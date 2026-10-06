@@ -17,6 +17,19 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Desktop: HDMI audio — drop the split-mode WirePlumber rule, inherit stock ACP (2026-10-06)
+`51-alsa-ucm.conf` set `api.alsa.use-acp = false` for PCI cards, so every ALSA
+PCM became a sink of its own. On the N100 (one HDA card: ALC897 + Intel HDMI)
+that split-mode HDMI sink — `api.alsa.path=hw:0,3`, 64 channels, `generic-mix` —
+was **silent**, while `aplay -D hw:0,3` on the same PCM was audible, and a full
+state diff between the working (ACP) and broken (split) configs was 5 lines, all
+PipeWire node properties. Removed the override; WirePlumber now uses stock ACP,
+as Ubuntu/Fedora/Pop!_OS ship. On a single-codec card ACP defaults to analog
+(priority 6565 > 5900, and the ALC897 line-out has no jack-detect), so HDMI is a
+**selectable profile**: pick `Digital Stereo (HDMI)` in Settings → Sound →
+Device profiles. `alsa-ucm-conf` stays (ACP reads it); `pengyos-alsa-unity.service`
+stays pending a laptop re-measure. Investigation: `hdmi-audio-problems.md`.
+
 ### Desktop: 20 new Pengy wallpapers, and Cosmic Pengy redrawn (2026-10-06)
 Twenty backgrounds — four seasons, seven North American holidays, nine Pengy
 adventures — at 2720×1530 exact 16:9, each anchored on COSMIC's own accent

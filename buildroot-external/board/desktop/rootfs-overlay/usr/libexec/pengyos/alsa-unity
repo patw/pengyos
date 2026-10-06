@@ -1,13 +1,13 @@
 #!/bin/sh
 # PengyOS Desktop: put each PCI sound card's master gain at unity (0 dB).
 #
-# WirePlumber drives PCI cards as plain ALSA PCMs (51-alsa-ucm.conf), so every
-# output, HDMI included, is a sink of its own. On that path PipeWire only does
-# software volume and nothing manages the codec's mixer, so its master gain
-# stays wherever the chip powered up: -20 dB on a ThinkPad T14's ALC257, -23 dB
-# on an N100's ALC897 (2026-10-04), and the speakers were quiet at 100%. Run
-# after alsa-restore.service at every boot: the software slider is the only
-# volume control, with the hardware at unity under it.
+# Kept after the 2026-10-06 removal of the split-mode WirePlumber rule
+# (51-alsa-ucm.conf). On that path PipeWire did software volume only and left the
+# codec's hardware Master at its power-on level: -20 dB on a ThinkPad T14's
+# ALC257, -23 dB on an N100's ALC897 (2026-10-04), so 100% in Settings was quiet.
+# Under the stock ACP path we now use, PipeWire is expected to manage the mixer
+# itself and this service may be redundant; it is retained until that is
+# re-measured on a laptop. Runs after alsa-restore.service at every boot.
 set -u
 for card in /sys/class/sound/card[0-9]*; do
     [ -e "$card/device" ] || continue
