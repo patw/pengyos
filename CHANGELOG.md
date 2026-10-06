@@ -17,7 +17,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Desktop: HDMI audio — drop the split-mode WirePlumber rule, inherit stock ACP (2026-10-06)
+### Fixed (26.10.10) — HDMI audio: drop the split-mode WirePlumber rule, inherit stock ACP
 `51-alsa-ucm.conf` set `api.alsa.use-acp = false` for PCI cards, so every ALSA
 PCM became a sink of its own. On the N100 (one HDA card: ALC897 + Intel HDMI)
 that split-mode HDMI sink — `api.alsa.path=hw:0,3`, 64 channels, `generic-mix` —
