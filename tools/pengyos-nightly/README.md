@@ -132,6 +132,17 @@ python3 -m pengyos_nightly act --only <id>         # one action, as a batch of o
 python3 -m pengyos_nightly status                  # alive? and what is queued?
 ```
 
+`status` also reports the Buildroot release-bump lane (spec phase 4):
+
+```
+bump lane: inert | Buildroot 2026.08 | no newer Buildroot release found
+bump lane: inert | Buildroot 2026.08 | finding: 2026.11 (new release series)
+bump lane: scheduled -> 2026.11 (not executable yet) | Buildroot 2026.08 | ...
+```
+
+with a `!` line when a newer series is a finding and nothing is scheduled. Those lines
+are attention, not failure: they do not change the exit code.
+
 State lives in `~/build/pengyos/nightly/` (`--state-dir`): `observations.json`,
 `state.json`, `plan.json`, `actions.json`, `nightly.toml`, `attest.jsonl` (the
 `pengyos-attest` hash chain of every action), `reports/`, the per-edition
@@ -157,3 +168,23 @@ python3 -m pytest -q
 
 Offline: the observers parse recorded upstream formats in `tests/fixtures/`
 (captured 2026-10-03), and the network, `pkg-stats` and the model are injected.
+
+## Rehearsal (not a test)
+
+```sh
+python3 rehearse.py                    # every allowed action in tonight's plan
+python3 rehearse.py ffmpeg libsndfile  # only these
+python3 rehearse.py --edition pengyos-server
+```
+
+The unit suite runs a fake `make`. `rehearse.py` runs the real
+`make <pkg>-dirclean` / `<pkg>-patch` against the real output trees, on a scratch
+branch, and restores `main` — publishing nothing and touching no state file. It
+refuses to run on a dirty tree, for the same reason the act lane does, and exits
+non-zero if HEAD moved or the tree is left dirty.
+
+Run it before leaving the act lane armed. Every defect this tool has found, unit
+tests could not — the `set -e` patch-culprit line, Buildroot's discarded `-pN`
+field, the concatenated MR `.patch`, and which of the planned fixes actually apply
+on the pinned versions (2026-10-07: 18 of 31 patches, 14 CVE matches closed, not
+25). Takes a few minutes.
