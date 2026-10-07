@@ -314,6 +314,64 @@ does not publish more than `max_releases` images a night, and it never reaches
 11. Tests stay offline: NVD records, stock recipe/hash files, upstream patches and
     the build are fixtures or injected.
 
+## Phase 4 — the Buildroot release-bump lane (design, not built)
+
+**Why this lane and not an LTS core.** Measured from the upstream tag list on 2026-10-07:
+Buildroot releases quarterly — `2025.08.x, 2025.11.x, 2026.02.x, 2026.05.x, 2026.08` — with
+point releases in between, and the `.02` series is the long-term-support one. Our tree is on
+`2026.08`, the newest. A stable series gets no security maintenance of its own between
+releases; what it gets is the *next release*, which arrives every quarter and carries the
+packages upstream has since fixed. LTS is that mechanism stretched to two years, and it buys
+the long horizon by **bumping packages inside an old series** — which is the same version
+collision the newest-COSMIC/NVIDIA tree exists to avoid. The quarterly bump gets the same
+security benefit at a quarter's latency and without freezing the tree.
+
+The observation already exists: `sources.buildroot_findings` reads the tag list, calls a
+newer point release *routine* and a newer series *major*, and names the LTS series when it
+sees one. What is missing is the action. `buildroot` is in `DENIED` today, with the reason
+already written: "a Buildroot release change means a new tree and a full rebuild of every
+edition; that is a scheduled event, not a nightly one." Phase 4 makes that scheduled event
+real instead of report-only.
+
+**Shape: `tree_move`, not `recipe_bump` or `patch_dir`.** The edit is to the tree the
+editions build from, and it has four parts, each one named in the plan:
+
+1. **the line** — which Buildroot the build uses, and the checkout/verification of it;
+2. **the external tree re-applied** — our `buildroot-external` layers, defconfigs and
+   `BR2_GLOBAL_PATCH_DIR` against the new `Config.in`/package set;
+3. **the pins re-resolved** — COSMIC commits, the NVIDIA driver version and the kernel,
+   each checked against what the new line actually provides;
+4. **the carried patches retired** — every patch under `patches/<pkg>/<version>/` that the
+   new line already contains is *removed*, and the CVE it closed is recorded as closed by
+   the release, not by us. A patch the new line still lacks moves to the new version's
+   directory. This is the honest version of the "already present in the pinned version"
+   problem the patch lane keeps hitting: the loop stops re-fixing what upstream fixed.
+
+**It is its own release event.** A tree move means a full rebuild of every edition, so it
+cannot share a night with a patch batch: it takes the one `max_releases` slot, and its
+pre-flight is the whole build plus the boot check, not a package re-extract.
+
+**Guards, each one named:**
+
+| Guard | Refuses |
+|---|---|
+| `bump_event_approved` | the lane runs only when the operator has scheduled it (`bump_buildroot = "2026.11"` in `nightly.toml`); a new upstream tag is a finding, never an action |
+| `cosmic_compat` | the COSMIC pins must still build against the new line's toolchain and libraries; unproven is refused |
+| `nvidia_module_build` | the kernel-module build must succeed against the new line's kernel headers, on real hardware — QEMU cannot prove a driver |
+| `patch_retirement` | a carried patch the new line already contains must be dropped, not duplicated; a patch that would be silently dropped without a record is refused |
+| `edition_coverage` | every edition in the channel must be rebuilt by the event; a partial set is refused rather than publishing a half-moved channel |
+
+**Acceptance criteria (phase 4)**
+19. A new Buildroot tag produces a *finding* and no action until `bump_buildroot` names a
+    target; `status` shows the scheduled event.
+20. A tree move publishes one version for every edition in the channel, or publishes nothing.
+21. A carried patch that the new line already contains is removed from the tree and its CVE
+    is recorded as closed by the release; the notes say which patches were retired.
+22. A failed COSMIC or NVIDIA check against the new line stops the event before any branch
+    is created, and says which pin failed.
+23. `main` is where it started after a failed build or boot check, and the old line remains
+    the one the channel serves.
+
 ## Acceptance criteria
 1. `pengyos-nightly run --no-email` on behoserver writes observations, a
    triaged state and an HTML report, with every source `ok` or an explicit
