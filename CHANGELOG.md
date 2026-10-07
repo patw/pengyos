@@ -28,7 +28,11 @@ stack-down summary. The build / QEMU / flash recipe went into `CONTRIBUTING.md`
 ("Setting up a development machine"), where the build half already lived. Repointed
 to the new homes: `SPEC.md` §5 (the rubric link), `docs/stack-down-replace.md` (the
 failure-modes citation), and the doc maps in `CONTRIBUTING.md`, `docs/README.md` and
-`CLAUDE.md`.
+`CLAUDE.md`. One stale claim went with it: the README said the NVIDIA editions had
+never been booted on an NVIDIA machine. **Desktop NVIDIA has** — first metal boot at
+26.10.7, an RTX 3060 Ti with two 1440p monitors, the fix being the Desktop board's
+`60-pengyos-amdgpu.conf` stubbing `nvidia*` to `/bin/true` (see "Fixed (26.10.7)").
+Server NVIDIA is still QEMU-only.
 
 ### Fixed — the download page offered testing images
 `scripts/release.sh --publish` runs `download-publish` for every release, testing

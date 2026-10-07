@@ -195,7 +195,7 @@ podman.
 ### 2.4 NVIDIA editions — opt-in
 
 NVIDIA's proprietary driver on the **open kernel modules** (`package/nvidia-open`,
-RTX 20 and newer) ships in two separate images, so the blob never reaches the
+Turing / RTX 20 and newer) ships in two separate images, so the blob never reaches the
 default ones; `pengyos-desktop-nvidia lint` enforces that.
 
 | Image | Layers | Adds |

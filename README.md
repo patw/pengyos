@@ -2,7 +2,7 @@
 
 A Linux distribution built from source with [Buildroot](https://buildroot.org), in
 three editions that nest: Core inside Server inside Desktop. It runs on ordinary
-hardware, the N100 mini PCs and laptops in the house it's developed on. Current
+modern PC hardware: laptops, desktops and mini PCs that boot in UEFI mode. Current
 images: 26.10.13.
 
 Free and MIT-licensed. It's also a side project rather than a product: no roadmap,
@@ -11,13 +11,22 @@ small human–AI team can build an operating system and keep it maintained.
 
 ## What you get
 
-| Edition | What's on it | Where it runs |
-|---|---|---|
-| Core | The base: systemd, key-only SSH, Python 3, nftables, chrony, storage tools, a broad firmware set. No editors, no containers, no GUI. About 224 MB of RAM at idle. | An N100 box, in service |
-| Server | Core plus tmux, mosh, zsh, git, ripgrep, fd, bat, eza, zoxide and jq; rootless podman; distrobox; a default-deny firewall; backup and metrics timers; the daily update check; and Pengy in a browser (`pengy-web`). | An i3-1215U machine, in service |
-| Desktop | Server plus the full COSMIC session (compositor, panel, launcher, files, terminal, editor, store) behind a login screen, PipeWire audio, Bluetooth codecs, CUPS printing, Wi-Fi, Xwayland and Vulkan, a boot splash, Flatpak from Flathub (Firefox lands on first boot), 21 wallpapers, and the Pengy desktop app. | Two N100 boxes, an i3-1215U, an i7-7600U ThinkPad, a Ryzen 7 6800H laptop. All daily drivers. |
-| Server NVIDIA | Server plus CUDA, `nvidia-smi`, persistence mode, and GPUs inside podman containers through CDI. | QEMU only so far |
-| Desktop NVIDIA | Desktop plus the NVIDIA driver, for GTX 16 and RTX cards. | QEMU only so far |
+| Edition | What's on it |
+|---|---|
+| Core | The base: systemd, key-only SSH, Python 3, nftables, chrony, storage tools, a broad firmware set. No editors, no containers, no GUI. About 224 MB of RAM at idle. |
+| Server | Core plus tmux, mosh, zsh, git, ripgrep, fd, bat, eza, zoxide and jq; rootless podman; distrobox; a default-deny firewall; backup and metrics timers; the daily update check; and Pengy in a browser (`pengy-web`). |
+| Desktop | Server plus the full COSMIC session (compositor, panel, launcher, files, terminal, editor, store) behind a login screen, PipeWire audio, Bluetooth codecs, CUPS printing, Wi-Fi, Xwayland and Vulkan, a boot splash, Flatpak from Flathub (Firefox lands on first boot), 21 wallpapers, and the Pengy desktop app. |
+| Server NVIDIA | Server plus CUDA, `nvidia-smi`, persistence mode, and GPUs inside podman containers through CDI. |
+| Desktop NVIDIA | Desktop plus the NVIDIA driver and its Vulkan and GL userspace, for Turing and newer. |
+
+### Will it run on your machine
+
+Any 64-bit PC that starts in UEFI mode, which is roughly anything from the last ten
+years. Intel and AMD graphics are in the base image. An NVIDIA card needs one of the
+NVIDIA editions, and those need Turing or newer (GTX 16, RTX 20 and anything after),
+which is where NVIDIA's open kernel modules stop. Wi-Fi from Intel, Realtek, MediaTek,
+Qualcomm and Broadcom is covered by the firmware set Core ships. The desktop has been
+built and used daily on laptops and mini PCs, so that's what it behaves best on.
 
 ## Trying it
 
@@ -25,8 +34,7 @@ small human–AI team can build an operating system and keep it maintained.
 which stick, how to write it, how to boot it, what the installer asks. The short
 version:
 
-- 64-bit machine that boots in UEFI mode, Secure Boot off. The images aren't signed
-  for Secure Boot yet.
+- Secure Boot off in the firmware settings. The images aren't signed for it yet.
 - Desktop boots into a live session you can try before installing. Server shows its
   installer on screen. Core has no installer: it runs from the stick, and you write
   it to an internal disk the same way.
@@ -59,15 +67,20 @@ boot returns to the old slot by itself. Core can't update in place yet.
 
 ## What isn't ready
 
-- The NVIDIA editions have never booted on an NVIDIA machine.
+- Server NVIDIA has only been booted under QEMU so far. Desktop NVIDIA has run on real
+  hardware since 26.10.7: an RTX 3060 Ti with two 1440p monitors at 144 and 180 Hz,
+  `nvidia-smi` working, COSMIC rendering on the GPU instead of the CPU. Its boot splash
+  still blanks for a moment while the driver takes over.
 - Secure Boot and measured boot aren't enforced, and the boot chain is unsigned.
   Someone with physical access or root can change what boots.
 - There's no package manager in the familiar sense. The base system changes by
   writing a new signed image; apps come through Flatpak. `/etc`, services and your
   data live on a separate partition that updates never touch.
 - x86_64 only. No ARM build.
-- It's tuned to hardware we own. If your machine isn't in that set, expect to
-  configure something.
+- Hardware support is driven by the handful of machines we run it on. Common Intel and
+  AMD laptops and mini PCs are the safest bet; unusual Wi-Fi cards and HDMI audio
+  paths are where trouble shows up, and one HDMI-audio case is worked end to end in
+  [`docs/hdmi-audio-problems.md`](docs/hdmi-audio-problems.md).
 - It's early. Expect rough edges.
 
 ## Building it instead
