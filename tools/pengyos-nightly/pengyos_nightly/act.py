@@ -291,6 +291,23 @@ def _failed_files(detail: str) -> str:
     return detail.splitlines()[0][:80] if detail else "the source"
 
 
+def _failed_patch(detail: str) -> str:
+    """Which patch Buildroot stopped on.
+
+    `apply-patches.sh` prints `Applying <name> using <type>:` immediately before each
+    patch and runs with `set -e`, so a failing patch ends the script there: the last
+    `Applying` line in the output *is* the culprit. (The script also has a
+    `Patch failed!  Please fix <patch>!` line, but `set -e` means it is never reached
+    on Buildroot 2026.08 - measured on a real `libsndfile-patch` failure. Keep the
+    named form for the benefit of any Buildroot that does print it.)
+    """
+    m = re.search(r"Please fix (\S+)!", detail)
+    if m:
+        return m.group(1)
+    names = re.findall(r"Applying (\S+) using", detail)
+    return names[-1] if names else ""
+
+
 def _patch_reason(detail: str) -> str:
     """Why Buildroot rejected a patch, in the two forms a reader can act on.
 
@@ -333,8 +350,7 @@ def triage_package(run, repo: Path, build_root: Path, br_version: str, external_
                     "editions": done}
         except RuntimeError as exc:
             detail = str(exc)
-            m = re.search(r"Please fix (\S+)!", detail)
-            name = m.group(1) if m else ""
+            name = _failed_patch(detail)
             victim = next((e for e in carried if Path(e["path"]).name == name), None)
             if victim is None:
                 return {"ok": False, "carried": carried, "dropped": dropped, "error": detail,
@@ -397,9 +413,15 @@ def refresh_package(run, build_root: Path, br_version: str, external_tree: str,
             p = _run(run, argv, env=env)
             if p.returncode != 0:
                 out = (p.stdout or "") + (p.stderr or "")
-                bad = [l for l in out.splitlines() if "FAILED" in l or "error:" in l][:4]
+                # The tail is the part that says what happened: `Applying <patch> using
+                # patch:`, patch's own `Reversed (or previously applied)` / `FAILED at`
+                # lines, and make's `.stamp_patched Error 1`. Filtering to only lines
+                # containing FAILED/error: drops exactly the lines the triage needs.
+                lines = out.splitlines()
+                head = [l for l in lines if "FAILED" in l or "error:" in l][:4]
+                tail = "\n".join(lines[-25:])
                 raise RuntimeError(f"{step} failed in {t}: "
-                                   + ("; ".join(bad) or out[-400:]))
+                                   + ("; ".join(head) + "\n" + tail if head else tail))
         done.append(t)
     return done
 

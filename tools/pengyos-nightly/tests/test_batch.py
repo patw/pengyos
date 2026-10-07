@@ -108,15 +108,29 @@ def _cfg(**kw):
 class Fake:
     """Stand-in for make / the gate / release.sh; git runs for real.
 
-    `patch_fails` simulates Buildroot's own rejection: the named patch is reported the
-    way `support/scripts/apply-patches.sh` reports it, and only while that file is
-    still in the tree - so a loop that takes the bad patch out is rewarded with a
-    passing pre-flight, exactly like the real one.
+    `patch_fails` is {component: (patch name, ...)} and simulates Buildroot's own
+    rejection. A name that is in our tree is ours: it fails while the file is there and
+    stops once the triage removes it, which is the behaviour the triage exists to get.
+    A name that is not in our tree stands for the recipe's own stock patch - `<pkg>-patch`
+    applies those too, the loop cannot take them out, and they fail every time.
     """
 
-    def __init__(self, fail=(), patch_fails=(), repo=None):
+    def __init__(self, fail=(), patch_fails=None, repo=None):
         self.calls, self.fail = [], tuple(fail)
-        self.patch_fails, self.repo = tuple(patch_fails), repo
+        self.patch_fails = {k: tuple(v) for k, v in (patch_fails or {}).items()}
+        self.repo = repo
+        # A name we have actually seen in the tree is ours: it fails while the file is
+        # there and stops once the triage removes it, which is the behaviour the triage
+        # exists to get. A name that is never in our tree stands for the recipe's own
+        # stock patch - `<pkg>-patch` applies those too, the loop cannot take them out,
+        # and they fail every time.
+        self.ours = set()
+
+    def _rejects(self, pkg: str, name: str) -> bool:
+        if list((self.repo / "buildroot-external").rglob(name)):
+            self.ours.add((pkg, name))
+            return True
+        return (pkg, name) not in self.ours
 
     def __call__(self, argv, **kw):
         argv = [str(a) for a in argv]
@@ -128,15 +142,22 @@ class Fake:
         joined = " ".join(argv)
         rc = 1 if any(f in joined for f in self.fail) else 0
         out = "ok " + joined
-        if rc == 0 and self.patch_fails and self.repo and joined.endswith("-patch"):
-            for name in self.patch_fails:
-                if not list((self.repo / "buildroot-external").rglob(name)):
+        if rc == 0 and self.repo:
+            for pkg, names in self.patch_fails.items():
+                if f"{pkg}-patch" not in joined:
                     continue
-                rc = 1
-                out = (f"Applying {name} using patch: \n"
-                       "Reversed (or previously applied) patch detected!  Skipping patch.\n"
-                       "1 out of 1 hunk ignored -- saving rejects to file src/ima_adpcm.c.rej\n"
-                       f"Patch failed!  Please fix {name}!")
+                for name in names:
+                    if not self._rejects(pkg, name):
+                        continue          # ours, and already taken out of the tree
+                    rc = 1
+                    out = (f"Applying {name} using patch: \n"
+                           "patching file src/ima_adpcm.c\n"
+                           "Reversed (or previously applied) patch detected!  Skipping patch.\n"
+                           "3 out of 3 hunks ignored -- saving rejects to file src/ima_adpcm.c.rej\n"
+                           "make[1]: *** [package/pkg-generic.mk:239: "
+                           "build/libsndfile-1.2.2/.stamp_patched] Error 1\n"
+                           "make: *** [Makefile:83: _all] Error 2")
+                    break
                 break
         return subprocess.CompletedProcess(argv, rc, stdout=out, stderr="")
 
@@ -161,7 +182,7 @@ def _site(tmp_path):
     return site
 
 
-def _run(tmp_path, actions, cfg=None, fail=(), patch_fails=(), apply=True, key=None):
+def _run(tmp_path, actions, cfg=None, fail=(), patch_fails=None, apply=True, key=None):
     repo = _repo(tmp_path)
     site = _site(tmp_path)
     state = tmp_path / "state"
@@ -299,7 +320,7 @@ def test_a_patch_buildroot_rejects_is_dropped_and_the_rest_of_the_package_ships(
     """
     actions = [_two_patch_action(), _bump_action()]
     result, fake, repo, site, state, cfg = _run(tmp_path, actions,
-                                                patch_fails=("0002-b.patch",),
+                                                patch_fails={"libxml2": ("0002-b.patch",)},
                                                 cfg=_cfg(key_file=_key(tmp_path)))
     assert result["published"], "one uncarriable cherry-pick does not sink the package"
     assert result["dropped"] == [] and result["applied_actions"] == [
@@ -331,7 +352,7 @@ def test_a_rejected_patch_does_not_block_the_other_fixes_for_that_package(tmp_pa
     nothing about a fix that would apply cleanly, so the package stays open."""
     actions = [_two_patch_action()]
     result, fake, repo, site, state, cfg = _run(tmp_path, actions,
-                                                patch_fails=("0002-b.patch",),
+                                                patch_fails={"libxml2": ("0002-b.patch",)},
                                                 cfg=_cfg(key_file=_key(tmp_path)))
     st = {"cves": {}, "findings": {}, "actions": {}, "patch_failures": {}}
     A.record_batch(result, actions, state, st, TODAY, run=fake, repo=repo)
@@ -347,7 +368,8 @@ def test_when_every_patch_for_a_package_is_rejected_the_package_is_dropped(tmp_p
     base = "buildroot-external/patches/libxml2/2.15.3"
     actions = [_two_patch_action(), _bump_action()]
     result, fake, repo, site, state, cfg = _run(tmp_path, actions,
-                                                patch_fails=("0001-a.patch", "0002-b.patch"),
+                                                patch_fails={"libxml2": ("0001-a.patch",
+                                                                       "0002-b.patch")},
                                                 cfg=_cfg(key_file=_key(tmp_path)))
     assert result["published"], "the rest of the batch still ships"
     assert result["dropped"] == ["security-libxml2-2.15.3"]
@@ -356,6 +378,22 @@ def test_when_every_patch_for_a_package_is_rejected_the_package_is_dropped(tmp_p
     assert result["patch_failures"]["libxml2"]["fixes"] == [
         "https://github.com/GNOME/libxml2/commit/76fe08d97de8",
         "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa"]
+
+
+def test_a_failure_on_buildroots_own_stock_patch_is_not_blamed_on_ours(tmp_path):
+    """`<pkg>-patch` applies the recipe's own patches too, and they appear in the same
+    output with the same `NNNN-` numbering. A failure attributed to a patch this action
+    never wrote must stop the triage, not quietly delete one of ours that looks similar.
+    """
+    actions = [_two_patch_action(), _bump_action()]
+    result, fake, repo, site, state, cfg = _run(tmp_path, actions,
+                                                patch_fails={"libxml2": ("0001-a-extra.patch",)},
+                                                cfg=_cfg(key_file=_key(tmp_path)))
+    assert result["dropped"] == ["security-libxml2-2.15.3"]
+    assert result["patch_failures"]["libxml2"]["fixes"] == [], \
+        "we do not know which of our fixes is at fault, so none is blacklisted"
+    assert not (repo / "buildroot-external/patches/libxml2").exists(), \
+        "the whole change is reverted, not one patch of it"
 
 
 def test_known_bad_fixes_accumulate_across_nights(tmp_path):
@@ -367,7 +405,7 @@ def test_known_bad_fixes_accumulate_across_nights(tmp_path):
                                          "fixes": [old]}}}
     actions = [_two_patch_action()]
     result, fake, repo, site, state, cfg = _run(tmp_path, actions,
-                                                patch_fails=("0002-b.patch",),
+                                                patch_fails={"libxml2": ("0002-b.patch",)},
                                                 cfg=_cfg(key_file=_key(tmp_path)))
     A.record_batch(result, actions, state, st, TODAY, run=fake, repo=repo)
     assert set(st["patch_failures"]["libxml2"]["fixes"]) == {

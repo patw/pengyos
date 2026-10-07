@@ -355,3 +355,51 @@ def test_notes_say_what_the_release_actually_carries(tmp_path):
     assert "carries 1 upstream fix commit(s), closing 1 security issue(s)" in notes
     assert "CVE-2026-86137 (P1, CVSS 7.8, upstream 76fe08d97de8)" in notes
     assert "26.10.8 has never been published" in notes
+
+
+# --- which patch Buildroot stopped on ----------------------------------------
+
+# Captured from a real `make libsndfile-patch` on behoserver, 2026-10-07: the fix
+# NVD named for CVE-2025-52194 is already in libsndfile 1.2.2. Note what is NOT in
+# it: apply-patches.sh has a `Patch failed!  Please fix <patch>!` line, but the script
+# runs `set -e`, so a failing patch ends it before that echo. The last `Applying`
+# line is the only thing that names the culprit.
+REAL_PATCH_FAILURE = """Applying 0016-Include-stdbool.h-instead-of-redefining-bool-true-an.patch using patch: 
+patching file src/ALAC/alac_decoder.c
+patching file src/ALAC/alac_encoder.c
+
+Applying 0001-ima-adpcm-fix-int-overflow-in-ima-reader-init.patch using patch: 
+patching file src/ima_adpcm.c
+Reversed (or previously applied) patch detected!  Skipping patch.
+3 out of 3 hunks ignored -- saving rejects to file src/ima_adpcm.c.rej
+make[1]: *** [package/pkg-generic.mk:239: .../build/libsndfile-1.2.2/.stamp_patched] Error 1
+make: *** [Makefile:83: _all] Error 2
+"""
+
+
+def test_the_failing_patch_is_named_by_the_last_applying_line():
+    assert A._failed_patch(REAL_PATCH_FAILURE) == \
+        "0001-ima-adpcm-fix-int-overflow-in-ima-reader-init.patch"
+
+
+def test_a_buildroot_that_names_the_failing_patch_is_still_preferred():
+    assert A._failed_patch("Applying a.patch using patch: \n"
+                           "Patch failed!  Please fix b.patch!") == "b.patch"
+
+
+def test_an_unattributable_failure_names_no_patch():
+    assert A._failed_patch("make: *** [Makefile:83: _all] Error 2") == ""
+
+
+def test_refresh_package_keeps_the_lines_the_triage_needs(tmp_path):
+    """The old error summary kept only lines containing FAILED / error:, which is
+    exactly how the culprit's name got thrown away."""
+    def fake(argv, **kw):
+        return subprocess.CompletedProcess(argv, 2, stdout=REAL_PATCH_FAILURE, stderr="")
+    try:
+        A.refresh_package(fake, tmp_path, "2026.08", "tree", ["pengyos-desktop"], "libsndfile")
+        raise AssertionError("expected a failure")
+    except RuntimeError as exc:
+        assert A._failed_patch(str(exc)) == \
+            "0001-ima-adpcm-fix-int-overflow-in-ima-reader-init.patch", str(exc)
+        assert "already present in the pinned version" == A._patch_reason(str(exc))
