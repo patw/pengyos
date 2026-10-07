@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-LIBMTP_VERSION = 1.1.22
+LIBMTP_VERSION = 1.1.23
 LIBMTP_SITE = https://github.com/libmtp/libmtp/releases/download/v$(LIBMTP_VERSION)
 LIBMTP_LICENSE = LGPL-2.1+
 LIBMTP_LICENSE_FILES = COPYING
