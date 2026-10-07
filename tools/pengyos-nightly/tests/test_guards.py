@@ -210,3 +210,52 @@ def test_lane_disabled_is_named_as_such():
     assert not ok and "major_never" in why
     ok, why = G.lane_allowed({"lane": "routine"}, {"lanes": ["security"]})
     assert not ok and "lane_disabled" in why
+
+
+# --- the Buildroot release-bump lane -----------------------------------------
+
+def test_buildroot_is_report_until_the_operator_schedules_the_event():
+    ok, why = G.denied_component("buildroot", {"bump_buildroot": ""})
+    assert not ok and "report-only" in why, why
+    ok, why = G.denied_component("buildroot", {"bump_buildroot": "2026.11"})
+    assert ok and "operator scheduled it" in why, why
+    assert not G.denied_component("linux", {"bump_buildroot": "2026.11"})[0], \
+        "scheduling a Buildroot bump does not unlock the kernel"
+
+
+def test_a_new_release_series_is_a_finding_not_an_action():
+    ok, why = G.bump_event_approved("buildroot", "2026.11", {"bump_buildroot": ""})
+    assert not ok and "no Buildroot bump is scheduled" in why, why
+
+
+def test_a_scheduled_bump_matches_what_was_scheduled():
+    ok, why = G.bump_event_approved("buildroot", "2027.02", {"bump_buildroot": "2026.11"})
+    assert not ok and "scheduled bump is to 2026.11, not 2027.02" in why, why
+    assert G.bump_event_approved("buildroot", "2026.11", {"bump_buildroot": "2026.11"})[0]
+    assert G.bump_event_approved("libxml2", "2.15.4", {"bump_buildroot": ""})[0], \
+        "not every candidate is a bump"
+
+
+def test_the_bump_lane_exists_only_with_the_schedule():
+    ok, why = G.lane_allowed({"lane": "bump"}, {"lanes": ["security"], "bump_buildroot": ""})
+    assert not ok and "only when bump_buildroot is set" in why, why
+    assert G.lane_allowed({"lane": "bump"}, {"lanes": ["security"],
+                                             "bump_buildroot": "2026.11"})[0]
+    ok, _ = G.lane_allowed({"lane": "major"}, {"lanes": ["major"], "bump_buildroot": "2026.11"})
+    assert not ok, "the major lane stays closed even with a bump scheduled"
+
+
+def test_a_tree_move_is_refused_until_the_act_lane_can_rebuild():
+    ok, why = G.tree_move_executable("tree_move")
+    assert not ok and "no full-rebuild path" in why, why
+    assert G.tree_move_executable("patch_dir")[0]
+    assert G.tree_move_executable("recipe_bump")[0]
+
+
+def test_a_tree_move_crossing_the_series_is_not_major_never():
+    """Crossing to a new release series *is* the event; major_never guards package bumps."""
+    ok, why = G.major_never({"shape": "tree_move", "current": "2026.08", "target": "2026.11",
+                             "bump_kind": "major"})
+    assert ok and "the event itself" in why, why
+    assert not G.major_never({"shape": "recipe_bump", "current": "2.15.3", "target": "3.0.0",
+                              "bump_kind": "major"})[0]

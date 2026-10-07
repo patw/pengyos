@@ -40,6 +40,10 @@ DEFAULTS = {
     # fix commits; see edits.py for the repro that settled it.
     "allow_patch_shape": True,
     "skip_cosmic": True,
+    # Phase 4 (spec): the Buildroot release-bump lane. Empty means the lane is inert - a
+    # newer release series stays a finding and nothing moves. Naming a target is the
+    # operator scheduling that event; the loop never decides it from a tag alone.
+    "bump_buildroot": "",
     "key_file": str(HOME / "Personal/pengyos-keys/release-2026.key"),
     "secrets": str(HOME / "Personal/.secrets"),
 }

@@ -548,6 +548,44 @@ def fetch_patch(commit_url: str, get=fetch_bytes) -> str:
     return fetch_patches(commit_url, get)[0]
 
 
+def carried_patch_files(repo: Path) -> list[str]:
+    """Every patch we currently carry, repo-relative.
+
+    These are the loop's own security maintenance. A tree move has to account for each one:
+    the new line either already carries the fix (the patch is retired and the CVE is
+    recorded as closed by the release) or it does not (the patch moves to the new version's
+    directory). Keeping them all silently is how a loop re-fixes what upstream fixed.
+    """
+    root = repo / "buildroot-external" / "patches"
+    if not root.is_dir():
+        return []
+    return sorted(str(p.relative_to(repo)) for p in root.rglob("*.patch"))
+
+
+def tree_move(repo: Path, target: str) -> list[Edit]:
+    """Move every edition to a new Buildroot release series.
+
+    The edit is small because the tree choice is declared, not implied: `targets.toml`
+    names `br_version` for every edition and pengyos-build resolves the checkout from it.
+
+    What this edit does **not** do is the part that is not built yet: fetch and verify the
+    new line, recompose the external layers against its package set, re-resolve the
+    COSMIC / NVIDIA / kernel pins, rebuild every edition from scratch, and retire the
+    carried patches the new line already contains. `guards.tree_move_executable` refuses
+    the action so none of that is implied by a plan that looks executable.
+    """
+    text = (repo / "targets.toml").read_text()
+    found = re.findall(r'br_version = "([^"]+)"', text)
+    if not found:
+        raise ValueError("targets.toml names no br_version")
+    current = sorted(set(found))
+    new = re.sub(r'br_version = "[^"]+"', f'br_version = "{target}"', text)
+    note = (f"Buildroot {'/'.join(current)} -> {target} for {len(found)} edition(s); every "
+            f"patch under buildroot-external/patches must be re-checked against {target} "
+            f"and retired if that line already carries the fix")
+    return [Edit(path="targets.toml", kind="replace", old=text, new=new, note=note)]
+
+
 def patch_slug(patch_text: str, sha: str) -> str:
     """A Buildroot-style patch name, from the commit's own Subject line.
 

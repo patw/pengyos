@@ -87,6 +87,14 @@ def _repo(tmp_path):
     layer = repo / "buildroot-external" / "configs" / "layers"
     layer.mkdir(parents=True, exist_ok=True)
     (layer / "core.config").write_text('BR2_ROOTFS_OVERLAY="x"\n')
+    (repo / "targets.toml").write_text(
+        '[[targets]]\nname = "pengyos-desktop"\nbr_version = "2026.08"\n'
+        'external_tree = "buildroot-external"\ndefconfig = "pengyos_desktop_defconfig"\n\n'
+        '[[targets]]\nname = "pengyos-server"\nbr_version = "2026.08"\n'
+        'external_tree = "buildroot-external"\ndefconfig = "pengyos_server_defconfig"\n')
+    carried = repo / "buildroot-external" / "patches" / "libxml2" / "2.15.3"
+    carried.mkdir(parents=True, exist_ok=True)
+    (carried / "0001-xmlregexp.patch").write_text(PATCH_TEXT)
     return repo
 
 
@@ -195,6 +203,74 @@ def test_a_review_request_makes_a_stock_package_actionable(tmp_path):
     assert a["closes"] == ["CVE-2026-40962"]
     assert a["cves"][0]["fix_commit"]["kind"] == "pull"
     assert len([e for e in a["edits"] if e["path"].endswith(".patch")]) == 1
+
+
+# --- the Buildroot release-bump lane (phase 4) -------------------------------
+
+def _bump_cfg(target="2026.11", lanes=("security", "routine")):
+    return {"act_enabled": True, "push": True, "lanes": list(lanes),
+            "priorities": ["P0", "P1"], "max_actions": 12, "cooldown_days": 7,
+            "allow_patch_shape": True, "skip_cosmic": True, "bump_buildroot": target}
+
+
+def test_a_new_buildroot_release_is_a_finding_and_stays_one(tmp_path):
+    """Nothing about a newer tag moves the tree. The lane is inert until the operator
+    schedules the event, and an inert lane leaves no candidate at all."""
+    obs = _obs(libxml2=_pkg(current="2.15.3", latest="2.15.4",
+                            cpeid="cpe:2.3:a:xmlsoft:libxml2:2.15.3:-:*:*:*:*:*:*",
+                            cves=["CVE-2026-86137"]))
+    obs["findings"] = [{"lane": "major", "component": "buildroot", "current": "2026.08",
+                        "available": "2026.11", "note": "new Buildroot release series 2026.11"}]
+    st = _st(_triaged("CVE-2026-86137", "libxml2"))
+    plan = _plan(tmp_path, obs, st, _nvd(tmp_path, ("CVE-2026-86137", _rec(
+        "xmlsoft", "libxml2", "*",
+        ["https://github.com/GNOME/libxml2/commit/76fe08d97de88bfaef2f7d5cd27f11954cc5bee2"],
+        versionEndExcluding="2.15.4"))))
+    assert not [a for a in plan["actions"] + plan["refused"] if a["component"] == "buildroot"], \
+        "a finding is not a candidate"
+
+
+def test_a_scheduled_bump_is_planned_refused_by_name_and_says_what_it_retires(tmp_path):
+    """`bump_buildroot = "2026.11"` is the operator scheduling the event. The plan then
+    shows the whole decision - the edit, every edition it touches, and the patches that
+    must be re-checked - and refuses it by name because the act lane cannot rebuild yet."""
+    obs = _obs()
+    obs["buildroot"] = "2026.08"
+    plan = planner.build_plan(obs, _st(), _bump_cfg(), TODAY, _repo(tmp_path), tmp_path,
+                              lambda cve: {}, fake_get)
+    a = _by_id(plan, "bump-buildroot-2026.11")
+    assert a, [x["id"] for x in plan["refused"]]
+    assert not a["allowed"] and "tree_move_not_executable" in a["refused_by"], a["guards"]
+    assert a["shape"] == "tree_move" and a["current"] == "2026.08" and a["target"] == "2026.11"
+    assert a["editions"] == ["pengyos-desktop", "pengyos-server"], "every edition, or none"
+    edit = a["edits"][0]
+    assert edit["path"] == "targets.toml"
+    assert edit["new"].count('br_version = "2026.11"') == 2
+    assert 'br_version = "2026.08"' not in edit["new"]
+    assert a["retires"] == ["buildroot-external/patches/libxml2/2.15.3/0001-xmlregexp.patch"]
+    assert "retired if that line already carries the fix" in a["retire_check"]
+    # The guard that stops it is the last one, so the plan still shows everything else.
+    assert a["refused_by"] == ["tree_move_not_executable"], a["refused_by"]
+
+
+def test_scheduling_a_bump_does_not_enable_the_other_major_findings(tmp_path):
+    """The bump lane is its own lane. Turning it on for Buildroot must not turn on the
+    kernel or the NVIDIA driver, which share the 'new release series' label."""
+    obs = _obs()
+    obs["buildroot"] = "2026.08"
+    obs["findings"] = [{"lane": "routine", "component": "linux", "current": "7.2.5",
+                        "available": "7.2.6", "note": "kernel point release"}]
+    plan = planner.build_plan(obs, _st(), _bump_cfg(), TODAY, _repo(tmp_path), tmp_path,
+                              lambda cve: {}, fake_get)
+    bump = _by_id(plan, "bump-buildroot-2026.11")
+    assert bump and not bump["allowed"]
+    assert bump["refused_by"] == ["tree_move_not_executable"], bump["refused_by"]
+    lane_ok = [g for g in bump["guards"] if g["guard"] == "lane_allowed"][0]
+    assert lane_ok["ok"] and "bump" in lane_ok["reason"], lane_ok
+    kernel = _by_id(plan, "routine-linux-7.2.6")
+    assert kernel and kernel["lane"] == "routine", "the kernel is not swept into the bump"
+    assert all(a["lane"] != "major" for a in plan["actions"] + plan["refused"]), \
+        [a["id"] for a in plan["actions"] + plan["refused"]]
 
 
 # --- attributing a CVE to the component its fix actually changes -------------

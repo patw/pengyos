@@ -59,6 +59,12 @@ def lane_allowed(action: dict, cfg: dict) -> tuple[bool, str]:
     lane = action.get("lane")
     if lane == "major":
         return False, "major_never: a new release series is a human decision"
+    if lane == "bump":
+        # Its own lane, so that scheduling a Buildroot bump cannot quietly enable the
+        # other major findings (the kernel, the NVIDIA driver) that share the label.
+        if not (cfg or {}).get("bump_buildroot"):
+            return False, "lane_disabled: the bump lane exists only when bump_buildroot is set"
+        return True, "lane bump is enabled by the scheduled event"
     if lane not in cfg["lanes"]:
         return False, f"lane_disabled: {lane!r} is not in lanes={cfg['lanes']}"
     return True, f"lane {lane} is enabled"
@@ -70,6 +76,8 @@ def major_never(action: dict) -> tuple[bool, str]:
     is what keeps the patch shape from pretending to be a bump."""
     if action.get("shape") == "patch_dir":
         return True, "patch shape: the pinned version does not move"
+    if action.get("shape") == "tree_move":
+        return True, "tree move: crossing to a new release series is the event itself"
     if action.get("bump_kind") == "major":
         return False, f"major_never: {action['current']} -> {action['target']} changes the series"
     if action.get("bump_kind") == "none":
@@ -145,10 +153,50 @@ def not_host_only(pkg: dict) -> tuple[bool, str]:
     return True, f"in {', '.join(pkg['editions'])}"
 
 
-def denied_component(component: str) -> tuple[bool, str]:
+def denied_component(component: str, cfg: dict | None = None) -> tuple[bool, str]:
     if component in DENIED:
+        # The one thing that lifts a report-only decision is the operator scheduling it.
+        # A Buildroot bump is not something the loop may decide for itself; when
+        # `bump_buildroot` names a target, that is the operator's decision, for that
+        # event only.
+        if component == "buildroot" and (cfg or {}).get("bump_buildroot"):
+            return True, (f"operator scheduled it: bump_buildroot = {cfg['bump_buildroot']} "
+                          "lifts the report-only default for this event")
         return False, f"denied_component: {component} is report-only — {DENIED[component]}"
     return True, "component is actable"
+
+
+def bump_event_approved(component: str, target: str, cfg: dict) -> tuple[bool, str]:
+    """A new Buildroot release series is a *finding*. Moving the tree to it is a decision.
+
+    The finding arrives on its own (sources.buildroot_findings reads the tag list); what
+    must not happen is the loop deciding quarterly that every edition rebuilds against a
+    new line. `bump_buildroot = "2026.11"` in nightly.toml is the operator scheduling that
+    event, and the target has to match what was scheduled.
+    """
+    if component != "buildroot":
+        return True, "not a Buildroot bump"
+    want = (cfg or {}).get("bump_buildroot") or ""
+    if not want:
+        return False, ("bump_event_approved: no Buildroot bump is scheduled; a newer release "
+                       "series is a finding, and moving the tree is the operator's decision")
+    if want != target:
+        return False, (f"bump_event_approved: the scheduled bump is to {want}, not {target}")
+    return True, f"scheduled by the operator: bump_buildroot = {want}"
+
+
+def tree_move_executable(shape: str) -> tuple[bool, str]:
+    """A tree move is planned and reviewed here; the act lane cannot run one yet.
+
+    Refusing it by name is the point: a plan that *allows* a tree move would hand it to an
+    act lane that has no full-rebuild path, and the honest failure would surface at 21:00
+    as a build error rather than as a guard that says what is not built.
+    """
+    if shape != "tree_move":
+        return True, "not a tree move"
+    return False, ("tree_move_not_executable: the bump lane can plan, guard and account for "
+                   "a tree move (spec phase 4), but the act lane has no full-rebuild path "
+                   "for it yet, so it is published as a decision to review, not an action")
 
 
 def patch_does_not_apply(component: str, st: dict,

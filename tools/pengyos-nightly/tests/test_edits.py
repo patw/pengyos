@@ -344,3 +344,37 @@ def test_a_replace_that_does_not_match_is_an_error(tmp_path):
     with pytest.raises(ValueError, match="did not find the line"):
         E.apply_edits(tmp_path, [E.Edit(path="a", kind="replace", old="VERSION = 1.0",
                                         new="VERSION = 1.1")])
+
+
+# --- the tree move (phase 4) -------------------------------------------------
+
+def test_tree_move_moves_every_edition_and_names_the_retirement_check(tmp_path):
+    repo = tmp_path
+    (repo / "targets.toml").write_text(
+        '[[targets]]\nname = "pengyos-desktop"\nbr_version = "2026.08"\n'
+        '[[targets]]\nname = "pengyos-server"\nbr_version = "2026.08"\n')
+    edits, = (E.tree_move(repo, "2026.11"),)
+    edit = edits[0]
+    assert edit.path == "targets.toml" and edit.kind == "replace"
+    assert edit.new.count('br_version = "2026.11"') == 2
+    assert "2026.08" not in edit.new
+    assert "retired if that line already carries the fix" in edit.note
+
+
+def test_tree_move_refuses_a_targets_file_that_names_no_line(tmp_path):
+    (tmp_path / "targets.toml").write_text('[[targets]]\nname = "pengyos-desktop"\n')
+    with pytest.raises(ValueError, match="no br_version"):
+        E.tree_move(tmp_path, "2026.11")
+
+
+def test_carried_patch_files_lists_the_loops_own_security_maintenance(tmp_path):
+    root = tmp_path / "buildroot-external" / "patches"
+    (root / "libxml2" / "2.15.3").mkdir(parents=True)
+    (root / "ffmpeg" / "6.1.5").mkdir(parents=True)
+    (root / "libxml2" / "2.15.3" / "0001-a.patch").write_text("x")
+    (root / "ffmpeg" / "6.1.5" / "0002-b.patch").write_text("x")
+    (root / "README").write_text("not a patch")
+    assert E.carried_patch_files(tmp_path) == [
+        "buildroot-external/patches/ffmpeg/6.1.5/0002-b.patch",
+        "buildroot-external/patches/libxml2/2.15.3/0001-a.patch"]
+    assert E.carried_patch_files(tmp_path / "nowhere") == []

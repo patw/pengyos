@@ -8,6 +8,7 @@ should have become an action is a visible bug rather than a silence.
 from __future__ import annotations
 
 import datetime as dt
+import tomllib
 from pathlib import Path
 
 from pengyos_nightly import edits as E
@@ -80,7 +81,8 @@ def _stock_recipe(build_root: Path, br_version: str, pkg: str,
 def _verdicts(name: str, action: dict, pkg: dict, cfg: dict, st: dict,
               today: dt.date, index: int) -> list[dict]:
     checks = [
-        ("denied_component", lambda: G.denied_component(name)),
+        ("denied_component", lambda: G.denied_component(name, cfg)),
+        ("bump_event_approved", lambda: G.bump_event_approved(name, action["target"], cfg)),
         ("not_host_only", lambda: G.not_host_only(pkg)),
         ("lane_allowed", lambda: G.lane_allowed(action, cfg)),
         ("stock_version_immovable", lambda: G.stock_version_immovable(action)),
@@ -91,6 +93,7 @@ def _verdicts(name: str, action: dict, pkg: dict, cfg: dict, st: dict,
         ("patch_does_not_apply", lambda: G.patch_does_not_apply(
             name, st, [c["fix_commit"]["url"] for c in action["cves"] if c.get("fix_commit")])),
         ("patch_shape_allowed", lambda: G.patch_shape_allowed(action["shape"], cfg)),
+        ("tree_move_not_executable", lambda: G.tree_move_executable(action["shape"])),
         ("cooldown", lambda: G.cooldown(name, st.get("actions", {}), cfg["cooldown_days"],
                                         today)),
         ("cap", lambda: G.cap(index, cfg["max_actions"])),
@@ -100,6 +103,14 @@ def _verdicts(name: str, action: dict, pkg: dict, cfg: dict, st: dict,
         ok, reason = fn()
         out.append({"guard": label, "ok": ok, "reason": reason})
     return out
+
+
+def _edition_names(repo: Path) -> list[str]:
+    """Every edition the repo declares, from its own targets.toml."""
+    try:
+        return [t["name"] for t in tomllib.loads((repo / "targets.toml").read_text())["targets"]]
+    except (OSError, ValueError, KeyError):
+        return []
 
 
 def _cached(get):
@@ -182,10 +193,13 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
     """
     current = pkg.get("current") or ""
     authored = pkg.get("tree") != "BUILDROOT"
+    # A Buildroot bump is neither shape: it does not move a package pin and it does not
+    # cherry-pick onto one. It moves the tree every edition builds from.
+    is_bump = name == "buildroot" and lane == "bump"
     # A stock package cannot be version-bumped from here at all (see edits.py), so
     # the security lane carries upstream's fix commits onto the pinned version
     # instead. The patch shape therefore has no target: it does not move the pin.
-    shape = "recipe_bump" if authored else "patch_dir"
+    shape = "tree_move" if is_bump else ("recipe_bump" if authored else "patch_dir")
     if shape == "patch_dir":
         target = current
     kind = bump_kind(current, target) if current and target else "none"
@@ -221,16 +235,36 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
               "latest_upstream": pkg.get("latest", ""),
               "recipe": pkg.get("mk_path") or pkg.get("pkg_path", "")}
 
+    # A tree move is a decision the operator reads in the plan, so its edit is built
+    # before the verdicts: one local file read, no network, no build.
+    bump_edits: list[E.Edit] = []
+    if shape == "tree_move":
+        try:
+            bump_edits = E.tree_move(repo, target)
+        except (OSError, ValueError) as exc:
+            action["tree_move_error"] = str(exc)
+
     guards_done = _verdicts(name, action, pkg, cfg, st, today, index)
     if not all(g["ok"] for g in guards_done):
-        action["edits"], action["hash"], action["risks"] = [], None, []
+        # A tree move is a decision the operator reads *in the plan*, and building its edit
+        # costs one local file read - no network, no build. So it is kept even when the
+        # action is refused: a refusal that hides what would have changed is not reviewable.
+        action["edits"] = [vars(x) for x in bump_edits]
+        action["hash"], action["risks"] = None, []
+        if shape == "tree_move":
+            action["retires"] = E.carried_patch_files(repo)
+            action["retire_check"] = (f"each patch must be re-checked against Buildroot "
+                                      f"{target}: retired if that line already carries the fix, "
+                                      "moved to the new version's directory if it does not")
         action["guards"] = guards_done
         action["allowed"] = False
         return action
 
     stock_patches = sorted(pkg.get("patch_files") or [])
     try:
-        if shape == "patch_dir":
+        if shape == "tree_move":
+            e, refused = bump_edits, []
+        elif shape == "patch_dir":
             e, refused = E.patch_dir(repo, name, current,
                                      [c for c in cves if c.get("affected")],
                                      action["editions"], get,
@@ -284,6 +318,14 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
             f"from its own tarball; the hunks are upstream's, unchanged")
     action["guards"] = guards_done
     action["allowed"] = True
+    if shape == "tree_move":
+        # The retirement list is the point of recording it: these are the loop's own
+        # security maintenance, and a tree move that does not say which of them the new
+        # line already carries is a tree move that re-fixes upstream's work.
+        action["retires"] = E.carried_patch_files(repo)
+        action["retire_check"] = (f"each patch must be re-checked against Buildroot {target}: "
+                                  "retired if that line already carries the fix, moved to the "
+                                  "new version's directory if it does not")
     return action
 
 
@@ -322,6 +364,12 @@ def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
             continue
         considered[name] = ("routine", pkg.get("latest") or f.get("available") or "")
 
+    # The bump lane exists only when the operator scheduled it. A newer Buildroot series
+    # is already a finding; this is the decision to act on one, and it is considered even
+    # when it will be refused, so the plan records which guard stopped it.
+    if cfg.get("bump_buildroot"):
+        considered["buildroot"] = ("bump", cfg["bump_buildroot"])
+
     actions, refused = [], []
     # Security first, worst first; routine after it.
     ranked = sorted(considered.items(),
@@ -330,6 +378,11 @@ def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
         pkg = packages.get(name) or {"current": "", "latest": target, "tree": "",
                                      "editions": [], "cves": [], "unsure_cves": [],
                                      "host_only": False}
+        if name == "buildroot":
+            pkg = {"current": obs.get("buildroot") or "", "latest": target, "tree": "EXTERNAL",
+                   "editions": _edition_names(repo), "cves": [], "unsure_cves": [],
+                   "host_only": False, "mk_path": "", "pkg_path": "", "patch_files": [],
+                   "cpeid": ""}
         a = _candidate(obs, st, cfg, name, pkg, lane, target, today, repo, build_root,
                        br_version, nvd_of, len(actions), get, packages, attribution)
         if a["allowed"]:
