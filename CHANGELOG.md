@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed (26.10.11) — pengyos-alsa-unity.service was dead in 26.10.10 (script shipped non-executable)
+26.10.10 shipped `/usr/libexec/pengyos/alsa-unity` as `0644`: an edit dropped the
+`+x` that `afcefef8` had set, and the rootfs overlay is copied with `rsync -a`, so
+the mode went straight into the image. `pengyos-alsa-unity.service` then failed at
+boot with `203/EXEC` ("Unable to locate executable ... Permission denied"). Audio
+was unaffected on the N100 (stock ACP makes the service redundant), but the laptop
+unity-gain fix it exists for was not being applied. The mode is restored, and the
+gate now fails if a unit `ExecStart` resolves to a non-executable overlay file.
+
 ### Fixed (26.10.10) — HDMI audio: drop the split-mode WirePlumber rule, inherit stock ACP
 `51-alsa-ucm.conf` set `api.alsa.use-acp = false` for PCI cards, so every ALSA
 PCM became a sink of its own. On the N100 (one HDA card: ALC897 + Intel HDMI)
