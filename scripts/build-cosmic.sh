@@ -91,8 +91,10 @@ while IFS=$'\t' read -r name url commit args; do
         python3 "${PIN_TOOL}" "${SRC}/${name}" "${LIBCOSMIC_REV}"
     fi
     echo "[cosmic] cargo ${args}  (${name})"
-    # shellcheck disable=SC2086  # args is a word list on purpose
-    (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" cargo ${args})
+    # Run through a shell so the column can be a `&&`-joined command list — the
+    # cosmic-files row needs the app and the applet built as two separate cargo
+    # invocations (see the TSV). -e: a failed first command stops the component.
+    (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" sh -ec "cargo ${args}")
     if [ -n "${LIBCOSMIC_REV}" ] && [ -e "${SRC}/${name}/Cargo.toml" ]; then
         # A cargo patch only lands if the pinned rev's crate VERSIONS satisfy the
         # graph. A stale component can get "patch was not used in the crate graph"
@@ -103,13 +105,37 @@ while IFS=$'\t' read -r name url commit args; do
         if ! python3 "${PIN_TOOL}" --verify "${SRC}/${name}" "${LIBCOSMIC_REV}"; then
             echo "[cosmic] ${name}: pin unused by the graph, re-resolving its lock"
             (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" cargo generate-lockfile --quiet)
-            (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" cargo ${args})
+            (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" sh -ec "cargo ${args}")
             python3 "${PIN_TOOL}" --verify "${SRC}/${name}" "${LIBCOSMIC_REV}" || {
                 echo "[cosmic] ${name}: the coherence pin did not take effect"; exit 1; }
         fi
     fi
     built=$((built + 1))
 done < "${LIST}"
+
+# --- Guard: the cosmic-files APP must not carry the desktop-applet code -------
+# cosmic-files and cosmic-files-applet are one cargo workspace, and the applet
+# depends on the app crate with `desktop-applet`. Building them in ONE cargo
+# invocation lets cargo feature-unify `desktop-applet` onto the cosmic-files
+# *app* binary, which then also creates the applet's full-screen Bottom-layer
+# "desktop" surface — the file manager draws a second, interactive copy of the
+# file view on the desktop wallpaper (reproduced 2026-10-06 in QEMU; see
+# CHANGELOG). cosmic-components.tsv builds them as two invocations; fail loudly
+# if a future edit reintroduces the single workspace build.
+if [ "${FETCH_ONLY}" = 0 ] && wanted cosmic-files && [ -x "${BUILD}/release/cosmic-files" ]; then
+    if grep -aq "already had surface ID" "${BUILD}/release/cosmic-files"; then
+        echo "[cosmic] ERROR: cosmic-files was built WITH the desktop-applet feature" >&2
+        echo "[cosmic]        it would draw a second copy of the file view on the desktop." >&2
+        echo "[cosmic]        Build cosmic-files and cosmic-files-applet as separate cargo" >&2
+        echo "[cosmic]        invocations (see the cosmic-files row in cosmic-components.tsv)." >&2
+        exit 1
+    fi
+    if [ -x "${BUILD}/release/cosmic-files-applet" ] &&
+       ! grep -aq "already had surface ID" "${BUILD}/release/cosmic-files-applet"; then
+        echo "[cosmic] ERROR: cosmic-files-applet is missing the desktop-applet code" >&2
+        exit 1
+    fi
+fi
 
 # Our libcosmic apps share one target dir so they share the libcosmic build.
 if [ "${FETCH_ONLY}" = 0 ]; then

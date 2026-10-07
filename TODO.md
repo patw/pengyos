@@ -494,7 +494,12 @@ must carry signed binaries.
   **reverted**: in QEMU the session died at ~32 s and cosmic-comp never started.
   Fix properly — decouple into a separate oneshot unit that runs *after* the
   session, or fix cosmic-comp's import, or drop the vestigial `dbus-run-session`.
-  Verify on real hardware.
+  Verify on real hardware. Related symptom (2026-10-06): a screenshot requested
+  from an **SSH** session hangs ~120 s with no dialog — the SSH client lands on the
+  *systemd user bus*, where `xdg-desktop-portal.service` cannot activate
+  (`Requisite=graphical-session.target`, and nothing ever starts that target:
+  `systemctl --user is-active graphical-session.target` → inactive). The portal is
+  only on the private `dbus-run-session` bus, so in-session screenshots are fine.
 - **Kernel coverage gaps — fleet hardware survey (todo #89, 2026-09-29):** all 10
   machines probed. CONFIG adds: `SPI_INTEL_SPI_PCI` + `MTD_SPI_NOR` (Intel
   SPI-NOR); `INTEL_VSEC`; `AMD64_EDAC` + `EDAC_IGEN6` (ADL-N);

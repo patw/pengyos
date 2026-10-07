@@ -13,6 +13,10 @@
 # libcosmic commit (14 distinct ones). build-cosmic.sh now forces one rev across
 # the whole set; the rev lives in scripts/cosmic-libcosmic.pin.
 #
+# The cargo-arguments column is a word list run as `cargo <args>`. It may be a
+# `&&`-joined list of cargo commands when a component has to be built in more
+# than one invocation — see cosmic-files below for why that is load-bearing.
+#
 # name	repository	commit	cargo arguments
 cosmic-comp	https://github.com/pop-os/cosmic-comp	0fbd4574ef4caf74769a617d205fd1fc909ac9b1	build --release
 cosmic-session	https://github.com/pop-os/cosmic-session	1e4f10b5821982688e4a8a39f819be0bc2ad3e74	build --release
@@ -29,7 +33,16 @@ cosmic-randr	https://github.com/pop-os/cosmic-randr	6e8e795970fa06d434af22775e41
 cosmic-screenshot	https://github.com/pop-os/cosmic-screenshot	5ddcf1804192ff98823bd37a778286db5a00f3dd	build --release
 cosmic-greeter	https://github.com/pop-os/cosmic-greeter	bfb2745176e3fd0824e008d3efb2b37bce5ae0db	build --release --workspace
 cosmic-term	https://github.com/pop-os/cosmic-term	9129277bed1e810418a3138d683c1bc15656234f	build --release
-cosmic-files	https://github.com/pop-os/cosmic-files	d1f0af78e64f9e8ddb52c486913d53a234ce3cf2	build --release --workspace
+# cosmic-files (the file manager) and cosmic-files-applet (the desktop) are ONE
+# cargo workspace, and the applet depends on the app crate with `desktop-applet`.
+# Building them in a single `--workspace` invocation lets cargo feature-unify
+# `desktop-applet` onto the cosmic-files *app* binary too — the file manager then
+# also creates the applet's full-screen Bottom-layer "desktop" surface and draws
+# a second, interactive copy of the file view on the wallpaper (reproduced
+# 2026-10-06 in QEMU; see CHANGELOG). Build the app and the applet as TWO
+# invocations, app FIRST: the app binary must never be compiled with the feature.
+# scripts/build-cosmic.sh fails the build if the app binary carries it anyway.
+cosmic-files	https://github.com/pop-os/cosmic-files	d1f0af78e64f9e8ddb52c486913d53a234ce3cf2	build --release -p cosmic-files && cargo build --release -p cosmic-files-applet
 cosmic-edit	https://github.com/pop-os/cosmic-edit	bfc98bf21930fe5d9c32b7c238442499191b6319	build --release
 cosmic-store	https://github.com/pop-os/cosmic-store	c6e57a18a8abaf4ae6b5755576982839f8e53900	build --release
 cosmic-player	https://github.com/pop-os/cosmic-player	66b3f34335a500ce5dc93880d06f7ae94905872f	build --release

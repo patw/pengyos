@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed (26.10.13) — COSMIC Files drew a second copy of its view on the desktop
+`cosmic-files` (the file manager) and `cosmic-files-applet` (the desktop) are one
+cargo workspace, and the applet depends on the app crate with the `desktop-applet`
+feature. The host build built the component with `cargo build --release
+--workspace`, so cargo **feature-unified** `desktop-applet` onto the `cosmic-files`
+*app* binary too. The app therefore also ran the applet's output-event handler and
+created a full-screen `Layer::Bottom`, all-edges-anchored layer surface showing
+`~/Desktop`: opening Files drew a second, interactive copy of the file view on the
+desktop wallpaper (over the real window, behind everything), and it followed the app
+across workspaces. Reported from behoweather (26.10.11); reproduced in QEMU on
+26.10.12 (virtio-gpu-gl + SDL/GL under Xvfb, QMP-injected input) and root-caused by
+building the app and applet together vs. separately. The component is now built as
+**two cargo invocations** — `-p cosmic-files` then `-p cosmic-files-applet`
+(`scripts/cosmic-components.tsv`) — and `scripts/build-cosmic.sh` fails the build if
+the app binary carries the applet code; `scripts/tests/test_cosmic_files_build.py`
+guards the TSV in the gate.
+
 ### Fixed (26.10.11) — pengyos-alsa-unity.service was dead in 26.10.10 (script shipped non-executable)
 26.10.10 shipped `/usr/libexec/pengyos/alsa-unity` as `0644`: an edit dropped the
 `+x` that `afcefef8` had set, and the rootfs overlay is copied with `rsync -a`, so
