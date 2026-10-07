@@ -14,7 +14,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from pengyos_nightly import planner, sources
+from pengyos_nightly import evidence, planner, sources
 
 FIX = Path(__file__).parent / "fixtures"
 PATCH_TEXT = (FIX / "patches" / "0001-xmlregexp-prevent-out-of-bounds-read-in-nxt-macro.patch"
@@ -195,6 +195,125 @@ def test_a_review_request_makes_a_stock_package_actionable(tmp_path):
     assert a["closes"] == ["CVE-2026-40962"]
     assert a["cves"][0]["fix_commit"]["kind"] == "pull"
     assert len([e for e in a["edits"] if e["path"].endswith(".patch")]) == 1
+
+
+# --- attributing a CVE to the component its fix actually changes -------------
+
+OTHER = (FIX / "patches" / "monorepo-asfdemux-other-component.patch").read_text()
+BAD_COMPONENT = """From bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb Mon Sep 17 00:00:00 2001
+Subject: [PATCH] dvbsuboverlay: bounds check
+
+--- a/subprojects/gst-plugins-bad/gst/dvbsuboverlay/gst-dvbsuboverlay.c
++++ b/subprojects/gst-plugins-bad/gst/dvbsuboverlay/gst-dvbsuboverlay.c
+@@ -10,6 +10,7 @@
++  if (len > MAX) return;
+"""
+
+
+def _gstreamer_obs(bad_version="1.24.13", ship_bad=True, ship_ugly=False):
+    pkgs = {"gstreamer1": _pkg(current="1.24.13", latest="1.26.0",
+                               cpeid="cpe:2.3:a:gstreamer:gstreamer:1.24.13:-:*:*:*:*:*:*",
+                               cves=["CVE-2026-3084", "CVE-2026-3085"]),
+            "gst1-plugins-good": _pkg(current="1.24.13", latest="1.26.0",
+                                      cpeid="cpe:2.3:a:gst-plugins-good:gst-plugins-good:"
+                                            "1.24.13:-:*:*:*:*:*:*")}
+    if ship_bad:
+        pkgs["gst1-plugins-bad"] = _pkg(current=bad_version, latest="1.26.0",
+                                        cpeid="cpe:2.3:a:gst-plugins-bad:gst-plugins-bad:"
+                                              f"{bad_version}:-:*:*:*:*:*:*")
+    if ship_ugly:
+        pkgs["gst1-plugins-ugly"] = _pkg(current="1.24.13", latest="1.26.0",
+                                         cpeid="cpe:2.3:a:gst-plugins-ugly:gst-plugins-ugly:"
+                                               "1.24.13:-:*:*:*:*:*:*")
+    return _obs(**pkgs)
+
+
+def _gstreamer_nvd(tmp_path):
+    return _nvd(tmp_path,
+                ("CVE-2026-3084", _rec("gstreamer", "gstreamer", "*",
+                                       ["https://gitlab.freedesktop.org/gstreamer/gstreamer"
+                                        "/-/merge_requests/11245"], versionEndExcluding="1.26.0")),
+                ("CVE-2026-3085", _rec("gstreamer", "gstreamer", "*",
+                                       ["https://gitlab.freedesktop.org/gstreamer/gstreamer"
+                                        "/-/merge_requests/12000"], versionEndExcluding="1.26.0")))
+
+
+def _gstreamer_get(url):
+    return (BAD_COMPONENT if "12000" in url else OTHER).encode()
+
+
+def test_a_fix_for_a_sibling_component_is_attributed_to_the_package_that_ships_it(tmp_path):
+    """pkg-stats reports a gst-plugins-bad fix against gstreamer1 (NVD's CPE is the
+    project) and shows gst1-plugins-bad with zero CVEs. The patch says where the change
+    is, so the CVE moves to the package that can actually carry it."""
+    obs = _gstreamer_obs()
+    st = _st(_triaged("CVE-2026-3084", "gstreamer1"), _triaged("CVE-2026-3085", "gstreamer1"))
+    room = {"act_enabled": True, "push": True, "lanes": ["security", "routine"],
+            "priorities": ["P0", "P1"], "max_actions": 12, "cooldown_days": 7,
+            "allow_patch_shape": True, "skip_cosmic": True}
+    plan = _plan_get(tmp_path, obs, st, _gstreamer_nvd(tmp_path), _gstreamer_get, room)
+
+    bad = _by_id(plan, "security-gst1-plugins-bad-1.24.13")
+    assert bad, [a["id"] for a in plan["actions"]] + [a["id"] for a in plan["refused"]]
+    assert [c["cve"] for c in bad["cves"]] == ["CVE-2026-3085"], \
+        "only the fix that changes gst-plugins-bad's files belongs here"
+    assert bad["cves"][0]["attributed"]["from"] == "gstreamer1"
+    assert bad["cves"][0]["attributed"]["component"] == "gst-plugins-bad"
+    # The exposure claim is inherited from the project-wide range, and the plan says so.
+    assert bad["cves"][0]["affected"], bad["cves"][0].get("note")
+
+    # asfdemux is gst-plugins-ugly, which no edition ships: that CVE stays on gstreamer1
+    # and is refused there, rather than disappearing from the plan.
+    core = _by_id(plan, "security-gstreamer1-1.24.13")
+    assert [c["cve"] for c in core["cves"]] == ["CVE-2026-3084"]
+    assert not core["allowed"] and "no_fix_for_this_package" in core["refused_by"], core["guards"]
+    assert plan["counts"]["attributed"] == 2
+
+
+def test_attribution_only_holds_when_both_components_are_pinned_at_the_same_version(tmp_path):
+    """The transfer is a lockstep claim: gstreamer releases core and its plugins at one
+    version. If our gst1-plugins-bad is not at that version, the CVE is not its problem."""
+    obs = _gstreamer_obs(bad_version="1.22.12")
+    st = _st(_triaged("CVE-2026-3084", "gstreamer1"), _triaged("CVE-2026-3085", "gstreamer1"))
+    plan = _plan_get(tmp_path, obs, st, _gstreamer_nvd(tmp_path), _gstreamer_get)
+    assert all(a["package"] == "" for a in plan["attributed"]), \
+        "nothing is moved: no component we ship is pinned at 1.24.13 for that fix"
+    assert not [a for a in plan["actions"] + plan["refused"]
+                if a["component"] == "gst1-plugins-bad"], \
+        "gst1-plugins-bad at 1.22.12 is not the package this fix belongs to"
+    core = _by_id(plan, "security-gstreamer1-1.24.13")
+    assert {c["cve"] for c in core["cves"]} == {"CVE-2026-3084", "CVE-2026-3085"}
+
+
+def test_a_component_we_do_not_ship_stays_recorded_where_it_was_reported(tmp_path):
+    """gst-plugins-ugly is in no edition. The CVE must not vanish from the plan: it stays
+    on gstreamer1 and is refused there, with the reason naming the component."""
+    obs = _gstreamer_obs(ship_bad=False)
+    st = _st(_triaged("CVE-2026-3084", "gstreamer1"))
+    plan = _plan_get(tmp_path, obs, st, _gstreamer_nvd(tmp_path), _gstreamer_get)
+    a = _by_id(plan, "security-gstreamer1-1.24.13")
+    assert not a["allowed"] and "no_fix_for_this_package" in a["refused_by"], a["guards"]
+    assert a["not_carried"][0]["reason"].startswith("the fix is for gst-plugins-ugly")
+
+
+def test_attribution_does_not_touch_a_package_that_is_not_a_monorepo_member(tmp_path):
+    """ffmpeg is its own product: nothing is re-attributed, and no patch is fetched for
+    attribution that the edits were not going to fetch anyway."""
+    obs = _obs(ffmpeg=_pkg(current="6.1.5", latest="8.1",
+                           cpeid="cpe:2.3:a:ffmpeg:ffmpeg:6.1.5:-:*:*:*:*:*:*",
+                           cves=["CVE-2026-40962"]))
+    st = _st(_triaged("CVE-2026-40962", "ffmpeg"))
+    nvd = _nvd(tmp_path, ("CVE-2026-40962", _rec(
+        "ffmpeg", "ffmpeg", "*", ["https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348"],
+        versionEndExcluding="8.1")))
+    plan = _plan_get(tmp_path, obs, st, nvd, lambda url: PATCH_TEXT.encode())
+    assert plan["counts"]["attributed"] == 0
+
+
+def test_a_monorepo_product_is_named_as_one(tmp_path):
+    assert evidence.is_monorepo_product("gstreamer")
+    assert not evidence.is_monorepo_product("ffmpeg")
+    assert not evidence.is_monorepo_product("")
 
 
 # --- a named commit that is not a fix for this package ----------------------

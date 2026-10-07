@@ -18,12 +18,20 @@ from pengyos_nightly.versions import bump_kind
 ORDER = {"P0": 0, "P1": 1, "P2": 2}
 
 
-def _matches(obs: dict, st: dict, cfg: dict, name: str, pkg: dict) -> list[dict]:
-    """Triaged CVE matches for one package, in the priorities the policy allows."""
+def _matches(obs: dict, st: dict, cfg: dict, name: str, pkg: dict,
+             attribution: dict | None = None) -> list[dict]:
+    """Triaged CVE matches for one package, in the priorities the policy allows.
+
+    `attribution` can move a match to a different package (see `_attribution`). A moved
+    match carries its `attributed` record, so the plan says where it came from and on what
+    evidence its exposure is claimed.
+    """
     out = []
     for key, rec in st["cves"].items():
         cve, _, pkgname = key.partition("|")
-        if pkgname != name or rec.get("resolved"):
+        moved = (attribution or {}).get((cve, pkgname))
+        owner = (moved or {}).get("package") or pkgname
+        if owner != name or rec.get("resolved") or rec.get("patched_by"):
             continue
         # Already carried as a patch in our tree: not a candidate again, and not an
         # open issue - pkg-stats cannot know we carry the fix because the version moved
@@ -32,10 +40,13 @@ def _matches(obs: dict, st: dict, cfg: dict, name: str, pkg: dict) -> list[dict]
             continue
         if rec.get("priority") not in cfg["priorities"]:
             continue
-        out.append({"cve": cve, "priority": rec["priority"], "cvss": rec.get("cvss"),
-                    "kev": bool(rec.get("kev")), "epss": rec.get("epss"),
-                    "unsure": cve in (pkg.get("unsure_cves") or []),
-                    "confirmed": cve in (pkg.get("cves") or [])})
+        entry = {"cve": cve, "priority": rec["priority"], "cvss": rec.get("cvss"),
+                 "kev": bool(rec.get("kev")), "epss": rec.get("epss"),
+                 "unsure": cve in (pkg.get("unsure_cves") or []),
+                 "confirmed": cve in (pkg.get("cves") or [])}
+        if moved:
+            entry["attributed"] = moved
+        out.append(entry)
     out.sort(key=lambda c: (ORDER.get(c["priority"], 9), -(c.get("cvss") or 0), c["cve"]))
     return out
 
@@ -91,9 +102,78 @@ def _verdicts(name: str, action: dict, pkg: dict, cfg: dict, st: dict,
     return out
 
 
+def _cached(get):
+    """One fetch per upstream URL per plan. Attribution and the edits want the same patch
+    text; asking twice is how a plan becomes slow and self-inconsistent."""
+    cache: dict[str, bytes] = {}
+
+    def fetch(url: str) -> bytes:
+        if url not in cache:
+            cache[url] = get(url)
+        return cache[url]
+    return fetch
+
+
+def _fix_components(url: str, get) -> set[str]:
+    """Which upstream components a named fix touches, read from the patch itself."""
+    try:
+        parts = E.fetch_patches(url, get)
+    except (OSError, ValueError):
+        return set()
+    comps: set[str] = set()
+    for text in parts:
+        comps |= E.patch_components(text)
+    return comps
+
+
+def _attribution(obs: dict, st: dict, cfg: dict, packages: dict, nvd_of, get) -> dict:
+    """CVEs whose named fix changes a *different* component of the same monorepo.
+
+    pkg-stats matches a project-wide CPE against the component carrying that CPE id, so a
+    gst-plugins-bad fix is reported against our gstreamer1 while gst1-plugins-bad itself
+    shows zero CVEs. The patch says which component it changes. If we ship that component
+    at the same version - a monorepo releases its components in lockstep, and our
+    gstreamer1, gst1-plugins-good and gst1-plugins-bad are all 1.24.13 - the CVE belongs to
+    that package, and the fix can actually be carried there.
+
+    If we ship no such component (gst-plugins-ugly is in no edition), the match stays where
+    it was so the refusal is recorded rather than the CVE quietly vanishing.
+    """
+    out: dict[tuple[str, str], dict] = {}
+    for key, rec in st["cves"].items():
+        cve, _, pkgname = key.partition("|")
+        if rec.get("resolved") or rec.get("patched_by"):
+            continue
+        if rec.get("priority") not in cfg["priorities"]:
+            continue
+        pkg = packages.get(pkgname)
+        if not pkg or not EV.is_monorepo_product(EV.upstream_component(pkgname)):
+            continue
+        fc = EV.fix_commit(nvd_of(cve))
+        if not fc or not fc.get("url"):
+            continue
+        comps = _fix_components(fc["url"], get)
+        if len(comps) != 1:
+            continue                      # no single component to attribute it to
+        comp = next(iter(comps))
+        if comp.lower() == EV.upstream_component(pkgname).lower():
+            continue                      # already in the right place
+        version = pkg.get("current") or ""
+        owner = next((n for n, p in packages.items()
+                      if EV.upstream_component(n).lower() == comp.lower()
+                      and (p.get("current") or "") == version), "")
+        out[(cve, pkgname)] = {
+            "from": pkgname, "component": comp, "package": owner, "lockstep": version,
+            "reason": f"the fix changes {comp}/, not {pkgname}'s files" + (
+                f"; attributed to {owner}, pinned at the same {version}"
+                if owner else f"; we ship no package for {comp} at {version}")}
+    return out
+
+
 def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
                target: str, today: dt.date, repo: Path, build_root: Path, br_version: str,
-               nvd_of, index: int, get) -> dict:
+               nvd_of, index: int, get, packages: dict | None = None,
+               attribution: dict | None = None) -> dict:
     """One candidate action, with its guards evaluated. Never raises.
 
     The cheap guards run first: a series jump or a denied component is refused for
@@ -110,10 +190,17 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
         target = current
     kind = bump_kind(current, target) if current and target else "none"
 
-    cves = _matches(obs, st, cfg, name, pkg)
+    cves = _matches(obs, st, cfg, name, pkg, attribution)
     for c in cves:
-        c.update(EV.evidence(c["cve"], name, nvd_of(c["cve"]), current, target,
-                             pkg.get("cpeid", "")))
+        # A CVE attributed from a sibling component of a monorepo keeps the evidence that
+        # matched it there - NVD's range is written against the project, and the only
+        # reason it transfers is that both components are pinned at the same lockstep
+        # version. That is recorded on the CVE, not assumed silently.
+        moved = c.get("attributed") or {}
+        src = moved.get("from") or name
+        src_pkg = (packages or {}).get(src) or pkg
+        c.update(EV.evidence(c["cve"], src, nvd_of(c["cve"]), current, target,
+                             src_pkg.get("cpeid", "")))
         if c.get("affected") or c.get("covered"):
             c["fix_commit"] = EV.fix_commit(nvd_of(c["cve"]))
 
@@ -207,9 +294,15 @@ def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
     br_version = obs.get("buildroot", "")
     considered: dict[str, dict] = {}
 
+    # Which CVEs belong to a different component of a monorepo than the one pkg-stats
+    # reported them against. Computed once, with a shared fetch cache, before any candidate
+    # is built - so a gst-plugins-bad fix is considered for gst1-plugins-bad.
+    get = _cached(get)
+    attribution = _attribution(obs, st, cfg, packages, nvd_of, get)
+
     # Security lane: any package carrying a triaged P0/P1 match.
     for name, pkg in sorted(packages.items()):
-        if not _matches(obs, st, cfg, name, pkg):
+        if not _matches(obs, st, cfg, name, pkg, attribution):
             continue
         considered[name] = ("security", pkg.get("latest") or "")
 
@@ -238,7 +331,7 @@ def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
                                      "editions": [], "cves": [], "unsure_cves": [],
                                      "host_only": False}
         a = _candidate(obs, st, cfg, name, pkg, lane, target, today, repo, build_root,
-                       br_version, nvd_of, len(actions), get)
+                       br_version, nvd_of, len(actions), get, packages, attribution)
         if a["allowed"]:
             actions.append(a)
         else:
@@ -249,7 +342,9 @@ def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
     targets = sorted({e for a in actions for e in a["editions"]})
     return {"date": today.isoformat(), "channel": G.CHANNEL, "policy": cfg,
             "actions": actions, "refused": refused,
+            "attributed": [{"cve": c, "from": p, **a} for (c, p), a in sorted(attribution.items())],
             "release": {"targets": targets,
                         "core_note": "pengyos-core has no A/B layout yet, so it is built "
                                      "but never update-published"},
-            "counts": {"actions": len(actions), "refused": len(refused)}}
+            "counts": {"actions": len(actions), "refused": len(refused),
+                       "attributed": len(attribution)}}

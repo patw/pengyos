@@ -221,9 +221,22 @@ def fix_commit(record: dict) -> dict | None:
     return None
 
 
+# Upstream projects that publish CVEs and fixes under one product name while shipping
+# one tarball per component. NVD's CPE is the project, so pkg-stats can only match such a
+# CVE to the component that carries that CPE id - for gstreamer, gstreamer1. Which
+# component the vulnerable file actually lives in is knowable only from the fix itself
+# (see planner._attribution), which pkg-stats never fetches.
+MONOREPO_PROJECTS = frozenset({"gstreamer"})
+
+
+def is_monorepo_product(product: str) -> bool:
+    """Is this upstream product a monorepo whose CVEs are published project-wide?"""
+    return (product or "").lower() in MONOREPO_PROJECTS
+
+
 # Buildroot's product-name aliases are also the name upstream uses for that package's
-# own directory. For a monorepo (gstreamer) that is the component a fix lives under —
-# `subprojects/<this name>/` — which is what makes a monorepo patch attributable to a
+# own directory. For a monorepo (gstreamer) that is the component a fix lives under -
+# `subprojects/<this name>/` - which is what makes a monorepo patch attributable to a
 # package rather than to the project.
 def upstream_component(package: str) -> str:
     """The name upstream uses for this package itself."""
