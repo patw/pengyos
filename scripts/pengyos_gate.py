@@ -327,6 +327,61 @@ def write_junit(rep: Report, path: Path) -> None:
                     f'failures="{failures}">{cases}</testsuite>\n')
 
 
+_EXEC_LINE = re.compile(
+    r"\s*Exec(?:StartPre|StartPost|Start|Reload|StopPost|Stop|Condition)\s*=\s*(.*)$")
+_EXEC_PREFIX = re.compile(r"^[-+!@]*")
+
+
+def _overlay_index(repo: Path) -> dict[str, Path]:
+    """target-absolute-path -> repo path, for every file in a rootfs-overlay."""
+    idx: dict[str, Path] = {}
+    for ov in sorted((repo / "buildroot-external").glob("**/rootfs-overlay")):
+        if not ov.is_dir():
+            continue
+        for f in ov.rglob("*"):
+            if f.is_file() and not f.is_symlink():
+                idx["/" + f.relative_to(ov).as_posix()] = f
+    return idx
+
+
+def check_overlay_executables(repo: Path) -> list[Check]:
+    """A unit ExecStart that resolves to an overlay file must be executable.
+
+    Buildroot copies BR2_ROOTFS_OVERLAY with rsync -a, so the repo's mode IS the
+    image's mode. A script that loses its +x (an editor rewriting it 0664, say)
+    then fails at boot with 203/EXEC. Found live: alsa-unity shipped 0644 in
+    26.10.10 and pengyos-alsa-unity.service failed on behoweather - a green build
+    and a green gate, because nothing checked the mode.
+    """
+    idx = _overlay_index(repo)
+    units = list((repo / "buildroot-external").glob("**/rootfs-overlay/**/*.service"))
+    units += list((repo / "buildroot-external").glob("**/rootfs-overlay/**/*.service.d/*.conf"))
+    out: list[Check] = []
+    for unit in sorted(units):
+        if not unit.is_file():
+            continue
+        for ln in unit.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = _EXEC_LINE.match(ln)
+            if not m:
+                continue
+            cmd = m.group(1).strip()
+            if not cmd or cmd.startswith(":"):
+                continue
+            target = _EXEC_PREFIX.sub("", cmd.split()[0])
+            if not target.startswith("/"):
+                continue
+            f = idx.get(target)
+            if f is None:
+                continue
+            ok = os.access(f, os.X_OK)
+            out.append(Check(f"overlay-exec:{target}", ok,
+                             "ok" if ok else
+                             f"{f.relative_to(repo)} is not executable (would fail 203/EXEC)"))
+    if not out:
+        out.append(Check("overlay-exec", True, "no overlay binaries referenced by units"))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="PengyOS repo-level integration gate")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -347,6 +402,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rep.checks += check_wiring_lints(repo, changed)
     rep.checks += check_group_overlays(repo)
+    rep.checks += check_overlay_executables(repo)
     rep.checks += check_background_sources(repo)
     if args.mode == "full":
         rep.checks += check_toolkit_suite(repo, changed)
