@@ -310,6 +310,37 @@ def test_attribution_does_not_touch_a_package_that_is_not_a_monorepo_member(tmp_
     assert plan["counts"]["attributed"] == 0
 
 
+def test_attribution_fetches_nothing_for_a_package_that_is_not_in_a_monorepo(tmp_path):
+    """Attribution costs a fetch per candidate fix, so it runs only where the question is
+    real: a package whose upstream product publishes CVEs project-wide. ffmpeg is its own
+    product, and paying for a fetch to learn that would double the plan's network cost."""
+    obs = _obs(ffmpeg=_pkg(current="6.1.5", latest="8.1",
+                           cpeid="cpe:2.3:a:ffmpeg:ffmpeg:6.1.5:-:*:*:*:*:*:*",
+                           cves=["CVE-2026-40962"]),
+               gstreamer1=_pkg(current="1.24.13", latest="1.26.0",
+                               cpeid="cpe:2.3:a:gstreamer:gstreamer:1.24.13:-:*:*:*:*:*:*",
+                               cves=["CVE-2026-3085"]))
+    st = _st(_triaged("CVE-2026-40962", "ffmpeg"), _triaged("CVE-2026-3085", "gstreamer1"))
+    nvd = _nvd(tmp_path,
+               ("CVE-2026-40962", _rec("ffmpeg", "ffmpeg", "*",
+                                       ["https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348"],
+                                       versionEndExcluding="8.1")),
+               ("CVE-2026-3085", _rec("gstreamer", "gstreamer", "*",
+                                      ["https://gitlab.freedesktop.org/gstreamer/gstreamer"
+                                       "/-/merge_requests/12000"], versionEndExcluding="1.26.0")))
+    seen = []
+
+    def get(url):
+        seen.append(url)
+        return _gstreamer_get(url)
+
+    out = planner._attribution(obs, st, {"priorities": ["P0", "P1"]}, obs["packages"],
+                               lambda cve: sources.nvd_raw(nvd, cve), get)
+    assert seen == ["https://gitlab.freedesktop.org/gstreamer/gstreamer"
+                    "/-/merge_requests/12000.patch"], seen
+    assert list(out) == [("CVE-2026-3085", "gstreamer1")]
+
+
 def test_a_monorepo_product_is_named_as_one(tmp_path):
     assert evidence.is_monorepo_product("gstreamer")
     assert not evidence.is_monorepo_product("ffmpeg")
