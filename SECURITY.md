@@ -2,16 +2,20 @@
 
 ## Reporting a vulnerability
 
-Please report security problems privately through GitHub's **private
-vulnerability reporting** on this repository (*Security* → *Report a
-vulnerability*), not in a public issue. Include the image and version
-(`cat /etc/os-release`: `IMAGE_ID`, `IMAGE_VERSION`, `BUILD_ID`), what an
-attacker needs (network position, a local account, physical access), and steps
-to reproduce.
+Email **dungeons@gmail.com**. There is no tracker, no bug bounty and no
+guaranteed response time — PengyOS is one person and a set of agents, and that
+address is the whole process for now. Please don't open a public issue for a
+live problem: disclose it by email first, so there is a fix to point at before
+there is a thread about it.
 
-PengyOS is a small project run by one person, so there is no bug bounty or
-guaranteed response time. Fixes ship as a new image on the `testing` update
-channel first, then `stable`.
+Include the image and version (`cat /etc/os-release`: `IMAGE_ID`,
+`IMAGE_VERSION`, `BUILD_ID`), what an attacker needs (network position, a local
+account, physical access), and the steps to reproduce. If `BUILD_ID` matches
+nothing in this repository's history, send it anyway — the history was squashed
+when the project went public, and the number still identifies which build you
+are running.
+
+Fixes ship as a new image on the `testing` update channel first, then `stable`.
 
 **Supported versions:** the newest image of each edition on each channel.
 Installed machines check for updates daily, so older images are not patched.

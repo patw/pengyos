@@ -2,7 +2,7 @@
 
 The nightly maintenance loop for [PengyOS](../../README.md). Every evening it finds
 out what changed upstream for everything PengyOS ships, triages the CVEs with the
-local model on behoserver, emails the maintainer a report — and **does something
+local model, emails the maintainer a report — and **does something
 about it**: it batches up to `max_actions` changes, verifies them as one build, and
 publishes **one** boot-checked, signed image to **testing**.
 
@@ -150,14 +150,16 @@ State lives in `~/build/pengyos/nightly/` (`--state-dir`): `observations.json`,
 `pkg-stats` updates).
 
 Needs: configured Buildroot output trees under `~/build/pengyos/output/`, `uv`
-(for `pkg-stats`' `aiohttp`), `git`, network, Pengy's settings
-(`~/.config/pengy/settings.json`) and the email skill
-(`~/Personal/skills/email/send_email.py`).
+(for `pkg-stats`' `aiohttp`), `git`, network, a model gateway's settings
+(`~/.config/pengy/settings.json`, or `$PENGY_SETTINGS`), and a mailer at
+`$PENGYOS_EMAIL_SCRIPT` (default `~/.local/bin/pengyos-email`). The mailer is
+not in this repository: with none configured the loop stays report-only, the
+HTML report still lands on disk, and the queue is not marked as reported.
 
-It runs from cron on behoserver at 19:00, before the Ralph window:
+Scheduled example — one run per evening, ahead of any overnight agent work:
 
 ```
-0 19 * * * cd $HOME/Desktop/Personal/pengyos/tools/pengyos-nightly && python3 -m pengyos_nightly run >> $HOME/logs/cron/pengyos-nightly.log 2>&1
+0 19 * * * cd "$HOME/pengyos/tools/pengyos-nightly" && python3 -m pengyos_nightly run >> "$HOME/logs/pengyos-nightly.log" 2>&1
 ```
 
 ## Tests

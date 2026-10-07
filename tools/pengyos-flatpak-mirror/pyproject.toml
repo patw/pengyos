@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-    { name = "Pat Wendorf", email = "pat@catbee.ca" },
+    { name = "Pat Wendorf", email = "dungeons@gmail.com" },
 ]
 keywords = ["pengyos", "flatpak", "ostree", "repo", "mirror", "supply-chain", "flathub"]
 classifiers = [

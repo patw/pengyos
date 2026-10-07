@@ -143,7 +143,7 @@ def test_full_flow_then_quiet_second_night(tmp_path):
 
     sent = []
     tuesday = dt.date(2026, 10, 6)
-    r = cli.do_report(args, send=lambda *a, **k: sent.append(a), today=tuesday)
+    r = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True, today=tuesday)
     assert r["sent"] and "1 P1" in r["subject"] and "major" in r["subject"]
     html = Path(r["report"]).read_text()
     assert "CVE-2026-38754" in html and "cosmic" in html
@@ -152,11 +152,11 @@ def test_full_flow_then_quiet_second_night(tmp_path):
     cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats)
     m2 = model("unused")
     assert cli.do_triage(args, complete=m2) == [] and not m2.calls
-    r2 = cli.do_report(args, send=lambda *a, **k: sent.append(a), today=tuesday + dt.timedelta(days=1))
+    r2 = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True, today=tuesday + dt.timedelta(days=1))
     assert not r2["sent"] and r2["subject"].endswith("nothing new") and len(sent) == 1
 
     # Monday: the digest goes out anyway.
-    r3 = cli.do_report(args, send=lambda *a, **k: sent.append(a), today=dt.date(2026, 10, 12))
+    r3 = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True, today=dt.date(2026, 10, 12))
     assert r3["sent"] and "weekly digest" in r3["subject"]
 
 
@@ -175,7 +175,7 @@ def test_no_email_does_not_consume_the_report_queue(tmp_path):
     cli.do_triage(args, complete=model('{"priority":"P2","reachable":"none","rationale":"x"}'))
 
     sent = []
-    r = cli.do_report(args, send=lambda *a, **k: sent.append(a), today=dt.date(2026, 10, 6))
+    r = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True, today=dt.date(2026, 10, 6))
     assert r["sent"] is False and sent == []
     assert r["new_cves"] and r["new_findings"]              # there IS something to report
 
@@ -189,7 +189,7 @@ def test_no_email_does_not_consume_the_report_queue(tmp_path):
 
     # The next run, without the flag, sends the same content. Nothing was lost.
     real = _args(tmp_path)
-    r2 = cli.do_report(real, send=lambda *a, **k: sent.append(a), today=dt.date(2026, 10, 7))
+    r2 = cli.do_report(real, send=lambda *a, **k: sent.append(a) or True, today=dt.date(2026, 10, 7))
     assert r2["sent"] and len(sent) == 1
     assert r2["new_cves"] == r["new_cves"] and r2["new_findings"] == r["new_findings"]
     st2 = state.load(Path(args.state_dir) / "state.json")
@@ -204,12 +204,12 @@ def test_mark_reported_clears_the_queue_without_sending(tmp_path):
     cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats)
     cli.do_triage(args, complete=model('{"priority":"P2","reachable":"none","rationale":"x"}'))
     sent = []
-    r = cli.do_report(args, send=lambda *a, **k: sent.append(a), today=dt.date(2026, 10, 6))
+    r = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True, today=dt.date(2026, 10, 6))
     assert r["sent"] is False and sent == []
     st = state.load(Path(args.state_dir) / "state.json")
     assert st["findings"] and all(c.get("reported") for c in st["cves"].values())
     # Genuinely cleared: the next night has nothing new to say.
-    r2 = cli.do_report(args, send=lambda *a, **k: sent.append(a), today=dt.date(2026, 10, 7))
+    r2 = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True, today=dt.date(2026, 10, 7))
     assert r2["new_cves"] == 0 and r2["new_findings"] == 0
 
 
@@ -228,7 +228,7 @@ def test_a_forced_report_is_never_blank(tmp_path):
     # Tuesday: not a digest day, and everything is already reported.
     quiet = _args(tmp_path, force_email=True)
     sent = []
-    r = cli.do_report(quiet, send=lambda *a, **k: sent.append(a), today=dt.date(2026, 10, 6))
+    r = cli.do_report(quiet, send=lambda *a, **k: sent.append(a) or True, today=dt.date(2026, 10, 6))
     assert r["sent"] and len(sent) == 1
     assert "still open" in r["subject"] and "weekly digest" not in r["subject"]
     body = Path(r["report"]).read_text()
@@ -271,6 +271,32 @@ def test_send_uses_email_skill(tmp_path):
     assert argv[:2] == ["python3", "/skills/email/send_email.py"]
     assert "--html" in argv and argv[argv.index("--to") + 1] == "a@b.c"
     assert (tmp_path / "r.html").read_text() == "<p>x</p>"
+
+
+def test_pengyos_email_script_names_the_mailer(tmp_path, monkeypatch):
+    """The mailer is machine-local: $PENGYOS_EMAIL_SCRIPT points at it, and a
+    machine with nothing configured has no mailer rather than a broken default."""
+    mailer = tmp_path / "pengyos-email"
+    mailer.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("PENGYOS_EMAIL_SCRIPT", str(mailer))
+    assert report.email_script() == mailer
+    monkeypatch.setenv("PENGYOS_EMAIL_SCRIPT", str(tmp_path / "absent-mailer"))
+    assert report.email_script() is None, "a named mailer that does not exist is no mailer"
+    monkeypatch.delenv("PENGYOS_EMAIL_SCRIPT", raising=False)
+    monkeypatch.setattr(report, "DEFAULT_EMAIL_SCRIPT", tmp_path / "no-launcher-here")
+    assert report.email_script() is None
+
+
+def test_no_mailer_means_report_only_and_not_reported(tmp_path, monkeypatch):
+    """A report nobody received has not been reported: send() must say False and
+    put nothing on the wire, so the caller leaves the queue intact."""
+    monkeypatch.delenv("PENGYOS_EMAIL_SCRIPT", raising=False)
+    monkeypatch.setattr(report, "DEFAULT_EMAIL_SCRIPT", tmp_path / "no-launcher-here")
+    calls = []
+    sent = report.send("subj", "<p>x</p>", tmp_path / "r.html",
+                       run=lambda argv, **k: calls.append(argv))
+    assert sent is False, "send() may not claim a delivery that did not happen"
+    assert calls == [], "nothing may be invoked when no mailer is configured"
 
 
 def test_digest_subject_carries_the_standing_load_not_just_whats_new():

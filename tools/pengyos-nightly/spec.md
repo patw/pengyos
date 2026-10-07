@@ -9,7 +9,7 @@ testing); phase 1 only observes, triages and reports.
 PengyOS pins everything: Buildroot and its ~450 packages, our authored recipes,
 the COSMIC commits, the kernel, the NVIDIA driver. Pins go stale, and stale pins
 collect CVEs. This loop keeps a human informed without asking a human to read
-NVD, and it runs on the local model on behoserver, where tokens cost electricity
+NVD, and it runs on a local model, where tokens cost electricity
 only.
 
 It replaces the TODO items "THE LOOP" (#110) and "automated triage" (#118), and
@@ -26,7 +26,7 @@ it gives `pengyos-upstream-watch` / `pengyos-update-triage` their real inputs.
 Stable is always a human decision. Nothing in this tool runs `update-promote`.
 
 ## Phase 1 deliverable
-A Python CLI `pengyos-nightly` (standard library only) run by cron on behoserver:
+A Python CLI `pengyos-nightly` (standard library only) run by cron on the build host:
 
 ```
 pengyos-nightly run     [--state-dir DIR] [--repo DIR] [--build-root DIR] [--no-email] [--dry-run]
@@ -94,8 +94,9 @@ floor always wins over the model (the model can raise a priority, never lower
 a KEV CVE below P1).
 
 ### Report
-An HTML email through the email skill (`~/Personal/skills/email/send_email.py`,
-configurable), and the same content as `<state-dir>/reports/<date>.html`.
+An HTML email through a machine-local mailer (`$PENGYOS_EMAIL_SCRIPT`, default
+`~/.local/bin/pengyos-email`; absent means report-only), and the same content
+as `<state-dir>/reports/<date>.html`.
 
 * New since the last report: CVEs by priority (with rationale, editions, fixed
   version if known), routine updates, major upgrades.
@@ -457,7 +458,7 @@ Status as of 2026-10-07, measured against the tests, not against intent:
 23. **not met.** There is no build to fail.
 
 ## Acceptance criteria
-1. `pengyos-nightly run --no-email` on behoserver writes observations, a
+1. `pengyos-nightly run --no-email` on the build host writes observations, a
    triaged state and an HTML report, with every source `ok` or an explicit
    error.
 2. Each observer parses a recorded fixture of its real upstream format

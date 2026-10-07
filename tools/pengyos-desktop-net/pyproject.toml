@@ -9,7 +9,7 @@ description = "Declarative NetworkManager + wpa_supplicant + COSMIC panel defaul
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Pat Wendorf", email = "pat@catbee.ca" }]
+authors = [{ name = "Pat Wendorf", email = "dungeons@gmail.com" }]
 keywords = ["pengyos", "networkmanager", "wifi", "cosmic", "buildroot"]
 # Standard library only at test time; declare any real dependency here.
 dependencies = []

@@ -213,8 +213,10 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
     should_send = bool(new_cves or new_findings or errors or digest or args.force_email)
     sent = False
     if should_send and not args.no_email:
-        send(subj, body, out, to=args.to)
-        sent = True
+        sent = send(subj, body, out, to=args.to)
+        if not sent:
+            print(f"report: no mailer configured (set PENGYOS_EMAIL_SCRIPT); "
+                  f"the report is at {out} and the queue stays unreported")
     # Only a DELIVERED report consumes the queue. `--no-email` renders to disk and
     # leaves everything unreported, so the next real run still sends it. Marking on
     # --no-email is what cost the operator their first digest: a development run on

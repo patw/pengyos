@@ -2,11 +2,23 @@
 from __future__ import annotations
 
 import html
+import os
 import subprocess
 from pathlib import Path
 
-EMAIL_SCRIPT = Path.home() / "Personal/skills/email/send_email.py"
+#: The mailer is machine-local and deliberately not part of this repository.
+#: $PENGYOS_EMAIL_SCRIPT names it; the default is the conventional per-user
+#: launcher. A machine with neither stays report-only - the HTML report is still
+#: written to disk, and the queue is not marked as reported.
+DEFAULT_EMAIL_SCRIPT = Path.home() / ".local/bin/pengyos-email"
 PRI_COLOR = {"P0": "#b00020", "P1": "#c75000", "P2": "#666666"}
+
+
+def email_script() -> Path | None:
+    """The mailer configured on this machine, or None when there is none."""
+    env = os.environ.get("PENGYOS_EMAIL_SCRIPT", "").strip()
+    path = Path(env).expanduser() if env else DEFAULT_EMAIL_SCRIPT
+    return path if path.is_file() else None
 
 
 def _e(s) -> str:
@@ -146,7 +158,16 @@ def subject(date: str, new_cves: list[dict], new_findings: list[dict], errors: d
 
 
 def send(subject_line: str, html_body: str, body_file: Path, to: str | None = None,
-         script: Path = EMAIL_SCRIPT, run=subprocess.run) -> None:
+         script: Path | None = None, run=subprocess.run) -> bool:
+    """Deliver the report; True only when it was actually sent.
+
+    ``script`` None means "whatever this machine configures". With no mailer
+    configured nothing goes out on the wire and the caller must not treat the
+    queue as reported - a report nobody received has not been reported.
+    """
+    script = Path(script) if script is not None else email_script()
+    if script is None:
+        return False
     body_file.write_text(html_body)
     argv = ["python3", str(script), "--quiet", "--html", "--subject", subject_line,
             "--body-file", str(body_file)]

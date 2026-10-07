@@ -36,7 +36,7 @@ def _seed(tmp_path, priority="P1", drain=True, errors=None):
     cli.do_triage(args, complete=flow.model(
         f'{{"priority":"{priority}","reachable":"local","rationale":"x"}}'))
     if drain:
-        cli.do_report(args, send=lambda *a, **k: None, today=dt.date(2026, 10, 7))
+        cli.do_report(args, send=lambda *a, **k: True, today=dt.date(2026, 10, 7))
     if errors is not None:
         obs = json.loads((_dir(tmp_path) / "observations.json").read_text())
         obs["errors"] = errors
@@ -83,7 +83,7 @@ def test_a_carried_fix_is_counted_as_closed_by_every_command(tmp_path, capsys):
     # The report must not count it among what is still open. The standing state only
     # travels with a digest or a forced send, so force one here.
     args.force_email = True
-    r = cli.do_report(args, send=lambda *a, **k: None, today=dt.date(2026, 10, 12))
+    r = cli.do_report(args, send=lambda *a, **k: True, today=dt.date(2026, 10, 12))
     body = (_dir(tmp_path) / "reports" / "2026-10-12.html").read_text()
     assert "Closed by patches we carry (1)" in body
     assert f"still open of {before['tracked']} tracked" in r["subject"], r["subject"]

@@ -1,14 +1,20 @@
 # Commit-identity normalization for `git log` / `git shortlog`.
 #
-# One identity per contributor. The ralph loop wrote most of this repository and
-# did so under several spellings of the same bot; they collapse here so the
-# history reads as three authors instead of twelve. This changes display only —
-# it does not rewrite any commit, so a BUILD_ID quoted by an installed image
-# still resolves to a real commit here (see SECURITY.md).
+# One identity per contributor. The ralph loop wrote most of this repository
+# under several spellings of the same bot; they collapse here so the history
+# reads as three authors instead of twelve. The canonical human address is the
+# one that actually receives mail - the catbee.ca spellings were never
+# provisioned. The agent identities stay separate on purpose: a person signs
+# the boundary, but the machine-authored commits stay labelled as such (see
+# docs/ai-contribution-stance.md).
+#
+# This is display only. No commit is rewritten, so a BUILD_ID quoted by an
+# installed image still resolves to a real commit in this history.
 
-Pat Wendorf <pat@catbee.ca> <dungeons@gmail.com>
-Pat Wendorf <pat@catbee.ca> <beholder@catbee.ca>
-Pengy <pengy@catbee.ca> <pengy@catbee.cc>
+Pat Wendorf <dungeons@gmail.com> <pat@catbee.ca>
+Pat Wendorf <dungeons@gmail.com> <beholder@catbee.ca>
+Pengy <pengy@pengyos.local> <pengy@catbee.ca>
+Pengy <pengy@pengyos.local> <pengy@catbee.cc>
 Ralph Loop <ralph@pengyos.local> <ralph@local>
 Ralph Loop <ralph@pengyos.local> <ralph@localhost>
 Ralph Loop <ralph@pengyos.local> <ralph@catbee.local>

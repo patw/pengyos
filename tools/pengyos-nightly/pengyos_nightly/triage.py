@@ -6,6 +6,7 @@ JSON. Its answer can raise a priority above the rules' floor, never lower it.
 from __future__ import annotations
 
 import json
+import os
 import re
 import urllib.request
 from pathlib import Path
@@ -150,7 +151,13 @@ def triage_cve(cve: str, package: str, pkg: dict, nvd: dict, kev: dict, epss: di
 
 # --- the model gateway Pengy uses ----------------------------------------------
 
-def pengy_settings(path: Path = Path.home() / ".config/pengy/settings.json") -> dict:
+def pengy_settings(path: Path | None = None) -> dict:
+    """The model gateway's own settings file. $PENGY_SETTINGS overrides where it
+    lives, so the triage lane is not tied to one machine's layout."""
+    if path is not None:
+        return json.loads(Path(path).read_text())
+    env = os.environ.get("PENGY_SETTINGS", "").strip()
+    path = Path(env).expanduser() if env else Path.home() / ".config/pengy/settings.json"
     return json.loads(Path(path).read_text())
 
 

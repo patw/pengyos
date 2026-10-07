@@ -9,7 +9,7 @@ description = "PengyOS Server remote-admin comfort set: Buildroot package enable
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "Pat Wendorf", email = "pat@catbee.ca" }]
+authors = [{ name = "Pat Wendorf", email = "dungeons@gmail.com" }]
 # stdlib-only at test time; declare any real dependency here.
 dependencies = []
 

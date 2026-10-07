@@ -708,7 +708,7 @@ def test_status_reports_a_blocked_batch(tmp_path, capsys):
     cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats)
     cli.do_triage(args, complete=flow.model('{"priority":"P1","reachable":"local",'
                                             '"rationale":"x"}'))
-    cli.do_report(args, send=lambda *a, **k: None, today=dt.date(2026, 10, 6))
+    cli.do_report(args, send=lambda *a, **k: True, today=dt.date(2026, 10, 6))
     state_dir = Path(args.state_dir)
     (state_dir / "actions.json").write_text(json.dumps({"actions": [
         {"kind": "batch", "date": "2026-10-06", "published": False,

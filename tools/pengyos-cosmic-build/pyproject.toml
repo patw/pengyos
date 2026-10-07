@@ -9,7 +9,7 @@ description = "Vendored, buildable COSMIC recipes + Desktop target wiring over t
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Pat Wendorf", email = "pat@catbee.ca" }]
+authors = [{ name = "Pat Wendorf", email = "dungeons@gmail.com" }]
 # stdlib-only at test time; declare any real dependency here.
 # The engine + lanes are sibling tools imported from their own tools/ dirs
 # (see conftest.py), never pip-installed.

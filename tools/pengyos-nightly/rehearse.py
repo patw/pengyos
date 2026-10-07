@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -42,9 +43,9 @@ REPO = Path(__file__).resolve().parents[2]          # <repo>/tools/pengyos-night
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pengyos_nightly import act as A, edits as E    # noqa: E402
 
-BUILD_ROOT = Path("/home/beholder/build/pengyos")
+BUILD_ROOT = Path(os.environ.get("PENGYOS_BUILD_ROOT") or (Path.home() / "build/pengyos"))
 BR = "2026.08"
-PLAN = Path("/home/beholder/build/pengyos/nightly/plan.json")
+PLAN = BUILD_ROOT / "nightly/plan.json"
 
 
 def git(*args, check=True) -> str:

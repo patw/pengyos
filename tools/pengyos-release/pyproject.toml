@@ -9,7 +9,7 @@ description = "Publish a signed, versioned PengyOS release to a local update fee
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Pat Wendorf", email = "pat@catbee.ca" }]
+authors = [{ name = "Pat Wendorf", email = "dungeons@gmail.com" }]
 keywords = ["pengyos", "linux", "reproducible", "release", "update-feed"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
