@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-10-07
+
+### Changed
+
+- The download page (`download/index.html`) lists only **stable** images: per
+  edition, the newest version whose update release is on the stable channel
+  (Core, which has no update feed, follows any edition of its version). Each
+  edition can show a different version, and each card links its own
+  `SHA256SUMS`. `download-publish` still stages a testing release's images.
+- Each card leads with the release line (`26.10`) and shows the build
+  (`26.10.7`) as small print, with a note that editions update separately, so
+  differing build numbers don't read as one edition being behind.
+- `update-promote` regenerates the download page, so promoting to stable is what
+  puts an image in front of new users.
+
+### Fixed
+
+- The page listed only the newest version's images, dropping editions that
+  version was not published for.
+
 ## [0.9.0] — 2026-10-03
 
 ### Added

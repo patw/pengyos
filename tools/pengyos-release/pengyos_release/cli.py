@@ -204,10 +204,12 @@ def _update_publish(args: argparse.Namespace) -> dict[str, Any]:
 
 @register("update-promote")
 def _update_promote(args: argparse.Namespace) -> dict[str, Any]:
+    from .downloads import refresh_index
     from .osupdate import promote, write_feed
 
     promote(Path(args.site), args.image, args.release, args.channel)
     write_feed(Path(args.site), args.base_url)
+    refresh_index(Path(args.site))  # a stable release is what the download page offers
     if not args.json:
         print(f"{args.image} {args.release} is now on {args.channel}")
     return {"image": args.image, "version": args.release, "channel": args.channel}

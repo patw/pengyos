@@ -11,6 +11,14 @@
 Desktop, Desktop NVIDIA, Server and Server NVIDIA ship their *installer* stick (live system +
 installer); Core ships its disk image (no installer: it runs from what it is
 written to).
+
+``download-publish`` runs with every release, testing included, because the
+images must come from the build that was boot-checked. ``index.html`` lists
+only **stable** ones: per edition, the newest version whose update release
+(``<site>/update/<image>/<version>/release.json``) is on stable, so a testing
+release stays off the page until ``update-promote --channel stable``, which
+regenerates it. Core has no update feed; its image counts as stable once any
+edition of the same version is.
 """
 
 from __future__ import annotations
@@ -115,6 +123,38 @@ def publish_downloads(builds: list[Path], site: Path, key: Path, *, force: bool 
     return dest
 
 
+def _stable(site: Path) -> set[tuple[str, str]]:
+    """(image, version) pairs on the stable update channel; Core rides along with its version."""
+    pairs = set()
+    for rj in (site / "update").glob("*/*/release.json"):
+        rel = json.loads(rj.read_text())
+        if "stable" in rel.get("channels", []):
+            pairs.add((rel["image"], rel["version"]))
+    pairs |= {("pengyos-core", v) for _, v in pairs}
+    return pairs
+
+
+def listed(site: Path) -> tuple[list[dict], list[dict]]:
+    """What the page offers: (one entry per edition, its newest stable; older stable releases)."""
+    releases = [json.loads(dj.read_text()) for dj in (site / "download").glob("*/downloads.json")]
+    releases.sort(key=lambda r: parse_version(r["version"]), reverse=True)
+    stable = _stable(site)
+    current = {}
+    for r in releases:
+        for e in r["images"]:
+            if (e["image"], r["version"]) in stable and e["image"] not in current:
+                current[e["image"]] = {**e, "version": r["version"]}
+    shown = {e["version"] for e in current.values()}
+    older = [r for r in releases if r["version"] not in shown
+             and any((e["image"], r["version"]) in stable for e in r["images"])]
+    return sorted(current.values(), key=lambda e: ORDER.index(e["image"])), older
+
+
+def _line(version: str) -> str:
+    """The release line people compare (``26.10``); the build (``26.10.7``) is small print."""
+    return version.rsplit(".", 1)[0]
+
+
 def _stick(raw: int) -> int:
     """The smallest common USB stick size (GB) the image fits on (sticks hold ~93%)."""
     return next(g for g in (4, 8, 16, 32, 64, 128) if g * 10**9 * 0.93 >= raw)
@@ -125,25 +165,19 @@ def _mib(n: int) -> str:
 
 
 def render_index(site: Path, key_file: str) -> str:
-    releases = []
-    for dj in (site / "download").glob("*/downloads.json"):
-        releases.append(json.loads(dj.read_text()))
-    releases.sort(key=lambda r: parse_version(r["version"]), reverse=True)
-    if not releases:
+    current, past = listed(site)
+    if not current:
         cards = "<p>No images published yet.</p>"
-        latest = None
     else:
-        latest = releases[0]
-        v = latest["version"]
         cards = "\n".join(
-            f'''<div class="card"><h3>{html.escape(e["name"])} <span class="v">{v}</span></h3>
+            f'''<div class="card"><h3>{html.escape(e["name"])} <span class="v">{_line(e["version"])}</span></h3>
 <p>{EDITIONS[e["image"]][1]}</p>
-<p><a class="btn" href="{v}/{e["file"]}">Download {html.escape(e["name"])}</a>
+<p><a class="btn" href="{e["version"]}/{e["file"]}">Download {html.escape(e["name"])}</a>
 <span class="m">{_mib(e["size"])} download · {_mib(e["raw_size"])} written · needs {"an" if _stick(e["raw_size"]) == 8 else "a"} {_stick(e["raw_size"])} GB+ stick</span></p>
-<p class="m mono">sha256 {e["sha256"]}</p></div>''' for e in latest["images"])
+<p class="m mono">build {e["version"]} · sha256 {e["sha256"]} · <a href="{e["version"]}/SHA256SUMS">SHA256SUMS</a></p></div>''' for e in current)
     older = "".join(
-        f'<li><a href="{r["version"]}/">{r["version"]}</a> ({r["published"][:10]})</li>' for r in releases[1:])
-    v = latest["version"] if latest else "YY.MM.N"
+        f'<li><a href="{r["version"]}/">{r["version"]}</a> ({r["published"][:10]})</li>' for r in past)
+    v = current[0]["version"] if current else "YY.MM.N"
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Download PengyOS</title>
@@ -168,8 +202,10 @@ installing <strong>erases the whole disk</strong> you install to.</p>
 
 <h2>1. Pick an edition</h2>
 {cards}
-<p class="m">Every image is listed in <a href="{v}/SHA256SUMS">SHA256SUMS</a>, signed by the PengyOS release key
-(<a href="{v}/SHA256SUMS.sig">signature</a>, <a href="{key_file}">public key</a>). Installed machines get
+<p class="m">Each edition is updated on its own, and each image here is the newest for its edition: a fix
+that only touches the Desktop does not make a new Server, so build numbers can differ.</p>
+<p class="m">Each release lists its images in a SHA256SUMS file, signed by the PengyOS release key
+(<code>SHA256SUMS.sig</code> beside it; <a href="{key_file}">public key</a>). Installed machines get
 updates from <a href="/update/">the update feed</a>.</p>
 {f'<div class="m">Older releases: <ul>{older}</ul></div>' if older else ''}
 
@@ -218,6 +254,12 @@ if it does not, the computer goes back to the previous version by itself.</p>
 <p class="m"><a href="/">← pengyos.catbee.ca</a></p>
 </body></html>
 """
+
+
+def refresh_index(site: Path) -> Path | None:
+    """Rewrite index.html after a promotion, with the key file download-publish left there."""
+    keys = sorted((site / "download").glob("pengyos-release-*.pub"))
+    return write_index(site, key_file=keys[-1].name) if keys else None
 
 
 def write_index(site: Path, key_file: str) -> Path:

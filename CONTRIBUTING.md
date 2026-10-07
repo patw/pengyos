@@ -80,6 +80,14 @@ edition's post-build writes os-release (`board/common/os-release.sh`):
 | `BUILD_ID` | `09af82d6df` | the git commit (`-dirty`: uncommitted changes) |
 | `PRETTY_NAME` | `PengyOS Server 26.09` | shown by the console banner, `hostnamectl` |
 
+**A patch build ships only the editions it changes; a new month ships all of
+them.** A Desktop-only fix (COSMIC, audio) is published for the Desktops alone,
+so Server machines don't reboot into a new slot that changes nothing. The first
+release of each month (`YY.MM.0`) is published for every edition, so all five
+always share a release line. People compare the line: the download page,
+`PRETTY_NAME` and the console banner lead with `26.10`, and the build
+(`26.10.7`) is small print.
+
 The installer stick's payload and `pengyos-release` use the same `YY.MM.N`
 (it sorts as dotted integers). Tools under `tools/` keep their own semantic
 versions.
@@ -133,7 +141,8 @@ promoted to **stable** once they have been upgraded on real hardware.
    ```
 
    `scripts/release.sh --publish` (sign into the site dir) or `--push` (and
-   rsync it) does the same after its checks. Images built with
+   rsync it) does the same after its checks. The download images are staged,
+   not offered: `download/index.html` lists only releases on stable. Images built with
    `PENGYOS_AUTHORIZED_KEYS_FILE` set must not be published.
 
 5. **Promote** once a real machine on testing has upgraded and confirmed the
@@ -144,7 +153,8 @@ promoted to **stable** once they have been upgraded on real hardware.
      --image <IMAGE_ID> --release <YY.MM.N> --channel stable
    ```
 
-   Then rsync again, and prune releases you no longer want public from both
+   This also regenerates the download page, so the release's install images
+   become the ones new users get. Then rsync again, and prune releases you no longer want public from both
    the site and the remote (`rsync` without `--delete` brings pruned
    releases back).
 

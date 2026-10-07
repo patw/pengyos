@@ -154,7 +154,15 @@ def test_download_publish(tmp_path, key):
     sig = (dest / "SHA256SUMS.sig").read_bytes().partition(b"\n")[2]
     Ed25519PublicKey.from_public_bytes(key[1]).verify(sig, hashlib.sha256(sums.encode()).digest())
     page = (site / "download/index.html").read_text()
-    assert "26.09.1/pengyos-desktop-26.09.1-x86_64.img.xz" in page and "Secure Boot" in page
+    assert "Secure Boot" in page
+    assert "pengyos-desktop-26.09.1-x86_64.img.xz" not in page  # testing until promoted
+    publish_update(desk, site, key[0], channel="testing")
+    promote(site, "pengyos-desktop", "26.09.1", "stable")
+    from pengyos_release.downloads import refresh_index
+    refresh_index(site)
+    page = (site / "download/index.html").read_text()
+    assert "26.09.1/pengyos-desktop-26.09.1-x86_64.img.xz" in page
+    assert "26.09.1/pengyos-core-26.09.1-x86_64.img.xz" in page  # Core rides with its version
     assert list((site / "download").glob("pengyos-release-*.pub"))
     assert _stick(6 * 10**9) == 8 and _stick(1_400_000_000) == 4
     # a mixed-version set is refused
@@ -162,3 +170,36 @@ def test_download_publish(tmp_path, key):
     (other / "target/usr/lib/os-release").write_text('IMAGE_ID=pengyos-server\nIMAGE_VERSION="26.09.2"\n')
     with pytest.raises(UpdatePublishError, match="one release at a time"):
         publish_downloads([desk, other], site, key[0])
+
+
+def test_download_page_lists_newest_stable_per_edition(tmp_path, key):
+    """A testing release stays off the page; each edition shows its own newest stable."""
+    from pengyos_release.downloads import publish_downloads
+
+    site = tmp_path / "site"
+
+    def release(image, version, channel):
+        b = make_build(tmp_path / f"{image}-{version}", version=version, image=image)
+        (b / "images" / f"{image}-x86_64-installer.img").write_bytes(b"img")
+        publish_update(b, site, key[0], channel="testing")
+        if channel == "stable":
+            promote(site, image, version, "stable")
+        publish_downloads([b], site, key[0])
+
+    release("pengyos-server", "26.09.1", "stable")
+    release("pengyos-desktop", "26.09.1", "stable")
+    release("pengyos-desktop", "26.09.2", "testing")
+    page = (site / "download/index.html").read_text()
+    assert "26.09.1/pengyos-desktop-26.09.1-x86_64.img.xz" in page
+    assert "26.09.2" not in page
+    assert "26.09.1/pengyos-server-26.09.1-x86_64.img.xz" in page
+
+    assert main(["update-promote", "--site", str(site), "--image", "pengyos-desktop",
+                 "--release", "26.09.2", "--channel", "stable"]) == 0
+    page = (site / "download/index.html").read_text()
+    assert "26.09.2/pengyos-desktop-26.09.2-x86_64.img.xz" in page
+    assert "26.09.1/pengyos-server-26.09.1-x86_64.img.xz" in page  # Server keeps its own newest
+    assert "26.09.1/pengyos-desktop-26.09.1-x86_64.img.xz" not in page
+    # both cards lead with the release line; the build is small print
+    assert page.count('<span class="v">26.09</span>') == 2
+    assert "build 26.09.2" in page and "build 26.09.1" in page

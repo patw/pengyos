@@ -6,8 +6,9 @@
 #   --publish        sign and publish into the local site dir: update-publish for
 #                    the A/B editions (Desktop, Desktop NVIDIA, Server, Server
 #                    NVIDIA) and one
-#                    download-publish for every target built. Needs
-#                    $PENGYOS_RELEASE_KEY.
+#                    download-publish for every target built (staged: the
+#                    download page lists only releases promoted to stable).
+#                    Needs $PENGYOS_RELEASE_KEY.
 #   --push           rsync the site dir to $PENGYOS_SITE_REMOTE (host:path/).
 #                    Implies --publish.
 #   --channel C      update channel for --publish (default: testing)
@@ -46,7 +47,7 @@ while [ $# -gt 0 ]; do
         --skip-cosmic) SKIP_COSMIC=1 ;;
         --no-boot-check) BOOT_CHECK=0 ;;
         --allow-dirty) ALLOW_DIRTY=1 ;;
-        -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
         -*) echo "release: unknown option $1" >&2; exit 2 ;;
         *) TARGETS+=("$1") ;;
     esac

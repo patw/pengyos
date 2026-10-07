@@ -17,6 +17,22 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — the download page offered testing images
+`scripts/release.sh --publish` runs `download-publish` for every release, testing
+included, and the download page listed whatever version was newest, so a testing
+build became the image new users installed before anyone had confirmed it on real
+hardware. It also listed only that newest version's images: 26.10.13 was published
+for the two Desktops alone, which took Server, Server NVIDIA and Core off the page.
+The page now lists, per edition, the newest version promoted to **stable**, and
+`update-promote` regenerates it (`pengyos-release` 0.10.0). Testing images are still
+compressed and signed at publish time, from the build that was boot-checked, and
+wait unlisted in `download/<version>/` until promotion.
+
+Editions can now show different builds, so each card leads with the release line
+(`26.10`) and gives the build as small print. Policy (CONTRIBUTING.md,
+"Versioning"): a patch build ships only the editions it changes, and each month's
+first release ships all of them, so the editions always share a release line.
+
 ### Fixed (26.10.13) — COSMIC Files drew a second copy of its view on the desktop
 `cosmic-files` (the file manager) and `cosmic-files-applet` (the desktop) are one
 cargo workspace, and the applet depends on the app crate with the `desktop-applet`
