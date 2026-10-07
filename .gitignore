@@ -30,3 +30,32 @@ target/
 # conflict files (they appear as ".syncthing.<name>.tmp" / "*.sync-conflict-*").
 .syncthing.*.tmp
 *.sync-conflict-*
+
+# Images and site staging dropped in-tree. Real builds go to $PENGYOS_BUILD_ROOT
+# (~/build/pengyos) and the release site dir to <build-root>/site; if either
+# lands here by mistake it stays out of the index. Test fixtures are exempt.
+*.img
+*.iso
+*.zst
+!tools/*/tests/fixtures/**/*.img
+site/
+
+# Local secrets and signing material. The release key never lives in this repo
+# (SECURITY.md); a public key that ships in an image is fine to track.
+.env
+.secrets
+keys/
+*.pem
+
+# pengyos-nightly state, if --state-dir is ever pointed into the repo
+nightly.toml
+observations.json
+plan.json
+actions.json
+attest.jsonl
+pkgstats-*.json
+nvd/
+reports/
+
+# Gate output (CI uploads it as an artifact; a local run leaves it behind)
+gate-junit.xml

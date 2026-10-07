@@ -1,0 +1,27 @@
+# Binary assets: never diffed, merged or re-encoded as text.
+*.jpg  binary
+*.png  binary
+*.img  binary
+*.iso  binary
+*.zst  binary
+*.tar  binary
+*.gz   binary
+*.bz2  binary
+*.xz   binary
+*.der  binary
+
+# Generated files. Edit the layer under configs/layers/ and run
+# scripts/compose-defconfigs.py; a hand-edit here is overwritten (and a test
+# checks for exactly that).
+buildroot-external/configs/pengyos_core_defconfig linguist-generated=true
+buildroot-external/configs/pengyos_server_defconfig linguist-generated=true
+buildroot-external/configs/pengyos_server_nvidia_defconfig linguist-generated=true
+buildroot-external/configs/pengyos_desktop_defconfig linguist-generated=true
+buildroot-external/configs/pengyos_desktop_nvidia_defconfig linguist-generated=true
+
+# QEMU serial-console and boot-log fixtures carry CRLF and terminal escapes, and
+# the suites parse them byte for byte. Keep them exactly as captured: no eol
+# normalization, no trailing-whitespace cleanup.
+tools/pengyos-qemu-verify/tests/fixtures/*.log -text
+tools/pengyos-desktop-session/tests/fixtures/*.log -text
+tools/pengyos-verifier/tests/fixtures/** -text
