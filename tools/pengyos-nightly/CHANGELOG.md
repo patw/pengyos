@@ -6,6 +6,40 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-07
+
+### Changed
+- **A named upstream commit is checked before it is carried.** `edits.classify_patch`
+  reads the patch itself and refuses three things that are not a fix for this package: one
+  that **adds new files only** (GStreamer publishes its security advisory as its own commit
+  and NVD links that as the "fix" — measured 2026-10-07, 7 of gstreamer1's 10 named fixes
+  were `security-advisories/sa-2026-*.md`; carrying them adds markdown to the source tree
+  and would have let the notes claim 8 CVEs closed), one that **belongs to a sibling
+  component** (NVD's CPE product is `gstreamer`, so a gst-plugins-ugly fix is matched
+  against our `gstreamer1`, whose tarball has no such files), and one **spanning several
+  components**. Refusals are recorded per CVE with a reason and the commit subject
+  (`action["not_carried"]`); a package with nothing carriable is refused by its own guard,
+  `no_fix_for_this_package`, not by the generic `recipe_unreadable`.
+- **Monorepo patches are re-rooted.** Buildroot downloads one standalone tarball per
+  gstreamer component (`GST1_PLUGINS_GOOD_SITE = .../src/gst-plugins-good`), so
+  `subprojects/gst-plugins-good/gst/...` has to become `gst/...`. Buildroot cannot do it:
+  its series format documents a `-pN` field, but `apply-patches.sh` cuts it away and
+  hardcodes `-p1` (line 119; its own comment says "We assume this field to always be
+  -p1") — verified against a real gstreamer patch on 2026-10-07. `reroot_patch` rewrites
+  the path lines only; the hunks are upstream's, unchanged, and the action records the
+  re-rooting as a risk.
+- **The claim is recomputed after the fetch.** The planner's first `closes` is what NVD's
+  metadata promised; once the patches are fetched and classified, `closes` / `still_open`
+  are recomputed from the edits actually written. A CVE whose named commit turned out to be
+  a document goes back to `still_open` with its reason and is not claimed.
+- `patch_dir` returns `(edits, refused)`; `NoCarriableFix` carries the refusals.
+
+### Known limit, measured not assumed
+Re-rooting makes a monorepo fix *addressable*; it does not make it apply. The four qtdemux
+commits from gstreamer MR 11243 are authored against a newer tree and fail on 1.24.13 with
+`-F0` (hunk offsets of -3109 lines). The failure is now legible — "does not apply to the
+pinned version" instead of "No file to patch" — and the triage drops them.
+
 ## [0.7.0] - 2026-10-07
 
 ### Changed

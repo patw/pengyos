@@ -144,14 +144,27 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
     stock_patches = sorted(pkg.get("patch_files") or [])
     try:
         if shape == "patch_dir":
-            e = E.patch_dir(repo, name, current, [c for c in cves if c.get("affected")],
-                            action["editions"], get)
+            e, refused = E.patch_dir(repo, name, current,
+                                     [c for c in cves if c.get("affected")],
+                                     action["editions"], get,
+                                     upstream=EV.upstream_component(name))
             hi = None
         else:
             p = repo / "buildroot-external" / "package" / name
             mk_text = (p / f"{name}.mk").read_text()
             e, hi = E.recipe_bump(repo, name, mk_text, (p / f"{name}.hash").read_text(),
                                   target, get)
+            refused = []
+    except E.NoCarriableFix as exc:
+        # Named by its own guard, not folded into `recipe_unreadable`: "NVD's commit for
+        # these CVEs is the advisory document" and "the recipe could not be read" are
+        # different problems and the next night needs to know which one it has.
+        action["edits"], action["hash"], action["risks"] = [], None, []
+        action["not_carried"] = exc.refused
+        action["guards"] = guards_done + [{"guard": "no_fix_for_this_package", "ok": False,
+                                           "reason": str(exc)}]
+        action["allowed"] = False
+        return action
     except (OSError, ValueError) as exc:
         action["edits"] = []
         action["risks"] = []
@@ -161,11 +174,27 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
         action["allowed"] = False
         return action
 
+    # Recompute the claim from what was actually written. The planner's first `closes` is
+    # what NVD's metadata promised; after the patches are fetched, some of those CVEs may
+    # have no patch at all - the named commit was an advisory document, or a fix for a
+    # sibling component of a monorepo. Those go back to `still_open` with a reason, so the
+    # notes can only ever claim what the tree carries.
+    if shape == "patch_dir":
+        action["closes"] = sorted({c for x in e for c in (x.cves or [])})
+        action["still_open"] = sorted({c["cve"] for c in cves if c.get("affected")}
+                                      - set(action["closes"]))
+        action["not_carried"] = refused
     action["edits"] = [vars(x) for x in e]
     action["hash"] = vars(hi) if hi else None
     action["patches"] = [x.path for x in e if x.path.endswith(".patch")]
     action["risks"] = ([f"the stock recipe's own patches still apply: {', '.join(stock_patches)}"]
                         if stock_patches and shape == "patch_dir" else [])
+    rerooted = [x for x in e if x.path.endswith(".patch") and "re-rooted" in x.note]
+    if rerooted:
+        action["risks"].append(
+            f"{len(rerooted)} patch(es) re-rooted from the upstream monorepo layout "
+            f"(subprojects/<component>/ stripped) because Buildroot builds this package "
+            f"from its own tarball; the hunks are upstream's, unchanged")
     action["guards"] = guards_done
     action["allowed"] = True
     return action

@@ -206,7 +206,7 @@ on the old one, so extraction fails. Two shapes only:
 | Shape | For | Edit |
 |---|---|---|
 | `recipe_bump` | a package we author (`tree != BUILDROOT`) | `NAME_VERSION` in `buildroot-external/package/<name>/<name>.mk` + the tarball hash in its `.hash` |
-| `patch_dir` | a stock package with a CVE NVD proves is open in the pinned version | the upstream fixes NVD names — a commit, or a pull/merge request on a host that serves one as a patch — as `buildroot-external/patches/<pkg>/<version>/*.patch`, **one file per commit** (a review request is split on its `From <sha>` heads), reached through `BR2_GLOBAL_PATCH_DIR` (`package/pkg-utils.mk:pkg-patch-hash-dirs`); recompose the defconfigs. Only the CVEs whose fix is fetchable are carried and claimed; the rest are recorded as `still_open` |
+| `patch_dir` | a stock package with a CVE NVD proves is open in the pinned version | the upstream fixes NVD names — a commit, or a pull/merge request on a host that serves one as a patch — as `buildroot-external/patches/<pkg>/<version>/*.patch`, **one file per commit** (a review request is split on its `From <sha>` heads) and **re-rooted for the package's own tarball** when upstream keeps a monorepo, reached through `BR2_GLOBAL_PATCH_DIR` (`package/pkg-utils.mk:pkg-patch-hash-dirs`); recompose the defconfigs. Only the CVEs whose fix is fetchable *and* belongs to this package are carried and claimed; the rest are recorded as `still_open` with the reason |
 
 Hashes for a bump come from upstream's own published checksum file when the stock
 `.hash` names one (GNOME publishes `<pkg>-<ver>.sha256sum`); otherwise the artifact
@@ -271,6 +271,7 @@ does not publish more than `max_releases` images a night, and it never reaches
 | `stock_version_immovable` | the routine lane may only bump pins we own; a stock package moves with a Buildroot release, not with a nightly |
 | `evidence_required` | NVD must place the shipped version inside the affected range (patch shape) or prove the target closes the CVE (bump shape) |
 | `fix_commits_available` | a patch is carried per CVE, and only for a CVE NVD names a **fetchable** upstream fix for (a commit, or a pull/merge request on a host that serves `.patch`); a component with nothing fetchable is refused, and one with a mix ships the fetchable part and names the rest as still open |
+| `no_fix_for_this_package` | a fetched patch must be a fix **for this package**: not a document that only adds new files, not a fix for a sibling component of a monorepo, not one spanning several components. Each refusal is recorded with its reason and the commit subject |
 | `patch_does_not_apply` | a **specific upstream fix** proved not to apply is not retried: the record is `patch_failures[<pkg>]["fixes"]`, the list of upstream fix URLs that failed, and a candidate is refused only when it wants one of them. A cherry-pick authored against a newer series says nothing about a fix that would apply cleanly, so the package stays open. A record with no fix list predates per-fix tracking and is honoured as a component-wide block until a human clears it |
 | `confirmed_only` | pkg-stats `unsure_cves` are never actionable |
 | `not_host_only` | a build-host package is not a security update to an image |

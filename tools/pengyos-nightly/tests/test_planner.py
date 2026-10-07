@@ -197,6 +197,97 @@ def test_a_review_request_makes_a_stock_package_actionable(tmp_path):
     assert len([e for e in a["edits"] if e["path"].endswith(".patch")]) == 1
 
 
+# --- a named commit that is not a fix for this package ----------------------
+
+ADVISORY = (FIX / "patches" / "advisory-sa-2026-0009.patch").read_text()
+MONOREPO = (FIX / "patches" / "monorepo-qtdemux-series.patch").read_text()
+
+
+def _plan_get(tmp_path, obs, st, nvd, get, cfg=None):
+    cfg = cfg or {"act_enabled": True, "push": True, "lanes": ["security", "routine"],
+                  "priorities": ["P0", "P1"], "max_actions": 1, "cooldown_days": 7,
+                  "allow_patch_shape": True, "skip_cosmic": True}
+    return planner.build_plan(obs, st, cfg, TODAY, _repo(tmp_path), tmp_path,
+                              lambda cve: sources.nvd_raw(nvd, cve), get)
+
+
+def test_an_advisory_commit_is_refused_by_name_not_claimed(tmp_path):
+    """NVD named GStreamer's advisory document as the fix for CVE-2026-3086. Carrying it
+    would add markdown to the source tree and let the notes claim a CVE was fixed."""
+    obs = _obs(gstreamer1=_pkg(current="1.24.13", latest="1.26.0",
+                               cpeid="cpe:2.3:a:gstreamer:gstreamer:1.24.13:-:*:*:*:*:*:*"))
+    nvd = _nvd(tmp_path, ("CVE-2026-3086", _rec(
+        "gstreamer", "gstreamer", "*",
+        ["https://gitlab.freedesktop.org/gstreamer/gstreamer/-/commit/025d59cf3459"],
+        versionEndExcluding="1.26.0")))
+    a = _by_id(_plan_get(tmp_path, obs, _st(_triaged("CVE-2026-3086", "gstreamer1")), nvd,
+                         lambda url: ADVISORY.encode()), "security-gstreamer1-1.24.13")
+    assert not a["allowed"] and "no_fix_for_this_package" in a["refused_by"], a["guards"]
+    assert a["not_carried"][0]["cves"] == ["CVE-2026-3086"]
+    assert "adds new files only" in a["not_carried"][0]["reason"]
+    assert "security-advisories" in a["not_carried"][0]["subject"], "named, so a human can see it"
+
+
+def test_a_fix_for_a_sibling_component_does_not_become_a_claim(tmp_path):
+    """NVD's product is `gstreamer`, so a gst-plugins-ugly fix is matched against our
+    gstreamer1. It is refused rather than written into a tree that has no such files."""
+    obs = _obs(gstreamer1=_pkg(current="1.24.13", latest="1.26.0",
+                               cpeid="cpe:2.3:a:gstreamer:gstreamer:1.24.13:-:*:*:*:*:*:*"))
+    nvd = _nvd(tmp_path, ("CVE-2026-3084", _rec(
+        "gstreamer", "gstreamer", "*",
+        ["https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/11245"],
+        versionEndExcluding="1.26.0")))
+    other = (FIX / "patches" / "monorepo-asfdemux-other-component.patch").read_text()
+    a = _by_id(_plan_get(tmp_path, obs, _st(_triaged("CVE-2026-3084", "gstreamer1")), nvd,
+                         lambda url: other.encode()), "security-gstreamer1-1.24.13")
+    assert not a["allowed"] and "no_fix_for_this_package" in a["refused_by"], a["guards"]
+    assert "gst-plugins-ugly" in a["not_carried"][0]["reason"]
+
+
+def test_a_monorepo_fix_for_this_component_is_carried_re_rooted_and_claimed(tmp_path):
+    obs = _obs(**{"gst1-plugins-good": _pkg(
+        current="1.24.13", latest="1.26.0",
+        cpeid="cpe:2.3:a:gst-plugins-good:gst-plugins-good:1.24.13:-:*:*:*:*:*:*")})
+    nvd = _nvd(tmp_path, ("CVE-2026-46469", _rec(
+        "gst-plugins-good", "gst-plugins-good", "*",
+        ["https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/11243"],
+        versionEndExcluding="1.26.0")))
+    a = _by_id(_plan_get(tmp_path, obs, _st(_triaged("CVE-2026-46469", "gst1-plugins-good")),
+                         nvd, lambda url: MONOREPO.encode()),
+               "security-gst1-plugins-good-1.24.13")
+    assert a["allowed"], a["guards"]
+    assert a["closes"] == ["CVE-2026-46469"]
+    patches = [e for e in a["edits"] if e["path"].endswith(".patch")]
+    assert len(patches) == 4
+    assert all("--- a/gst/isomp4/qtdemux.c" in e["new"] for e in patches)
+    assert any("re-rooted" in r for r in a["risks"]), a["risks"]
+
+
+def test_a_package_keeps_the_real_fix_and_admits_the_advisory_one(tmp_path):
+    """The honesty case: one CVE has a real fix, the other's named commit is a document.
+    The action ships, claims one CVE, and says the other is still open - with the reason."""
+    obs = _obs(libxml2=_pkg(current="2.15.3", latest="2.15.4",
+                            cpeid="cpe:2.3:a:xmlsoft:libxml2:2.15.3:-:*:*:*:*:*:*"))
+    real = _rec("xmlsoft", "libxml2", "*",
+                ["https://github.com/GNOME/libxml2/commit/76fe08d97de88bfaef2f7d5cd27f11954cc5bee2"],
+                versionEndExcluding="2.15.4")
+    doc = _rec("xmlsoft", "libxml2", "*",
+               ["https://gitlab.freedesktop.org/gstreamer/gstreamer/-/commit/025d59cf3459"],
+               versionEndExcluding="2.15.4")
+    nvd = _nvd(tmp_path, ("CVE-2026-86137", real), ("CVE-2026-3086", doc))
+    st = _st(_triaged("CVE-2026-86137", "libxml2"), _triaged("CVE-2026-3086", "libxml2"))
+
+    def get(url):
+        return ADVISORY.encode() if "025d59cf" in url else (FIX / "patches" /
+            "0001-xmlregexp-prevent-out-of-bounds-read-in-nxt-macro.patch").read_bytes()
+
+    a = _by_id(_plan_get(tmp_path, obs, st, nvd, get), "security-libxml2-2.15.3")
+    assert a["allowed"], a["guards"]
+    assert a["closes"] == ["CVE-2026-86137"], "the claim is the patch set"
+    assert a["still_open"] == ["CVE-2026-3086"], "not dropped - named"
+    assert a["not_carried"][0]["reason"].startswith("adds new files only")
+
+
 def test_a_known_bad_fix_is_refused_by_name_and_the_package_stays_open(tmp_path):
     """Tomorrow's plan must refuse the cherry-pick that already failed, and still take a
     different fix for the same package."""

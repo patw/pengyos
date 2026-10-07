@@ -142,3 +142,11 @@ def test_vendor_errata_are_not_a_fix_to_carry():
         {"url": "https://access.redhat.com/errata/RHSA-2026:49361"}]}) is None
     c = EV.fix_commit(record("CVE-2026-37555"))
     assert c and c["host"] == "github.com"
+
+
+def test_upstream_component_is_the_name_upstream_uses_for_the_package():
+    """For a monorepo this is also the `subprojects/<name>` a fix lives under, which is
+    what makes a monorepo patch attributable to a package rather than to the project."""
+    assert EV.upstream_component("gst1-plugins-good") == "gst-plugins-good"
+    assert EV.upstream_component("gstreamer1") == "gstreamer"
+    assert EV.upstream_component("ffmpeg") == "ffmpeg", "no alias, the name is its own"

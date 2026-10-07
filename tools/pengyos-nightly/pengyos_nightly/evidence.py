@@ -221,6 +221,15 @@ def fix_commit(record: dict) -> dict | None:
     return None
 
 
+# Buildroot's product-name aliases are also the name upstream uses for that package's
+# own directory. For a monorepo (gstreamer) that is the component a fix lives under —
+# `subprojects/<this name>/` — which is what makes a monorepo patch attributable to a
+# package rather than to the project.
+def upstream_component(package: str) -> str:
+    """The name upstream uses for this package itself."""
+    return CPE_ALIASES.get(package, package)
+
+
 def fix_refs(record: dict, limit: int = 3) -> list[str]:
     """Upstream references worth putting in the release notes."""
     refs = [r.get("url", "") for r in (record or {}).get("references", [])]

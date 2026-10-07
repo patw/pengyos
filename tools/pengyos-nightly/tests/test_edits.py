@@ -145,8 +145,8 @@ def test_patch_dir_carries_a_review_request_and_names_the_commit_it_came_from(tm
     cves = [{"cve": "CVE-2026-40962", "priority": "P1", "affected": True,
              "fix_commit": {"url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348",
                             "sha": "", "host": "code.ffmpeg.org", "kind": "pull"}}]
-    edits = E.patch_dir(tmp_path, "ffmpeg", "6.1.5", cves, ["pengyos-desktop"],
-                        get=lambda url: PATCH.encode())
+    edits, _ = E.patch_dir(tmp_path, "ffmpeg", "6.1.5", cves, ["pengyos-desktop"],
+                           get=lambda url: PATCH.encode())
     patch = next(e for e in edits if e.path.endswith(".patch"))
     assert patch.path.startswith("buildroot-external/patches/ffmpeg/6.1.5/0001-")
     assert "CVE-2026-40962" in patch.note and "pull" in patch.note
@@ -183,8 +183,8 @@ def test_patch_dir_writes_one_file_per_commit_in_a_review_request(tmp_path):
                             "host": "gitlab.freedesktop.org", "kind": "pull"}}]
     second = PATCH.replace("76fe08d97de88bfaef2f7d5cd27f11954cc5bee2",
                            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-    edits = E.patch_dir(tmp_path, "gst1-plugins-good", "1.24.13", cves, ["pengyos-desktop"],
-                        get=lambda url: (PATCH + second).encode())
+    edits, _ = E.patch_dir(tmp_path, "gst1-plugins-good", "1.24.13", cves,
+                           ["pengyos-desktop"], get=lambda url: (PATCH + second).encode())
     patches = [e for e in edits if e.path.endswith(".patch")]
     assert [Path(e.path).name[:4] for e in patches] == ["0001", "0002"], \
         [e.path for e in patches]
@@ -201,8 +201,8 @@ def test_patch_dir_records_which_cves_each_patch_closes(tmp_path):
     cves = [{"cve": "CVE-2026-86137", "priority": "P1", "affected": True,
              "fix_commit": {"url": "https://github.com/GNOME/libxml2/commit/76fe08d9",
                             "sha": "76fe08d9", "host": "github.com", "kind": "commit"}}]
-    edits = E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"],
-                        get=lambda url: PATCH.encode())
+    edits, _ = E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"],
+                           get=lambda url: PATCH.encode())
     patch = next(e for e in edits if e.path.endswith(".patch"))
     assert patch.cves == ["CVE-2026-86137"]
     assert patch.fix_url == "https://github.com/GNOME/libxml2/commit/76fe08d9"
@@ -220,7 +220,7 @@ def test_patch_dir_carries_one_numbered_patch_per_distinct_commit(tmp_path):
             {"cve": "CVE-2026-99999", "priority": "P1",
              "fix_commit": {"url": "https://github.com/GNOME/libxml2/commit/76fe08d",
                             "sha": "76fe08d", "host": "github.com"}}]
-    edits = E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"], get=get)
+    edits, _ = E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"], get=get)
     paths = [e.path for e in edits if e.path.endswith(".patch")]
     assert paths == ["buildroot-external/patches/libxml2/2.15.3/"
                      "0001-xmlregexp-prevent-out-of-bounds-read-in-nxt-macro.patch",
@@ -228,6 +228,91 @@ def test_patch_dir_carries_one_numbered_patch_per_distinct_commit(tmp_path):
                      "0002-xmlregexp-prevent-out-of-bounds-read-in-nxt-macro.patch"], \
         "two CVEs, two commits, numbered; the duplicate commit is not carried twice"
     assert edits[-1].kind == "ensure" and "BR2_GLOBAL_PATCH_DIR" in edits[-1].new
+
+
+# --- is this patch a fix for THIS package? (real upstream fixtures) ----------
+# The three fixtures below were captured from the live plan on 2026-10-07, not invented:
+# the advisory commit GStreamer publishes for CVE-2026-3086, the gst-plugins-ugly fix NVD
+# matched against our gstreamer1, and the 4-commit qtdemux series for gst-plugins-good.
+
+PATCHES = Path(__file__).parent / "fixtures" / "patches"
+ADVISORY = (PATCHES / "advisory-sa-2026-0009.patch").read_text()
+OTHER_COMPONENT = (PATCHES / "monorepo-asfdemux-other-component.patch").read_text()
+MONOREPO_SERIES = (PATCHES / "monorepo-qtdemux-series.patch").read_text()
+
+
+def test_patch_paths_and_components_read_the_patch_itself():
+    assert E.patch_components(PATCH) == set(), "libxml2 patches are not monorepo-shaped"
+    assert E.patch_components(ADVISORY) == set()
+    assert E.patch_components(OTHER_COMPONENT) == {"gst-plugins-ugly"}
+    assert E.patch_components(MONOREPO_SERIES) == {"gst-plugins-good"}
+    assert E.patch_subject(ADVISORY).startswith("security-advisories")
+
+
+def test_an_advisory_commit_is_not_a_fix():
+    """GStreamer publishes the advisory as its own commit and NVD links it as the fix.
+    Carrying it adds markdown to the source tree and closes nothing - which is how seven
+    of gstreamer1's ten 'fixes' would have claimed eight CVEs in the release notes."""
+    v = E.classify_patch(ADVISORY, "gstreamer")
+    assert not v["ok"] and "adds new files only" in v["reason"], v
+
+
+def test_a_fix_for_a_sibling_component_is_not_a_fix_for_this_package():
+    """NVD's CPE product is `gstreamer`, so a gst-plugins-ugly fix is matched against our
+    gstreamer1. Those files are not in gstreamer's tarball: the patch can only fail."""
+    v = E.classify_patch(OTHER_COMPONENT, "gstreamer")
+    assert not v["ok"] and "gst-plugins-ugly" in v["reason"], v
+    assert E.classify_patch(OTHER_COMPONENT, "gst-plugins-ugly")["ok"], \
+        "the same patch is a real fix for the package that owns those files"
+
+
+def test_a_monorepo_fix_for_this_component_is_re_rooted():
+    v = E.classify_patch(next(iter(E.split_patches(MONOREPO_SERIES))), "gst-plugins-good")
+    assert v["ok"] and v["prefix"] == "subprojects/gst-plugins-good/", v
+
+
+def test_reroot_patch_moves_the_paths_and_leaves_the_hunks_alone():
+    out = E.reroot_patch(OTHER_COMPONENT, "subprojects/gst-plugins-ugly/")
+    assert "--- a/gst/asfdemux/gstasfdemux.c" in out
+    assert not [l for l in out.splitlines()
+                if l.startswith(E._PATH_LINES) and "subprojects/" in l]
+    changed = [l for l in out.splitlines()
+               if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))]
+    assert changed == [l for l in OTHER_COMPONENT.splitlines()
+                       if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))], \
+        "the change itself is upstream's, unchanged"
+    assert E.reroot_patch(PATCH, "") is PATCH, "a patch with no prefix is left alone"
+
+
+def test_patch_dir_refuses_an_advisory_commit_and_says_why(tmp_path):
+    cves = [{"cve": "CVE-2026-3086", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://gitlab.freedesktop.org/gstreamer/gstreamer"
+                                    "/-/commit/025d59cf3459", "sha": "025d59cf3459",
+                            "host": "gitlab.freedesktop.org", "kind": "commit"}}]
+    with pytest.raises(E.NoCarriableFix) as exc:
+        E.patch_dir(tmp_path, "gstreamer1", "1.24.13", cves, ["pengyos-desktop"],
+                    get=lambda url: ADVISORY.encode(), upstream="gstreamer")
+    assert exc.value.refused[0]["cves"] == ["CVE-2026-3086"]
+    assert "adds new files only" in exc.value.refused[0]["reason"]
+
+
+def test_patch_dir_writes_the_re_rooted_patch_not_the_monorepo_form(tmp_path):
+    cves = [{"cve": "CVE-2026-46469", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://gitlab.freedesktop.org/gstreamer/gstreamer"
+                                    "/-/merge_requests/11243", "sha": "",
+                            "host": "gitlab.freedesktop.org", "kind": "pull"}}]
+    edits, refused = E.patch_dir(tmp_path, "gst1-plugins-good", "1.24.13", cves,
+                                 ["pengyos-desktop"], get=lambda url: MONOREPO_SERIES.encode(),
+                                 upstream="gst-plugins-good")
+    patches = [e for e in edits if e.path.endswith(".patch")]
+    assert len(patches) == 4, "the request's four commits, one file each"
+    assert not refused
+    for e in patches:
+        assert "--- a/gst/isomp4/qtdemux.c" in e.new
+        assert "subprojects/" not in "\n".join(
+            l for l in e.new.splitlines() if l.startswith(E._PATH_LINES))
+        assert "re-rooted" in e.note
+        assert e.cves == ["CVE-2026-46469"]
 
 
 def test_patch_dir_refuses_when_there_is_nothing_to_carry(tmp_path):

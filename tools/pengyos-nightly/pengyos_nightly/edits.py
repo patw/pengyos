@@ -300,13 +300,122 @@ def carried_cves(cves: list[dict]) -> list[str]:
     return sorted({cve for g in carried_patches(cves) for cve in g["cves"]})
 
 
-def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: list[str],
-              get=fetch_bytes) -> list[Edit]:
-    """A stock Buildroot package: carry the upstream fix commits as patches.
+# --- is this patch a fix for THIS package? -----------------------------------
 
-    The subset is deliberate: a CVE whose record names no upstream fix is not
-    carried and not claimed (see `carried_patches`), so a package with a mix of
-    fetchable fixes and vendor errata gets the fixes it can honestly take.
+class NoCarriableFix(ValueError):
+    """None of a candidate's named fixes can be carried for this package.
+
+    Carries the per-CVE reasons so the plan can say *why* rather than reporting a
+    generic failure: "NVD's commit for these CVEs is the advisory document, not a change
+    to the code" is actionable information; "patch failed" is not.
+    """
+
+    def __init__(self, message: str, refused: list[dict]):
+        super().__init__(message)
+        self.refused = refused
+
+
+# Upstream monorepos (gstreamer, and anything else that commits to one tree while
+# shipping one tarball per component) put every file under this prefix.
+_MONOREPO = "subprojects/"
+# The lines `git format-patch` uses to name files. Hunk bodies are left alone:
+# re-rooting is about where a patch lands, never about what it changes.
+_PATH_LINES = ("--- a/", "+++ b/", "diff --git a/", "rename from ", "rename to ",
+               "copy from ", "copy to ")
+
+
+def patch_paths(text: str) -> list[str]:
+    """The files a patch touches, from its own diff control lines."""
+    out = []
+    for line in (text or "").splitlines():
+        if line.startswith("--- ") or line.startswith("+++ "):
+            path = line[4:].strip()
+            if path == "/dev/null":
+                continue
+            out.append(re.sub(r"^[ab]/", "", path))
+    return sorted(set(out))
+
+
+def patch_components(text: str) -> set[str]:
+    """Which upstream components a monorepo patch touches (empty if it is not
+    monorepo-shaped)."""
+    return {p.split("/")[1] for p in patch_paths(text) if p.startswith(_MONOREPO)}
+
+
+def patch_subject(patch_text: str) -> str:
+    """The commit subject a patch carries, for a human reading a refusal."""
+    for line in (patch_text or "").splitlines():
+        if line.startswith("Subject:"):
+            subject = re.sub(r"^\[[^\]]*\]\s*", "", line[len("Subject:"):].strip())
+            return subject.strip()[:80]
+    return ""
+
+
+def classify_patch(text: str, upstream: str) -> dict:
+    """Is this fetched patch a fix for this package, and how must it be applied?
+
+    Three things a named upstream commit can be that are not a fix we can carry:
+
+    * **an advisory document.** GStreamer publishes the advisory as its own commit and
+      NVD links that as the "fix" — measured 2026-10-07, 7 of gstreamer1's 10 named
+      fixes were `security-advisories/sa-2026-*.md`, new files only. Carrying them adds
+      markdown to the source tree, closes nothing, and would let the notes claim eight
+      CVEs fixed.
+    * **a fix for a sibling component.** NVD's CPE product is `gstreamer`, so a
+      gst-plugins-ugly fix is matched against our `gstreamer1`. Those files are not in
+      this tarball, so the patch can only fail.
+    * **a patch spanning several components**, which no single tarball can take.
+
+    A monorepo patch for *this* component is re-rooted: Buildroot downloads one
+    standalone tarball per component (`GST1_PLUGINS_GOOD_SITE = .../src/gst-plugins-good`),
+    so `subprojects/gst-plugins-good/gst/...` has to become `gst/...`. Buildroot cannot
+    do this itself — its series format documents a `-pN` field, but `apply-patches.sh`
+    cuts it away and hardcodes `-p1` (line 119; its own comment says "We assume this
+    field to always be -p1"), verified against a real gstreamer patch on 2026-10-07.
+    """
+    lines = (text or "").splitlines()
+    if not any(l.startswith("--- a/") for l in lines):
+        return {"ok": False, "prefix": "",
+                "reason": "adds new files only - it changes nothing the package ships"}
+    paths = patch_paths(text)
+    if not paths:
+        return {"ok": False, "prefix": "", "reason": "names no file to change"}
+    comps = patch_components(text)
+    if len(comps) > 1:
+        return {"ok": False, "prefix": "",
+                "reason": f"spans upstream components {', '.join(sorted(comps))}"}
+    if comps:
+        comp = next(iter(comps))
+        if comp != upstream:
+            return {"ok": False, "prefix": "",
+                    "reason": f"the fix is for {comp}, not for {upstream} (NVD matches the "
+                              "project, not the component)"}
+        stray = [p for p in paths if not p.startswith(_MONOREPO)]
+        if stray:
+            return {"ok": False, "prefix": "", "reason": "mixes monorepo paths with "
+                                                         "package-root paths"}
+        return {"ok": True, "prefix": f"{_MONOREPO}{comp}/",
+                "reason": f"re-rooted from {_MONOREPO}{comp}/ for the standalone tarball"}
+    return {"ok": True, "prefix": "", "reason": ""}
+
+
+def reroot_patch(text: str, prefix: str) -> str:
+    """Strip a monorepo prefix from a patch's file paths, leaving its hunks alone."""
+    if not prefix:
+        return text
+    return "".join(line.replace(prefix, "") if line.startswith(_PATH_LINES) else line
+                   for line in text.splitlines(True))
+
+
+def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: list[str],
+              get=fetch_bytes, upstream: str = "") -> tuple[list[Edit], list[dict]]:
+    """A stock Buildroot package: carry the upstream fixes as patches.
+
+    The subset is deliberate, twice over: a CVE whose record names no fetchable fix is
+    not carried (see `carried_patches`), and a fetched patch that is not a fix for this
+    package is not carried either (see `classify_patch`). The return value is the pair
+    the planner needs to stay honest — the edits, and the CVEs refused with the reason
+    for each.
 
     This is the shape the build proved (2026-10-05). The version override did not:
     `LIBXML2_VERSION = 2.15.4` in external.mk made Buildroot *download* 2.15.4 while
@@ -322,12 +431,19 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
     build stays byte-comparable to every other edition.
     """
     edits: list[Edit] = []
+    refused: list[dict] = []
     n = 0
     for group in carried_patches(cves):
         src = group["source"]
         # One review request can be several commits: each becomes its own patch file,
         # because Buildroot pipes one file to one `patch` invocation.
         for text in fetch_patches(src.get("url", ""), get):
+            verdict = classify_patch(text, upstream or pkg)
+            if not verdict["ok"]:
+                refused.append({"cves": list(group["cves"]), "fix_url": src.get("url", ""),
+                                "reason": verdict["reason"], "subject": patch_subject(text)})
+                continue
+            text = reroot_patch(text, verdict["prefix"])
             sha = src.get("sha") or patch_sha(text)
             n += 1
             edits.append(Edit(
@@ -335,16 +451,19 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
                      f"{patch_slug(text, sha)}.patch",
                 kind="create", new=text,
                 note=f"{', '.join(group['cves'])} ({src.get('kind', 'commit')} from "
-                     f"{src.get('host', '')} {(sha or src.get('url', ''))[:12]})",
+                     f"{src.get('host', '')} {(sha or src.get('url', ''))[:12]}"
+                     + (f"; {verdict['reason']}" if verdict["prefix"] else ""),
                 cves=list(group["cves"]), fix_url=src.get("url", "")))
     if not edits:
-        raise ValueError(f"no upstream fix commit to carry for {pkg}")
+        raise NoCarriableFix(
+            f"no upstream fix can be carried for {pkg}: "
+            + "; ".join(sorted({r["reason"] for r in refused})), refused)
     edits.append(Edit(path="buildroot-external/configs/layers/core.config", kind="ensure",
                       new='BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_PENGYOS_PATH)/patches"',
                       note="the dir Buildroot searches for patches and per-version hashes "
                            "(package/pkg-utils.mk:pkg-patch-hash-dirs); defconfigs are "
                            "recomposed after"))
-    return edits
+    return edits, refused
 
 
 # Hosts verified (2026-10-05, 2026-10-06) to serve `<url>.patch` as git
