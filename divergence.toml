@@ -69,12 +69,15 @@ upstream_status = "not-offered"
 # package's own directory), so libxml2 reported "affected by CVEs" and "newer version
 # 2.15.4 available upstream" even after 26.10.8 shipped the fixes.
 #
-# Declared 2026-10-07: LIBXML2_IGNORE_CVES in buildroot-external/external.mk names all
-# seven CVEs, each preceded by a comment naming its patch file. Verified against the
-# real tree - `make printvars VARS=LIBXML2_IGNORE_CVES` in output/pengyos-desktop now
-# reports all seven, and `make libxml2-dirclean && make libxml2-patch` still applies
-# all seven cleanly, so the declaration is inert for the build. pkg-stats suppresses
-# each CVE from the next scan onward and will flag the entries as stale ignores once a
-# Buildroot line pins libxml2 >= 2.15.4 - the expiry signal doing its job. The gate
+# Declared 2026-10-07: LIBXML2_IGNORE_CVES names all seven CVEs, each preceded by a
+# comment naming its patch file, in buildroot-external/patches/cve-declarations.mk
+# (included from external.mk). Verified against the real tree - `make printvars
+# VARS=LIBXML2_IGNORE_CVES` in output/pengyos-desktop now reports all seven, and
+# `make libxml2-dirclean && make libxml2-patch` still applies all seven cleanly, so the
+# declaration is inert for the build. pkg-stats suppresses each CVE from the next scan
+# onward and will flag the entries as stale ignores once a Buildroot line pins
+# libxml2 >= 2.15.4 - the expiry signal doing its job. The gate
 # (scripts/pengyos_gate.py:check_patch_declarations) now fails the repo if a patch set
-# in this ledger is not declared, or declares a CVE the ledger does not close.
+# in this ledger is not declared, or declares a CVE the ledger does not close - and
+# pengyos-nightly writes that declaration itself now, from the patches that survived its
+# own pre-flight.

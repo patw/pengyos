@@ -423,6 +423,127 @@ def test_a_preflight_buildroot_does_not_attribute_to_a_patch_stops_the_triage(tm
         "an unattributed failure must not blacklist the fixes"
 
 
+def _commit_files(repo):
+    """[(commit subject, [paths])] for every commit the batch added."""
+    out = subprocess.run(["git", "-C", str(repo), "log", "--all", "--not", _seed(repo),
+                          "--name-only", "--format=COMMIT:%s"],
+                         capture_output=True, text=True).stdout
+    groups, cur = [], None
+    for line in out.splitlines():
+        if line.startswith("COMMIT:"):
+            cur = (line[len("COMMIT:"):], [])
+            groups.append(cur)
+        elif line.strip() and cur is not None:
+            cur[1].append(line.strip())
+    return groups
+
+
+def test_a_carried_fix_is_declared_to_pkg_stats_in_the_same_commit(tmp_path):
+    """A patch the loop carries has to be declared or the tree keeps reporting the CVE
+    open after shipping the fix (pkg-stats cannot see a BR2_GLOBAL_PATCH_DIR patch).
+    The declaration is written by the loop, committed **with the change it describes**,
+    and names the patch file - buildroot-external/patches/README.md rule 3."""
+    result, fake, repo, site, state, cfg = _run(tmp_path, [_two_patch_action()])
+    rel = "buildroot-external/patches/cve-declarations.mk"
+    decl = repo / rel
+    assert decl.is_file(), [s["step"] for s in result["journal"]]
+    text = decl.read_text()
+    assert "# 0001-a.patch" in text and "# 0002-b.patch" in text, text
+    assert "LIBXML2_IGNORE_CVES += CVE-2026-86137" in text, text
+    assert "LIBXML2_IGNORE_CVES += CVE-2026-86144" in text, text
+    assert any(s["step"] == "declare" and s["ok"] for s in result["journal"]), result["journal"]
+
+    patch = "buildroot-external/patches/libxml2/2.15.3/0001-a.patch"
+    with_patch = [g for g in _commit_files(repo) if patch in g[1]]
+    assert with_patch, [g[0] for g in _commit_files(repo)]
+    assert all(rel in g[1] for g in with_patch), (
+        f"a declaration in some later commit is not a declaration of this change: "
+        f"{[g[1] for g in with_patch]}")
+    assert _dirty(repo) == ""
+
+
+def test_a_declaration_that_cannot_be_written_stops_the_batch(tmp_path, monkeypatch):
+    """The loop may not publish a fix it cannot account for. A declaration that fails
+    is a bail, not a warning: publishing anyway is how the tree ends up claiming fixes
+    it cannot show."""
+    real = A.E.cve_declaration_edit
+
+    def broken(repo, component, carried):
+        e = real(repo, component, carried)
+        if e is not None:
+            e.kind, e.old = "replace", "this text is not in the file"
+        return e
+
+    monkeypatch.setattr(A.E, "cve_declaration_edit", broken)
+    result, fake, repo, site, state, cfg = _run(tmp_path, [_two_patch_action()])
+    assert any(s["step"] == "cve-declaration" and not s["ok"] for s in result["journal"]), \
+        [s["step"] for s in result["journal"]]
+    assert not result["published"] and not fake.asked("release.sh")
+    assert _branch(repo) == "main" and _dirty(repo) == "", \
+        "a failed declaration must leave the tree where it started"
+
+
+def test_a_batch_that_fails_after_declaring_takes_the_declaration_back(tmp_path):
+    """The declaration is written before the build. If the build fails, main is restored
+    - and an untracked declaration left behind is a dirty tree, which is what makes the
+    next night's run refuse to do anything (clean_tree)."""
+    result, fake, repo, site, state, cfg = _run(tmp_path, [_two_patch_action()],
+                                                 fail=["release.sh"])
+    assert not result["published"]
+    decl = repo / "buildroot-external/patches/cve-declarations.mk"
+    assert not decl.exists(), decl.read_text() if decl.is_file() else "gone"
+    assert not (repo / "buildroot-external/patches/libxml2").exists()
+    assert _branch(repo) == "main" and _dirty(repo) == ""
+
+
+def test_a_fix_buildroot_rejected_is_not_declared(tmp_path):
+    """The declaration follows the tree, not the plan. An ignore for a fix that never
+    landed would report a CVE closed while the image is still exposed - which is a
+    worse lie than the one the declaration exists to fix."""
+    result, fake, repo, site, state, cfg = _run(tmp_path, [_two_patch_action()],
+                                                 patch_fails={"libxml2": ("0002-b.patch",)})
+    assert result["published"]
+    text = (repo / "buildroot-external/patches/cve-declarations.mk").read_text()
+    assert "CVE-2026-86137" in text, "the patch that survived is declared"
+    assert "CVE-2026-86144" not in text, "the rejected one is not"
+    assert "0002-b.patch" not in text, text
+    assert "Still open in libxml2: CVE-2026-86144" in (tmp_path / "state" /
+                                                        "notes-batch-2026-10-06.md").read_text()
+
+
+def test_a_declaration_failure_on_a_later_action_undoes_the_earlier_one(tmp_path, monkeypatch):
+    """Two packages, one file. The first declares, the second cannot - and the batch
+    stops. The first declaration has to go back out with everything else, or main is
+    restored with a claim in the tree for a night that published nothing."""
+    real = A.E.cve_declaration_edit
+
+    def broken(repo, component, carried):
+        e = real(repo, component, carried)
+        if e is not None and component == "libmtp":
+            e.kind, e.old = "replace", "this text is not in the file"
+        return e
+
+    monkeypatch.setattr(A.E, "cve_declaration_edit", broken)
+    actions = [_two_patch_action(),
+               _bump_action(component="alsa-ucm-conf", current="1.2.16", target="1.2.16.1"),
+               _patch_action(component="libmtp", id="security-libmtp-1.1.23", current="1.1.22",
+                             target="1.1.22", closes=["CVE-2026-11111"],
+                             cves=[{"cve": "CVE-2026-11111", "priority": "P1", "cvss": 6.0,
+                                    "affected": True, "affected_note": "1.1.22 < 1.1.23",
+                                    "fix_commit": {"sha": "aaaaaaaaaaaa",
+                                                   "host": "github.com", "url": "u"}}],
+                             edits=[{"path": "buildroot-external/patches/libmtp/1.1.22/0001-m.patch",
+                                     "kind": "create", "new": "From aaaa\n",
+                                     "cves": ["CVE-2026-11111"], "fix_url": "u"}])]
+    result, fake, repo, site, state, cfg = _run(tmp_path, actions)
+    assert any(s["step"] == "cve-declaration" and not s["ok"] for s in result["journal"]), \
+        [s["step"] for s in result["journal"]]
+    assert not result["published"] and not fake.asked("release.sh")
+    decl = repo / "buildroot-external/patches/cve-declarations.mk"
+    assert not decl.exists(), "the libxml2 declaration was written, then must be taken back"
+    assert _branch(repo) == "main" and _dirty(repo) == ""
+
+
 def test_a_package_that_fails_its_preflight_is_dropped_and_the_rest_ship(tmp_path):
     actions = [_patch_action(), _bump_action()]
     result, fake, repo, site, state, cfg = _run(tmp_path, actions,

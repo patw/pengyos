@@ -664,6 +664,10 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
               "journal": journal, "channel": G.CHANNEL,
               "planned": [a["id"] for a in actions], "applied_actions": [],
               "dropped": []}
+    # Declaration edits, kept apart from an action's planned edits: they are written
+    # after the pre-flight, from what survived, and a batch that bails has to take them
+    # back out too.
+    declared: list[E.Edit] = []
 
     def step(name, ok, detail=""):
         journal.append({"step": name, "ok": ok, "detail": detail})
@@ -675,6 +679,22 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
         if apply:
             try:
                 _git(run, repo, "checkout", "-f", "main")
+                # `checkout -f` does not touch files main has never seen, and the patch
+                # files this batch wrote are exactly that. Left behind they leave the
+                # tree dirty - and a dirty tree is what makes the *next* night's run
+                # refuse to do anything at all (clean_tree). Take each action's edits
+                # back the way a dropped package's are taken back, and take the
+                # declarations back too.
+                for a in actions:
+                    _revert_dropped(run, repo, a)
+                for e in declared:
+                    target = repo / e.path
+                    if not target.is_file():
+                        continue
+                    if e.kind == "create":
+                        target.unlink()
+                    else:
+                        target.write_text(e.old)
             except RuntimeError as exc:
                 step("restore main", False, str(exc))
         result["error"] = f"{name}: {detail}"
@@ -695,6 +715,11 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
                   f"{', '.join(a['editions'])}")
             for e in a["edits"]:
                 print(E.Edit(**e).preview())
+            decl = E.cve_declaration_edit(repo, a["component"],
+                                          [e for e in a["edits"] if e["path"].endswith(".patch")])
+            if decl:
+                print(f"    and, for the patches that survive the pre-flight, declares them "
+                      f"to pkg-stats: {decl.note}")
         return result
     if not cfg["act_enabled"]:
         return bail("kill switch", "act_enabled = false in nightly.toml")
@@ -774,9 +799,22 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
             else:
                 step("pre-flight", True, f"{a['component']} re-extracted and re-patched in "
                                          f"{', '.join(triaged['editions'])}")
+            # Declare what this package actually carries - after the pre-flight, on
+            # purpose. The tree may claim only the fixes that survived, so a patch
+            # Buildroot rejected takes its CVE with it rather than leaving an ignore that
+            # hides a real exposure. pkg-stats cannot see a BR2_GLOBAL_PATCH_DIR patch
+            # any other way (buildroot-external/patches/README.md rule 3).
+            decl = E.cve_declaration_edit(repo, a["component"], carried)
+            if decl:
+                try:
+                    E.apply_edits(repo, [decl])
+                except (OSError, ValueError) as exc:
+                    return bail("cve-declaration", f"{a['component']}: {exc}")
+                declared.append(decl)
+                touched[a["id"]].append(decl.path)
+                step("declare", True, decl.note)
             live.append(a)
-            continue
-        # Nothing this package can carry: the change is dropped, its edits are taken
+            continue        # Nothing this package can carry: the change is dropped, its edits are taken
         # back out of the tree, and the failure is recorded by name.
         result["dropped"].append(a["id"])
         result.setdefault("patch_failures", {})[a["component"]] = {

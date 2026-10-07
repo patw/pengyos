@@ -15,28 +15,13 @@ include $(sort $(wildcard $(BR2_EXTERNAL_PENGYOS_PATH)/package/*/*.mk))
 # picks the decompressor from the file extension.
 INFLATE.crate = $(ZCAT)
 
-# libxml2 2.15.3: the seven upstream fixes we carry under
-# buildroot-external/patches/libxml2/2.15.3 (ledger: divergence.toml entry
-# libxml2-2.15.3-cve-2026; expiry: a Buildroot line pinning libxml2 >= 2.15.4).
-# Declared because pkg-stats cannot see a patch delivered through
-# BR2_GLOBAL_PATCH_DIR: set_patch_count() walks only the package's own directory,
-# so without this the package reports "affected by CVEs" forever. With it pkg-stats
-# suppresses each CVE and flags it as a stale ignore once the version moves - which
-# is the expiry signal doing its job. (buildroot-external/patches/README.md rule 3.)
-# 0001-xmlregexp-prevent-out-of-bounds-read-in-nxt-macro.patch
-LIBXML2_IGNORE_CVES += CVE-2026-86137
-# 0002-fix-add-overflow-checks-to-xmldictaddqstring-in-dict-c.patch
-LIBXML2_IGNORE_CVES += CVE-2026-86138
-# 0003-fix-add-length-check-to-xmluriescapestr-in-uri-c.patch
-LIBXML2_IGNORE_CVES += CVE-2026-86139
-# 0004-fix-add-bounds-checks-to-xmlsnprintfelements-in-valid-c.patch
-LIBXML2_IGNORE_CVES += CVE-2026-86140
-# 0005-xpointer-check-overflow-in-xmlxptrevalxptrpart.patch
-LIBXML2_IGNORE_CVES += CVE-2026-86142
-# 0006-xmlio-check-for-int-overflow-before-calling-writecallback.patch
-LIBXML2_IGNORE_CVES += CVE-2026-86143
-# 0007-fix-xinclude-propagate-parseflags-in-xmlxincludeprocess-and.patch
-LIBXML2_IGNORE_CVES += CVE-2026-86144
+# The carried upstream fixes we declare to pkg-stats live in their own file, written by
+# pengyos-nightly from the patches that actually survived pre-flight (see
+# patches/README.md rule 3 and patches/cve-declarations.mk). Kept separate from this
+# file so a human override and a generated declaration are not the same thing - and so
+# a patch taken out of the tree takes its declaration with it. $(wildcard) so a tree
+# with no carried patches still builds.
+include $(wildcard $(BR2_EXTERNAL_PENGYOS_PATH)/patches/cve-declarations.mk)
 
 # getent: glibc builds it, Buildroot never installs it (BR2_PACKAGE_GLIBC_UTILS
 # is getconf + ldd only). Every distro has it; COSMIC Settings' Users page runs

@@ -218,6 +218,7 @@ def check_patch_declarations(repo: Path) -> list[Check]:
 
     text = ""
     for mk in [repo / "buildroot-external/external.mk",
+               repo / "buildroot-external/patches/cve-declarations.mk",
                *sorted((repo / "buildroot-external" / "package").glob("*/*.mk"))]:
         try:
             text += mk.read_text()

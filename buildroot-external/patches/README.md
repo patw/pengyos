@@ -22,17 +22,19 @@ patches/<package>/<version>/<NNNN>-<short-description>.patch
    **expiry condition** live in [`divergence.toml`](../../divergence.toml) at the
    repository root. A patch with no ledger entry is not approved.
 3. **Declare it to the tooling.** A carried patch must also be declared with
-   `<PKG>_IGNORE_CVES` in `external.mk`, each entry preceded by a comment naming the
-   patch file — Buildroot's own convention
-   (`docs/manual/adding-packages-generic.adoc`). Without it, `pkg-stats` cannot see
-   the patch at all: `set_patch_count()` walks only the package's own directory, so
-   a patch delivered through the global patch dir leaves the package reporting
-   *"affected by CVEs"* forever. With it, `pkg-stats` suppresses the CVE **and**
-   reports a *stale CVE ignore* once the version moves — which is the expiry signal
-   doing its job. This is enforced, not advised: `scripts/pengyos_gate.py` compares
-   every patch set in `divergence.toml` against the declarations in the tree and
-   fails on a missing one, on an empty patch directory, and on a declaration the
-   ledger does not back.
+   `<PKG>_IGNORE_CVES`, each entry preceded by a comment naming the patch file —
+   Buildroot's own convention (`docs/manual/adding-packages-generic.adoc`). Without it,
+   `pkg-stats` cannot see the patch at all: `set_patch_count()` walks only the package's
+   own directory, so a patch delivered through the global patch dir leaves the package
+   reporting *"affected by CVEs"* forever. With it, `pkg-stats` suppresses the CVE **and**
+   reports a *stale CVE ignore* once the version moves — which is the expiry signal doing
+   its job. The loop writes its own declarations to
+   [`patches/cve-declarations.mk`](cve-declarations.mk), included from `external.mk`, from
+   the patches that actually survived pre-flight; a hand-written override can still live in
+   `external.mk` and the loop will not duplicate it. This is enforced, not advised:
+   `scripts/pengyos_gate.py` compares every patch set in `divergence.toml` against the
+   declarations in the tree and fails on a missing one, on an empty patch directory, and on
+   a declaration the ledger does not back.
 4. **Patches are an emergency lane.** They exist for the case where a fix exists and
    no bump is reachable. The preferred shape for anything longer-lived is a named
    fork with a ledger entry and a pay-down plan

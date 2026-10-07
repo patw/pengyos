@@ -212,38 +212,48 @@ Hashes for a bump come from upstream's own published checksum file when the stoc
 `.hash` names one (GNOME publishes `<pkg>-<ver>.sha256sum`); otherwise the artifact
 is downloaded and hashed here, and the plan labels it `self-attested`.
 
-### Open: the tree does not declare what it carries
+### The tree declares what it carries
 
 A `patch_dir` action closes CVEs in the built image and in `state.json`, but the tree
-itself says nothing about it, so Buildroot's own `pkg-stats` keeps reporting those CVEs
-open the next morning. Measured on the 2026-10-06 desktop scan: `ffmpeg 6.1.5` reports 37
-open CVEs and no ignores — after tonight carries 11 patches closing 11 matches, that number
-will not move. The loop's own reporting is honest about this (`patched_by` is counted as
-closed by `status`, the report and the triage); the tree's is not.
+itself has to say so or Buildroot's own `pkg-stats` keeps reporting those CVEs open the
+next morning. Measured on the 2026-10-06 desktop scan: `ffmpeg 6.1.5` reported 37 open
+CVEs and no ignores, and libxml2 reported "affected by CVEs" for all seven CVEs whose
+fixes shipped in 26.10.8. The loop's own reporting was honest (`patched_by` counts as
+closed); the tree's was not.
 
-Upstream already has the mechanism, and it is the one Buildroot's manual prescribes for
-exactly this case (`docs/manual/adding-packages-generic.adoc`: `<pkg>_IGNORE_CVES` "is
-typically used when the CVE is fixed by a patch in the package", each entry preceded by a
-comment naming the patch):
+Upstream's mechanism is `<pkg>_IGNORE_CVES`, and it is the one Buildroot's manual
+prescribes for exactly this case (`docs/manual/adding-packages-generic.adoc`: "typically
+used when the CVE is fixed by a patch in the package", each entry preceded by a comment
+naming the patch):
 
 - `pkg-stats` reads it in `package_init_make_info` (`printvars VARS=… %_IGNORE_CVES`) and
   `show-info` emits it (`package/pkg-utils.mk`);
 - it is live in our tree today: 13 packages in the desktop scan carry `ignored_cves`, all
   of them upstream's own entries (`podman v5.7.0` ignores CVE-2026-33414);
 - `pkg-stats` also reports `stale_cve_ignores` — 5 packages carry ignores NVD no longer
-  considers needed (`libsndfile` CVE-2022-33065) — which is the audit trail for an entry
-  that outlived its patch;
-- verified 2026-10-07 on the real tree: adding `FFMPEG_IGNORE_CVES += CVE-2026-40962` to
-  `buildroot-external/external.mk` makes `make printvars VARS=FFMPEG_IGNORE_CVES` in
-  `output/pengyos-desktop` print it, and removing the line makes it print nothing. A
-  br2-external tree can declare this for a **stock** package, because
-  `include $(BR2_EXTERNAL_MKS)` (Makefile:564) comes after `include package/Makefile.in`
-  (Makefile:526), which is what pulls in `package/*.mk`.
+  considers needed (`libsndfile` CVE-2022-33065) — the audit trail for an entry that
+  outlived its patch;
+- a br2-external tree can declare it for a **stock** package: `include $(BR2_EXTERNAL_MKS)`
+  (Makefile:564) comes after `include package/Makefile.in` (Makefile:526), so the later
+  assignment wins. Verified: `make printvars VARS=LIBXML2_IGNORE_CVES` in
+  `output/pengyos-desktop` reports all seven, and reports nothing without the lines.
+  **Run it in a configured output tree** — in the source checkout there is no `.config`,
+  so it reports nothing even when the mechanism works.
 
-Not built, and deliberately not built before an unattended run: the act lane writing the
-entry next to the patch. It needs its own guard — an ignore that outlives the patch it
-declares would hide a real exposure — so the entry must name the patch file and be retired
-with it, the same accounting a `tree_move` already records in `retires`.
+Built (2026-10-07): `edits.cve_declaration_edit` writes the declarations to
+`buildroot-external/patches/cve-declarations.mk`, included from `external.mk`, and the act
+lane calls it **after the pre-flight**, from the patches that survived — not from what the
+plan promised. A fix Buildroot rejected therefore gets no declaration: an ignore that
+outlives its patch would hide a real exposure, which is a worse claim than the one this
+fixes. Each block is regenerated whole, so a package left with nothing to carry loses its
+block. A declaration that cannot be written stops the batch (`cve-declaration`), because
+publishing a fix the loop cannot account for is how the tree ends up claiming what it
+cannot show. `scripts/pengyos_gate.py:check_patch_declarations` compares every patch set in
+`divergence.toml` against the tree and fails on a missing declaration, an empty patch
+directory, or a declaration the ledger does not back.
+
+Not built: retiring a declaration when a **tree move** makes it unnecessary. The list is
+there (`tree_move`'s `retires`); acting on it is phase 4's executable half.
 
 ### Act (a batch of actions, one release, end to end) — phase 3
 

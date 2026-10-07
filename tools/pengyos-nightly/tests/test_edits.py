@@ -376,6 +376,86 @@ def test_the_user_agent_names_the_version_actually_running():
         S.USER_AGENT
 
 
+# --- declaring a carried fix to pkg-stats ------------------------------------
+
+CARRIED = [{"path": "buildroot-external/patches/libxml2/2.15.3/0001-a.patch",
+            "cves": ["CVE-2026-86137"], "fix_url": "u1"},
+           {"path": "buildroot-external/patches/libxml2/2.15.3/0002-b.patch",
+            "cves": ["CVE-2026-86139", "CVE-2026-86138"], "fix_url": "u2"}]
+
+
+def _decl_repo(tmp_path, external_mk="# overrides\n"):
+    (tmp_path / "buildroot-external" / "patches").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "buildroot-external" / "external.mk").write_text(external_mk)
+    return tmp_path
+
+
+def test_a_carried_patch_is_declared_with_a_comment_naming_the_file(tmp_path):
+    """Buildroot's convention: a comment naming the patch before each entry. pkg-stats
+    cannot see a BR2_GLOBAL_PATCH_DIR patch, so this is the only way the tree can say
+    the fix is carried."""
+    repo = _decl_repo(tmp_path)
+    e = E.cve_declaration_edit(repo, "libxml2", CARRIED)
+    assert e is not None and e.kind == "create" and e.path == E.CVE_DECLARATIONS
+    for line in ("# 0001-a.patch", "LIBXML2_IGNORE_CVES += CVE-2026-86137",
+                 "# 0002-b.patch", "LIBXML2_IGNORE_CVES += CVE-2026-86138 CVE-2026-86139"):
+        assert line in e.new, e.new
+    E.apply_edits(repo, [e])
+    assert "LIBXML2_IGNORE_CVES += CVE-2026-86137" in (repo / E.CVE_DECLARATIONS).read_text()
+
+
+def test_the_block_is_regenerated_from_what_survived_not_appended(tmp_path):
+    """Twice the same carried set must not double the block, and a fix Buildroot
+    rejected must lose its declaration: an ignore for a fix that did not land would
+    hide a real exposure."""
+    repo = _decl_repo(tmp_path)
+    E.apply_edits(repo, [E.cve_declaration_edit(repo, "libxml2", CARRIED)])
+    assert E.cve_declaration_edit(repo, "libxml2", CARRIED) is None, "idempotent"
+
+    survived = [c for c in CARRIED if c["path"].endswith("0002-b.patch")]
+    e = E.cve_declaration_edit(repo, "libxml2", survived)
+    assert e is not None and e.kind == "replace"
+    E.apply_edits(repo, [e])
+    text = (repo / E.CVE_DECLARATIONS).read_text()
+    assert "CVE-2026-86137" not in text, "the dropped patch's CVE is gone"
+    assert "CVE-2026-86138" in text and "CVE-2026-86139" in text
+    assert text.count(">>> libxml2") == 1, text
+
+
+def test_a_package_left_with_nothing_to_declare_loses_its_block(tmp_path):
+    repo = _decl_repo(tmp_path)
+    E.apply_edits(repo, [E.cve_declaration_edit(repo, "libxml2", CARRIED)])
+    e = E.cve_declaration_edit(repo, "libxml2", [])
+    assert e is not None and "retire" in e.note, e
+    E.apply_edits(repo, [e])
+    assert "LIBXML2_IGNORE_CVES" not in (repo / E.CVE_DECLARATIONS).read_text()
+
+
+def test_a_hand_declaration_is_left_where_it_is(tmp_path):
+    """external.mk and the generated file are different things. A CVE a human declared
+    is not duplicated into the generated block; the rest still lands."""
+    repo = _decl_repo(tmp_path, "LIBXML2_IGNORE_CVES += CVE-2026-86137\n")
+    e = E.cve_declaration_edit(repo, "libxml2", CARRIED)
+    assert "CVE-2026-86137" not in e.new, e.new
+    assert "CVE-2026-86138" in e.new and "CVE-2026-86139" in e.new
+
+
+def test_dashed_component_uses_buildroots_variable_prefix(tmp_path):
+    repo = _decl_repo(tmp_path)
+    carried = [{"path": "buildroot-external/patches/gst1-plugins-good/1.24.13/0001-q.patch",
+                "cves": ["CVE-2026-73433"]}]
+    e = E.cve_declaration_edit(repo, "gst1-plugins-good", carried)
+    assert "GST1_PLUGINS_GOOD_IGNORE_CVES += CVE-2026-73433" in e.new, e.new
+
+
+def test_declared_cves_sees_the_generated_file_and_the_hand_overrides(tmp_path):
+    repo = _decl_repo(tmp_path, "PODMAN_IGNORE_CVES += CVE-2026-33414\n")
+    E.apply_edits(repo, [E.cve_declaration_edit(repo, "libxml2", CARRIED)])
+    got = E.declared_cves(repo)
+    assert got["LIBXML2"] == {"CVE-2026-86137", "CVE-2026-86138", "CVE-2026-86139"}
+    assert got["PODMAN"] == {"CVE-2026-33414"}
+
+
 def test_carried_patch_files_lists_the_loops_own_security_maintenance(tmp_path):
     root = tmp_path / "buildroot-external" / "patches"
     (root / "libxml2" / "2.15.3").mkdir(parents=True)

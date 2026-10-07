@@ -139,6 +139,16 @@ closes = ["CVE-2026-11111"]
     assert checks and all(c.ok for c in checks), [c.detail for c in checks]
 
 
+def test_a_declaration_in_the_generated_file_counts(tmp_path):
+    """pengyos-nightly writes its declarations to patches/cve-declarations.mk, not to
+    external.mk. The check reads both, or every nightly patch set would fail the gate."""
+    repo = make_repo(tmp_path, "# no declarations here\n")
+    (repo / "buildroot-external/patches/cve-declarations.mk").write_text(
+        "# >>> libxml2\nLIBXML2_IGNORE_CVES += CVE-2026-86137 CVE-2026-86138\n# <<< libxml2\n")
+    checks = [c for c in gate.check_patch_declarations(repo) if "libxml2" in c.name]
+    assert checks and all(c.ok for c in checks), [c.detail for c in checks]
+
+
 def test_the_gate_actually_runs_the_declaration_check(tmp_path, monkeypatch, capsys):
     """A check that exists but is never called is the exact failure class this gate
     exists to catch — a green suite around a tree nobody inspects. Pin the wiring."""

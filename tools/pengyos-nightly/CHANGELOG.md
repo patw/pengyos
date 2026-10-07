@@ -6,6 +6,43 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-07
+
+### Added
+- **The act lane declares the fixes it carries.** `edits.cve_declaration_edit` writes
+  `<PKG>_IGNORE_CVES` to `buildroot-external/patches/cve-declarations.mk` (included from
+  `external.mk`), one line per CVE, each preceded by a comment naming the patch file —
+  Buildroot's own convention. `pkg-stats` cannot see a patch delivered through
+  `BR2_GLOBAL_PATCH_DIR` (`set_patch_count()` walks only the package's own directory), so
+  without this the tree keeps reporting a CVE open after the fix shipped: libxml2 did exactly
+  that for all seven CVEs published in 26.10.8, and `ffmpeg 6.1.5` reports 37 open CVEs with
+  no ignores at all.
+- **The declaration is written after the pre-flight, from what survived.** Not from what the
+  plan promised: a fix Buildroot rejected gets no declaration. An ignore that outlives its
+  patch would report a CVE closed while the image is still exposed, which is a worse claim
+  than the one this fixes. Each package's block is regenerated whole, so a package left with
+  nothing to carry loses its block, and a CVE a human declared in `external.mk` or in a
+  recipe we author is left where it is rather than duplicated.
+- **A declaration that cannot be written stops the batch** (`cve-declaration`): the loop may
+  not publish a fix it cannot account for.
+
+### Fixed
+- **A batch that bailed left its untracked patch files in the working tree.** `git checkout
+  -f main` does not touch files main has never seen, and the patches a batch wrote are
+  exactly that. Left behind they leave the tree dirty — and a dirty tree is what makes the
+  *next* night's run refuse to do anything at all (`clean_tree`). A bail now takes every
+  action's edits back the way a dropped package's are taken back, and takes the declarations
+  back too. Found by mutation, not by reading the code.
+
+### Tests
+11 new tests (7 in the tool's edit layer, 4 in the batch lane), 226 passed. 16 mutations on
+the new behaviour: 15 caught, 1 equivalent (`carried` and `action["edits"]` are the same set
+after the pre-flight, because triage removes rejected patches from `action["edits"]` in
+place — no test can distinguish them, and the behaviour is correct either way). Two
+mutations found real defects before commit: the dirty-tree bail above, and a test that
+passed on a substring match (`"cve-declaration" in error` matched the *filename*
+`cve-declarations.mk`) instead of the guard that was supposed to fire.
+
 ## [0.9.0] - 2026-10-07
 
 ### Added
