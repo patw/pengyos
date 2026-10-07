@@ -84,8 +84,8 @@ and publishes every edition in one command; images and docs are published,
 Core and Server rebuild byte for byte on a second host, and the nightly loop
 (`tools/pengyos-nightly`, phase 1) watches upstream and CVE feeds. What remains
 is moving COSMIC into Buildroot recipes, the rest of the nightly loop, more
-hardware, and polish — see the [CHANGELOG](CHANGELOG.md) and
-[`TODO.md`](TODO.md).
+hardware, and polish — see the [CHANGELOG](CHANGELOG.md); open work is tracked
+as GitHub issues.
 
 ## Editions
 
@@ -120,9 +120,13 @@ scripts/provision-build-host.sh             # add --desktop for the Desktop edit
 scripts/build-cosmic.sh                     # Desktop only: pinned COSMIC + our libcosmic apps
 
 # 1. build an edition — e.g. Core. Reads targets.toml; writes under ~/build/pengyos.
+#    acquire → configure → build. Only `acquire` touches the network (blobless
+#    clone of the pinned Buildroot tag); configure and build refuse to run without it.
 cd tools/pengyos-build
-python3 -m pengyos_build list  --targets ../../targets.toml
-python3 -m pengyos_build build pengyos-core --targets ../../targets.toml
+python3 -m pengyos_build list      --targets ../../targets.toml
+python3 -m pengyos_build acquire   pengyos-core --targets ../../targets.toml
+python3 -m pengyos_build configure pengyos-core --targets ../../targets.toml
+python3 -m pengyos_build build     pengyos-core --targets ../../targets.toml
 
 # 2. boot it headless under QEMU/KVM (UEFI) and assert it reaches a login prompt
 cd ../pengyos-qemu-verify

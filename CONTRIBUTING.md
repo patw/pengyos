@@ -111,11 +111,12 @@ promoted to **stable** once they have been upgraded on real hardware.
    Rebuilding a tree from scratch avoids all of this.
 
 3. **Build and check.** `scripts/release.sh [TARGET …]` (all five images by
-   default) configures, builds, writes the SBOM, and boots each image under
-   QEMU: the smoke matrix for Core and Server, and a login plus
-   `pengyos-qemu-verify desktop` for the Desktops. It configures and builds
-   in one go, so when step 2 applies, run `pengyos-build configure`, then step
-   2, then `release.sh`. Boot the image on the hardware it is for, too (see
+   default) acquires the pinned Buildroot tree, configures, builds, writes the
+   SBOM, and boots each image under QEMU: the smoke matrix for Core and Server,
+   and a login plus `pengyos-qemu-verify desktop` for the Desktops. It
+   acquires, configures and builds in one go, so when step 2 applies, run
+   `pengyos-build acquire`, then `pengyos-build configure`, then step 2, then
+   `release.sh`. Boot the image on the hardware it is for, too (see
    `docs/qemu-testing.md` §6).
 
 4. **Sign and publish to testing**, from `tools/pengyos-release`:
@@ -154,7 +155,16 @@ The verified build host is Ubuntu 26.04 on x86_64 with KVM and ~16 GB RAM:
 ```sh
 scripts/provision-build-host.sh [--desktop]   # idempotent: installs host prerequisites
 scripts/build-cosmic.sh                       # Desktop only: COSMIC + our libcosmic apps
+
+cd tools/pengyos-build                        # then, per target, in this order:
+python3 -m pengyos_build acquire   <target> --targets ../../targets.toml   # clone + pin Buildroot
+python3 -m pengyos_build configure <target> --targets ../../targets.toml
+python3 -m pengyos_build build     <target> --targets ../../targets.toml
 ```
+
+`acquire` is the only step that touches the network, and it is idempotent; the
+tree lives in `$PENGYOS_BUILD_ROOT` (default `~/build/pengyos`), never in the
+repo. `configure` and `build` never auto-acquire — they stop and tell you to.
 
 Per-tool development needs only the tool's own toolchain (Python ≥ 3.11, or a
 recent Rust, or cmake for the C++ tools). Python tools use PEP 723 / `uv` or a

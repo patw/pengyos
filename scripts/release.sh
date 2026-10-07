@@ -18,10 +18,11 @@
 #   --allow-dirty    build from a tree with uncommitted changes (BUILD_ID gets
 #                    "-dirty"; refused with --publish)
 #
-# Steps per target: configure -> build -> SBOM (generated and embedded, so the
+# Steps per target: acquire (blobless clone + pinned tag of Buildroot; the only
+# network step) -> configure -> build -> SBOM (generated and embedded, so the
 # image carries a current one) -> boot check under QEMU (the smoke matrix for
-# Core and Server; for the Desktops a login check plus scripts/qemu-desktop-check.py,
-# which proves the COSMIC session runs). Nothing is signed or pushed
+# Core and Server; for the Desktops a login check plus `pengyos-qemu-verify
+# desktop`, which proves the COSMIC session runs). Nothing is signed or pushed
 # unless asked: signing a release and putting it in front of machines is a
 # human decision (CLAUDE.md, "Security boundary").
 #
@@ -92,7 +93,8 @@ case " ${TARGETS[*]} " in
 esac
 
 for t in "${TARGETS[@]}"; do
-    say "${t}: configure + build"
+    say "${t}: acquire + configure + build"
+    build acquire "${t}"
     build configure "${t}"
     build build "${t}"
     say "${t}: SBOM (generate + embed)"
