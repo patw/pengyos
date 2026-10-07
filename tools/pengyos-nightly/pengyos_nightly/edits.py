@@ -45,9 +45,13 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pengyos_nightly import __version__
+
 Get = "callable"  # documented: every fetch here takes an injectable get(url)->bytes
 
-UA = "pengyos-nightly/0.4 (+https://pengyos.catbee.ca)"
+# The version we present to upstream is the version we are running, not the one that
+# happened to be current when this line was first written (it read 0.4 for six releases).
+UA = f"pengyos-nightly/{__version__} (+https://pengyos.catbee.ca)"
 
 
 @dataclass

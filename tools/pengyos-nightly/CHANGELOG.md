@@ -6,7 +6,62 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-10-07
+## [0.9.0] - 2026-10-07
+
+### Added
+- **The Buildroot release-bump lane, decision half (spec phase 4).** A new Buildroot release
+  series is a *finding*; moving every edition onto it is a scheduled, operator-approved event.
+  `bump_buildroot = ""` in `nightly.toml` is the default and means the lane is **inert** — a
+  newer series produces no candidate at all. Naming a target is the operator scheduling it.
+  The shape is `tree_move`, not `recipe_bump` or `patch_dir`: it does not move a package pin
+  and it does not cherry-pick onto one, it moves the tree every edition builds from.
+- **`edits.tree_move(repo, target)`** rewrites `br_version` for every edition in
+  `targets.toml` — the tree choice is declared in that file, not implied by a checkout.
+  **`edits.carried_patch_files(repo)`** lists every patch under `buildroot-external/patches/`,
+  which is the loop's own security maintenance and the thing a tree move must account for: the
+  plan records it as `retires` with a `retire_check` naming what has to be re-checked against
+  the new line. Keeping them all silently is how a loop re-fixes what upstream fixed.
+- **Four guards, each named and tested.** `bump_event_approved` refuses unless
+  `bump_buildroot` names exactly the target. `lane_allowed` gives the bump its **own** lane,
+  enabled only by the schedule — measured by test, scheduling a Buildroot bump does not enable
+  the kernel or the NVIDIA driver, which share the "new release series" label.
+  `denied_component(component, cfg)` lifts `buildroot`'s report-only default for that event
+  only; `linux`, `nvidia-open` and COSMIC stay denied whatever is scheduled. `major_never`
+  treats a `tree_move` as the event itself rather than a package bump.
+- **`tree_move_not_executable` refuses the action by name.** The act lane has no full-rebuild
+  path, so a plan that *allowed* a tree move would hand it to a lane that cannot run it, and
+  the honest failure would surface at 21:00 as a build error instead of as a guard that says
+  what is not built.
+- **A refused tree move still shows its edit.** The planner builds it before the verdicts (one
+  local file read, no network, no build) and keeps it when the action is refused, so
+  `plan.json` records what would have changed and which guard stopped it. A refusal that hides
+  the change is not reviewable.
+- **`status` shows the lane**, which it did not before:
+  `bump lane: inert | Buildroot 2026.08 | no newer Buildroot release found`,
+  `… | finding: 2026.11 (new release series)`, or
+  `bump lane: scheduled -> 2026.11 (not executable yet)`. A `!` line appears when a newer
+  series is a finding with nothing scheduled, when the scheduled target is not what the
+  observer found, and when a schedule has no finding behind it. These do not flip `ok` or the
+  exit code: an open human decision is attention, not a broken loop — the same rule already
+  applied to a queued batch with `act_enabled = false`.
+
+### Fixed
+- **The User-Agent we present to upstream named a version that did not exist.** `edits.py`
+  said `pengyos-nightly/0.4` and `sources.py` said `pengyos-nightly/0.1` while the tool was
+  0.8.0. Both now derive from `__version__`.
+
+### Known limit, measured not assumed
+Phase 4 is half built and the spec says which half. Built: the schedule, the candidate, the
+edit, the retirement *accounting*, the guards, and the report. Not built: fetching and
+verifying the new line, recomposing `buildroot-external` against its package set, re-resolving
+the COSMIC / NVIDIA / kernel pins, the full rebuild of every edition, and the *actual* patch
+retirement. Acceptance criteria 19 is met, 21 is partly met, 20 and 22–23 are not.
+
+### Tests
+19 new tests (12 guards/planner/edits, 7 status), 214 passed. 11 mutations on the status
+behaviour, all caught — one of them found a real defect in the first version: it validated a
+scheduled bump only against *major* findings, so a scheduled point release (routine lane) was
+misreported as "no finding behind it". The phase-4 batch had 8/8 mutations caught.
 
 ### Changed
 - **A named upstream commit is checked before it is carried.** `edits.classify_patch`

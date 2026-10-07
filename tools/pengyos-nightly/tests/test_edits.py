@@ -367,6 +367,15 @@ def test_tree_move_refuses_a_targets_file_that_names_no_line(tmp_path):
         E.tree_move(tmp_path, "2026.11")
 
 
+def test_the_user_agent_names_the_version_actually_running():
+    """Upstream sees this string on every fetch. It read 0.4 in edits.py and 0.1 in
+    sources.py while the tool was 0.8.0 — a claim about ourselves that was simply false."""
+    from pengyos_nightly import __version__, sources as S
+    assert E.UA == f"pengyos-nightly/{__version__} (+https://pengyos.catbee.ca)", E.UA
+    assert S.USER_AGENT == f"pengyos-nightly/{__version__} (+https://pengyos.catbee.ca)", \
+        S.USER_AGENT
+
+
 def test_carried_patch_files_lists_the_loops_own_security_maintenance(tmp_path):
     root = tmp_path / "buildroot-external" / "patches"
     (root / "libxml2" / "2.15.3").mkdir(parents=True)

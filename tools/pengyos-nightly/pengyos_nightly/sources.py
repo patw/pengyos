@@ -18,12 +18,14 @@ import urllib.request
 from pathlib import Path
 from typing import Callable, Iterable
 
+from pengyos_nightly import __version__
 from pengyos_nightly.versions import bump_kind, is_prerelease, numeric, strip_prefix, vkey
 
 Get = Callable[[str], str]
 Run = Callable[[list], str]
 
-USER_AGENT = "pengyos-nightly/0.1 (+https://pengyos.catbee.ca)"
+# See edits.py: the User-Agent names the version actually running.
+USER_AGENT = f"pengyos-nightly/{__version__} (+https://pengyos.catbee.ca)"
 
 
 def http_get(url: str, timeout: float = 60) -> str:

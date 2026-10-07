@@ -267,7 +267,8 @@ does not publish more than `max_releases` images a night, and it never reaches
 | Guard | Rule |
 |---|---|
 | `channel_locked` | the publish channel is the constant `testing`; `update-promote` and `--channel stable` are unreachable — asserted on the argv before anything runs |
-| `major_never` | a bump that changes the release series is never acted on |
+| `major_never` | a bump that changes the release series is never acted on. A `tree_move` is exempt: crossing to a new Buildroot series **is** the scheduled event, and `major_never` guards package pins, not the tree |
+| `tree_move_not_executable` | a `tree_move` is planned, guarded and accounted for, then refused **by name**: the act lane has no full-rebuild path yet, so publishing a plan that looks executable would hand a tree move to a lane that cannot run it and turn a design gap into a 21:00 build error |
 | `stock_version_immovable` | the routine lane may only bump pins we own; a stock package moves with a Buildroot release, not with a nightly |
 | `evidence_required` | NVD must place the shipped version inside the affected range (patch shape) or prove the target closes the CVE (bump shape) |
 | `fix_commits_available` | a patch is carried per CVE, and only for a CVE NVD names a **fetchable** upstream fix for (a commit, or a pull/merge request on a host that serves `.patch`); a component with nothing fetchable is refused, and one with a mix ships the fetchable part and names the rest as still open |
@@ -275,7 +276,9 @@ does not publish more than `max_releases` images a night, and it never reaches
 | `patch_does_not_apply` | a **specific upstream fix** proved not to apply is not retried: the record is `patch_failures[<pkg>]["fixes"]`, the list of upstream fix URLs that failed, and a candidate is refused only when it wants one of them. A cherry-pick authored against a newer series says nothing about a fix that would apply cleanly, so the package stays open. A record with no fix list predates per-fix tracking and is honoured as a component-wide block until a human clears it |
 | `confirmed_only` | pkg-stats `unsure_cves` are never actionable |
 | `not_host_only` | a build-host package is not a security update to an image |
-| `denied_component` | `linux`, `nvidia-open`, `buildroot` and COSMIC are report-only in this phase (a kernel bump invalidates the NVIDIA module build and every stamp chain; a Buildroot release means a new tree and a full rebuild; both need their own lane) |
+| `lane_allowed` | a candidate only enters the night if its lane is enabled. `bump` is its own lane and is enabled **only** by `bump_buildroot` being set — so scheduling a Buildroot bump cannot quietly enable the kernel or the NVIDIA driver, which share the "new release series" label |
+| `denied_component` | `linux`, `nvidia-open`, `buildroot` and COSMIC are report-only in this phase (a kernel bump invalidates the NVIDIA module build and every stamp chain; a Buildroot release means a new tree and a full rebuild; both need their own lane). `buildroot`'s default is lifted **only** for the event the operator scheduled (`bump_buildroot` names the target); the others stay denied whatever is scheduled |
+| `bump_event_approved` | a new Buildroot release series is a *finding*; the tree move is refused unless `bump_buildroot` names exactly that target |
 | `cooldown` | the same component is not touched twice inside `cooldown_days` |
 | `cap` | at most `max_actions` candidates in the night's batch (the batch size, not the release count) |
 | `release_cap` | at most `max_releases` signed images published per night — checked against what was already published today, so a second `act --apply` cannot publish again |
@@ -314,7 +317,7 @@ does not publish more than `max_releases` images a night, and it never reaches
 11. Tests stay offline: NVD records, stock recipe/hash files, upstream patches and
     the build are fixtures or injected.
 
-## Phase 4 — the Buildroot release-bump lane (design, not built)
+## Phase 4 — the Buildroot release-bump lane (the decision half is built; the rebuild half is not)
 
 **Why this lane and not an LTS core.** Measured from the upstream tag list on 2026-10-07:
 Buildroot releases quarterly — `2025.08.x, 2025.11.x, 2026.02.x, 2026.05.x, 2026.08` — with
@@ -351,26 +354,64 @@ editions build from, and it has four parts, each one named in the plan:
 cannot share a night with a patch batch: it takes the one `max_releases` slot, and its
 pre-flight is the whole build plus the boot check, not a package re-extract.
 
+### Built (2026-10-07): the decision, its guards, and its accounting
+
+The lane can be scheduled, planned, guarded, reviewed and reported. It cannot yet be run,
+and it says so.
+
+| Part | Where |
+|---|---|
+| the schedule | `config.bump_buildroot` (default `""`). Empty means the lane is **inert**: a newer series stays a finding and no candidate is even considered |
+| the candidate | `planner`: appears only when scheduled, with `shape = "tree_move"`, `current` from the observation and `target` from the schedule, and `editions` read from the repo's own `targets.toml` |
+| the edit | `edits.tree_move(repo, target)`: rewrites `br_version` for **every** edition — the tree choice is declared, not implied |
+| the retirement accounting | `edits.carried_patch_files(repo)` lists every patch the loop currently carries, recorded in the plan as `retires` with a `retire_check` naming what has to be re-checked against the new line |
+| the guards | `bump_event_approved`, `lane_allowed` (the `bump` lane), `denied_component(component, cfg)`, `major_never`'s `tree_move` exemption, `tree_move_not_executable` |
+| the reviewability | the edit and the retirement list are recorded **even when the action is refused** (one local file read, no network, no build), so `plan.json` shows what would have changed and which guard stopped it |
+| the report | `status` prints `bump lane: inert` or `bump lane: scheduled -> 2026.11 (not executable yet)`, plus a `!` line when a newer series is a finding with nothing scheduled, when the scheduled target is not what the observer found, or when a schedule has no finding behind it |
+
+### Not built: the rebuild
+
+Nothing here is implemented, and `tree_move_not_executable` exists precisely so that no plan
+can imply it is:
+
+1. fetch and **verify** the new line (download, hash, the Buildroot tree itself);
+2. recompose `buildroot-external` — layers, defconfigs, `Config.in` and `BR2_GLOBAL_PATCH_DIR`
+   — against the new line's package set;
+3. re-resolve the pins: COSMIC commits, the NVIDIA driver, the kernel, each checked against
+   what the new line actually provides;
+4. the full rebuild of every edition, the boot check, and one signed release per edition set;
+5. the **actual** retirement: drop a carried patch the new line already contains, move the
+   ones it lacks to the new version's directory, and record each dropped patch's CVE as closed
+   by the release rather than by us.
+
 **Guards, each one named:**
 
-| Guard | Refuses |
-|---|---|
-| `bump_event_approved` | the lane runs only when the operator has scheduled it (`bump_buildroot = "2026.11"` in `nightly.toml`); a new upstream tag is a finding, never an action |
-| `cosmic_compat` | the COSMIC pins must still build against the new line's toolchain and libraries; unproven is refused |
-| `nvidia_module_build` | the kernel-module build must succeed against the new line's kernel headers, on real hardware — QEMU cannot prove a driver |
-| `patch_retirement` | a carried patch the new line already contains must be dropped, not duplicated; a patch that would be silently dropped without a record is refused |
-| `edition_coverage` | every edition in the channel must be rebuilt by the event; a partial set is refused rather than publishing a half-moved channel |
+| Guard | Built? | Refuses |
+|---|---|---|
+| `bump_event_approved` | yes | the lane runs only when the operator has scheduled it (`bump_buildroot = "2026.11"` in `nightly.toml`); a new upstream tag is a finding, never an action |
+| `lane_allowed` (the `bump` lane) | yes | the lane exists only when the schedule does, so a Buildroot bump cannot enable the kernel or the driver |
+| `tree_move_not_executable` | yes | any `tree_move`, by name, until the act lane has a full-rebuild path. This is the guard that keeps phase 4 honest about what is missing |
+| `cosmic_compat` | no | the COSMIC pins must still build against the new line's toolchain and libraries; unproven is refused |
+| `nvidia_module_build` | no | the kernel-module build must succeed against the new line's kernel headers, on real hardware — QEMU cannot prove a driver |
+| `patch_retirement` | no | a carried patch the new line already contains must be dropped, not duplicated; a patch that would be silently dropped without a record is refused. (The *list* of carried patches is built; the check against the new line is not) |
+| `edition_coverage` | no | every edition in the channel must be rebuilt by the event; a partial set is refused rather than publishing a half-moved channel |
 
 **Acceptance criteria (phase 4)**
-19. A new Buildroot tag produces a *finding* and no action until `bump_buildroot` names a
-    target; `status` shows the scheduled event.
-20. A tree move publishes one version for every edition in the channel, or publishes nothing.
-21. A carried patch that the new line already contains is removed from the tree and its CVE
-    is recorded as closed by the release; the notes say which patches were retired.
-22. A failed COSMIC or NVIDIA check against the new line stops the event before any branch
-    is created, and says which pin failed.
-23. `main` is where it started after a failed build or boot check, and the old line remains
-    the one the channel serves.
+
+Status as of 2026-10-07, measured against the tests, not against intent:
+
+19. **met.** A new Buildroot tag produces a *finding* and no action until `bump_buildroot`
+    names a target — an inert lane produces no candidate at all — and `status` shows the
+    scheduled event, its target, and that it is not executable.
+20. **not met.** A tree move publishes one version for every edition in the channel, or
+    publishes nothing. The plan names every edition; nothing publishes, because
+    `tree_move_not_executable` refuses the action.
+21. **partly met.** The carried patches are listed and the retirement check is recorded in the
+    plan. Nothing is dropped and no CVE is recorded as closed by the release, because the new
+    line is not fetched.
+22. **not met.** `cosmic_compat` and `nvidia_module_build` are named in this spec and exist in
+    no code.
+23. **not met.** There is no build to fail.
 
 ## Acceptance criteria
 1. `pengyos-nightly run --no-email` on behoserver writes observations, a
