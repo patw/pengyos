@@ -206,7 +206,7 @@ on the old one, so extraction fails. Two shapes only:
 | Shape | For | Edit |
 |---|---|---|
 | `recipe_bump` | a package we author (`tree != BUILDROOT`) | `NAME_VERSION` in `buildroot-external/package/<name>/<name>.mk` + the tarball hash in its `.hash` |
-| `patch_dir` | a stock package with a CVE NVD proves is open in the pinned version | the upstream fixes NVD names — a commit, or a pull/merge request on a host that serves one as a patch — as `buildroot-external/patches/<pkg>/<version>/*.patch`, reached through `BR2_GLOBAL_PATCH_DIR` (`package/pkg-utils.mk:pkg-patch-hash-dirs`); recompose the defconfigs. Only the CVEs whose fix is fetchable are carried and claimed; the rest are recorded as `still_open` |
+| `patch_dir` | a stock package with a CVE NVD proves is open in the pinned version | the upstream fixes NVD names — a commit, or a pull/merge request on a host that serves one as a patch — as `buildroot-external/patches/<pkg>/<version>/*.patch`, **one file per commit** (a review request is split on its `From <sha>` heads), reached through `BR2_GLOBAL_PATCH_DIR` (`package/pkg-utils.mk:pkg-patch-hash-dirs`); recompose the defconfigs. Only the CVEs whose fix is fetchable are carried and claimed; the rest are recorded as `still_open` |
 
 Hashes for a bump come from upstream's own published checksum file when the stock
 `.hash` names one (GNOME publishes `<pkg>-<ver>.sha256sum`); otherwise the artifact

@@ -29,6 +29,21 @@ versions follow [SemVer](https://semver.org/).
   (patch reported `Reversed (or previously applied)`) versus `does not apply to the
   pinned version`. The first is a fact about the CVE; the second is a fact about the
   cherry-pick.
+- **A review request is split into the patches it contains.** A GitLab MR / GitHub PR
+  `.patch` is the whole series concatenated (measured: gstreamer MR 11243 = 4 patches in
+  one file, MR 12xxx = 6). Buildroot pipes one file to one `patch` invocation, so the
+  concatenated response made patch read the next email's headers as garbage and those
+  packages could never carry a review-request fix at all. `split_patches` separates them
+  on the `From <sha> Mon Sep 17 00:00:00 2001` head; `patch_dir` writes one numbered file
+  per commit. `fetch_patches` raises on a response that is not a format-patch, so an HTML
+  page cannot become a `.patch` in the tree.
+- **`PatchFailure` carries the whole command output.** One ffmpeg cherry-pick produced 17
+  failed hunks, pushing the `Applying <patch>` line hundreds of lines from the end of the
+  log, so the triage could not name the culprit from a summarised message. The message is
+  summarised for humans; `.output` is not truncated for the triage. `_failed_patch` names
+  the culprit from the last `Applying` line, because `apply-patches.sh` runs `set -e` and
+  never reaches its own `Patch failed!  Please fix <patch>!` echo (measured on a real
+  `make libsndfile-patch` failure).
 
 ## [0.6.0] - 2026-10-06
 
