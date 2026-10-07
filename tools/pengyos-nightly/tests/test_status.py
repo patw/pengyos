@@ -155,3 +155,98 @@ def test_status_names_the_last_report_and_when_the_next_digest_is(tmp_path):
     assert result["last_report"] == "2026-10-07"
     # Thursday drain, so no digest has gone out.
     assert result["last_digest"] == "never"
+
+
+# --- the Buildroot release-bump lane (spec phase 4) --------------------------
+
+def _buildroot_finding(tmp_path, available="2026.11", current="2026.08", lane="major"):
+    """What the observer writes when a newer Buildroot release appears: `major` for a
+    new release series, `routine` for a point release inside our own series."""
+    obs = json.loads((_dir(tmp_path) / "observations.json").read_text())
+    obs["buildroot"] = current
+    obs["findings"] = [f for f in obs["findings"] if f.get("component") != "buildroot"]
+    obs["findings"].append({"lane": lane, "component": "buildroot", "current": current,
+                            "available": available,
+                            "note": f"new Buildroot release series {available}"
+                            if lane == "major" else f"Buildroot {current} point release"})
+    (_dir(tmp_path) / "observations.json").write_text(json.dumps(obs))
+
+
+def _policy(tmp_path, target):
+    (_dir(tmp_path) / "nightly.toml").write_text(f'bump_buildroot = "{target}"\n')
+
+
+def test_the_bump_lane_is_inert_and_says_so(tmp_path, capsys):
+    """The default. A newer series is not a candidate and nothing moves - but status has
+    to say the lane exists and is off, or 'inert' is indistinguishable from 'missing'."""
+    args = _seed(tmp_path)
+    result = cli.do_status(args, now=time.time())
+    assert result["bump_lane"] == "inert", result
+    assert result["bump_finding"] == "" and result["bump_executable"] is False
+    assert result["problems"] == []
+    assert "bump lane: inert" in capsys.readouterr().out
+
+
+def test_a_newer_buildroot_series_is_reported_as_an_unscheduled_decision(tmp_path, capsys):
+    """The finding is real and the lane is inert: status must name the decision that is
+    waiting on the operator, and how to make it, without calling it a failure."""
+    args = _seed(tmp_path)
+    _buildroot_finding(tmp_path)
+    result = cli.do_status(args, now=time.time())
+    assert result["bump_lane"] == "inert" and result["bump_finding"] == "2026.11", result
+    flagged = [p for p in result["problems"] if "Buildroot 2026.11" in p]
+    assert len(flagged) == 1 and "bump_buildroot" in flagged[0], result["problems"]
+    assert result["ok"] is True, "an open human decision is attention, not a broken loop"
+    out = capsys.readouterr().out
+    assert "finding: 2026.11 (new release series)" in out and "! Buildroot 2026.11" in out, out
+
+
+def test_a_point_release_in_our_own_series_is_not_reported_as_a_tree_move(tmp_path, capsys):
+    """The observer calls 2026.08.1 routine and 2026.11 major. Only the latter is the
+    tree-move decision; crying tree-move about a point release trains the operator to
+    ignore the line that matters."""
+    args = _seed(tmp_path)
+    _buildroot_finding(tmp_path, available="2026.08.1", lane="routine")
+    result = cli.do_status(args, now=time.time())
+    assert result["bump_finding"] == "", "a point release is not a new release series"
+    assert result["bump_available"] == ["2026.08.1"]
+    assert result["problems"] == [], result["problems"]
+    assert "finding: 2026.08.1 (point release)" in capsys.readouterr().out
+
+
+def test_a_scheduled_bump_names_the_target_and_that_it_cannot_run_yet(tmp_path, capsys):
+    args = _seed(tmp_path)
+    _buildroot_finding(tmp_path)
+    _policy(tmp_path, "2026.11")
+    result = cli.do_status(args, now=time.time())
+    assert result["bump_lane"] == "scheduled -> 2026.11 (not executable yet)", result
+    assert result["problems"] == [], "scheduled and matching the finding: nothing to flag"
+    assert "bump lane: scheduled -> 2026.11 (not executable yet)" in capsys.readouterr().out
+
+
+def test_a_scheduled_point_release_is_not_flagged(tmp_path):
+    """The schedule is validated against every Buildroot finding, not only the major one:
+    bump_buildroot = "2026.08.1" is a legitimate thing for the operator to schedule."""
+    args = _seed(tmp_path)
+    _buildroot_finding(tmp_path, available="2026.08.1", lane="routine")
+    _policy(tmp_path, "2026.08.1")
+    result = cli.do_status(args, now=time.time())
+    assert result["problems"] == [], result["problems"]
+
+
+def test_a_scheduled_bump_that_is_not_what_the_observer_found_is_named(tmp_path):
+    args = _seed(tmp_path)
+    _buildroot_finding(tmp_path, available="2027.02")
+    _policy(tmp_path, "2026.11")
+    result = cli.do_status(args, now=time.time())
+    assert any('bump_buildroot = "2026.11" is not what the observer found' in p and "2027.02" in p
+               for p in result["problems"]), result["problems"]
+
+
+def test_a_scheduled_bump_with_no_finding_behind_it_is_named(tmp_path):
+    """A schedule that names a line upstream has not released (or one older than ours)
+    would move the tree for no reason; the plan would refuse it, status says why first."""
+    args = _seed(tmp_path)
+    _policy(tmp_path, "2027.02")
+    result = cli.do_status(args, now=time.time())
+    assert any("no newer Buildroot release at all" in p for p in result["problems"]), result["problems"]

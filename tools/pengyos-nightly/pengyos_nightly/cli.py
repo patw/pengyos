@@ -314,6 +314,51 @@ def _blocked_batches(actions_path: Path, today: dt.date) -> list[dict]:
     return [a for a in log if a.get("kind") == "batch" and not a.get("published")]
 
 
+def _bump_lane(cfg: dict, obs: dict) -> dict:
+    """The Buildroot release-bump lane as a status reader sees it (spec phase 4).
+
+    A newer Buildroot release *series* is a finding whose action is the operator's
+    decision; a point release inside our own series is not a tree move and is not
+    flagged as one. `status` has to say which state we are in, because "the loop is
+    quiet" and "a decision is waiting on a human" look identical from outside — and the
+    lane is inert by default, so silence is its normal state.
+
+    These are attention lines, not failures: they do not flip `ok`, the same way a queued
+    batch with act_enabled = false does not. The loop is doing what it was told; what is
+    outstanding is a human decision.
+    """
+    scheduled = (cfg or {}).get("bump_buildroot") or ""
+    found = [f for f in obs.get("findings", []) if f.get("component") == "buildroot"]
+    series = next((f for f in found if f.get("lane") == "major"), None)
+    available = sorted({f.get("available", "") for f in found if f.get("available")})
+    out = {"current": obs.get("buildroot") or "",
+           "finding": (series or {}).get("available", ""),
+           "available": available,
+           "scheduled": scheduled,
+           "problems": [],
+           # Never true until the act lane grows a full-rebuild path
+           # (guards.tree_move_executable): a scheduled bump is a decision to review.
+           "executable": False}
+    out["state"] = (f"scheduled -> {scheduled} (not executable yet)"
+                    if scheduled else "inert")
+    if out["finding"] and not scheduled:
+        out["problems"] = [
+            f'Buildroot {out["finding"]} is a newer release series and nothing is scheduled '
+            f'(bump lane: inert). Set bump_buildroot = "{out["finding"]}" in nightly.toml to '
+            f'schedule the tree move, or leave it a finding.']
+    elif scheduled and available and scheduled not in available:
+        out["problems"] = [
+            f'bump_buildroot = "{scheduled}" is not what the observer found (newer '
+            f'release(s): {", ".join(available)}). The plan would still move every edition '
+            f'to {scheduled}, because that is what was scheduled - which is the point of '
+            f'checking it against the finding first.']
+    elif scheduled and not available:
+        out["problems"] = [
+            f'bump_buildroot = "{scheduled}" is scheduled but the observer found no newer '
+            f'Buildroot release at all: {out["current"]} is still the newest series upstream.']
+    return out
+
+
 def do_status(args, now: float | None = None, today: dt.date | None = None) -> dict:
     """Answer "is the loop alive?" without waiting for an email.
 
@@ -360,6 +405,13 @@ def do_status(args, now: float | None = None, today: dt.date | None = None) -> d
     out["max_releases"] = cfg.get("max_releases", 1)
     out["releases_today"] = actlane.published_today(p["state_dir"],
                                                     today or dt.date.today())
+    bump = _bump_lane(cfg, obs)
+    out["bump_lane"] = bump["state"]
+    out["bump_current"] = bump["current"]
+    out["bump_finding"] = bump["finding"]
+    out["bump_available"] = bump["available"]
+    out["bump_executable"] = bump["executable"]
+    out["problems"].extend(bump["problems"])
     if p["plan"].exists():
         try:
             plan = json.loads(p["plan"].read_text())
@@ -419,6 +471,10 @@ def do_status(args, now: float | None = None, today: dt.date | None = None) -> d
         print(f"  act lane: {'on' if out['act_enabled'] else 'OFF'} | no plan.json yet | "
               f"batch policy: up to {out['max_actions']} change(s) -> {out['max_releases']} "
               f"release(s)/night, {out['releases_today']} published today")
+    detail = (f"finding: {out['bump_finding']} (new release series)" if out["bump_finding"]
+              else (f"finding: {', '.join(out['bump_available'])} (point release)"
+                    if out["bump_available"] else "no newer Buildroot release found"))
+    print(f"  bump lane: {out['bump_lane']} | Buildroot {out['bump_current'] or '?'} | {detail}")
     for problem in out["problems"]:
         print(f"  ! {problem}")
     return out
