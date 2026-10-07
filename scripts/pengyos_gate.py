@@ -192,6 +192,73 @@ def _image_size(path: Path) -> tuple[int, int] | None:
     return None
 
 
+def check_patch_declarations(repo: Path) -> list[Check]:
+    """A carried patch must be declared to the tooling that reads the tree.
+
+    `pkg-stats` cannot see a patch delivered through BR2_GLOBAL_PATCH_DIR:
+    `set_patch_count()` walks only the package's own directory. Without
+    `<PKG>_IGNORE_CVES` the package keeps reporting "affected by CVEs" for a CVE we
+    shipped a fix for, so the divergence ledger says closed while the tree says open.
+    Found 2026-10-07: the libxml2 patch set (7 patches, published in 26.10.8) had no
+    declaration at all, even though `buildroot-external/patches/README.md` rule 3 and
+    the ledger entry itself both name this as the fix.
+
+    The ledger (`divergence.toml`) is the source of truth for which CVEs a patch set
+    closes; the check is that the tree says exactly that, no more and no less. An
+    ignore that outlives its patch would hide a real exposure, so an extra declaration
+    fails too.
+    """
+    try:
+        ledger = tomllib.loads((repo / "divergence.toml").read_text())
+    except (OSError, ValueError) as exc:
+        return [Check("patch-declaration", False, f"divergence.toml unreadable: {exc}")]
+    entries = [d for d in ledger.get("divergence", []) if d.get("patches_dir")]
+    if not entries:
+        return [Check("patch-declaration", True, "no patch set in the ledger")]
+
+    text = ""
+    for mk in [repo / "buildroot-external/external.mk",
+               *sorted((repo / "buildroot-external" / "package").glob("*/*.mk"))]:
+        try:
+            text += mk.read_text()
+        except OSError:
+            continue
+
+    out: list[Check] = []
+    for d in entries:
+        name = d["id"]
+        pdir = repo / d["patches_dir"]
+        if not pdir.is_dir():
+            out.append(Check(f"patch-declaration:{name}", False,
+                             f"{d['patches_dir']} is in the ledger but does not exist"))
+            continue
+        carried = sorted(p.name for p in pdir.rglob("*.patch"))
+        prefix = d["component"].upper().replace("-", "_")
+        declared: set[str] = set()
+        for line in text.splitlines():
+            m = re.match(rf"^\s*{prefix}_IGNORE_CVES\s*\+?=\s*(.*)$", line)
+            if m:
+                declared |= {c for c in m.group(1).split() if c.startswith("CVE-")}
+        want = set(d.get("closes") or [])
+        missing, extra = sorted(want - declared), sorted(declared - want)
+        if not carried:
+            out.append(Check(f"patch-declaration:{name}", False,
+                             f"{d['patches_dir']} holds no .patch file"))
+        elif missing:
+            out.append(Check(f"patch-declaration:{name}", False,
+                             f"{len(carried)} patch(es) carried but pkg-stats is not told: "
+                             f"{prefix}_IGNORE_CVES is missing {', '.join(missing)}"))
+        elif extra:
+            out.append(Check(f"patch-declaration:{name}", False,
+                             f"{prefix}_IGNORE_CVES declares {', '.join(extra)}, which "
+                             f"{name} does not close — an ignore outliving its patch"))
+        else:
+            out.append(Check(f"patch-declaration:{name}", True,
+                             f"{len(carried)} patch(es), {len(want)} CVE(s) declared to "
+                             f"pkg-stats via {prefix}_IGNORE_CVES"))
+    return out
+
+
 def check_background_sources(repo: Path) -> list[Check]:
     """Every COSMIC background record must resolve inside its own overlay.
 
@@ -402,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rep.checks += check_wiring_lints(repo, changed)
     rep.checks += check_group_overlays(repo)
+    rep.checks += check_patch_declarations(repo)
     rep.checks += check_overlay_executables(repo)
     rep.checks += check_background_sources(repo)
     if args.mode == "full":

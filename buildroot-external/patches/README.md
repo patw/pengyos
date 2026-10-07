@@ -29,7 +29,10 @@ patches/<package>/<version>/<NNNN>-<short-description>.patch
    a patch delivered through the global patch dir leaves the package reporting
    *"affected by CVEs"* forever. With it, `pkg-stats` suppresses the CVE **and**
    reports a *stale CVE ignore* once the version moves — which is the expiry signal
-   doing its job.
+   doing its job. This is enforced, not advised: `scripts/pengyos_gate.py` compares
+   every patch set in `divergence.toml` against the declarations in the tree and
+   fails on a missing one, on an empty patch directory, and on a declaration the
+   ledger does not back.
 4. **Patches are an emergency lane.** They exist for the case where a fix exists and
    no bump is reachable. The preferred shape for anything longer-lived is a named
    fork with a ledger entry and a pay-down plan
