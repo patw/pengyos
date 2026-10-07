@@ -130,6 +130,29 @@ def test_a_review_request_counts_as_an_available_fix():
     assert ok and "1 upstream fix" in why, why
 
 
+def test_a_known_bad_fix_blocks_that_fix_and_not_the_whole_package():
+    """The record is per fix. A commit authored against ffmpeg 8.x failing on 6.1.5 says
+    nothing about a fix written for 6.1.5, so the package stays open to it."""
+    st = {"patch_failures": {"ffmpeg": {
+        "date": "2026-10-06", "where": "libavcodec/pngenc.c",
+        "fixes": ["https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/aaaaaaaaaaaa"]}}}
+    ok, why = G.patch_does_not_apply("ffmpeg", st, [
+        "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/aaaaaaaaaaaa"])
+    assert not ok and "known-bad" in why, why
+    assert G.patch_does_not_apply("ffmpeg", st, [
+        "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/bbbbbbbbbbbb"])[0], \
+        "a different fix for the same package is still tryable"
+    assert G.patch_does_not_apply("ffmpeg", st, [])[0], "no named fix, nothing known-bad"
+
+
+def test_a_failure_recorded_before_per_fix_tracking_still_blocks_the_component():
+    """Refusing something for the old reason in the open beats un-blocking it by accident."""
+    st = {"patch_failures": {"podman": {"date": "2026-10-05", "where": "libpod/x.go"}}}
+    ok, why = G.patch_does_not_apply("podman", st,
+                                     ["https://github.com/containers/podman/commit/abc1234"])
+    assert not ok and "before per-fix tracking" in why, why
+
+
 def test_unsure_matches_are_never_actionable():
     a = _patch_action(cves=[{"cve": "CVE-2026-1", "affected": True, "unsure": True,
                              "fix_commit": {"url": "u", "sha": "s", "host": "github.com"}}])

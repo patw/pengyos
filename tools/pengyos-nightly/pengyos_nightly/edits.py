@@ -58,6 +58,11 @@ class Edit:
     old: str = ""
     new: str = ""
     note: str = ""
+    # For a carried patch: the CVEs this one file closes and the upstream fix it came
+    # from. The act lane needs both to re-compute its claim when a patch is dropped in
+    # pre-flight (see act.triage_package), and plan.json is the record of that mapping.
+    cves: list[str] = field(default_factory=list)
+    fix_url: str = ""
 
     def preview(self) -> str:
         if self.kind == "append":
@@ -326,7 +331,8 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
             path=f"buildroot-external/patches/{pkg}/{current}/{n:04d}-{slug}.patch",
             kind="create", new=text,
             note=f"{', '.join(group['cves'])} ({src.get('kind', 'commit')} from "
-                 f"{src.get('host', '')} {(sha or src.get('url', ''))[:12]})"))
+                 f"{src.get('host', '')} {(sha or src.get('url', ''))[:12]})",
+            cves=list(group["cves"]), fix_url=src.get("url", "")))
     if not edits:
         raise ValueError(f"no upstream fix commit to carry for {pkg}")
     edits.append(Edit(path="buildroot-external/configs/layers/core.config", kind="ensure",

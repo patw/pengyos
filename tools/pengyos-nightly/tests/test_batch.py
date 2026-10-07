@@ -106,10 +106,17 @@ def _cfg(**kw):
 
 
 class Fake:
-    """Stand-in for make / the gate / release.sh; git runs for real."""
+    """Stand-in for make / the gate / release.sh; git runs for real.
 
-    def __init__(self, fail=()):
+    `patch_fails` simulates Buildroot's own rejection: the named patch is reported the
+    way `support/scripts/apply-patches.sh` reports it, and only while that file is
+    still in the tree - so a loop that takes the bad patch out is rewarded with a
+    passing pre-flight, exactly like the real one.
+    """
+
+    def __init__(self, fail=(), patch_fails=(), repo=None):
         self.calls, self.fail = [], tuple(fail)
+        self.patch_fails, self.repo = tuple(patch_fails), repo
 
     def __call__(self, argv, **kw):
         argv = [str(a) for a in argv]
@@ -120,7 +127,18 @@ class Fake:
         self.calls.append(argv)
         joined = " ".join(argv)
         rc = 1 if any(f in joined for f in self.fail) else 0
-        return subprocess.CompletedProcess(argv, rc, stdout="ok " + joined, stderr="")
+        out = "ok " + joined
+        if rc == 0 and self.patch_fails and self.repo and joined.endswith("-patch"):
+            for name in self.patch_fails:
+                if not list((self.repo / "buildroot-external").rglob(name)):
+                    continue
+                rc = 1
+                out = (f"Applying {name} using patch: \n"
+                       "Reversed (or previously applied) patch detected!  Skipping patch.\n"
+                       "1 out of 1 hunk ignored -- saving rejects to file src/ima_adpcm.c.rej\n"
+                       f"Patch failed!  Please fix {name}!")
+                break
+        return subprocess.CompletedProcess(argv, rc, stdout=out, stderr="")
 
     def asked(self, needle):
         return any(needle in " ".join(c) for c in self.calls)
@@ -143,12 +161,12 @@ def _site(tmp_path):
     return site
 
 
-def _run(tmp_path, actions, cfg=None, fail=(), apply=True, key=None):
+def _run(tmp_path, actions, cfg=None, fail=(), patch_fails=(), apply=True, key=None):
     repo = _repo(tmp_path)
     site = _site(tmp_path)
     state = tmp_path / "state"
     cfg = _cfg(**({"key_file": key or _key(tmp_path)})) if cfg is None else cfg
-    fake = Fake(fail)
+    fake = Fake(fail, patch_fails, repo)
     result = A.run_batch(actions, cfg, repo, tmp_path, site, state,
                          apply=apply, run=fake, today=TODAY)
     return result, fake, repo, site, state, cfg
@@ -244,6 +262,128 @@ def test_the_batch_notes_say_what_the_patch_set_left_open(tmp_path):
 
 
 # --- a bad candidate must not spend the night ---------------------------------
+
+def _two_patch_action(**kw):
+    """A stock package carrying two fixes, so one can be rejected and the other kept."""
+    base = "buildroot-external/patches/libxml2/2.15.3"
+    good = "https://github.com/GNOME/libxml2/commit/76fe08d97de8"
+    bad = "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa"
+    a = _patch_action(
+        closes=["CVE-2026-86137", "CVE-2026-86144"],
+        patches=[f"{base}/0001-a.patch", f"{base}/0002-b.patch"],
+        cves=[{"cve": "CVE-2026-86137", "priority": "P1", "cvss": 7.8, "affected": True,
+               "affected_note": "2.15.3 < 2.15.4", "fix_commit": {"sha": "76fe08d97de8",
+                                                                   "host": "github.com",
+                                                                   "url": good}},
+                {"cve": "CVE-2026-86144", "priority": "P1", "cvss": 5.5, "affected": True,
+                 "affected_note": "2.15.3 < 2.15.4", "fix_commit": {"sha": "aaaaaaaaaaaa",
+                                                                    "host": "github.com",
+                                                                    "url": bad}}],
+        edits=[{"path": f"{base}/0001-a.patch", "kind": "create", "new": "From 76fe08d\n",
+                "note": "CVE-2026-86137", "cves": ["CVE-2026-86137"], "fix_url": good},
+               {"path": f"{base}/0002-b.patch", "kind": "create", "new": "From aaaa\n",
+                "note": "CVE-2026-86144", "cves": ["CVE-2026-86144"], "fix_url": bad},
+               {"path": "buildroot-external/configs/layers/core.config", "kind": "ensure",
+                "new": 'BR2_GLOBAL_PATCH_DIR="x"', "note": "dir"}],
+        still_open=[])
+    return {**a, **kw}
+
+
+def test_a_patch_buildroot_rejects_is_dropped_and_the_rest_of_the_package_ships(tmp_path):
+    """The unit of failure is a patch, not a package.
+
+    `apply-patches.sh` names the patch it could not apply, so the loop takes that one
+    file out, re-extracts, and ships what survives - instead of condemning the whole
+    package because one cherry-pick was wrong. Measured 2026-10-06: ffmpeg had 11 of 19
+    patches that apply, and the old behaviour shipped none of them.
+    """
+    actions = [_two_patch_action(), _bump_action()]
+    result, fake, repo, site, state, cfg = _run(tmp_path, actions,
+                                                patch_fails=("0002-b.patch",),
+                                                cfg=_cfg(key_file=_key(tmp_path)))
+    assert result["published"], "one uncarriable cherry-pick does not sink the package"
+    assert result["dropped"] == [] and result["applied_actions"] == [
+        "security-libxml2-2.15.3", "routine-libmtp-1.1.23"], result["dropped"]
+    assert not (repo / "buildroot-external/patches/libxml2/2.15.3/0002-b.patch").exists(), \
+        "the rejected patch must not stay in the tree the image is built from"
+    assert (repo / "buildroot-external/patches/libxml2/2.15.3/0001-a.patch").exists()
+    assert fake.count("libxml2-dirclean") >= 2, "re-extract after each rejection"
+
+    # The claim follows the tree: one patch carried, one CVE closed, one still open.
+    notes = (tmp_path / "state" / "notes-batch-2026-10-06.md").read_text()
+    assert "Not carried: 0002-b.patch: already present in the pinned version " \
+           "(CVE-2026-86144)" in notes, notes
+    assert "Still open in libxml2: CVE-2026-86144" in notes, notes
+    assert "carries 1 upstream fix commit(s), closing 1 security issue(s)" in notes, notes
+
+    st = {"cves": {"CVE-2026-86137|libxml2": {}, "CVE-2026-86144|libxml2": {}},
+          "findings": {}, "actions": {}, "patch_failures": {}}
+    A.record_batch(result, actions, state, st, TODAY, run=fake, repo=repo)
+    assert "patched_by" in st["cves"]["CVE-2026-86137|libxml2"]
+    assert "patched_by" not in st["cves"]["CVE-2026-86144|libxml2"], \
+        "not carried, so not claimed closed"
+    assert st["patch_failures"]["libxml2"]["fixes"] == [
+        "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa"]
+
+
+def test_a_rejected_patch_does_not_block_the_other_fixes_for_that_package(tmp_path):
+    """The known-bad record is per fix. A cherry-pick written for a newer series says
+    nothing about a fix that would apply cleanly, so the package stays open."""
+    actions = [_two_patch_action()]
+    result, fake, repo, site, state, cfg = _run(tmp_path, actions,
+                                                patch_fails=("0002-b.patch",),
+                                                cfg=_cfg(key_file=_key(tmp_path)))
+    st = {"cves": {}, "findings": {}, "actions": {}, "patch_failures": {}}
+    A.record_batch(result, actions, state, st, TODAY, run=fake, repo=repo)
+    bad = "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa"
+    good = "https://github.com/GNOME/libxml2/commit/76fe08d97de8"
+    ok, why = G.patch_does_not_apply("libxml2", st, [bad])
+    assert not ok and "known-bad" in why, why
+    assert G.patch_does_not_apply("libxml2", st, [good])[0], \
+        "the package is not blocked, the failed fix is"
+
+
+def test_when_every_patch_for_a_package_is_rejected_the_package_is_dropped(tmp_path):
+    base = "buildroot-external/patches/libxml2/2.15.3"
+    actions = [_two_patch_action(), _bump_action()]
+    result, fake, repo, site, state, cfg = _run(tmp_path, actions,
+                                                patch_fails=("0001-a.patch", "0002-b.patch"),
+                                                cfg=_cfg(key_file=_key(tmp_path)))
+    assert result["published"], "the rest of the batch still ships"
+    assert result["dropped"] == ["security-libxml2-2.15.3"]
+    assert not (repo / "buildroot-external/patches/libxml2").exists(), \
+        "a package that carries no patches must not look like one that does"
+    assert result["patch_failures"]["libxml2"]["fixes"] == [
+        "https://github.com/GNOME/libxml2/commit/76fe08d97de8",
+        "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa"]
+
+
+def test_known_bad_fixes_accumulate_across_nights(tmp_path):
+    """The known-bad set is a memory, not a snapshot: overwriting it would make the loop
+    rediscover the same bad cherry-pick every week."""
+    old = "https://github.com/GNOME/libxml2/commit/oldoldold"
+    st = {"cves": {}, "findings": {}, "actions": {},
+          "patch_failures": {"libxml2": {"date": "2026-10-05", "where": "parser.c",
+                                         "fixes": [old]}}}
+    actions = [_two_patch_action()]
+    result, fake, repo, site, state, cfg = _run(tmp_path, actions,
+                                                patch_fails=("0002-b.patch",),
+                                                cfg=_cfg(key_file=_key(tmp_path)))
+    A.record_batch(result, actions, state, st, TODAY, run=fake, repo=repo)
+    assert set(st["patch_failures"]["libxml2"]["fixes"]) == {
+        old, "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa"}
+    assert st["patch_failures"]["libxml2"]["date"] == "2026-10-06", "the newer fact wins"
+
+
+def test_a_preflight_buildroot_does_not_attribute_to_a_patch_stops_the_triage(tmp_path):
+    """No `Please fix <patch>!` line, no guessing which change is at fault."""
+    actions = [_two_patch_action(), _bump_action()]
+    result, fake, repo, site, state, cfg = _run(tmp_path, actions, fail=("libxml2-dirclean",),
+                                                cfg=_cfg(key_file=_key(tmp_path)))
+    assert result["dropped"] == ["security-libxml2-2.15.3"]
+    assert result["patch_failures"]["libxml2"]["fixes"] == [], \
+        "an unattributed failure must not blacklist the fixes"
+
 
 def test_a_package_that_fails_its_preflight_is_dropped_and_the_rest_ship(tmp_path):
     actions = [_patch_action(), _bump_action()]

@@ -151,19 +151,37 @@ def denied_component(component: str) -> tuple[bool, str]:
     return True, "component is actable"
 
 
-def patch_does_not_apply(component: str, st: dict) -> tuple[bool, str]:
-    """A candidate whose upstream patch was *proved* not to apply is not retried every
-    night. The pre-flight is cheap but not free (it re-extracts the package in every
-    affected edition) and it spends the night's one action slot, so a known-bad
-    candidate would block a good one forever. This needs a human: adapt the patch or
-    choose a different fix.
+def patch_does_not_apply(component: str, st: dict,
+                         fixes: list[str] | None = None) -> tuple[bool, str]:
+    """A **specific upstream fix** that was proved not to apply is not retried.
+
+    Scoped to the fixes, not to the component, deliberately. The cheap-but-not-free
+    pre-flight must not let one bad cherry-pick block every future fix for a package:
+    a commit authored against ffmpeg 8.x failing on 6.1.5 says nothing about a fix
+    written for 6.1.5. `fixes` is the candidate's upstream fix URLs; the candidate is
+    refused when it wants one that already failed, and allowed when it does not.
+
+    A record with no fix list predates per-fix tracking. It is honoured as a
+    component-wide block rather than silently dropped: refusing something for the
+    wrong reason in the open beats un-blocking it by accident.
     """
     bad = (st.get("patch_failures") or {}).get(component)
-    if bad:
+    if not bad:
+        return True, "no recorded patch failure"
+    known = sorted({f for f in (bad.get("fixes") or []) if f})
+    if not known:
         return False, (f"patch_does_not_apply: {component}'s upstream patch failed on "
-                       f"{bad.get('where', 'the source')} on {bad.get('date', '?')}; "
-                       "needs a human to adapt the patch or pick another fix")
-    return True, "no recorded patch failure"
+                       f"{bad.get('where', 'the source')} on {bad.get('date', '?')}; recorded "
+                       "before per-fix tracking, so it needs a human to adapt the patch, "
+                       "pick another fix, or clear state.json:patch_failures")
+    hit = sorted({f for f in (fixes or []) if f in set(known)})
+    if hit:
+        return False, (f"patch_does_not_apply: {len(hit)} of {component}'s candidate fix(es) "
+                       f"already failed on {bad.get('where', 'the source')} "
+                       f"({bad.get('date', '?')}); {len(known)} fix(es) are known-bad for "
+                       f"{component}, the rest are still tryable")
+    return True, (f"{component} has {len(known)} known-bad fix(es); this candidate names "
+                  "none of them")
 
 
 def cooldown(component: str, log: dict, days: int, today: dt.date) -> tuple[bool, str]:

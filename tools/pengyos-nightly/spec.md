@@ -229,10 +229,16 @@ release**: the batch is the unit of work, the signed image is the unit of risk.
 3. **runs the repo gate once** (`pengyos_gate.py run --mode full --base <branch point>`);
 4. **pre-flights each package once** — `<pkg>-dirclean` then `<pkg>-patch` in every
    edition that carries it. This is where a patch that does not apply is caught, in
-   seconds, before any build. A package that fails here is **dropped from the batch**
-   (recorded as `patch_does_not_apply`, exactly as phase 2 recorded it) and the batch
-   continues without it: one bad cherry-pick must not spend the night. If every
-   package fails, nothing is built and nothing is published;
+   seconds, before any build. **The unit of failure is a patch, not a package**:
+   `apply-patches.sh` names the patch it could not apply (`Patch failed!  Please fix
+   <patch>!`), so `triage_package` takes that one file out of the tree, re-extracts,
+   and tries again. What survives is what the image carries, and `shrink_action`
+   recomputes `closes` / `still_open` / `patches` from it, so the claim follows the
+   tree. A rejected fix is recorded per fix (`patch_failures[<pkg>]["fixes"]`), not per
+   component; a package whose patches all fail is dropped, and its now-empty
+   `patches/<pkg>/` is pruned. A failure Buildroot does not attribute to a named patch
+   stops the triage rather than guessing. If every package fails, nothing is built and
+   nothing is published;
 5. **builds, boot-checks, signs and publishes once** — `scripts/release.sh --publish
    --channel testing` for the **union of the editions the batch touches**, with one
    notes file listing every change and its evidence. `release.sh` already refuses a
@@ -265,7 +271,7 @@ does not publish more than `max_releases` images a night, and it never reaches
 | `stock_version_immovable` | the routine lane may only bump pins we own; a stock package moves with a Buildroot release, not with a nightly |
 | `evidence_required` | NVD must place the shipped version inside the affected range (patch shape) or prove the target closes the CVE (bump shape) |
 | `fix_commits_available` | a patch is carried per CVE, and only for a CVE NVD names a **fetchable** upstream fix for (a commit, or a pull/merge request on a host that serves `.patch`); a component with nothing fetchable is refused, and one with a mix ships the fetchable part and names the rest as still open |
-| `patch_does_not_apply` | a candidate whose patch was *proved* not to apply is not retried: the pre-flight spends the night's one action slot, so a known-bad candidate would block every candidate behind it. Needs a human to adapt the patch or pick another fix |
+| `patch_does_not_apply` | a **specific upstream fix** proved not to apply is not retried: the record is `patch_failures[<pkg>]["fixes"]`, the list of upstream fix URLs that failed, and a candidate is refused only when it wants one of them. A cherry-pick authored against a newer series says nothing about a fix that would apply cleanly, so the package stays open. A record with no fix list predates per-fix tracking and is honoured as a component-wide block until a human clears it |
 | `confirmed_only` | pkg-stats `unsure_cves` are never actionable |
 | `not_host_only` | a build-host package is not a security update to an image |
 | `denied_component` | `linux`, `nvidia-open`, `buildroot` and COSMIC are report-only in this phase (a kernel bump invalidates the NVIDIA module build and every stamp chain; a Buildroot release means a new tree and a full rebuild; both need their own lane) |

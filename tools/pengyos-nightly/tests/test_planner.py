@@ -197,6 +197,28 @@ def test_a_review_request_makes_a_stock_package_actionable(tmp_path):
     assert len([e for e in a["edits"] if e["path"].endswith(".patch")]) == 1
 
 
+def test_a_known_bad_fix_is_refused_by_name_and_the_package_stays_open(tmp_path):
+    """Tomorrow's plan must refuse the cherry-pick that already failed, and still take a
+    different fix for the same package."""
+    obs = _obs(libxml2=_pkg(current="2.15.3", latest="2.15.4",
+                            cpeid="cpe:2.3:a:xmlsoft:libxml2:2.15.3:-:*:*:*:*:*:*"))
+    st = _st(_triaged("CVE-2026-86137", "libxml2"))
+    st["patch_failures"] = {"libxml2": {"date": "2026-10-05", "where": "parser.c",
+                                        "fixes": ["https://github.com/GNOME/libxml2/commit/bad1bad1"]}}
+    nvd = _nvd(tmp_path, ("CVE-2026-86137", _rec(
+        "xmlsoft", "libxml2", "*", ["https://github.com/GNOME/libxml2/commit/bad1bad1"],
+        versionEndExcluding="2.15.4")))
+    a = _by_id(_plan(tmp_path, obs, st, nvd), "security-libxml2-2.15.3")
+    assert not a["allowed"] and "patch_does_not_apply" in a["refused_by"], a["guards"]
+
+    nvd2 = _nvd(tmp_path, ("CVE-2026-86137", _rec(
+        "xmlsoft", "libxml2", "*", ["https://github.com/GNOME/libxml2/commit/beef1cad"],
+        versionEndExcluding="2.15.4")))
+    b = _by_id(_plan(tmp_path, obs, st, nvd2), "security-libxml2-2.15.3")
+    assert b["allowed"], b["guards"]
+    assert b["closes"] == ["CVE-2026-86137"]
+
+
 # --- refusals, each one named ------------------------------------------------
 
 def test_a_cve_with_no_upstream_commit_is_refused_not_guessed(tmp_path):

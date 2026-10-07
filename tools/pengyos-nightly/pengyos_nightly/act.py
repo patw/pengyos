@@ -100,6 +100,11 @@ def notes_for(action: dict, version: str, version_note: str = "") -> str:
         lines.append(f"Still open in {action['component']}: {', '.join(other)} "
                      f"(NVD names no upstream fix to carry for these).")
         lines.append("")
+    for d in (action.get("dropped_patches") or []):
+        lines.append(f"Not carried: {Path(d['patch']).name}: {d['reason']}"
+                     + (f" ({', '.join(d['cves'])})" if d.get("cves") else ""))
+    if action.get("dropped_patches"):
+        lines.append("")
     lines.append(f"Editions rebuilt: {', '.join(action['editions'])}.")
     if action.get("risks"):
         lines.append("")
@@ -245,6 +250,9 @@ def batch_notes(actions: list[dict], version: str, version_note: str = "") -> st
         if a.get("still_open"):
             lines.append(f"    - Still open in {a['component']}: {', '.join(a['still_open'])} "
                          f"(NVD names no upstream fix to carry for these)")
+        for d in (a.get("dropped_patches") or []):
+            lines.append(f"    - Not carried: {Path(d['patch']).name}: {d['reason']}"
+                         + (f" ({', '.join(d['cves'])})" if d.get("cves") else ""))
         for r in (a.get("risks") or []):
             lines.append(f"    - Note: {r}")
     editions = sorted({e for a in actions for e in (a.get("editions") or [])})
@@ -281,6 +289,84 @@ def _failed_files(detail: str) -> str:
     if files:
         return ", ".join(sorted(set(files)))
     return detail.splitlines()[0][:80] if detail else "the source"
+
+
+def _patch_reason(detail: str) -> str:
+    """Why Buildroot rejected a patch, in the two forms a reader can act on.
+
+    `support/scripts/apply-patches.sh` runs `patch -F0 -g0 -p1 -t -N`, so a fix that
+    is already in the pinned source is not a silent no-op: patch reports it as reversed
+    and Buildroot fails the package. Saying "already present" is the difference between
+    "this CVE is not open in what we ship" and "this cherry-pick is the wrong fix", and
+    only the first is worth reading again tomorrow.
+    """
+    if "Reversed (or previously applied)" in detail:
+        return "already present in the pinned version"
+    return "does not apply to the pinned version"
+
+
+def triage_package(run, repo: Path, build_root: Path, br_version: str, external_tree: str,
+                   editions: list[str], action: dict) -> dict:
+    """Pre-flight a package, dropping the patches Buildroot itself rejects.
+
+    The unit of failure is a patch, not a package. `apply-patches.sh` names the one it
+    could not apply (`Patch failed!  Please fix <patch>!`), so the loop takes that file
+    out of the tree, re-extracts, and tries again — which is what "one bad cherry-pick
+    must not spend the night" has always meant, applied at the level the evidence
+    actually supports. What survives is what the image carries, and `shrink_action`
+    recomputes the claim from it.
+
+    A failure Buildroot does not attribute to a named patch stops the triage: the loop
+    does not guess which change is at fault.
+
+    Returns {"ok": bool, "carried": [edit], "dropped": [{patch, cves, fix_url, reason,
+    where}], "error": str, "editions": [target]}. `ok` is the pre-flight's verdict, not
+    "some patch survived": a version bump carries no patches and still passes.
+    """
+    carried = [e for e in action.get("edits") or [] if e.get("path", "").endswith(".patch")]
+    dropped: list[dict] = []
+    while True:
+        try:
+            done = refresh_package(run, build_root, br_version, external_tree,
+                                   editions, action["component"])
+            return {"ok": True, "carried": carried, "dropped": dropped, "error": "",
+                    "editions": done}
+        except RuntimeError as exc:
+            detail = str(exc)
+            m = re.search(r"Please fix (\S+)!", detail)
+            name = m.group(1) if m else ""
+            victim = next((e for e in carried if Path(e["path"]).name == name), None)
+            if victim is None:
+                return {"ok": False, "carried": carried, "dropped": dropped, "error": detail,
+                        "editions": []}
+            dropped.append({"patch": victim["path"], "cves": list(victim.get("cves") or []),
+                            "fix_url": victim.get("fix_url", ""),
+                            "reason": _patch_reason(detail), "where": _failed_files(detail)})
+            target = repo / victim["path"]
+            if target.exists():
+                target.unlink()
+            _prune_empty(run, repo, victim["path"])
+            carried.remove(victim)
+            action["edits"].remove(victim)
+            if not carried:
+                return {"ok": False, "carried": [], "dropped": dropped, "error": detail,
+                        "editions": []}
+
+
+def shrink_action(action: dict, carried: list[dict], dropped: list[dict]) -> None:
+    """Recompute what an action may claim, from the patches that survived pre-flight.
+
+    The planner's rule, applied after the build has had its say: the claim is the patch
+    set. A CVE whose patch was rejected goes back to `still_open`, so the notes, the
+    commit message and the `patched_by` record describe the image that was built.
+    """
+    closed = sorted({c for e in carried for c in (e.get("cves") or [])})
+    action["patches"] = [e["path"] for e in carried]
+    action["closes"] = closed
+    action["still_open"] = sorted(({c["cve"] for c in action.get("cves") or []
+                                    if c.get("affected")} - set(closed))
+                                   | set(action.get("still_open") or []))
+    action["dropped_patches"] = dropped
 
 
 def refresh_package(run, build_root: Path, br_version: str, external_tree: str,
@@ -626,25 +712,45 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
 
     live: list[dict] = []
     for a in actions:
-        try:
-            refreshed = refresh_package(run, build_root, br_version, tree,
-                                        a["editions"], a["component"])
-            step("pre-flight", True, f"{a['component']} re-extracted and re-patched in "
-                                     f"{', '.join(refreshed)}")
+        triaged = triage_package(run, repo, build_root, br_version, tree, a["editions"], a)
+        carried, dropped, error = triaged["carried"], triaged["dropped"], triaged["error"]
+        if triaged["ok"]:
+            if dropped:
+                # Some of this package's fixes are carried and some are not. The claim
+                # follows the tree, and the fixes Buildroot rejected are recorded per
+                # fix, so the same cherry-pick is not retried while the package itself
+                # stays open to a better one.
+                shrink_action(a, carried, dropped)
+                touched[a["id"]] = [p for p in touched[a["id"]]
+                                    if p in {e["path"] for e in a["edits"]}]
+                result.setdefault("patch_failures", {})[a["component"]] = {
+                    "date": today.isoformat(),
+                    "where": ", ".join(sorted({d["where"] for d in dropped})) or "the source",
+                    "detail": "; ".join(f"{Path(d['patch']).name}: {d['reason']}"
+                                        for d in dropped)[:400],
+                    "fixes": sorted({d["fix_url"] for d in dropped if d.get("fix_url")}),
+                    "carried": len(carried)}
+                result.setdefault("patch_drops", {})[a["component"]] = dropped
+                step("pre-flight", True,
+                     f"{a['component']} re-extracted and re-patched in "
+                     f"{', '.join(triaged['editions'])}: {len(carried)} patch(es) carried, "
+                     f"{len(dropped)} not ({'; '.join(sorted({d['reason'] for d in dropped}))})")
+            else:
+                step("pre-flight", True, f"{a['component']} re-extracted and re-patched in "
+                                         f"{', '.join(triaged['editions'])}")
             live.append(a)
-        except RuntimeError as exc:
-            # One bad cherry-pick does not spend the night. Record it as a named
-            # failure so the planner refuses this candidate by name next time, drop it
-            # from this batch, and take its edits back out of the tree.
-            result["dropped"].append(a["id"])
-            result.setdefault("patch_failures", {})[a["component"]] = {
-                "date": today.isoformat(), "where": _failed_files(str(exc)),
-                "detail": str(exc)[:400]}
-            step("pre-flight", False, f"{a['component']} dropped from the batch: {exc}")
-            try:
-                _revert_dropped(run, repo, a)
-            except RuntimeError as exc2:
-                return bail("revert dropped", f"{a['component']}: {exc2}")
+            continue
+        # Nothing this package can carry: the change is dropped, its edits are taken
+        # back out of the tree, and the failure is recorded by name.
+        result["dropped"].append(a["id"])
+        result.setdefault("patch_failures", {})[a["component"]] = {
+            "date": today.isoformat(), "where": _failed_files(error), "detail": error[:400],
+            "fixes": sorted({d["fix_url"] for d in dropped if d.get("fix_url")})}
+        step("pre-flight", False, f"{a['component']} dropped from the batch: {error}")
+        try:
+            _revert_dropped(run, repo, a)
+        except RuntimeError as exc2:
+            return bail("revert dropped", f"{a['component']}: {exc2}")
     if not live:
         return bail("pre-flight", "every package in the batch failed its pre-flight; "
                                   "nothing was built or published")
@@ -736,7 +842,13 @@ def record_batch(result: dict, actions: list[dict], state_dir: Path, st: dict,
     for action in shipped:
         record(result, action, state_dir, st, today, run=run, repo=repo)
     for component, bad in (result.get("patch_failures") or {}).items():
-        st.setdefault("patch_failures", {})[component] = bad
+        # Merge, do not replace. The known-bad set for a component accumulates night
+        # after night; overwriting it would forget the fixes already proved wrong and
+        # spend another pre-flight rediscovering them.
+        cur = (st.get("patch_failures") or {}).get(component) or {}
+        merged = {**cur, **bad}
+        merged["fixes"] = sorted({*(cur.get("fixes") or []), *(bad.get("fixes") or [])})
+        st.setdefault("patch_failures", {})[component] = merged
 
     entry = {"kind": "batch", "date": today.isoformat(),
              "published": bool(result.get("published")),

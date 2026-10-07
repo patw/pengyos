@@ -153,6 +153,19 @@ def test_patch_dir_carries_a_review_request_and_names_the_commit_it_came_from(tm
     assert "76fe08d97de8" in patch.note, "the sha read back out of the fetched patch"
 
 
+def test_patch_dir_records_which_cves_each_patch_closes(tmp_path):
+    """The act lane re-computes its claim after pre-flight, and it can only do that if
+    each edit says which CVEs it closes and which upstream fix it came from."""
+    cves = [{"cve": "CVE-2026-86137", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://github.com/GNOME/libxml2/commit/76fe08d9",
+                            "sha": "76fe08d9", "host": "github.com", "kind": "commit"}}]
+    edits = E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"],
+                        get=lambda url: PATCH.encode())
+    patch = next(e for e in edits if e.path.endswith(".patch"))
+    assert patch.cves == ["CVE-2026-86137"]
+    assert patch.fix_url == "https://github.com/GNOME/libxml2/commit/76fe08d9"
+
+
 def test_patch_dir_carries_one_numbered_patch_per_distinct_commit(tmp_path):
     def get(url):
         return PATCH.encode()

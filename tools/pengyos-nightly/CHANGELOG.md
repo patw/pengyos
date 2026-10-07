@@ -6,6 +6,30 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-07
+
+### Changed
+- **The unit of pre-flight failure is a patch, not a package.** `act.triage_package`
+  reads the patch Buildroot rejected (`apply-patches.sh`: `Patch failed!  Please fix
+  <patch>!`), takes that file out of the tree, re-extracts, and retries. `shrink_action`
+  then recomputes `closes` / `still_open` / `patches` from what survived, so the claim
+  follows the tree. Previously one uncarriable cherry-pick condemned the whole package:
+  measured 2026-10-06, ffmpeg had 11 of 19 patches that apply and the loop would have
+  shipped none of them, then blacklisted ffmpeg.
+- **`patch_does_not_apply` is scoped to the fix, not the component.** The record is now
+  `patch_failures[<pkg>]["fixes"]` — the upstream fix URLs proved not to apply — and a
+  candidate is refused only when it wants one of them. A commit authored against ffmpeg
+  8.x failing on 6.1.5 no longer blocks a fix written for 6.1.15. The known-bad set
+  accumulates across nights (merge, never overwrite). A record with no fix list predates
+  per-fix tracking and is honoured as a component-wide block until a human clears it.
+- **`Edit` carries `cves` and `fix_url`.** The act lane can only re-compute its claim
+  after pre-flight if each patch file says which CVEs it closes and which upstream fix
+  it came from; `plan.json` is now that mapping.
+- **Rejection reasons are named in the notes**: `already present in the pinned version`
+  (patch reported `Reversed (or previously applied)`) versus `does not apply to the
+  pinned version`. The first is a fact about the CVE; the second is a fact about the
+  cherry-pick.
+
 ## [0.6.0] - 2026-10-06
 
 ### Changed
