@@ -20,6 +20,7 @@ in this order if you are picking the project up cold:
 | [`install-update-architecture.md`](install-update-architecture.md) | *How is PengyOS installed and updated?* — the original design. Its UKI / systemd-boot / sysupdate half stays **parked**; what shipped is the smaller GRUB + ext4 "A/B lite" in `state-layout.md` (see the banners). |
 | [`state-layout.md`](state-layout.md) | *Where does a machine's state live, and how does an update work?* — **implemented** for Server and Desktop: ESP + two read-only root slots + a btrfs `data` partition, `/etc` as an overlay; `pengyos-update` writes the other slot and keeps it only if it boots. |
 | [`qemu-testing.md`](qemu-testing.md) | *How do we boot and inspect an image?* — the headless boot harness, SSH into a booted guest, the serial console, driving it non-interactively, and how to screenshot a GL desktop in a VM (plus the VM-vs-real-hardware caveats). |
+| [`hdmi-audio-problems.md`](hdmi-audio-problems.md) | *What does a real hardware investigation look like here?* — a silent-HDMI case worked end to end: what was measured, which conclusions were superseded, and how the fault was narrowed to PipeWire's split-mode ALSA sink node. Kept for the method, not as a support document. |
 
 ## Conventions
 

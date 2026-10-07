@@ -71,7 +71,7 @@ Updates never touch `data`. Update feeds match on `IMAGE_ID`. The UKI / systemd-
 ## Conventions
 
 - **Versioning.** Images use `YY.MM.N` from the root `VERSION` file. Bump it when publishing an image; a new month resets N to 0. `board/common/os-release.sh` writes `VERSION_ID`, `IMAGE_VERSION`, `IMAGE_ID`, and `BUILD_ID` (the git commit) from it.
-- **Docs in the same change.** System-level changes get an entry in the root `CHANGELOG.md` (Keep a Changelog, under `[Unreleased]` or the image version). Tool changes go in that tool's `CHANGELOG.md`. Each directory's `README.md` must stay accurate. `TODO.md` is temporary: delete items once they land.
+- **Docs in the same change.** System-level changes get an entry in the root `CHANGELOG.md` (Keep a Changelog, under `[Unreleased]` or the image version). Tool changes go in that tool's `CHANGELOG.md`. Each directory's `README.md` must stay accurate. Open work lives as GitHub issues, not in a backlog file.
 - **Small, atomic commits** whose messages say *why*.
 - **Security boundary.** Release signing, update acceptance and privilege changes need a human's sign-off. Signing keys never live in this repo.
 - **Licenses.** Prefer MIT/Apache-2.0 components. Any GPL/LGPL component or binary blob must be documented explicitly in `SPEC.md`.

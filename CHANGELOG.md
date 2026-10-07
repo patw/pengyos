@@ -54,7 +54,7 @@ as Ubuntu/Fedora/Pop!_OS ship. On a single-codec card ACP defaults to analog
 (priority 6565 > 5900, and the ALC897 line-out has no jack-detect), so HDMI is a
 **selectable profile**: pick `Digital Stereo (HDMI)` in Settings → Sound →
 Device profiles. `alsa-ucm-conf` stays (ACP reads it); `pengyos-alsa-unity.service`
-stays pending a laptop re-measure. Investigation: `hdmi-audio-problems.md`.
+stays pending a laptop re-measure. Investigation: `docs/hdmi-audio-problems.md`.
 
 ### Desktop: 20 new Pengy wallpapers, and Cosmic Pengy redrawn (2026-10-06)
 Twenty backgrounds — four seasons, seven North American holidays, nine Pengy
@@ -268,7 +268,7 @@ targets actually lives.
   a real 26.10.7 Server image under KVM - failed-unit and sshd checks pass, and
   `pengyos-update status` correctly fails on a raw disk image that has no A/B
   layout yet.
-- **Publishing audit** (`docs/github-publish-audit.md`): what is clean (no
+- **Publishing audit** (working notes, kept out of the public tree): what is clean (no
   secrets, no large blobs, LICENSE/SECURITY/CONTRIBUTING in place), what is not
   (97 home-network machine-name mentions, one personal email in a
   `pyproject.toml`, 310 commits authored as the personal address, no remote
