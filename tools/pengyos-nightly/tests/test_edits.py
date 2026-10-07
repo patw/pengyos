@@ -153,6 +153,48 @@ def test_patch_dir_carries_a_review_request_and_names_the_commit_it_came_from(tm
     assert "76fe08d97de8" in patch.note, "the sha read back out of the fetched patch"
 
 
+def test_split_patches_separates_a_review_request_series(tmp_path):
+    """A GitLab MR / GitHub PR `.patch` is the whole series concatenated, and Buildroot
+    pipes one file to one `patch` invocation. Measured 2026-10-07: gstreamer's MR 11243
+    came back as 4 patches in one file, which is what the `|-- |GitLab` garbage in a real
+    `gstreamer1-patch` failure was."""
+    second = PATCH.replace("76fe08d97de88bfaef2f7d5cd27f11954cc5bee2",
+                           "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+    parts = E.split_patches(PATCH + second)
+    assert len(parts) == 2
+    assert all(p.startswith("From ") for p in parts)
+    assert E.patch_sha(parts[0]) == "76fe08d97de88bfaef2f7d5cd27f11954cc5bee2"
+    assert E.patch_sha(parts[1]) == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    assert len(E.split_patches(PATCH)) == 1, "a single commit is still one patch"
+    assert E.split_patches("") == []
+
+
+def test_a_response_that_is_not_a_format_patch_is_refused(tmp_path):
+    """An HTML page must not become a .patch file in the tree."""
+    with pytest.raises(ValueError, match="not a git format-patch"):
+        E.fetch_patches("https://gitlab.freedesktop.org/gstreamer/gstreamer/-/commit/abc",
+                        get=lambda url: b"<!DOCTYPE html><html><body>GitLab</body></html>")
+
+
+def test_patch_dir_writes_one_file_per_commit_in_a_review_request(tmp_path):
+    cves = [{"cve": "CVE-2026-46470", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://gitlab.freedesktop.org/gstreamer/gstreamer"
+                                    "/-/merge_requests/11243", "sha": "",
+                            "host": "gitlab.freedesktop.org", "kind": "pull"}}]
+    second = PATCH.replace("76fe08d97de88bfaef2f7d5cd27f11954cc5bee2",
+                           "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+    edits = E.patch_dir(tmp_path, "gst1-plugins-good", "1.24.13", cves, ["pengyos-desktop"],
+                        get=lambda url: (PATCH + second).encode())
+    patches = [e for e in edits if e.path.endswith(".patch")]
+    assert [Path(e.path).name[:4] for e in patches] == ["0001", "0002"], \
+        [e.path for e in patches]
+    assert len({Path(e.path).name for e in patches}) == 2, "two files, not one"
+    assert all(e.cves == ["CVE-2026-46470"] for e in patches), \
+        "both commits of the request close the same CVE, so both are claimed by it"
+    assert E.patch_sha(patches[1].new)[:12] in patches[1].note, \
+        "each file names the commit it actually came from, not just the request"
+
+
 def test_patch_dir_records_which_cves_each_patch_closes(tmp_path):
     """The act lane re-computes its claim after pre-flight, and it can only do that if
     each edit says which CVEs it closes and which upstream fix it came from."""

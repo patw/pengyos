@@ -391,6 +391,44 @@ def test_an_unattributable_failure_names_no_patch():
     assert A._failed_patch("make: *** [Makefile:83: _all] Error 2") == ""
 
 
+def test_triage_finds_the_culprit_in_a_long_failure_log(tmp_path):
+    """One ffmpeg cherry-pick produced 17 failed hunks, so the `Applying` line sits
+    hundreds of lines from the end of the log. The message shown to a human is
+    summarised; the evidence the triage reads is not."""
+    action = {"component": "ffmpeg", "current": "6.1.5", "shape": "patch_dir",
+              "editions": ["pengyos-desktop"], "cves": [], "edits": [
+                  {"path": "buildroot-external/patches/ffmpeg/6.1.5/0001-a.patch",
+                   "kind": "create", "new": "From aaaaaaa\n", "cves": ["CVE-2026-1"],
+                   "fix_url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/aaaaaaaaaaaa"},
+                  {"path": "buildroot-external/patches/ffmpeg/6.1.5/0002-b.patch",
+                   "kind": "create", "new": "From bbbbbbb\n", "cves": ["CVE-2026-2"],
+                   "fix_url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/bbbbbbbbbbbb"}]}
+    for e in action["edits"]:
+        p = tmp_path / e["path"]
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(e["new"])
+
+    def fake(argv, **kw):
+        argv = [str(a) for a in argv]
+        bad = tmp_path / "buildroot-external/patches/ffmpeg/6.1.5/0002-b.patch"
+        if any(a.endswith("ffmpeg-patch") for a in argv) and bad.exists():
+            out = ("Applying 0001-a.patch using patch: \npatching file libavformat/mov.c\n"
+                   "Applying 0002-b.patch using patch: \n"
+                   + "".join(f"Hunk #{i} FAILED at {100 * i}.\n" for i in range(1, 61))
+                   + "60 out of 60 hunks FAILED -- saving rejects to file libavformat/mov.c.rej\n"
+                   + "make[1]: *** [package/pkg-generic.mk:239: build/ffmpeg-6.1.5/"
+                     ".stamp_patched] Error 1\nmake: *** [Makefile:83: _all] Error 2\n")
+            return subprocess.CompletedProcess(argv, 2, stdout=out, stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    r = A.triage_package(fake, tmp_path, tmp_path, "2026.08", "tree",
+                         ["pengyos-desktop"], action)
+    assert r["ok"], r["error"]
+    assert [Path(e["path"]).name for e in r["carried"]] == ["0001-a.patch"]
+    assert [Path(d["patch"]).name for d in r["dropped"]] == ["0002-b.patch"]
+    assert r["dropped"][0]["reason"] == "does not apply to the pinned version"
+
+
 def test_refresh_package_keeps_the_lines_the_triage_needs(tmp_path):
     """The old error summary kept only lines containing FAILED / error:, which is
     exactly how the culprit's name got thrown away."""

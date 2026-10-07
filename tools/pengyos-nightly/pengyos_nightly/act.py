@@ -291,6 +291,20 @@ def _failed_files(detail: str) -> str:
     return detail.splitlines()[0][:80] if detail else "the source"
 
 
+class PatchFailure(RuntimeError):
+    """A pre-flight step failed, carrying the whole command output.
+
+    The message is for a human and for `patch_failures.detail`; `.output` is for the
+    triage, which has to find the failing patch's name in a log that can run to
+    hundreds of lines (one ffmpeg cherry-pick produced 17 failed hunks). Truncating
+    the message is fine; truncating the evidence is not.
+    """
+
+    def __init__(self, message: str, output: str):
+        super().__init__(message)
+        self.output = output
+
+
 def _failed_patch(detail: str) -> str:
     """Which patch Buildroot stopped on.
 
@@ -349,7 +363,7 @@ def triage_package(run, repo: Path, build_root: Path, br_version: str, external_
             return {"ok": True, "carried": carried, "dropped": dropped, "error": "",
                     "editions": done}
         except RuntimeError as exc:
-            detail = str(exc)
+            detail = getattr(exc, "output", None) or str(exc)
             name = _failed_patch(detail)
             victim = next((e for e in carried if Path(e["path"]).name == name), None)
             if victim is None:
@@ -420,8 +434,8 @@ def refresh_package(run, build_root: Path, br_version: str, external_tree: str,
                 lines = out.splitlines()
                 head = [l for l in lines if "FAILED" in l or "error:" in l][:4]
                 tail = "\n".join(lines[-25:])
-                raise RuntimeError(f"{step} failed in {t}: "
-                                   + ("; ".join(head) + "\n" + tail if head else tail))
+                raise PatchFailure(f"{step} failed in {t}: "
+                                   + ("; ".join(head) + "\n" + tail if head else tail), out)
         done.append(t)
     return done
 

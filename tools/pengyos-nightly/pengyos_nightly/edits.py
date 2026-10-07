@@ -322,17 +322,21 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
     build stays byte-comparable to every other edition.
     """
     edits: list[Edit] = []
-    for n, group in enumerate(carried_patches(cves), start=1):
+    n = 0
+    for group in carried_patches(cves):
         src = group["source"]
-        text = fetch_patch(src.get("url", ""), get)
-        sha = src.get("sha") or patch_sha(text)
-        slug = patch_slug(text, sha)
-        edits.append(Edit(
-            path=f"buildroot-external/patches/{pkg}/{current}/{n:04d}-{slug}.patch",
-            kind="create", new=text,
-            note=f"{', '.join(group['cves'])} ({src.get('kind', 'commit')} from "
-                 f"{src.get('host', '')} {(sha or src.get('url', ''))[:12]})",
-            cves=list(group["cves"]), fix_url=src.get("url", "")))
+        # One review request can be several commits: each becomes its own patch file,
+        # because Buildroot pipes one file to one `patch` invocation.
+        for text in fetch_patches(src.get("url", ""), get):
+            sha = src.get("sha") or patch_sha(text)
+            n += 1
+            edits.append(Edit(
+                path=f"buildroot-external/patches/{pkg}/{current}/{n:04d}-"
+                     f"{patch_slug(text, sha)}.patch",
+                kind="create", new=text,
+                note=f"{', '.join(group['cves'])} ({src.get('kind', 'commit')} from "
+                     f"{src.get('host', '')} {(sha or src.get('url', ''))[:12]})",
+                cves=list(group["cves"]), fix_url=src.get("url", "")))
     if not edits:
         raise ValueError(f"no upstream fix commit to carry for {pkg}")
     edits.append(Edit(path="buildroot-external/configs/layers/core.config", kind="ensure",
@@ -379,11 +383,50 @@ def patch_sha(patch_text: str) -> str:
     return m.group(1) if m else ""
 
 
-def fetch_patch(commit_url: str, get=fetch_bytes) -> str:
-    url = patch_url(commit_url)
+# The line `git format-patch` writes at the head of every patch it emits. It is also
+# the only thing that separates one patch from the next when a whole review request
+# is fetched at once.
+_PATCH_HEAD = re.compile(r"^From ([0-9a-f]{7,40}) Mon Sep 17 00:00:00 2001$", re.M)
+
+
+def split_patches(text: str) -> list[str]:
+    """Split a fetched review request into the individual patches it contains.
+
+    A GitLab merge request or GitHub pull request `.patch` is the whole series
+    concatenated — measured 2026-10-07 on the live plan, gstreamer's MR 11243 came back
+    as 4 patches in one file and MR 12xxx as 6. Buildroot applies one file per patch
+    (`apply-patches.sh` pipes each file to `patch` once), so a concatenated response
+    makes patch read the next email's headers as garbage: that is the `|-- |GitLab`
+    noise in a real `gstreamer1-patch` failure. Splitting is what makes a review
+    request carriable at all.
+    """
+    marks = list(_PATCH_HEAD.finditer(text or ""))
+    if not marks:
+        return []
+    ends = [m.start() for m in marks[1:]] + [len(text)]
+    return [text[m.start():end] for m, end in zip(marks, ends)]
+
+
+def fetch_patches(source_url: str, get=fetch_bytes) -> list[str]:
+    """Fetch an upstream fix as one or more git patches.
+
+    One review request can be several commits, so this returns a list. A response that
+    is not a git format-patch at all (an HTML page, an error page) raises rather than
+    becoming a `.patch` file that poisons the tree.
+    """
+    url = patch_url(source_url)
     if not url:
-        raise ValueError(f"no .patch form known for {commit_url!r}")
-    return get(url).decode("utf-8", "replace")
+        raise ValueError(f"no .patch form known for {source_url!r}")
+    parts = split_patches(get(url).decode("utf-8", "replace"))
+    if not parts:
+        raise ValueError(f"{url} is not a git format-patch")
+    return parts
+
+
+def fetch_patch(commit_url: str, get=fetch_bytes) -> str:
+    """The single patch a commit URL serves. Review requests are handled by
+    `fetch_patches`, which is what `patch_dir` uses."""
+    return fetch_patches(commit_url, get)[0]
 
 
 def patch_slug(patch_text: str, sha: str) -> str:
