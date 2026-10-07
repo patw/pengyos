@@ -99,6 +99,37 @@ def test_no_upstream_commit_means_no_action():
     assert not ok and "no_fix_commit" in why
 
 
+def test_a_mix_of_fetchable_and_unfetchable_is_actionable_for_the_fetchable_part():
+    """The veto used to be per component: one CVE with no named commit refused the
+    whole package. Measured 2026-10-06, that held 28 fetchable patches behind 17
+    CVEs with nothing to fetch — ffmpeg 18 of 21, gstreamer1 10 of 24."""
+    a = _patch_action(cves=[
+        {"cve": "CVE-2026-86137", "affected": True,
+         "fix_commit": {"url": "https://github.com/GNOME/libxml2/commit/76fe08d",
+                        "sha": "76fe08d", "host": "github.com"}},
+        {"cve": "CVE-2026-18477", "affected": True, "fix_commit": None}])
+    ok, why = G.fix_commits_available(a)
+    assert ok, why
+    assert "1 of 2" in why and "CVE-2026-18477" in why, why
+
+
+def test_a_commit_on_a_host_that_serves_no_patch_is_not_a_fix_to_carry():
+    """The guard may not allow what fetch_patch cannot fetch."""
+    a = _patch_action(cves=[{"cve": "CVE-2026-1", "affected": True, "fix_commit": {
+        "url": "https://code.videolan.org/videolan/x/commit/deadbeef", "sha": "deadbeef",
+        "host": "code.videolan.org"}}])
+    ok, why = G.fix_commits_available(a)
+    assert not ok and "no_fix_commit" in why, why
+
+
+def test_a_review_request_counts_as_an_available_fix():
+    a = _patch_action(cves=[{"cve": "CVE-2026-40962", "affected": True, "fix_commit": {
+        "url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348", "sha": "",
+        "host": "code.ffmpeg.org", "kind": "pull"}}])
+    ok, why = G.fix_commits_available(a)
+    assert ok and "1 upstream fix" in why, why
+
+
 def test_unsure_matches_are_never_actionable():
     a = _patch_action(cves=[{"cve": "CVE-2026-1", "affected": True, "unsure": True,
                              "fix_commit": {"url": "u", "sha": "s", "host": "github.com"}}])

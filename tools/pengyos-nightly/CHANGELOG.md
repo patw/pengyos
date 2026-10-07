@@ -6,6 +6,34 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-06
+
+### Changed
+- **`fix_commits_available` is per CVE, not per component.** One CVE whose NVD record
+  named no upstream commit used to refuse the whole package. Measured on the live plan
+  2026-10-06: that veto held **28 fetchable patches behind 17 CVEs with nothing to
+  fetch** — ffmpeg 18 of 21 CVEs actionable, refused; gstreamer1 10 of 24, refused.
+  A component is now actionable when at least one affected CVE names a fetchable fix.
+- **The claim is computed from the patch set.** `edits.carried_patches` decides which
+  patches are written and `edits.carried_cves` is the union of CVEs they close; the
+  planner takes `closes` from the same function, so the notes, the commit message and
+  the `patched_by` record can never claim more than the tree carries. Affected CVEs
+  left out are recorded as `still_open` and named in the release notes as still open.
+  Two CVEs fixed by one commit are still **one patch and two closed** — deduplicating
+  the patch does not shrink the claim.
+- **A pull/merge request counts as a named fix.** FFmpeg and GStreamer publish fixes as
+  review requests and NVD links the request, not the commit. `evidence.fix_commit` now
+  recognises `pull/N`, `pulls/N` and `-/merge_requests/N` (a named commit still wins),
+  and `edits.patch_sha` reads the commit sha back out of the fetched format-patch so
+  the notes still cite a commit. Verified live: `code.ffmpeg.org/.../pulls/22348.patch`
+  and `gitlab.freedesktop.org/.../merge_requests/11243.patch` both serve 200 + patch text.
+- **`code.ffmpeg.org` is a known patch host.** 16 of the ffmpeg fix references live
+  there and the old host list could not fetch any of them — the guard would have allowed
+  the action and `fetch_patch` would have raised on it. `carried_patches` now checks the
+  patch form exists before counting a fix, so the guard cannot allow what the fetcher
+  cannot fetch. `patch_url` also passes an already-`.patch` reference through instead of
+  doubling it.
+
 ## [0.5.0] - 2026-10-06
 
 ### Changed

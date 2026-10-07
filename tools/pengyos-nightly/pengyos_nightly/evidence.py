@@ -182,22 +182,42 @@ def evidence(cve: str, package: str, record: dict, current: str, target: str,
 
 
 _COMMIT = re.compile(r"/commit/([0-9a-f]{7,40})")
+# A fix published as a review request rather than a bare commit: GitHub `pull/N`,
+# FFmpeg/cgit-style `pulls/N`, GitLab `-/merge_requests/N`. Each form was verified
+# against a real NVD reference on 2026-10-06: code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348
+# and gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/11243 both serve the
+# fix as git format-patch (see edits.patch_url).
+_PULL = re.compile(r"/(?:pull|pulls|merge_requests|merge-requests)/(\d+)")
+
+
+def host_of(url: str) -> str:
+    return url.split("//", 1)[-1].split("/", 1)[0]
 
 
 def fix_commit(record: dict) -> dict | None:
-    """The upstream commit NVD points at as the fix, if it names one.
+    """The upstream fix NVD points at, if it names one: a commit, or the pull /
+    merge request that carries it.
 
     For a stock package this is the whole difference between "carry the fix" and
     "report it": a record that points at a vendor erratum (tar's CVEs reference
-    Red Hat errata) has nothing to fetch, so the loop must not pretend otherwise.
+    Red Hat errata) or at an advisory (gstreamer's ZDI entries) has nothing to
+    fetch, so the loop must not pretend otherwise. A review request counts because
+    the hosts we carry patches from serve the request itself as a format-patch,
+    which is how FFmpeg and GStreamer actually publish a fix; the sha is then read
+    back out of the patch (edits.patch_sha), so the record still names a commit.
     """
     refs = [r.get("url", "") for r in (record or {}).get("references", [])]
-    ordered = [u for u in refs if _COMMIT.search(u)] + [u for u in refs if not _COMMIT.search(u)]
-    for url in ordered:
+    # A named commit first: it is the exact change, and it is what the patch lane
+    # has always carried. A request is the fallback, not the preference.
+    for url in refs:
         m = _COMMIT.search(url)
         if m:
-            host = url.split("//", 1)[-1].split("/", 1)[0]
-            return {"url": url, "sha": m.group(1), "host": host}
+            return {"url": url, "sha": m.group(1), "host": host_of(url), "kind": "commit"}
+    for url in refs:
+        m = _PULL.search(url)
+        if m:
+            return {"url": url, "sha": "", "host": host_of(url), "kind": "pull",
+                    "request": m.group(1)}
     return None
 
 

@@ -95,7 +95,44 @@ def test_fix_commit_is_the_upstream_commit_nvd_names():
     c = EV.fix_commit(record("CVE-2026-86137"))
     assert c == {"url": "https://github.com/GNOME/libxml2/commit/"
                        "76fe08d97de88bfaef2f7d5cd27f11954cc5bee2",
-                 "sha": "76fe08d97de88bfaef2f7d5cd27f11954cc5bee2", "host": "github.com"}
+                 "sha": "76fe08d97de88bfaef2f7d5cd27f11954cc5bee2", "host": "github.com",
+                 "kind": "commit"}
+
+
+def test_a_review_request_is_a_fix_the_loop_can_carry():
+    """FFmpeg and GStreamer publish a fix as a review request and NVD links the
+    request, not the commit. Both hosts serve the request itself as a git
+    format-patch (verified live on 2026-10-06), so this is a fix to carry — the old
+    rule read it as "no fix", which is how ffmpeg CVE-2026-40962 (CVSS 9.8) sat
+    unactioned while its patch was one HTTP GET away."""
+    ffmpeg = EV.fix_commit({"references": [
+        {"url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348"}]})
+    assert ffmpeg == {"url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348",
+                      "sha": "", "host": "code.ffmpeg.org", "kind": "pull",
+                      "request": "22348"}
+    gst = EV.fix_commit({"references": [
+        {"url": "https://gitlab.freedesktop.org/gstreamer/gstreamer"
+                "/-/merge_requests/11243.patch"}]})
+    assert gst and gst["kind"] == "pull" and gst["request"] == "11243"
+    gh = EV.fix_commit({"references": [{"url": "https://github.com/o/r/pull/42"}]})
+    assert gh and gh["kind"] == "pull" and gh["sha"] == ""
+
+
+def test_a_named_commit_beats_a_review_request_on_the_same_record():
+    """A commit is the exact change; a request is the fallback, never the preference."""
+    rec = {"references": [{"url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348"},
+                          {"url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/"
+                                   "dbd495f066a85ba96b17433f4306582aa37c3951"}]}
+    c = EV.fix_commit(rec)
+    assert c["kind"] == "commit" and c["sha"].startswith("dbd495f0")
+
+
+def test_an_issue_or_an_advisory_page_is_not_a_review_request():
+    """`/issues/4854` and a security advisory name a problem, not a fix."""
+    assert EV.fix_commit({"references": [
+        {"url": "https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/4854"}]}) is None
+    assert EV.fix_commit({"references": [
+        {"url": "https://gstreamer.freedesktop.org/security/sa-2026-0018.html"}]}) is None
 
 
 def test_vendor_errata_are_not_a_fix_to_carry():

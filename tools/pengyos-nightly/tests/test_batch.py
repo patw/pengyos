@@ -234,6 +234,15 @@ def test_the_batch_notes_name_every_change_and_its_evidence(tmp_path):
     assert "Editions rebuilt: pengyos-desktop, pengyos-server" in notes
 
 
+def test_the_batch_notes_say_what_the_patch_set_left_open(tmp_path):
+    """A subset patch must not read as a clean sweep: the CVEs NVD could not name a
+    fix for are named, so the next reader is not told the package is clear."""
+    actions = [_patch_action(still_open=["CVE-2026-18477", "CVE-2026-8631"])]
+    _run(tmp_path, actions, cfg=_cfg(key_file=_key(tmp_path)))
+    notes = (tmp_path / "state" / "notes-batch-2026-10-06.md").read_text()
+    assert "Still open in libxml2: CVE-2026-18477, CVE-2026-8631" in notes, notes
+
+
 # --- a bad candidate must not spend the night ---------------------------------
 
 def test_a_package_that_fails_its_preflight_is_dropped_and_the_rest_ship(tmp_path):

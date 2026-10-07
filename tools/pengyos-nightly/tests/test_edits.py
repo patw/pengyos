@@ -91,6 +91,68 @@ def test_patch_url_is_only_offered_for_hosts_that_serve_one():
     assert E.patch_url("") is None
 
 
+def test_patch_url_knows_ffmpeg_gitlab_and_a_review_request():
+    """16 of the ffmpeg fix references live on code.ffmpeg.org, which the old host
+    list silently could not fetch — the guard allowed the action and fetch_patch
+    would have raised on it."""
+    assert E.patch_url("https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/dbd495f0").endswith(
+        "dbd495f0.patch")
+    assert E.patch_url("https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348").endswith(
+        "pulls/22348.patch")
+    assert E.patch_url("https://github.com/o/r/pull/42").endswith("pull/42.patch")
+
+
+def test_patch_url_passes_a_patch_form_through_instead_of_doubling_it():
+    """GStreamer's advisory references already end in `.patch`."""
+    url = ("https://gitlab.freedesktop.org/gstreamer/gstreamer"
+           "/-/merge_requests/11243.patch")
+    assert E.patch_url(url) == url
+
+
+def test_patch_sha_reads_the_commit_a_format_patch_came_from():
+    """A fix NVD named only as a pull request still ends up recorded against a sha."""
+    assert E.patch_sha(PATCH) == "76fe08d97de88bfaef2f7d5cd27f11954cc5bee2"
+    assert E.patch_sha("not a format-patch") == ""
+
+
+# --- which CVEs a patch set actually closes ----------------------------------
+
+def test_two_cves_fixed_by_one_commit_are_one_patch_and_two_closed():
+    cves = [{"cve": "CVE-2026-86143", "fix_commit": {"url": "https://github.com/o/r/commit/abc",
+                                                     "sha": "abc"}},
+            {"cve": "CVE-2026-86137", "fix_commit": {"url": "https://github.com/o/r/commit/abc",
+                                                     "sha": "abc"}}]
+    groups = E.carried_patches(cves)
+    assert len(groups) == 1
+    assert groups[0]["cves"] == ["CVE-2026-86137", "CVE-2026-86143"]
+    assert E.carried_cves(cves) == ["CVE-2026-86137", "CVE-2026-86143"], \
+        "deduplicating the patch must not shrink the claim"
+
+
+def test_a_cve_with_nothing_fetchable_is_carried_by_nothing():
+    cves = [{"cve": "CVE-2026-18477", "fix_commit": None},
+            {"cve": "CVE-2026-8631", "fix_commit": {"url": "https://support.hp.com/doc",
+                                                    "sha": "", "host": "support.hp.com"}},
+            {"cve": "CVE-2026-86137", "fix_commit": {"url": "https://github.com/GNOME/libxml2"
+                                                      "/commit/76fe08d", "sha": "76fe08d"}}]
+    assert E.carried_cves(cves) == ["CVE-2026-86137"]
+    assert len(E.carried_patches(cves)) == 1
+
+
+def test_patch_dir_carries_a_review_request_and_names_the_commit_it_came_from(tmp_path):
+    """The ffmpeg case: NVD named a pull request, the host serves it as a patch, and
+    the patch's own `From` line supplies the commit the notes cite."""
+    cves = [{"cve": "CVE-2026-40962", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348",
+                            "sha": "", "host": "code.ffmpeg.org", "kind": "pull"}}]
+    edits = E.patch_dir(tmp_path, "ffmpeg", "6.1.5", cves, ["pengyos-desktop"],
+                        get=lambda url: PATCH.encode())
+    patch = next(e for e in edits if e.path.endswith(".patch"))
+    assert patch.path.startswith("buildroot-external/patches/ffmpeg/6.1.5/0001-")
+    assert "CVE-2026-40962" in patch.note and "pull" in patch.note
+    assert "76fe08d97de8" in patch.note, "the sha read back out of the fetched patch"
+
+
 def test_patch_dir_carries_one_numbered_patch_per_distinct_commit(tmp_path):
     def get(url):
         return PATCH.encode()

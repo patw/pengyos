@@ -116,12 +116,20 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
         if c.get("affected") or c.get("covered"):
             c["fix_commit"] = EV.fix_commit(nvd_of(c["cve"]))
 
-    closes = [c["cve"] for c in cves if (c.get("affected") if shape == "patch_dir"
-                                         else c.get("covered"))]
+    # What this action may *claim*. For a patch shape the claim is exactly the set
+    # of CVEs whose fix will be written into the tree — `carried_cves` is the same
+    # function `patch_dir` iterates, so the notes, the commit message and the
+    # `patched_by` record can never overstate the patch set. The affected CVEs left
+    # out are recorded as `still_open` and named in the notes, not dropped.
+    closes = (E.carried_cves([c for c in cves if c.get("affected")])
+              if shape == "patch_dir" else
+              [c["cve"] for c in cves if c.get("covered")])
+    still_open = ([c["cve"] for c in cves if c.get("affected") and c["cve"] not in closes]
+                  if shape == "patch_dir" else [])
     action = {"id": f"{lane}-{name}-{target}", "lane": lane, "component": name,
               "current": current, "target": target, "bump_kind": kind, "shape": shape,
               "editions": list(pkg.get("editions") or []), "cves": cves,
-              "closes": closes, "tree": pkg.get("tree", ""),
+              "closes": closes, "still_open": still_open, "tree": pkg.get("tree", ""),
               "latest_upstream": pkg.get("latest", ""),
               "recipe": pkg.get("mk_path") or pkg.get("pkg_path", "")}
 

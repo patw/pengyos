@@ -260,9 +260,48 @@ def download_hash(url: str, filename: str, get=fetch_bytes) -> HashInfo:
 
 # --- the shapes --------------------------------------------------------------
 
+def carried_patches(cves: list[dict]) -> list[dict]:
+    """The patches `patch_dir` will write, and the CVEs each one closes.
+
+    One entry per upstream fix, in a stable order: two CVEs fixed by the same commit
+    or the same review request are carried by **one** patch and both count as closed
+    by it — deduplicating the patch must not shrink the claim. A CVE whose record
+    names no fetchable fix is absent from the result: not carried, and not claimed.
+
+    Returns `[{"source": <the fix_commit dict>, "cves": [cve id, ...]}, ...]`.
+    """
+    groups: dict[str, dict] = {}
+    for c in sorted(cves, key=lambda c: c["cve"]):
+        src = c.get("fix_commit") or {}
+        url = src.get("url", "")
+        # Fetchable, not merely named: a commit on a host that serves no .patch is a
+        # fact about the world the loop cannot act on, and the guard must not allow
+        # what fetch_patch would then fail on.
+        if not url or patch_url(url) is None:
+            continue
+        key = src.get("sha") or url
+        groups.setdefault(key, {"source": src, "cves": []})["cves"].append(c["cve"])
+    return [groups[k] for k in sorted(groups)]
+
+
+def carried_cves(cves: list[dict]) -> list[str]:
+    """Every CVE the patch set closes — the union over `carried_patches`.
+
+    One rule, in one place: the planner takes the action's `closes` from this, the
+    guard asks it what is fetchable, and `patch_dir` writes the patches from
+    `carried_patches`. The tree and the security claim are computed from the same
+    function, so they cannot drift apart.
+    """
+    return sorted({cve for g in carried_patches(cves) for cve in g["cves"]})
+
+
 def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: list[str],
               get=fetch_bytes) -> list[Edit]:
     """A stock Buildroot package: carry the upstream fix commits as patches.
+
+    The subset is deliberate: a CVE whose record names no upstream fix is not
+    carried and not claimed (see `carried_patches`), so a package with a mix of
+    fetchable fixes and vendor errata gets the fixes it can honestly take.
 
     This is the shape the build proved (2026-10-05). The version override did not:
     `LIBXML2_VERSION = 2.15.4` in external.mk made Buildroot *download* 2.15.4 while
@@ -278,21 +317,16 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
     build stays byte-comparable to every other edition.
     """
     edits: list[Edit] = []
-    seen: set[str] = set()
-    n = 0
-    for c in sorted(cves, key=lambda c: c["cve"]):
-        commit = c.get("fix_commit") or {}
-        sha, url = commit.get("sha", ""), commit.get("url", "")
-        if not sha or sha in seen:
-            continue
-        seen.add(sha)
-        n += 1
-        text = fetch_patch(url, get)
+    for n, group in enumerate(carried_patches(cves), start=1):
+        src = group["source"]
+        text = fetch_patch(src.get("url", ""), get)
+        sha = src.get("sha") or patch_sha(text)
         slug = patch_slug(text, sha)
         edits.append(Edit(
             path=f"buildroot-external/patches/{pkg}/{current}/{n:04d}-{slug}.patch",
             kind="create", new=text,
-            note=f"{c['cve']} ({c['priority']}) fix from {commit.get('host', '')} {sha[:12]}"))
+            note=f"{', '.join(group['cves'])} ({src.get('kind', 'commit')} from "
+                 f"{src.get('host', '')} {(sha or src.get('url', ''))[:12]})"))
     if not edits:
         raise ValueError(f"no upstream fix commit to carry for {pkg}")
     edits.append(Edit(path="buildroot-external/configs/layers/core.config", kind="ensure",
@@ -303,15 +337,40 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
     return edits
 
 
-_PATCH_HOSTS = ("github.com", "gitlab.com", "gitlab.gnome.org", "gitlab.freedesktop.org")
+# Hosts verified (2026-10-05, 2026-10-06) to serve `<url>.patch` as git
+# format-patch: GitHub commits and pulls, the three GitLab instances (commits and
+# merge requests), and FFmpeg's own GitLab, where 16 of the ffmpeg fix references
+# actually live and which the old list silently could not fetch.
+_PATCH_HOSTS = ("github.com", "gitlab.com", "gitlab.gnome.org", "gitlab.freedesktop.org",
+                "code.ffmpeg.org")
 
 
-def patch_url(commit_url: str) -> str | None:
-    """The .patch form of a commit URL, for the hosts we know serve one (both were
-    verified against real fix commits on 2026-10-05)."""
-    if commit_url and any(h in commit_url for h in _PATCH_HOSTS):
-        return commit_url.rstrip("/") + ".patch"
+def patch_url(source_url: str) -> str | None:
+    """The git format-patch form of an upstream fix URL — a commit or a review
+    request — for the hosts we know serve one.
+
+    NVD sometimes hands us the patch form directly (gstreamer's advisory references
+    end in `.patch`), so that case is passed through rather than doubled.
+    """
+    if not source_url:
+        return None
+    url = source_url.rstrip("/")
+    if url.endswith(".patch"):
+        return url
+    if any(h in url for h in _PATCH_HOSTS):
+        return url + ".patch"
     return None
+
+
+def patch_sha(patch_text: str) -> str:
+    """The commit a fetched format-patch came from.
+
+    `git format-patch` opens with `From <sha> Mon Sep 17 00:00:00 2001`, so a fix
+    NVD named only as a pull/merge request still ends up recorded against a real
+    commit sha — the same evidence a named commit gives.
+    """
+    m = re.match(r"^From ([0-9a-f]{7,40}) ", patch_text or "")
+    return m.group(1) if m else ""
 
 
 def fetch_patch(commit_url: str, get=fetch_bytes) -> str:

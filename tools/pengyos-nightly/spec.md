@@ -163,8 +163,11 @@ The release key and the site target are never in the repo and never printed:
 `plan` reads `observations.json` + `state.json` and writes `plan.json`:
 
 * **actions** — each with `lane`, `component`, `current`, `target`, `shape`,
-  `editions`, the CVE matches it closes and the **evidence** for each, the exact
-  file edits it would make, and every guard verdict it passed.
+  `editions`, the CVE matches it closes (`closes`) and the **evidence** for each,
+  the affected CVEs the action does *not* close (`still_open`), the exact
+  file edits it would make, and every guard verdict it passed. `closes` is computed
+  from the same function that writes the patches (`edits.carried_cves`), so the
+  security claim and the patch set cannot drift apart.
 * **refused** — every candidate that was considered and the named guard that
   stopped it. A plan with only actions is not auditable: the refusals are the
   proof that the guards ran.
@@ -203,7 +206,7 @@ on the old one, so extraction fails. Two shapes only:
 | Shape | For | Edit |
 |---|---|---|
 | `recipe_bump` | a package we author (`tree != BUILDROOT`) | `NAME_VERSION` in `buildroot-external/package/<name>/<name>.mk` + the tarball hash in its `.hash` |
-| `patch_dir` | a stock package with a CVE NVD proves is open in the pinned version | the upstream fix commits NVD names, as `buildroot-external/patches/<pkg>/<version>/*.patch`, reached through `BR2_GLOBAL_PATCH_DIR` (`package/pkg-utils.mk:pkg-patch-hash-dirs`); recompose the defconfigs |
+| `patch_dir` | a stock package with a CVE NVD proves is open in the pinned version | the upstream fixes NVD names — a commit, or a pull/merge request on a host that serves one as a patch — as `buildroot-external/patches/<pkg>/<version>/*.patch`, reached through `BR2_GLOBAL_PATCH_DIR` (`package/pkg-utils.mk:pkg-patch-hash-dirs`); recompose the defconfigs. Only the CVEs whose fix is fetchable are carried and claimed; the rest are recorded as `still_open` |
 
 Hashes for a bump come from upstream's own published checksum file when the stock
 `.hash` names one (GNOME publishes `<pkg>-<ver>.sha256sum`); otherwise the artifact
@@ -261,7 +264,7 @@ does not publish more than `max_releases` images a night, and it never reaches
 | `major_never` | a bump that changes the release series is never acted on |
 | `stock_version_immovable` | the routine lane may only bump pins we own; a stock package moves with a Buildroot release, not with a nightly |
 | `evidence_required` | NVD must place the shipped version inside the affected range (patch shape) or prove the target closes the CVE (bump shape) |
-| `fix_commits_available` | a patch exists only if NVD names an upstream commit for it |
+| `fix_commits_available` | a patch is carried per CVE, and only for a CVE NVD names a **fetchable** upstream fix for (a commit, or a pull/merge request on a host that serves `.patch`); a component with nothing fetchable is refused, and one with a mix ships the fetchable part and names the rest as still open |
 | `patch_does_not_apply` | a candidate whose patch was *proved* not to apply is not retried: the pre-flight spends the night's one action slot, so a known-bad candidate would block every candidate behind it. Needs a human to adapt the patch or pick another fix |
 | `confirmed_only` | pkg-stats `unsure_cves` are never actionable |
 | `not_host_only` | a build-host package is not a security update to an image |

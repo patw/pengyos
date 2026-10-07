@@ -157,6 +157,46 @@ def test_one_patch_per_commit_even_when_two_cves_share_it(tmp_path):
     assert len(a["closes"]) == 2
 
 
+def test_a_patch_action_claims_only_the_cves_it_actually_carries(tmp_path):
+    """The claim and the patch set come from one rule (`edits.carried_cves`), so a
+    package with a mix of fetchable fixes and vendor errata ships the fixes and says
+    plainly which CVEs are still open. Before this, one unfetchable CVE refused the
+    whole component: ffmpeg 18 fetchable patches lost to 3 errata-only CVEs."""
+    obs = _obs(libxml2=_pkg(current="2.15.3", latest="2.15.4",
+                            cpeid="cpe:2.3:a:xmlsoft:libxml2:2.15.3:-:*:*:*:*:*:*"))
+    carried = _rec("xmlsoft", "libxml2", "*",
+                   ["https://github.com/GNOME/libxml2/commit/76fe08d9"],
+                   versionEndExcluding="2.15.4")
+    errata = _rec("xmlsoft", "libxml2", "*",
+                  ["https://access.redhat.com/errata/RHSA-2026:49361"],
+                  versionEndExcluding="2.15.4")
+    nvd = _nvd(tmp_path, ("CVE-2026-86137", carried), ("CVE-2026-86144", errata))
+    a = _by_id(_plan(tmp_path, obs, _st(_triaged("CVE-2026-86137", "libxml2"),
+                                        _triaged("CVE-2026-86144", "libxml2")), nvd),
+               "security-libxml2-2.15.3")
+    assert a["allowed"], a["guards"]
+    assert a["closes"] == ["CVE-2026-86137"], "the claim is the patch set, not the exposure"
+    assert a["still_open"] == ["CVE-2026-86144"], "the rest is named, not dropped"
+    assert len([e for e in a["edits"] if e["path"].endswith(".patch")]) == 1
+    assert len(a["cves"]) == 2, "both matches stay recorded on the action"
+
+
+def test_a_review_request_makes_a_stock_package_actionable(tmp_path):
+    """The ffmpeg case, end to end through the planner: NVD named a pull request on
+    a host that serves it as a patch, so the pinned version can carry the fix."""
+    obs = _obs(ffmpeg=_pkg(current="6.1.5", latest="8.1",
+                           cpeid="cpe:2.3:a:ffmpeg:ffmpeg:6.1.5:-:*:*:*:*:*:*"))
+    nvd = _nvd(tmp_path, ("CVE-2026-40962", _rec(
+        "ffmpeg", "ffmpeg", "*", ["https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/22348"],
+        versionEndExcluding="8.1")))
+    a = _by_id(_plan(tmp_path, obs, _st(_triaged("CVE-2026-40962", "ffmpeg")), nvd),
+               "security-ffmpeg-6.1.5")
+    assert a["allowed"], a["guards"]
+    assert a["closes"] == ["CVE-2026-40962"]
+    assert a["cves"][0]["fix_commit"]["kind"] == "pull"
+    assert len([e for e in a["edits"] if e["path"].endswith(".patch")]) == 1
+
+
 # --- refusals, each one named ------------------------------------------------
 
 def test_a_cve_with_no_upstream_commit_is_refused_not_guessed(tmp_path):

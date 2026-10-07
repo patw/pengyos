@@ -15,6 +15,8 @@ import datetime as dt
 import subprocess
 from pathlib import Path
 
+from pengyos_nightly import edits as E
+
 CHANNEL = "testing"          # the only channel this tool may ever publish to
 PROMOTE = "update-promote"   # the command this tool must never run
 
@@ -103,16 +105,29 @@ def evidence_required(action: dict) -> tuple[bool, str]:
 
 
 def fix_commits_available(action: dict) -> tuple[bool, str]:
-    """A patch can only be carried if NVD names an upstream commit for it."""
+    """A patch is carried per CVE, and only for a CVE NVD names an upstream fix for.
+
+    Per CVE, not per component: `edits.carried_cves` decides what is written to the
+    tree and the planner takes `closes` from the same function, so a component whose
+    CVEs name a mix of fetchable fixes and vendor errata is actionable for the
+    fetchable ones and names the rest as still open in the notes. Refusing a whole
+    component because one CVE has no named commit throws away the fixes upstream
+    *did* publish — measured 2026-10-06, that veto was holding 28 fetchable patches
+    behind 17 CVEs that have nothing to fetch.
+    """
     if action.get("shape") != "patch_dir":
         return True, "bump shape: no patch to fetch"
     need = [c for c in action.get("cves", []) if c.get("affected")]
-    missing = [c["cve"] for c in need
-               if not (c.get("fix_commit") or {}).get("url")]
+    carried = E.carried_cves(need)
+    if not carried:
+        return False, ("no_fix_commit: NVD names no upstream commit or review request for "
+                       + ", ".join(c["cve"] for c in need)
+                       + " (vendor errata are not something to cherry-pick)")
+    missing = [c["cve"] for c in need if c["cve"] not in carried]
     if missing:
-        return False, ("no_fix_commit: NVD names no upstream commit for "
-                       + ", ".join(missing) + " (vendor errata are not something to cherry-pick)")
-    return True, f"{len(need)} upstream fix commit(s) named by NVD"
+        return True, (f"{len(carried)} of {len(need)} affected CVE(s) name an upstream fix; "
+                      f"report-only: {', '.join(missing)}")
+    return True, f"{len(carried)} upstream fix commit(s) named by NVD"
 
 
 def confirmed_only(action: dict) -> tuple[bool, str]:

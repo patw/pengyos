@@ -95,9 +95,10 @@ def notes_for(action: dict, version: str, version_note: str = "") -> str:
                          + (f", upstream {commit[:12]}" if commit else "")
                          + f"): {c.get('affected_note') or c.get('note', '')}")
         lines.append("")
-    other = [c["cve"] for c in cves if c["cve"] not in closes]
+    other = action.get("still_open") or [c["cve"] for c in cves if c["cve"] not in closes]
     if other:
-        lines.append(f"Still open in {action['component']}: {', '.join(other)}.")
+        lines.append(f"Still open in {action['component']}: {', '.join(other)} "
+                     f"(NVD names no upstream fix to carry for these).")
         lines.append("")
     lines.append(f"Editions rebuilt: {', '.join(action['editions'])}.")
     if action.get("risks"):
@@ -241,6 +242,9 @@ def batch_notes(actions: list[dict], version: str, version_note: str = "") -> st
                          + (", actively exploited" if c.get("kev") else "")
                          + (f", upstream {commit[:12]}" if commit else "")
                          + f"): {c.get('affected_note') or c.get('note', '')}")
+        if a.get("still_open"):
+            lines.append(f"    - Still open in {a['component']}: {', '.join(a['still_open'])} "
+                         f"(NVD names no upstream fix to carry for these)")
         for r in (a.get("risks") or []):
             lines.append(f"    - Note: {r}")
     editions = sorted({e for a in actions for e in (a.get("editions") or [])})
