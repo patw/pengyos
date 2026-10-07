@@ -1,0 +1,10 @@
+config BR2_PACKAGE_XDG_UTILS
+	bool "xdg-utils"
+	help
+	  freedesktop.org desktop integration scripts: xdg-open,
+	  xdg-mime, xdg-settings, xdg-email, xdg-screensaver,
+	  xdg-desktop-menu, xdg-desktop-icon, xdg-icon-resource.
+	  Opens files and URLs with the user's default applications
+	  (mimeapps.list) from scripts and the command line.
+
+	  https://www.freedesktop.org/wiki/Software/xdg-utils/

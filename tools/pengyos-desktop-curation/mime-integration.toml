@@ -1,0 +1,185 @@
+# PengyOS Desktop .desktop/mime integration plan.
+#
+# This is the *committed declarative data* for the **.desktop/mime integration
+# plan** — *which everyday category
+# integrates how* — as data.
+#
+# The curated set (`curated.toml`) says *which* apps are the defaults. This file
+# says *how* each one is wired into the freedesktop default-application
+# machinery system-wide:
+#
+#   category   — the everyday category (matches curated.toml)
+#   app        — the curated app name (matches curated.toml)
+#   desktop_id — the .desktop id that becomes the default (e.g.
+#                `org.gnome.Files.desktop`)
+#   ref        — the Flathub ref (for the flatpak lane; matches curated.toml)
+#   mechanism  — how the association is applied system-wide (one of the
+#                MECHANISMS: `mimeapps_list` / `xdg_desktop_dirs` / `systemd_mime`)
+#   mime_types — the MIME types this app is the default for (empty when the
+#                category is not a file handler — calculator, screenshots)
+#   rationale  — human-authored why (spec Principle 8)
+#   human_signed — true when a human ratified the entry (spec Principle 8)
+#
+# Human-ratified, never AI-decided (spec Principle 8): every entry below is
+# authored by a human with an explicit `rationale` and is `human_signed = true`.
+# The tool never chooses the integration unaided — it only stores and emits what
+# a human has ratified.
+#
+# NOTE (2026-09-22): `desktop_id`, `ref`, and `mime_types` are the human-authored
+# integration contract. `desktop_id`/`ref` track the curated set; `mime_types`
+# are the freedesktop well-known types for each category. Verify they stay in
+# step with curated.toml (the emitter cross-checks).
+
+
+# --- browser ----------------------------------------------------------------
+# The browser is the default handler for web schemes and HTML.
+[[entry]]
+category = "browser"
+app = "Firefox"
+desktop_id = "org.mozilla.FirefoxRepo.desktop"
+ref = "org.mozilla.FirefoxRepo"
+mechanism = "mimeapps_list"
+mime_types = [
+    "x-scheme-handler/http",
+    "x-scheme-handler/https",
+    "text/html",
+    "application/xhtml+xml",
+]
+rationale = "The user-ratified default browser: standards-focused, privacy by default."
+human_signed = true
+
+
+# --- terminal ---------------------------------------------------------------
+# The terminal is not a file handler; it is the `x-terminal-emulator` alternative
+# (the name `update-alternatives`/`alacarte` resolve to a default terminal).
+[[entry]]
+category = "terminal"
+app = "GNOME Terminal"
+desktop_id = "org.gnome.Terminal.desktop"
+ref = "org.gnome.Terminal"
+mechanism = "mimeapps_list"
+mime_types = ["x-terminal-emulator"]
+rationale = "The GNOME desktop's default terminal emulator; matches the session."
+human_signed = true
+
+
+# --- files ------------------------------------------------------------------
+[[entry]]
+category = "files"
+app = "Files"
+desktop_id = "org.gnome.Files.desktop"
+ref = "org.gnome.Files"
+mechanism = "mimeapps_list"
+mime_types = ["inode/directory", "x-scheme-handler/file"]
+rationale = "The GNOME Files (Nautilus) file manager; the desktop default."
+human_signed = true
+
+
+# --- editor -----------------------------------------------------------------
+[[entry]]
+category = "editor"
+app = "GNOME Text Editor"
+desktop_id = "org.gnome.TextEditor.desktop"
+ref = "org.gnome.TextEditor"
+mechanism = "mimeapps_list"
+mime_types = [
+    "text/plain",
+    "text/x-python",
+    "text/markdown",
+    "text/x-shellscript",
+]
+rationale = "The maintained successor to gedit; the default plain-text editor."
+human_signed = true
+
+
+# --- media ------------------------------------------------------------------
+[[entry]]
+category = "media"
+app = "VLC"
+desktop_id = "org.vlc.Vlc.desktop"
+ref = "org.vlc.Vlc"
+mechanism = "mimeapps_list"
+mime_types = [
+    "audio/mpeg",
+    "audio/mp3",
+    "video/mp4",
+    "video/x-matroska",
+]
+rationale = "Plays virtually every media format out of the box."
+human_signed = true
+
+
+# --- office -----------------------------------------------------------------
+[[entry]]
+category = "office"
+app = "LibreOffice"
+desktop_id = "org.libreoffice.LibreOffice.desktop"
+ref = "org.libreoffice.LibreOffice"
+mechanism = "mimeapps_list"
+mime_types = [
+    "application/vnd.oasis.opendocument.text",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.oasis.opendocument.spreadsheet",
+]
+rationale = "The default office suite: docs, sheets, and slides."
+human_signed = true
+
+
+# --- PDF --------------------------------------------------------------------
+[[entry]]
+category = "PDF"
+app = "Evince"
+desktop_id = "org.gnome.Evince.desktop"
+ref = "org.gnome.Evince"
+mechanism = "mimeapps_list"
+mime_types = ["application/pdf"]
+rationale = "The GNOME document/PDF viewer; the default for reading PDFs."
+human_signed = true
+
+
+# --- archive ----------------------------------------------------------------
+[[entry]]
+category = "archive"
+app = "File Roller"
+desktop_id = "org.gnome.FileRoller.desktop"
+ref = "org.gnome.FileRoller"
+mechanism = "mimeapps_list"
+mime_types = [
+    "application/zip",
+    "application/gzip",
+    "application/x-tar",
+    "application/x-bzip2",
+]
+rationale = "The GNOME archive manager; open/create/extract common formats."
+human_signed = true
+
+
+# --- calculator -------------------------------------------------------------
+# A calculator is not a file handler: it has no default MIME type. It integrates
+# by being discoverable in the app grid (advertised via XDG desktop dirs), not
+# by claiming a MIME association.
+[[entry]]
+category = "calculator"
+app = "Calculator"
+desktop_id = "org.gnome.Calculator.desktop"
+ref = "org.gnome.Calculator"
+mechanism = "xdg_desktop_dirs"
+mime_types = []
+rationale = "The GNOME calculator: basic, scientific, financial, and programming modes."
+human_signed = true
+
+
+# --- screenshots ------------------------------------------------------------
+# A screenshot tool is not a file handler either: it captures the screen rather
+# than opening files, so it has no default MIME type. It integrates by being
+# discoverable in the app grid.
+[[entry]]
+category = "screenshots"
+app = "GNOME Screenshot"
+desktop_id = "org.gnome.Screenshot.desktop"
+ref = "org.gnome.Screenshot"
+mechanism = "xdg_desktop_dirs"
+mime_types = []
+rationale = "Capture the screen, a window, or a selection; the desktop default."
+human_signed = true

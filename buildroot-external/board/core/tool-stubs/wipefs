@@ -1,0 +1,8 @@
+#!/bin/sh
+# PengyOS stub: 'wipefs' is intentionally not shipped on this image.
+# It ships a helpful pointer so an agent (or a human) knows the alternative.
+cat >&2 <<'MSG'
+PengyOS: 'wipefs' is not installed in this image.
+  instead, use: parted -s /dev/sdX mklabel gpt (re-labels, clearing signatures), or 'dd if=/dev/zero of=/dev/sdX bs=1M count=4'
+MSG
+exit 127

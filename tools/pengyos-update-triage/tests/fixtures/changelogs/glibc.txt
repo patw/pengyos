@@ -1,0 +1,13 @@
+# component: glibc
+
+## 2.40.0
+- Fix buffer overflow in the dynamic loader while processing GLIBC_TUNABLES (CVE-2023-4911)
+- Various buffer overflow fixes and security hardening
+- Update locales and timezone data
+
+## 2.39.0
+- Initial release of the 2.39 series
+- Fix a heap overflow in iconv
+
+## 2.38.0
+- Regular release

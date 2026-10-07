@@ -1,0 +1,18 @@
+config BR2_PACKAGE_OO7
+	bool "oo7"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on BR2_PACKAGE_SYSTEMD # systemd-creds seals the keyring password
+	depends on BR2_PACKAGE_DBUS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  The Secret Service (org.freedesktop.secrets): where apps keep
+	  passwords and login tokens (browsers, VS Code, the GitHub CLI,
+	  anything using libsecret), plus the Secret portal for
+	  sandboxed Flatpak apps. oo7-daemon replaces gnome-keyring.
+
+	  The desktop logs in without a password, so the keyring's
+	  password is random and sealed with systemd-creds (to the TPM
+	  when there is one, else the machine's host key); oo7-session
+	  unseals it when an app first asks for a secret.
+
+	  https://github.com/linux-credentials/oo7

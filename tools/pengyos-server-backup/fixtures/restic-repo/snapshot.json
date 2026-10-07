@@ -1,0 +1,38 @@
+{
+  "format": "pengyos-backup-fixture/v1",
+  "id": "snap-20260919023000-e3b0c44298fc1c14",
+  "time": "2026-09-19T02:30:00Z",
+  "host": "backup-host",
+  "paths": [
+    "/etc",
+    "/home/operator"
+  ],
+  "tree_hash": "c0c312752290795c0a528e3f718ea1035bf0fd43a52a5a6d1895a9fa4d788408",
+  "entries": [
+    {
+      "path": "etc/pengyos-release",
+      "size": 20,
+      "hash": "1efc439ada78c7b601a32b09b9b07308f063374b2a73b28a078eccb291a1c805"
+    },
+    {
+      "path": "etc/hostname",
+      "size": 12,
+      "hash": "5f5d6c97f63b08943dd559b6ac3cc677c7363dc755e3dee4ca3db89736078b74"
+    },
+    {
+      "path": "home/operator/README.md",
+      "size": 16,
+      "hash": "86e253bcfeeef57da5a0237b02386299b3c9dc75c017f83425cb829c0aaa2acd"
+    },
+    {
+      "path": "home/operator/.config/profile.sh",
+      "size": 31,
+      "hash": "fe108f211b611149629e82865090c2539b6f9afc29523ca56a20d9f92eb2d09c"
+    },
+    {
+      "path": "var/log/pengyos.log",
+      "size": 19,
+      "hash": "eba01b26471425ac3d67f6d6dded82582c40c6d874c178a5696fc9e214b62ced"
+    }
+  ]
+}

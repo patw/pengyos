@@ -1,0 +1,11 @@
+# PengyOS measured-boot policy: expected PCR values.
+#
+# Keys are PCR indices; values are hex (0x-prefixed) or decimal integers,
+# mirroring the `--expect PCR=VALUE` CLI syntax. These values are derived
+# from the committed event log for the measured boot.
+#
+# The `[expected]` table is optional; without it the top-level keys are the
+# expected values directly.
+[expected]
+pcr0 = "0x00000000000000000000000000000000000000000000000000000000000000"
+pcr7 = "0x000000000000000000000000000000000000000000000000000000deadbeef"

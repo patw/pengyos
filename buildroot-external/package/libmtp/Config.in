@@ -1,0 +1,9 @@
+config BR2_PACKAGE_LIBMTP
+	bool "libmtp"
+	select BR2_PACKAGE_LIBUSB
+	help
+	  Media Transfer Protocol: Android phones, cameras and media
+	  players over USB. gvfs's MTP backend (so COSMIC Files shows the
+	  phone) uses it. Buildroot 2026.08 does not ship it.
+
+	  https://github.com/libmtp/libmtp

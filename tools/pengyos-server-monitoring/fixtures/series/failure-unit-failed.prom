@@ -1,0 +1,6 @@
+node_systemd_units_failed{instance="node1"} 1 0
+node_systemd_units_failed{instance="node1"} 1 60
+node_systemd_units_failed{instance="node1"} 1 120
+node_systemd_units_failed{instance="node1"} 1 180
+node_systemd_units_failed{instance="node1"} 1 240
+node_systemd_units_failed{instance="node1"} 1 300

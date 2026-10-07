@@ -1,0 +1,48 @@
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+MANIFEST
+
+# --- Virtual environments ---------------------------------------------------
+.venv/
+venv/
+env/
+.env/
+
+# --- Test / tooling caches --------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+
+# --- Harness runtime artifacts (never commit these) -------------------------
+# serial console logs and per-run result files. The captured serial-log
+# fixtures in tests/fixtures/ are the exception: they are committed (the
+# suite needs them on a fresh clone).
+*.log
+!tests/fixtures/*.log
+qemu-serial*.log
+boot-*.json
+boot-*.xml
+serial*.txt
+# working copies of disk images / scratch output
+*.qcow2
+*.img.tmp
+*.iso.tmp
+
+# --- Editors / OS -----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store

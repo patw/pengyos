@@ -1,0 +1,13 @@
+config BR2_PACKAGE_DDCUTIL
+	bool "ddcutil"
+	depends on BR2_PACKAGE_HAS_UDEV
+	select BR2_PACKAGE_LIBGLIB2
+	select BR2_PACKAGE_JANSSON
+	select BR2_PACKAGE_ACL
+	select BR2_PACKAGE_LIBDRM
+	help
+	  Control monitors over DDC/CI (brightness, contrast, input
+	  source) through /dev/i2c-* (CONFIG_I2C_CHARDEV). Buildroot
+	  2026.08 does not ship it.
+
+	  https://www.ddcutil.com

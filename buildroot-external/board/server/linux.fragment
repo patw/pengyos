@@ -1,0 +1,43 @@
+# ============================================================================
+# PengyOS Server — Linux kernel config fragment (systemd requirements)
+# ----------------------------------------------------------------------------
+# Stacked AFTER Core's fragment (board/core/linux.fragment) by the
+# defconfig layers (configs/layers/): Server gets all of Core's kernel. The
+# symbols below repeat Core's systemd requirements (harmless — same values);
+# Server-only kernel additions go here.
+#
+# A kernel fragment is a plain list of CONFIG_= assignments (kconfig syntax).
+# ============================================================================
+
+# --- devtmpfs / tmpfs (systemd hard requirements) ---------------------------
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_TMPFS=y
+CONFIG_TMPFS_XATTR=y
+
+# --- Serial console (QEMU default UART) -------------------------------------
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+
+# --- virtio block/net for QEMU ----------------------------------------------
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_VIRTIO_NET=y
+CONFIG_VIRTIO_PCI=y
+
+# --- Filesystem -------------------------------------------------------------
+CONFIG_EXT4_FS=y
+
+# --- Modules / networking basics --------------------------------------------
+CONFIG_MODULES=y
+CONFIG_NET=y
+
+# --- The partition & state layout (docs/state-layout.md) ----------------------
+# Installed systems boot through preinit (the kernel's init=), which mounts the
+# btrfs data partition and overlays /etc before any module could be loaded —
+# so btrfs and overlayfs are built in.
+CONFIG_BTRFS_FS=y
+CONFIG_OVERLAY_FS=y
+# efivarfs built in, so the /sys/firmware/efi/efivars mount works (the
+# installer's efibootmgr, fwupd, bootctl need it; as a module it never mounted).
+CONFIG_EFIVAR_FS=y

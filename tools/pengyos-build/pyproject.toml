@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-build"
+version = "0.1.0"
+description = "Reproducible Buildroot build driver for PengyOS targets"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+pengyos-build = "pengyos_build.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_build*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

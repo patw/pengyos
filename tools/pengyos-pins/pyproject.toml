@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-pins"
+version = "0.1.0"
+description = "Pinned component manifest for PengyOS: validate pins.toml, emit a Buildroot fragment + report, and detect drift against a lockfile"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+pengyos-pins = "pengyos_pins.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_pins*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

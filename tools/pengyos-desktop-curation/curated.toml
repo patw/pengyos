@@ -1,0 +1,118 @@
+# Curated PengyOS Desktop default-application set.
+#
+# This is the *committed declarative data* for the curated default-app set,
+# modelled as data
+# (category -> app -> lane -> ref -> rationale -> human_signed).
+#
+# Human-ratified, never AI-decided (spec Principle 8): every entry below is
+# authored by a human with an explicit `rationale` and is `human_signed = true`.
+# The tool never chooses the app set unaided — it only stores and emits what a
+# human has ratified.
+#
+# The delivery `lane` is one of:
+#   flatpak   — shipped as a Flatpak (Flathub ref in `ref`)
+#   appimage  — shipped as an AppImage
+#   recipe    — built from a PengyOS/Buildroot recipe
+#
+# `ref` is only meaningful for the `flatpak` lane (the Flathub application id).
+# For the other lanes it is omitted.
+
+# --- browser ----------------------------------------------------------------
+
+[[entry]]
+category = "browser"
+app = "Firefox"
+lane = "flatpak"
+ref = "org.mozilla.FirefoxRepo"
+rationale = "The user-ratified default browser: standards-focused, privacy by default."
+human_signed = true
+
+# --- terminal ---------------------------------------------------------------
+
+[[entry]]
+category = "terminal"
+app = "GNOME Terminal"
+lane = "flatpak"
+ref = "org.gnome.Terminal"
+rationale = "The GNOME desktop's default terminal emulator; matches the session."
+human_signed = true
+
+# --- files ------------------------------------------------------------------
+
+[[entry]]
+category = "files"
+app = "Files"
+lane = "flatpak"
+ref = "org.gnome.Files"
+rationale = "The GNOME Files (Nautilus) file manager; the desktop default."
+human_signed = true
+
+# --- editor -----------------------------------------------------------------
+
+[[entry]]
+category = "editor"
+app = "GNOME Text Editor"
+lane = "flatpak"
+ref = "org.gnome.TextEditor"
+rationale = "The maintained successor to gedit; the default plain-text editor."
+human_signed = true
+
+# --- media ------------------------------------------------------------------
+
+[[entry]]
+category = "media"
+app = "VLC"
+lane = "flatpak"
+ref = "org.vlc.Vlc"
+rationale = "Plays virtually every media format out of the box."
+human_signed = true
+
+# --- office -----------------------------------------------------------------
+
+[[entry]]
+category = "office"
+app = "LibreOffice"
+lane = "flatpak"
+ref = "org.libreoffice.LibreOffice"
+rationale = "The default office suite: docs, sheets, and slides."
+human_signed = true
+
+# --- PDF --------------------------------------------------------------------
+
+[[entry]]
+category = "PDF"
+app = "Evince"
+lane = "flatpak"
+ref = "org.gnome.Evince"
+rationale = "The GNOME document/PDF viewer; the default for reading PDFs."
+human_signed = true
+
+# --- archive ----------------------------------------------------------------
+
+[[entry]]
+category = "archive"
+app = "File Roller"
+lane = "flatpak"
+ref = "org.gnome.FileRoller"
+rationale = "The GNOME archive manager; open/create/extract common formats."
+human_signed = true
+
+# --- calculator -------------------------------------------------------------
+
+[[entry]]
+category = "calculator"
+app = "Calculator"
+lane = "flatpak"
+ref = "org.gnome.Calculator"
+rationale = "The GNOME calculator: basic, scientific, financial, and programming modes."
+human_signed = true
+
+# --- screenshots ------------------------------------------------------------
+
+[[entry]]
+category = "screenshots"
+app = "GNOME Screenshot"
+lane = "flatpak"
+ref = "org.gnome.Screenshot"
+rationale = "Capture the screen, a window, or a selection; the desktop default."
+human_signed = true

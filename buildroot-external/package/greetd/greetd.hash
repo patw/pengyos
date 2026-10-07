@@ -1,0 +1,10 @@
+# Locally calculated
+#
+# NOTE: Buildroot's cargo infrastructure runs a post-process step that re-packs
+# the source tarball with the vendored crates (VENDOR/) and then verifies the
+# hash again. The hash below is therefore of the POST-PROCESSED tarball, not the
+# raw upstream one (the upstream GitHub archive of tag 0.10.3 hashes to
+# ee5cb70e0add4ca9c9fe57e47581ab0002d44c07743fb5492469f3b570db640b). To obtain
+# it, run the download and copy the "got" value from the hash error.
+sha256  fa53b57bc5e0628680eef6bf2e1c0e600b8ef98680037188bbbf1969cef3dcc6  0.10.3.tar.gz
+sha256  3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986  LICENSE

@@ -1,0 +1,48 @@
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+MANIFEST
+
+# --- Virtual environments ---------------------------------------------------
+.venv/
+venv/
+env/
+.env/
+
+# --- Test / tooling caches --------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+
+# --- Harness runtime artifacts (never commit these) -------------------------
+# Attestation logs and export bundles written at runtime. The committed
+# fixtures in tests/fixtures/ are the exception: they are committed (the
+# suite needs them on a fresh clone).
+*.log
+!tests/fixtures/*.log
+*.jsonl
+!tests/fixtures/*.jsonl
+attest-export.*
+attest-*.json
+attest-*.jsonl
+# scratch chains used by ad-hoc runs
+chain-*.jsonl
+chain-*.log
+
+# --- Editors / OS -----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store

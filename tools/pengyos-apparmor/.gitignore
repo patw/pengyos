@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local AppArmor artifacts (never commit loaded/compiled state)
+profiles/*.loaded
+profiles/*.disabled
+
+# Port-pin transition staging files (left only if a staged-atomic commit
+# is interrupted; the probe + re-run reconcile them)
+*.pin-tmp

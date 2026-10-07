@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-nightly"
+version = "0.4.0"
+description = "The PengyOS nightly maintenance loop: observe upstream, triage CVEs with the local model, email a report, and act on one change into the testing channel."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+# Standard library only. pkg-stats' own dependencies (aiohttp, ...) come from `uv run --with`.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/patw/pengyos/tree/main/tools/pengyos-nightly"
+Repository = "https://github.com/patw/pengyos"
+
+[project.scripts]
+pengyos-nightly = "pengyos_nightly.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_nightly*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

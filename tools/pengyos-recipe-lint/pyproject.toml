@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-recipe-lint"
+version = "0.1.0"
+description = "Lint PengyOS Buildroot package recipes: hash present, license declared, version pinned, no unverified downloads."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["buildroot", "pengyos", "linter", "recipes", "reproducible"]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+pengyos-recipe-lint = "pengyos_recipe_lint.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_recipe_lint*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

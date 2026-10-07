@@ -1,0 +1,7 @@
+# The cursor theme used when none is chosen: cosmic-comp and libXcursor (X11
+# apps under Xwayland) both load the theme named "default" unless
+# XCURSOR_THEME is set. Without one, cosmic-comp drew a single built-in arrow
+# for every cursor shape.
+[Icon Theme]
+Name=Default
+Inherits=Pop

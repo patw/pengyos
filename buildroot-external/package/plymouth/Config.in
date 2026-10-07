@@ -1,0 +1,20 @@
+config BR2_PACKAGE_PLYMOUTH
+	bool "plymouth"
+	depends on BR2_INIT_SYSTEMD
+	depends on BR2_PACKAGE_HAS_UDEV
+	select BR2_PACKAGE_LIBPNG
+	select BR2_PACKAGE_LIBDRM
+	select BR2_PACKAGE_LIBEVDEV
+	select BR2_PACKAGE_LIBXKBCOMMON
+	select BR2_PACKAGE_XKEYBOARD_CONFIG
+	select BR2_PACKAGE_FREETYPE
+	help
+	  Graphical boot splash: draws on the DRM device from early
+	  userspace until the desktop takes over, and survives the
+	  firmware-framebuffer -> GPU-driver handoff. Ships the
+	  PengyOS theme (Pengy + a spinner) as the default.
+
+	  https://www.freedesktop.org/wiki/Software/Plymouth/
+
+comment "plymouth needs systemd and udev"
+	depends on !BR2_INIT_SYSTEMD || !BR2_PACKAGE_HAS_UDEV

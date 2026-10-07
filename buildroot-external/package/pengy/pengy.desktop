@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Pengy
+GenericName=AI Assistant
+Comment=Local-first AI agent with tools
+Exec=pengy
+Icon=pengy
+Terminal=false
+Categories=Utility;
+Keywords=ai;agent;assistant;chat;llm;
+StartupWMClass=pengy

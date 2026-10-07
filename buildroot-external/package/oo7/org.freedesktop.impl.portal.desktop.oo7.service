@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.oo7
+Exec=/usr/bin/oo7-portal

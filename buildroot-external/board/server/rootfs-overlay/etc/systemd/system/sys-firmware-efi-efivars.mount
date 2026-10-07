@@ -1,0 +1,18 @@
+# PengyOS: mount the UEFI variables filesystem. systemd mounts it itself only
+# when built with EFI support, which Buildroot's systemd here is not — so
+# efibootmgr, fwupd (UEFI capsules, boot entries) and bootctl found "EFI
+# variables are not supported" on UEFI machines.
+[Unit]
+Description=EFI Variable Filesystem
+DefaultDependencies=no
+ConditionPathExists=/sys/firmware/efi
+Before=local-fs.target
+
+[Mount]
+What=efivarfs
+Where=/sys/firmware/efi/efivars
+Type=efivarfs
+Options=nosuid,nodev,noexec
+
+[Install]
+WantedBy=local-fs.target

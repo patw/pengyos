@@ -1,0 +1,187 @@
+# ============================================================================
+# PengyOS Core — Linux kernel config fragment (systemd requirements)
+# ----------------------------------------------------------------------------
+# Applied on top of the qemu x86_64 defconfig via
+#   BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="board/core/linux.fragment"
+# in configs/pengyos_core_defconfig.
+#
+# Provides the kernel features the systemd userspace needs at boot:
+# devtmpfs/tmpfs (systemd's hard requirements), the serial UART, virtio
+# block/net for QEMU storage and networking, ext4, loadable modules, and a
+# local framebuffer console so a real machine shows the console on screen.
+#
+# A kernel fragment is a plain list of CONFIG_= assignments (kconfig syntax).
+# ============================================================================
+
+# --- devtmpfs / tmpfs (systemd hard requirements) ---------------------------
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_TMPFS=y
+CONFIG_TMPFS_XATTR=y
+
+# --- Serial console (UART) --------------------------------------------------
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+
+# --- virtio block/net for QEMU ----------------------------------------------
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_VIRTIO_NET=y
+CONFIG_VIRTIO_PCI=y
+
+# --- Filesystem -------------------------------------------------------------
+CONFIG_EXT4_FS=y
+
+# --- Modules / networking basics --------------------------------------------
+CONFIG_MODULES=y
+CONFIG_NET=y
+
+# --- Local video console (real hardware: HDMI/DP via the UEFI GOP framebuffer)
+# Early QEMU builds used the serial line only, so console=tty0 had no driver to
+# render to and a physical monitor showed nothing. simpledrm drives the
+# firmware-provided (GOP) framebuffer and fbcon renders tty0. Built in (=y, not
+# a module) so the console lights up early in boot, and so getty@.service's
+# ConditionPathExists=/dev/tty0 is satisfied.
+CONFIG_DRM=y
+# sysfb marks the firmware (GOP) framebuffer as a generic "simple-framebuffer"
+# device for simpledrm to bind. Without it simpledrm is built but never binds,
+# so there is no fb0 and the console stays dark. (Selects SYSFB.)
+CONFIG_SYSFB_SIMPLEFB=y
+CONFIG_DRM_SIMPLEDRM=y
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
+CONFIG_FONT_8x16=y
+
+# --- Load the firmware-heavy drivers late (as modules) ----------------------
+# i915 and cfg80211 were built-in and probed *before* the rootfs was mounted,
+# so their /lib/firmware fetches failed with -ENOENT (this image has no
+# initramfs). Built as modules they load once the rootfs is up and the firmware
+# (shipped by the linux-firmware subset in the defconfig) is reachable.
+# iwlwifi drives the Alder Lake-N CNVi WiFi (PCI 8086:54f0, AX101-class).
+CONFIG_DRM_I915=m
+CONFIG_CFG80211=m
+CONFIG_IWLWIFI=m
+
+# --- Fleet hardware coverage (other machines that may boot this stick) -------
+# Storage: every machine has NVMe; behopc's is behind Intel VMD. The USB stick
+# itself boots on usb-storage, but a real OS must see the internal disks.
+CONFIG_BLK_DEV_NVME=y
+CONFIG_VMD=m
+CONFIG_USB_UAS=m
+# Wired NICs across the fleet: behoserver = Intel I210 (igb), behorouter =
+# Intel I226-V (igc). (r8169/e1000e/e1000/tg3 are already built in.)
+CONFIG_IGB=m
+CONFIG_IGC=m
+# WiFi: behobasement has a Realtek RTL8821CE (rtw88 stack).
+CONFIG_RTW88=m
+CONFIG_RTW88_PCI=m
+CONFIG_RTW88_8821CE=m
+
+# --- Common devices (breadth — some machines will never use these) -----------
+# Filesystems for removable media and other OSes' disks.
+CONFIG_EXFAT_FS=m
+CONFIG_NTFS3_FS=m
+CONFIG_XFS_FS=m
+CONFIG_BTRFS_FS=m
+CONFIG_F2FS_FS=m
+CONFIG_UDF_FS=m
+# Storage: software RAID, dm-crypt (LUKS), SD/MMC card readers.
+CONFIG_MD_RAID0=m
+CONFIG_MD_RAID1=m
+CONFIG_MD_RAID10=m
+CONFIG_MD_RAID456=m
+CONFIG_DM_CRYPT=m
+CONFIG_MMC=m
+CONFIG_MMC_BLOCK=m
+CONFIG_MMC_SDHCI=m
+CONFIG_MMC_SDHCI_PCI=m
+# USB: serial adapters (rescue console), ACM tty, USB networking (CDC/RNDIS tether).
+CONFIG_USB_SERIAL=m
+CONFIG_USB_SERIAL_FTDI_SIO=m
+CONFIG_USB_SERIAL_CH341=m
+CONFIG_USB_SERIAL_PL2303=m
+CONFIG_USB_ACM=m
+CONFIG_USB_USBNET=m
+CONFIG_USB_NET_CDCETHER=m
+CONFIG_USB_NET_CDC_NCM=m
+CONFIG_USB_NET_RNDIS_HOST=m
+# Bluetooth.
+CONFIG_BT=m
+CONFIG_BT_HCIBTUSB=m
+# Wired NICs beyond the fleet's: Aquantia, Intel 10/25/40G, Broadcom, Mellanox.
+CONFIG_AQTION=m
+CONFIG_IXGBE=m
+CONFIG_I40E=m
+CONFIG_ICE=m
+CONFIG_BNX2X=m
+CONFIG_MLX4_EN=m
+# WiFi families beyond Intel: Atheros, Broadcom, Realtek rtw89.
+CONFIG_ATH10K=m
+CONFIG_ATH10K_PCI=m
+CONFIG_ATH11K=m
+CONFIG_ATH11K_PCI=m
+CONFIG_BRCMFMAC=m
+CONFIG_RTW89=m
+CONFIG_RTW89_PCI=m
+CONFIG_RTW89_8852BE=m
+# GPU acceleration (console works without these via simpledrm).
+CONFIG_DRM_AMDGPU=m
+
+# --- Laptop-class common devices --------------------------------------------
+# USB audio (headsets/DACs) and modern touchpads (I2C-HID + precision multitouch).
+CONFIG_SND_USB_AUDIO=m
+CONFIG_I2C_HID=m
+CONFIG_I2C_HID_ACPI=m
+CONFIG_HID_MULTITOUCH=m
+CONFIG_USB_HIDDEV=y
+
+# --- Platform health: sensors, memory errors, thermal, firmware flash ---------
+# From the 2026-09-29 fleet survey (lspci/hwmon on all 10 machines vs. this
+# config). All modules; udev loads each only where the hardware exists.
+# CPU temperature on AMD Zen (k10temp) and the Nuvoton NCT67xx Super-I/O
+# (fan RPM / voltages / fan control on most desktop boards, e.g. behoserver).
+CONFIG_SENSORS_K10TEMP=m
+CONFIG_SENSORS_NCT6775=m
+# AMD SMBus (SPD, RGB over SMBus).
+CONFIG_I2C_PIIX4=m
+# AMD Secure Processor: CCP crypto offload + the PSP interface.
+CONFIG_CRYPTO_DEV_CCP=y
+CONFIG_CRYPTO_DEV_CCP_DD=m
+CONFIG_CRYPTO_DEV_SP_CCP=y
+CONFIG_CRYPTO_DEV_SP_PSP=y
+# Memory-error reporting (EDAC): AMD Zen and Intel Alder Lake-N/in-band ECC.
+CONFIG_RAS=y
+CONFIG_EDAC=y
+CONFIG_EDAC_AMD64=m
+CONFIG_EDAC_IGEN6=m
+# Intel thermal: processor thermal device (DPTF/int340x), PCH thermal sensor,
+# idle-injection clamp, uncore frequency control.
+CONFIG_INT340X_THERMAL=m
+CONFIG_INTEL_PCH_THERMAL=m
+CONFIG_INTEL_POWERCLAMP=m
+CONFIG_INTEL_UNCORE_FREQ_CONTROL=m
+# Intel platform telemetry (DVSEC / PMT).
+CONFIG_INTEL_VSEC=m
+# Intel SPI flash controller (00:1f.5) -> /dev/mtd*, for firmware tooling.
+CONFIG_SPI=y
+CONFIG_MTD=m
+CONFIG_MTD_SPI_NOR=m
+CONFIG_SPI_MEM=y
+CONFIG_SPI_INTEL_PCI=m
+
+# --- Swap in compressed RAM (zram) --------------------------------------------
+# No edition had any swap: filling RAM froze the machine rather than slowing it.
+# zram-generator (package) sets up /dev/zram0 as zstd-compressed swap at boot,
+# as Fedora and Pop!_OS do.
+CONFIG_ZRAM=m
+CONFIG_ZRAM_BACKEND_ZSTD=y
+CONFIG_CRYPTO_ZSTD=y
+
+# --- Intel ME interface as modules --------------------------------------------
+# Built in (the x86_64 default), mei_me probes during kernel init: on an ASUS
+# PRIME Z790-P whose ME firmware was in a bad state it retried hw_start for ~6 s
+# (8.5 -> 14.4 s) before the first framebuffer, all of it a black screen. As
+# modules, udev loads them in the background and a failing ME delays nothing.
+CONFIG_INTEL_MEI=m
+CONFIG_INTEL_MEI_ME=m

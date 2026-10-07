@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-live"
+version = "0.5.0"
+description = "Emit + lint the PengyOS live/installer session overlay (boot to a desktop, installer running)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Pat Wendorf", email = "pat@catbee.ca" },
+]
+keywords = [
+    "pengyos",
+    "live",
+    "installer",
+    "autologin",
+    "systemd",
+    "cosmic",
+    "getty",
+    "overlay",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Version Control",
+]
+# Standard library only at runtime. Declare any real dependency here.
+dependencies = []
+
+[project.optional-dependencies]
+# Dev / test only. Never required to run the tool.
+test = ["pytest>=7"]
+
+[project.scripts]
+pengyos-live = "pengyos_live.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/patw/pengyos/tree/main/tools/pengyos-live"
+Repository = "https://github.com/patw/pengyos"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pengyos_live*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-q"

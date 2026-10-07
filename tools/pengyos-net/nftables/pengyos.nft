@@ -1,0 +1,46 @@
+#!/usr/sbin/nft -f
+
+# PengyOS baseline firewall ruleset (nftables).
+#
+# Policy: default-deny inbound.
+#   - input : policy drop; only loopback, established/related flows and
+#             the explicit allow list below pass.
+#   - forward: policy drop (PengyOS is not a router by default).
+#   - output: policy accept (baseline convenience; outbound hardening is
+#             an explicit follow-up, see spec.md).
+#
+# Inbound allow list (new connections):
+#   - SSH, tcp/22
+#
+# Apply: nft -f nftables/pengyos.nft   (requires root; NOT part of tests)
+
+flush ruleset
+
+table inet pengyos {
+
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # Never drop our own traffic.
+        iif "lo" accept
+
+        # Stateful: continue established/related flows.
+        ct state established,related accept
+
+        # Drop malformed packets before any policy decision.
+        ct state invalid drop
+
+        # Allow list: SSH.
+        tcp dport 22 ct state new accept
+
+        # Everything else is dropped by the chain policy.
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}

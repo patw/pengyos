@@ -1,0 +1,63 @@
+menu "PengyOS (external tree)"
+
+	# COSMIC native (non-Rust) dependencies Buildroot 2026.08 does not ship.
+	# Emitted by pengyos-cosmic-native-deps (committed under that tool) and
+	# installed here so the Desktop target's `BR2_PACKAGE_*` symbols resolve.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/greetd/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-desktop-portal/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cosmic-portal/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-desktop-portal-gtk/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-fira/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-noto-color-emoji/Config.in"
+
+	# Desktop hardware control Buildroot 2026.08 does not ship.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/power-profiles-daemon/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libmtp/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ddcutil/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/bolt/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/distrobox/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-utils/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-user-dirs/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/oo7/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/pop-cursor-theme/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/zram-generator/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/sof-firmware/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/steam-devices/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/gamemode/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/accountsservice/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/switcheroo-control/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ipp-usb/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libfreeaptx/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ldacbt/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ffmpegthumbnailer/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-noto-cjk/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/plymouth/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cosmic-sound-theme/Config.in"
+
+	# Flatpak (the Desktop's app lane) and the two libraries it needs that
+	# Buildroot 2026.08 does not ship. Built here instead of copied from the
+	# build host.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libfyaml/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/appstream/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/flatpak/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/desktop-file-utils-target/Config.in"
+
+	# Pengy, the built-in agent (CLI: Core, web: Server, Qt6 app: Desktop).
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/pengy/Config.in"
+	# Qt apps (Pengy) themed by COSMIC (dark/light, accent, fonts, icons).
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cutecosmic/Config.in"
+
+	# NVIDIA editions only: the proprietary driver on the open kernel modules
+	# (Buildroot's nvidia-driver is the legacy 390 branch — no Turing+, no GBM).
+	# and the CDI half of the container toolkit (GPUs in podman containers).
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/nvidia-open/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/nvidia-container-toolkit/Config.in"
+
+	# Audio: ALSA UCM configuration (Buildroot has none). Without it PipeWire
+	# only exposes a generic Analog profile — no HDMI/Display sinks.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/alsa-ucm-conf/Config.in"
+
+	# COSMIC cargo recipes (pengyos-cosmic-pkg / -recipes) are emitted here next;
+	# their `source` lines are added once the vendored digests are pinned.
+
+endmenu

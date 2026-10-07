@@ -1,0 +1,47 @@
+# pengy-panel — sample configuration.
+#
+# Run with:  pengy-panel --config examples/panel.toml
+#
+# Every key is optional; omitting a key (or an entire table) takes the
+# documented default. See the "Configuration" section of README.md for the
+# full schema, and widgets/src/config.rs for the authoritative rules.
+
+[bar]
+# Gap between adjacent widgets within a section, in text cells (0–16,
+# default 1).
+gap_cells = 1
+# How often poll-based widgets (clock, battery) refresh, in milliseconds
+# (>= 250, default 1000).
+poll_interval_ms = 1000
+
+# Widgets, in order. Each entry needs `type` and `section`
+# (`left` | `center` | `right`).
+
+[[widgets]]
+type = "workspaces"
+section = "left"
+count = 3
+
+[[widgets]]
+type = "text"
+section = "left"
+text = "PengyOS"
+
+[[widgets]]
+type = "clock"
+section = "center"
+# Tokens: %H %I %M %S %p %d %b %B %a %A %Y (%% = literal percent).
+format = "%a %b %d  %H:%M"
+
+[[widgets]]
+type = "template"
+section = "right"
+# {{var}} placeholders are filled in by the backend (T6+).
+text = "{{hostname}}"
+
+[[widgets]]
+type = "battery"
+section = "right"
+supply = "BAT0"
+low = 25
+critical = 10

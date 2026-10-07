@@ -1,0 +1,9 @@
+# PengyOS Server layer — file permissions on top of Buildroot's
+# system/device_table.txt (BR2_ROOTFS_DEVICE_TABLE; makedevs format:
+# <path> <type> <mode> <uid> <gid> <major> <minor> <start> <inc> <count>).
+#
+# pam_unix checks a non-root caller's password through unix_chkpwd, which must
+# read /etc/shadow: without setuid root every unprivileged password check fails
+# (the COSMIC lock screen could never unlock). Buildroot's linux-pam installs it
+# 0755.
+/usr/bin/unix_chkpwd	f	4755	0	0	-	-	-	-	-

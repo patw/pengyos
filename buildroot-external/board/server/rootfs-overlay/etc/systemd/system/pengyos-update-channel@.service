@@ -1,0 +1,8 @@
+# PengyOS — switch the update channel (%i = stable or testing), then re-check.
+[Unit]
+Description=Switch PengyOS updates to the %i channel
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pengyos-update channel %i
+ExecStart=-/usr/bin/pengyos-update check --save --quiet

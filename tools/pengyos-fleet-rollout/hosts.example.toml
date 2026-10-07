@@ -1,0 +1,46 @@
+# Example fleet inventory for `pengyos-fleet-rollout plan`.
+#
+# Copy to `inventory.toml` and edit. `plan` reads this to order the fleet into
+# staged, canary-first batches. This is the `pengyos-fleet-inventory` fleet
+# description (hosts + role/priority) that the rollout consumes.
+#
+# Schema (a `[[hosts]]` array of tables):
+#   name      (required) logical machine name; also the rollout target id.
+#   role      (optional) the host's role, e.g. `canary` / `edge` / `core` /
+#             `edge`. Drives canary-first ordering when no priority is set.
+#   priority  (optional) integer used to order within a tier; higher first.
+#             Ties break on `name` so the plan is deterministic.
+#   address   (optional) reachability target forwarded to the transport.
+#
+# The canary batch (size 1) always goes first; the remaining hosts are grouped
+# into batches of at most `--batch-size`.
+
+[[hosts]]
+name = "canary-1"
+role = "canary"
+priority = 100
+address = "canary-1.home.lab"
+
+[[hosts]]
+name = "edge-1"
+role = "edge"
+priority = 10
+address = "edge-1.home.lab"
+
+[[hosts]]
+name = "edge-2"
+role = "edge"
+priority = 10
+address = "edge-2.home.lab"
+
+[[hosts]]
+name = "core-1"
+role = "core"
+priority = 50
+address = "core-1.home.lab"
+
+[[hosts]]
+name = "core-2"
+role = "core"
+priority = 50
+address = "core-2.home.lab"

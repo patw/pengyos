@@ -1,0 +1,15 @@
+# PengyOS — a user's desktop session, started by greetd (general.service).
+# auth: the password typed into the login screen (COSMIC's greeter relays
+# greetd's PAM prompt). Automatic login (greetd's initial_session, opt-in:
+# pengyos-autologin) opens the session without authenticating.
+# pam_unix verifies an unprivileged user's password through the setuid
+# unix_chkpwd (Server layer permissions.txt). pam_systemd turns the session
+# into a logind session on seat0: /run/user/UID, the user's systemd manager,
+# polkit's "active session", screen locking.
+auth      requisite pam_nologin.so
+auth      required  pam_unix.so
+account   required  pam_unix.so
+session   required  pam_limits.so
+session   required  pam_env.so
+session   required  pam_unix.so
+session   optional  pam_systemd.so

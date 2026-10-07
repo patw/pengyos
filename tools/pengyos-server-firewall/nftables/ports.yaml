@@ -1,0 +1,14 @@
+# Example declared-ports config for `pengyos-netctl rules --config ports.yaml`.
+#
+# The rendered nftables allow list is exactly:
+#   - SSH,  tcp/<ssh_port>        (always allowed)
+#   - WireGuard, udp/<listen_port> (always allowed)
+#   - the declared allowed_tcp / allowed_udp ports
+#
+# This file is a committed fixture so the suite can exercise the generator
+# without network access or a running host.
+
+listen_port: 51820          # WireGuard (UDP) — always allowed
+ssh_port: 22                # SSH (TCP)  — always allowed
+allowed_tcp: [443, 8080]    # extra declared TCP ports
+allowed_udp: [1194]         # extra declared UDP ports (e.g. OpenVPN)

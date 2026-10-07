@@ -1,0 +1,93 @@
+#!/bin/sh
+# PengyOS preinit — runs as PID 1 before systemd (kernel `init=`), because the
+# machine's state must be in place before systemd reads /etc and there is no
+# initramfs. See docs/state-layout.md.
+#
+# Installed systems boot with `ro pengyos.data=<N>` (N = the data partition's
+# number on the root disk, label pengyos-data): the system image
+# (root slot) stays read-only and this mounts the data partition and puts the
+# machine's state over it:
+#   /etc   overlay: image /etc + /data/etc/upper (the machine's changes)
+#   /var   <- /data/var     /home <- /data/home     /root <- /data/root
+# Without pengyos.data (the installer stick, older installs) it does nothing.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+
+data=
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in pengyos.data=*) data=${arg#pengyos.data=} ;; esac
+done
+[ -n "$data" ] || exec /sbin/init "$@"
+
+say() { echo "pengyos-preinit: $*" > /dev/kmsg 2>/dev/null || echo "pengyos-preinit: $*"; }
+
+# No udev yet (and busybox blkid cannot search): find partition N of the disk
+# the root filesystem is on through sysfs, then check its label.
+dev=
+rootdev=$(awk '$5 == "/" { print $3; exit }' /proc/self/mountinfo)
+disk=$(dirname "$(readlink -f "/sys/dev/block/$rootdev")")
+for part in "$disk"/*/partition; do
+    [ "$(cat "$part" 2>/dev/null)" = "$data" ] || continue
+    dev=/dev/$(basename "$(dirname "$part")")
+done
+# The filesystem type and label, read from the superblock ("btrfs LABEL", "ext4
+# LABEL" or ""): busybox blkid does not know btrfs, and there is no udev yet.
+fsinfo() {
+    rd() { dd if="$1" bs=1 skip="$2" count="$3" 2>/dev/null | tr -d '\000'; }
+    if [ "$(rd "$1" 65600 8)" = "_BHRfS_M" ]; then
+        echo "btrfs $(rd "$1" 65835 256)"
+    elif [ "$(dd if="$1" bs=1 skip=1080 count=2 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "53ef" ]; then
+        echo "ext4 $(rd "$1" 1144 16)"
+    fi
+}
+fstype=
+if [ -n "$dev" ]; then
+    info=$(fsinfo "$dev")
+    if [ "${info#* }" = "pengyos-data" ]; then
+        fstype=${info%% *}
+    else
+        say "partition $data ($dev) is not labelled pengyos-data — not using it"
+        dev=
+    fi
+fi
+
+if [ -n "$dev" ]; then
+    # btrfs (subvolumes etc/var/home/root, snapshot-able); installs made before
+    # 2026-09-28 have ext4 there, which still boots.
+    if [ "$fstype" = btrfs ]; then
+        mount -t btrfs -o rw,noatime,compress=zstd:1 "$dev" /data || dev=
+    else
+        # Unclean shutdown: let e2fsck fix what it safely can (exit < 4).
+        e2fsck -p "$dev" > /dev/null 2>&1
+        [ $? -lt 4 ] || say "e2fsck found errors on $dev it could not fix"
+        mount -t ext4 -o rw,noatime "$dev" /data || dev=
+    fi
+fi
+if [ -z "$dev" ]; then
+    # A usable, forgetful system beats an unbootable one.
+    say "data partition $data NOT FOUND — booting with temporary state, changes will be lost"
+    mount -t tmpfs -o mode=0755 pengyos-data /data
+fi
+
+mkdir -p /data/etc/upper /data/etc/work /data/var /data/home /data/root
+# A different image (an update, or a rollback) may carry build-time content
+# under /var the machine has never seen (a new daemon's /var/lib dir): copy in
+# what is missing, never overwriting. Only when the image changed (BUILD_ID), so
+# a normal boot pays nothing.
+build=$(sed -n 's/^BUILD_ID=//p' /usr/lib/os-release 2>/dev/null | tr -d '"')
+if [ -n "$build" ] && [ "$(cat /data/var/lib/pengyos/image-build 2>/dev/null)" != "$build" ]; then
+    cp -a -n /var/. /data/var/ 2>/dev/null || say "could not seed /var from this image"
+    mkdir -p /data/var/lib/pengyos && echo "$build" > /data/var/lib/pengyos/image-build
+fi
+/usr/lib/pengyos/merge-accounts /etc /data/etc/upper || say "merging accounts failed"
+mount -t overlay overlay \
+    -o lowerdir=/etc,upperdir=/data/etc/upper,workdir=/data/etc/work /etc \
+    || say "could not overlay /etc — machine settings are NOT being kept"
+mount --bind /data/var /var
+mount --bind /data/home /home
+mount --bind /data/root /root
+
+exec /sbin/init "$@"

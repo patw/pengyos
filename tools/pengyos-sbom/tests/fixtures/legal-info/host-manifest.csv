@@ -1,0 +1,3 @@
+PACKAGE,VERSION,LICENSE,LICENSE FILES,SOURCE ARCHIVE,SOURCE SITE,DEPENDENCIES WITH LICENSES
+"buildroot","2026.02.3","GPL-2.0+","COPYING","not saved","not saved"
+"zlib","1.3.1","MIT,GPL-2.0+","LICENSE","zlib-1.3.1.tar.xz","https://zlib.net/",""

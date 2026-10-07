@@ -1,0 +1,231 @@
+"""The guards. Each one is named, each one is tested, and none of them negotiate.
+
+Two of them are not planner rules but hard walls, checked again on the way out:
+
+* `CHANNEL` is a constant. The act lane publishes to `testing` and has no code
+  path to `update-promote` or to a stable pointer; `assert_locked()` re-checks
+  every argv the tool is about to run, so a future edit that assembles a
+  different command fails here rather than in front of machines.
+* `clean_tree` / `key_present` / `gate_first` are checked at act time and not
+  only in the plan, because the tree and the key can change between the two.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import subprocess
+from pathlib import Path
+
+CHANNEL = "testing"          # the only channel this tool may ever publish to
+PROMOTE = "update-promote"   # the command this tool must never run
+
+# Components the act lane may not touch in this phase, with the reason that goes
+# into the plan. Report-only here is a decision, not an oversight.
+DENIED = {
+    "linux": "a kernel bump invalidates the NVIDIA module build and every package stamp "
+             "chain in the tree; it needs its own lane and its own gate",
+    "nvidia-open": "a driver change is only proven on real hardware, which QEMU cannot do",
+    "buildroot": "a Buildroot release change means a new tree and a full rebuild of every "
+                 "edition; that is a scheduled event, not a nightly one",
+    "cosmic": "COSMIC is host-built from pinned commits and moves as an epoch, which is a "
+              "major decision by design",
+}
+
+
+class GuardError(Exception):
+    """Raised when a hard wall is reached. The act lane never catches it."""
+
+
+def assert_locked(argv: list[str]) -> list[str]:
+    """Return argv unchanged, or raise. The stable channel is not reachable.
+
+    Checked on the assembled command rather than on the planner's intent, so the
+    guard survives someone later reordering or extending the argv.
+    """
+    joined = " ".join(argv)
+    for word in (PROMOTE, "--channel stable", "--channel=stable"):
+        if word in joined:
+            raise GuardError(f"refusing to run a command that touches stable: {joined!r}")
+    if "--channel" in argv:
+        i = argv.index("--channel")
+        if i + 1 < len(argv) and argv[i + 1] != CHANNEL:
+            raise GuardError(f"refusing to publish to channel {argv[i + 1]!r}: this tool only "
+                             f"ever publishes to {CHANNEL!r}")
+    return argv
+
+
+def lane_allowed(action: dict, cfg: dict) -> tuple[bool, str]:
+    lane = action.get("lane")
+    if lane == "major":
+        return False, "major_never: a new release series is a human decision"
+    if lane not in cfg["lanes"]:
+        return False, f"lane_disabled: {lane!r} is not in lanes={cfg['lanes']}"
+    return True, f"lane {lane} is enabled"
+
+
+def major_never(action: dict) -> tuple[bool, str]:
+    """A version bump may not cross a release series. The patch shape does not move
+    a version at all, so it has nothing to check here — `stock_version_immovable`
+    is what keeps the patch shape from pretending to be a bump."""
+    if action.get("shape") == "patch_dir":
+        return True, "patch shape: the pinned version does not move"
+    if action.get("bump_kind") == "major":
+        return False, f"major_never: {action['current']} -> {action['target']} changes the series"
+    if action.get("bump_kind") == "none":
+        return False, "nothing_newer: upstream has no newer release than the pin"
+    return True, f"{action['current']} -> {action['target']} is patch-level"
+
+
+def stock_version_immovable(action: dict) -> tuple[bool, str]:
+    """The routine lane means 'move the pin', and a stock package's pin is not ours
+    to move (see edits.py). Routine bumps apply to recipes we author."""
+    if action.get("lane") == "routine" and action.get("shape") == "patch_dir":
+        return False, ("stock_version_immovable: a stock package moves with a Buildroot "
+                       "release, not with a nightly bump; only recipes we author are "
+                       "bumped")
+    return True, "the pin is ours to move"
+
+
+def evidence_required(action: dict) -> tuple[bool, str]:
+    if action.get("lane") != "security":
+        return True, "routine lane: no CVE evidence required"
+    if action.get("shape") == "patch_dir":
+        hit = [c for c in action.get("cves", []) if c.get("affected")]
+        if not hit:
+            return False, (f"evidence_required: NVD does not place {action.get('current')} "
+                           "inside any affected range here, so there is nothing to fix")
+        return True, (f"{len(hit)} CVE match(es) put {action['current']} inside NVD's "
+                      "affected range")
+    covered = [c for c in action.get("cves", []) if c.get("covered")]
+    if not covered:
+        return False, (f"evidence_required: nothing proves {action.get('target')} closes any "
+                       "CVE match here")
+    return True, f"{len(covered)} CVE match(es) closed by {action['target']} per NVD's range"
+
+
+def fix_commits_available(action: dict) -> tuple[bool, str]:
+    """A patch can only be carried if NVD names an upstream commit for it."""
+    if action.get("shape") != "patch_dir":
+        return True, "bump shape: no patch to fetch"
+    need = [c for c in action.get("cves", []) if c.get("affected")]
+    missing = [c["cve"] for c in need
+               if not (c.get("fix_commit") or {}).get("url")]
+    if missing:
+        return False, ("no_fix_commit: NVD names no upstream commit for "
+                       + ", ".join(missing) + " (vendor errata are not something to cherry-pick)")
+    return True, f"{len(need)} upstream fix commit(s) named by NVD"
+
+
+def confirmed_only(action: dict) -> tuple[bool, str]:
+    unsure = [c["cve"] for c in action.get("cves", []) if c.get("unsure")]
+    if unsure:
+        return False, f"confirmed_only: {', '.join(unsure)} are pkg-stats 'unsure' matches"
+    return True, "every match is a confirmed pkg-stats CVE"
+
+
+def not_host_only(pkg: dict) -> tuple[bool, str]:
+    if pkg.get("host_only"):
+        return False, "not_host_only: a build-host tool is not in any image"
+    if not pkg.get("editions"):
+        return False, "not_host_only: the package is in no configured edition"
+    return True, f"in {', '.join(pkg['editions'])}"
+
+
+def denied_component(component: str) -> tuple[bool, str]:
+    if component in DENIED:
+        return False, f"denied_component: {component} is report-only — {DENIED[component]}"
+    return True, "component is actable"
+
+
+def patch_does_not_apply(component: str, st: dict) -> tuple[bool, str]:
+    """A candidate whose upstream patch was *proved* not to apply is not retried every
+    night. The pre-flight is cheap but not free (it re-extracts the package in every
+    affected edition) and it spends the night's one action slot, so a known-bad
+    candidate would block a good one forever. This needs a human: adapt the patch or
+    choose a different fix.
+    """
+    bad = (st.get("patch_failures") or {}).get(component)
+    if bad:
+        return False, (f"patch_does_not_apply: {component}'s upstream patch failed on "
+                       f"{bad.get('where', 'the source')} on {bad.get('date', '?')}; "
+                       "needs a human to adapt the patch or pick another fix")
+    return True, "no recorded patch failure"
+
+
+def cooldown(component: str, log: dict, days: int, today: dt.date) -> tuple[bool, str]:
+    last = log.get(component)
+    if not last:
+        return True, "never acted on before"
+    try:
+        then = dt.date.fromisoformat(str(last)[:10])
+    except ValueError:
+        return True, "never acted on before"
+    gap = (today - then).days
+    if gap < days:
+        return False, f"cooldown: {component} was bumped {gap}d ago (needs {days}d)"
+    return True, f"last bumped {gap}d ago"
+
+
+def cap(index: int, limit: int) -> tuple[bool, str]:
+    if index >= limit:
+        return False, f"cap: {limit} action(s) per night is the limit"
+    return True, f"action {index + 1} of {limit}"
+
+
+def release_cap(published_today: int, limit: int) -> tuple[bool, str]:
+    """How many signed images may reach the feed in one night.
+
+    Separate from `cap` on purpose: `cap` sizes the batch, this limits the blast
+    radius. A batch of twelve changes is still one image. Checked against what has
+    already been published today, so a second `act --apply` cannot publish a second
+    release and a re-run after a success is a no-op rather than a surprise.
+    """
+    if published_today >= limit:
+        return False, (f"release_cap: {published_today} release(s) already published today, "
+                       f"limit is {limit}")
+    return True, f"release {published_today + 1} of {limit} today"
+
+
+def batch_conflict(actions: list[dict]) -> tuple[bool, str]:
+    """Two changes in one batch may not edit the same file.
+
+    Batching is safe when the changes are independent, which they usually are: a
+    patch under patches/<pkg>/ and a version in a recipe we author do not touch. When
+    two candidates do want the same file — the same recipe, the same layer config —
+    the order they are applied in changes the result. That is a human's decision, so
+    it is refused before a branch exists rather than resolved by whoever ran last.
+    """
+    seen: dict[str, str] = {}
+    for a in actions:
+        for e in a.get("edits") or []:
+            path = e.get("path", "")
+            if not path:
+                continue
+            if path in seen and seen[path] != a["id"]:
+                return False, (f"batch_conflict: {seen[path]} and {a['id']} both edit "
+                               f"{path}; one of them needs a human to sequence it")
+            seen[path] = a["id"]
+    return True, f"{len(seen)} file(s), no two actions touching the same one"
+
+
+def patch_shape_allowed(shape: str, cfg: dict) -> tuple[bool, str]:
+    if shape == "patch_dir" and not cfg["allow_patch_shape"]:
+        return False, ("patch_shape_off: cherry-picking upstream fix commits into "
+                       "BR2_GLOBAL_PATCH_DIR is planned but not applied unless "
+                       "allow_patch_shape = true")
+    return True, f"shape {shape} is allowed"
+
+
+def clean_tree(repo: Path, run=subprocess.run) -> tuple[bool, str]:
+    out = run(["git", "-C", str(repo), "status", "--porcelain"],
+              capture_output=True, text=True).stdout.strip()
+    if out:
+        return False, "clean_tree: the working tree has uncommitted changes"
+    return True, "working tree is clean"
+
+
+def key_present(key: str | None) -> tuple[bool, str]:
+    if not key:
+        return False, "key_present: no release key (PENGYOS_RELEASE_KEY or the key file)"
+    if not Path(key).expanduser().is_file():
+        return False, f"key_present: {key} is not a readable file"
+    return True, "release key is present"

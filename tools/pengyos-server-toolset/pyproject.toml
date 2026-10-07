@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-server-toolset"
+version = "0.1.0"
+description = "PengyOS Server remote-admin comfort set: Buildroot package enables (fragments/server-toolset.fragment) + a curated mosh/tmux/ripgrep/fd/bat/eza/fzf/zoxide/starship/jq shell profile, validated by drift-proof pytest."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf", email = "pat@catbee.ca" }]
+# stdlib-only at test time; declare any real dependency here.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

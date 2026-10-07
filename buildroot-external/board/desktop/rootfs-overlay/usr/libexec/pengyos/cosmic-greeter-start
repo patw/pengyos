@@ -1,0 +1,8 @@
+#!/bin/sh
+# The login screen: cosmic-comp running cosmic-greeter, as the cosmic-greeter
+# user (greetd's default_session). Upstream's cosmic-greeter-start, plus the
+# seat backend the whole desktop uses (seatd; see start-cosmic).
+rm -rf /run/cosmic-greeter/cosmic/com.system76.CosmicSettingsDaemon/v1/* > /dev/null 2>&1
+export LIBSEAT_BACKEND=seatd
+export XDG_CURRENT_DESKTOP=COSMIC XDG_SESSION_TYPE=wayland
+exec cosmic-comp cosmic-greeter

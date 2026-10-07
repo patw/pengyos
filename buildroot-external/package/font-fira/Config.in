@@ -1,0 +1,9 @@
+config BR2_PACKAGE_FONT_FIRA
+	bool "font-fira"
+	help
+	  Mozilla's Fira Sans (all weights and italics) and Fira Mono:
+	  the interface and monospace fonts COSMIC is designed around
+	  (libcosmic's defaults). Without them COSMIC falls back to
+	  whatever fontconfig finds.
+
+	  https://github.com/mozilla/Fira

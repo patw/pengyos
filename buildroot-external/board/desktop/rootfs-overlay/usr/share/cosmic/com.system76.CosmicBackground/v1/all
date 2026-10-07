@@ -1,0 +1,6 @@
+(
+    output: "all",
+    source: Path("/usr/share/backgrounds/pengyos/cosmic-pengy-16x9.jpg"),
+    filter_by_theme: false,
+    rotation_frequency: 3600,
+)

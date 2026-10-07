@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / tool caches
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Generated artifacts (not source): the select command's defconfig fragment and
+# the excluded-drivers report.
+*.fragment.config
+excluded_drivers.*
+
+# OS / editors
+.DS_Store
+*.swp
+*~

@@ -1,0 +1,408 @@
+{
+ "packages": {
+  "bolt": {
+   "tree": "PENGYOS",
+   "path": "package/bolt/bolt.mk",
+   "pkg_path": "package/bolt",
+   "infras": [
+    [
+     "target",
+     "meson"
+    ]
+   ],
+   "license": "LGPL-2.1+",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [],
+   "warnings": 0,
+   "current_version": "0.9.11",
+   "url": "https://gitlab.freedesktop.org/bolt/bolt",
+   "cpeid": null,
+   "cves": [
+    "CVE-2015-7309",
+    "CVE-2017-16754",
+    "CVE-2019-9185",
+    "CVE-2019-15483",
+    "CVE-2019-15484",
+    "CVE-2019-15485",
+    "CVE-2020-4040",
+    "CVE-2020-4041",
+    "CVE-2020-28925",
+    "CVE-2021-27367",
+    "CVE-2022-31321",
+    "CVE-2023-5214",
+    "CVE-2025-34086"
+   ],
+   "ignored_cves": [],
+   "unsure_cves": [],
+   "stale_cve_ignores": [],
+   "latest_version": {
+    "status": 3,
+    "version": "1.3.1",
+    "id": 6791
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "ok",
+     "no patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "error",
+     "no verified CPE identifier"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "warning",
+     "no developers"
+    ],
+    "version": [
+     "error",
+     "The newer version 1.3.1 is available upstream"
+    ],
+    "cve": [
+     "error",
+     "affected by CVEs"
+    ]
+   },
+   "developers": []
+  },
+  "alsa-ucm-conf": {
+   "tree": "PENGYOS",
+   "path": "package/alsa-ucm-conf/alsa-ucm-conf.mk",
+   "pkg_path": "package/alsa-ucm-conf",
+   "infras": [
+    [
+     "target",
+     "generic"
+    ]
+   ],
+   "license": "BSD-3-Clause",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [],
+   "warnings": 0,
+   "current_version": "1.2.16",
+   "url": "https://github.com/alsa-project/alsa-ucm-conf",
+   "cpeid": null,
+   "cves": [],
+   "ignored_cves": [],
+   "unsure_cves": [],
+   "stale_cve_ignores": [],
+   "latest_version": {
+    "status": 3,
+    "version": "1.2.16.1",
+    "id": 141467
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "ok",
+     "no patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "error",
+     "no verified CPE identifier"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "warning",
+     "no developers"
+    ],
+    "version": [
+     "error",
+     "The newer version 1.2.16.1 is available upstream"
+    ],
+    "cve": [
+     "ok",
+     "not affected by CVEs"
+    ]
+   },
+   "developers": []
+  },
+  "cosmic-sound-theme": {
+   "tree": "PENGYOS",
+   "path": "package/cosmic-sound-theme/cosmic-sound-theme.mk",
+   "pkg_path": "package/cosmic-sound-theme",
+   "infras": [
+    [
+     "target",
+     "meson"
+    ]
+   ],
+   "license": "CC-BY-SA-4.0",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [],
+   "warnings": 0,
+   "current_version": "epoch-1.9.0",
+   "url": "https://github.com/pop-os/cosmic-sound-theme",
+   "cpeid": null,
+   "cves": [],
+   "ignored_cves": [],
+   "unsure_cves": [],
+   "stale_cve_ignores": [],
+   "latest_version": {
+    "status": 3,
+    "version": "1.9.0",
+    "id": 391472
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "ok",
+     "no patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "error",
+     "no verified CPE identifier"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "warning",
+     "no developers"
+    ],
+    "version": [
+     "error",
+     "The newer version 1.9.0 is available upstream"
+    ],
+    "cve": [
+     "ok",
+     "not affected by CVEs"
+    ]
+   },
+   "developers": []
+  },
+  "oo7": {
+   "tree": "PENGYOS",
+   "path": "package/oo7/oo7.mk",
+   "pkg_path": "package/oo7",
+   "infras": [
+    [
+     "target",
+     "cargo"
+    ]
+   ],
+   "license": "MIT , vendored dependencies licenses probably not listed",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [],
+   "warnings": 0,
+   "current_version": "0.7.0.beta",
+   "url": "https://github.com/linux-credentials/oo7",
+   "cpeid": null,
+   "cves": [],
+   "ignored_cves": [],
+   "unsure_cves": [],
+   "stale_cve_ignores": [],
+   "latest_version": {
+    "status": 3,
+    "version": "0.6.0",
+    "id": 375085
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "ok",
+     "no patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "error",
+     "no verified CPE identifier"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "warning",
+     "no developers"
+    ],
+    "version": [
+     "error",
+     "The newer version 0.6.0 is available upstream"
+    ],
+    "cve": [
+     "ok",
+     "not affected by CVEs"
+    ]
+   },
+   "developers": []
+  },
+  "busybox": {
+   "tree": "BUILDROOT",
+   "path": "package/busybox/busybox.mk",
+   "pkg_path": "package/busybox",
+   "infras": [
+    [
+     "target",
+     "kconfig"
+    ]
+   ],
+   "license": "GPL-2.0, bzip2-1.0.6",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [
+    "0002-Makefile.flags-strip-non-l-arguments-returned-by-pkg.patch",
+    "0001-networking-libiproute-use-linux-if_packet.h-instead-.patch",
+    "0005-seedrng-fix-getrandom-detection-for-non-glibc-libc.patch",
+    "0012-netstat-sanitize-argv0-for-p-CVE-2024-58251.patch",
+    "0011-wget-dont-allow-control-characters-or-spaces-in-the-URL.patch",
+    "0007-awk.c-fix-CVE-2023-42366-bug-15874.patch",
+    "0004-nslookup-sanitize-all-printed-strings-with-printable.patch",
+    "0009-syslogd-fix-wrong-OPT_locallog-flag-detection.patch",
+    "0008-hwclock-Check-for-SYS_settimeofday-before-calling-sy.patch",
+    "0006-tc-Fix-compilation-with-Linux-v6.8-rc1.patch",
+    "0003-libbb-sockaddr2str-ensure-only-printable-characters-.patch",
+    "0010-testsuite-tar-tests-fix-test-after-cve-2025-46394.patch"
+   ],
+   "warnings": 0,
+   "current_version": "1.38.0",
+   "url": "http://busybox.net/",
+   "cpeid": "cpe:2.3:a:busybox:busybox:1.38.0:-:*:*:*:*:*:*",
+   "cves": [
+    "CVE-2026-38754",
+    "CVE-2026-38753",
+    "CVE-2026-38755"
+   ],
+   "ignored_cves": [
+    "CVE-2022-28391",
+    "CVE-2023-42366",
+    "CVE-2024-58251",
+    "CVE-2025-46394",
+    "CVE-2025-60876"
+   ],
+   "unsure_cves": [],
+   "stale_cve_ignores": [
+    "CVE-2022-28391",
+    "CVE-2023-42366",
+    "CVE-2025-60876",
+    "CVE-2025-46394"
+   ],
+   "latest_version": {
+    "status": 2,
+    "version": "1.38.0",
+    "id": 230
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "error",
+     "lots of patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "ok",
+     "(not checked against CPE dictionary)"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "warning",
+     "no developers"
+    ],
+    "version": [
+     "ok",
+     "up-to-date"
+    ],
+    "cve": [
+     "error",
+     "affected by CVEs"
+    ]
+   },
+   "developers": []
+  }
+ },
+ "commit": "d5180309b1b66ef3b8eaccca70ad69be8e0729a1",
+ "date": "2026-10-03 17:01:41.338164+00:00"
+}

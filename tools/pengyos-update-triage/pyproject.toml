@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-update-triage"
+version = "0.11.0"
+description = "Ingest OSV/NVD advisories and upstream changelogs for pinned PengyOS components; classify them security/relevant/ignore with a transparent rationale, and emit ranked, justified update proposals."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Pat Wendorf", email = "pat@catbee.ca" },
+]
+keywords = ["pengyos", "security", "advisory", "osv", "nvd", "cve", "changelog", "triage", "proposals", "update"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: System :: Systems Administration",
+]
+# Standard library only for the core. Declare any real dependency here.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+pengyos-update-triage = "pengyos_update_triage.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/patw/pengyos/tree/main/tools/pengyos-update-triage"
+Repository = "https://github.com/patw/pengyos"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pengyos_update_triage*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-q"

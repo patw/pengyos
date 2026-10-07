@@ -1,0 +1,16 @@
+# Fixture policy for the license-audit test suite.
+#
+# Permissive-preferred posture: copyleft in the core is flagged (not allowed),
+# and documented exceptions exist for the proprietary firmware blob and a
+# copyleft application that is intentionally out of scope for the core.
+#
+# The fixture audit is *clean* (exit 0): everything is either an allowed family,
+# a dynamically-linked copyleft-in-core component (flagged as a WARN), or an
+# excepted component. Unit tests exercise the hard-FAIL path with their own
+# policies.
+
+allowed_families = ["MIT", "Apache-2.0", "Zlib", "BSD-2-Clause", "BSD-3-Clause", "ISC"]
+copyleft_in_core = false
+
+# Documented, reviewed exceptions (component ids exempt from the policy).
+exceptions = ["firmware-blob", "some-copyleft-app"]

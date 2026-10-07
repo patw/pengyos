@@ -1,0 +1,7 @@
+# This file is managed by the build — do not edit.
+[Unit]
+Description=nftables ruleset application
+After=network.target
+
+[Install]
+WantedBy=multi-user.target

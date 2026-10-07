@@ -1,0 +1,12 @@
+# PengyOS — check for updates once a day (and a few minutes after boot).
+[Unit]
+Description=Check for PengyOS updates daily
+
+[Timer]
+OnBootSec=5min
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

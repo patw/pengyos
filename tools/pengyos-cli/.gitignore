@@ -1,0 +1,10 @@
+# Rust build output
+/target
+
+# Cargo lock is intentionally NOT ignored: this crate ships a binary, and a
+# committed Cargo.lock is required for reproducible builds (see Cargo.toml).
+
+# Editor / OS noise
+*.swp
+*~
+.DS_Store

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-install"
+version = "0.1.0"
+description = "Edition-agnostic install engine for PengyOS: (release, target, layout) -> ordered plan -> execute (install = first update)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "install", "uki", "efi", "boot", "reproducible"]
+
+# Standard library only at runtime. TOML ships with 3.11+; the shim in
+# pengyos_install._toml_compat backfills tomllib on 3.10.
+dependencies = []
+
+[project.optional-dependencies]
+# Dev / test only. Never required to run the tool.
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-install = "pengyos_install.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

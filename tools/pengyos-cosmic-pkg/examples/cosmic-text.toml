@@ -1,0 +1,35 @@
+# Example component manifest for pengyos-cosmic-pkg.
+#
+# This is a *realistic, hand-checkable* example describing one COSMIC git
+# component (``cosmic-text``), used to demonstrate the manifest schema and to
+# smoke-test the CLI end to end. It is NOT part of the hermetic test fixtures —
+# it lives in ``examples/`` so a human can eyeball the format and so the
+# ``pengyos-cosmic-pkg`` subcommands can be demoed against committed data.
+#
+# The schema is defined by ``pengyos_cosmic_pkg.manifest``; the loader is
+# ``load_manifest`` / ``parse_manifest``. A manifest is a single TOML table:
+# the four required fields (``name``, ``git_url``, ``tag``, ``license``) plus the
+# optional cargo ``features`` / ``binaries`` and the ``[[deps]]`` array.
+
+name = "cosmic-text"
+git_url = "https://github.com/pop-os/libcosmic"
+tag = "v0.6.0"
+license = "MIT OR Apache-2.0"
+
+# Cargo features to enable for this component (Buildroot BR2_PACKAGE_*_CARGO_FEATURES).
+features = ["default", "render"]
+
+# Cargo binary targets to build (Buildroot BR2_PACKAGE_*_CARGO_BINARIES).
+binaries = ["cosmic-text"]
+
+# Dependencies. Each is itself a git component: name + git_url + pinned tag.
+# The ``vendor`` engine rewrites each of these git sources to the vendored path.
+[[deps]]
+name = "smithay-clipboard"
+git_url = "https://github.com/pop-os/smithay-clipboard"
+tag = "v0.1.1"
+
+[[deps]]
+name = "winit"
+git_url = "https://github.com/pop-os/winit"
+tag = "v0.2.30"

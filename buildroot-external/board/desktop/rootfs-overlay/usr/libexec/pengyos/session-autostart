@@ -1,0 +1,144 @@
+#!/usr/bin/python3
+"""Start the session's XDG autostart entries (freedesktop Desktop Application
+Autostart spec) for a PengyOS COSMIC session.
+
+cosmic-session leaves autostart to systemd whenever systemd is PID 1
+(`systemctl --user start cosmic-session.target` -> xdg-desktop-autostart.target),
+but our session bus comes from dbus-run-session (start-cosmic), not the systemd
+user bus, so apps started that way would land on the wrong bus — and nothing
+was started at all. start-cosmic runs this inside dbus-run-session instead: it
+waits for the compositor (cosmic-session exports WAYLAND_DISPLAY to the systemd
+user manager once cosmic-comp is up), then launches each entry with that
+display and our session bus.
+
+Spec rules kept: ~/.config/autostart overrides /etc/xdg/autostart by file name;
+Hidden=true and X-GNOME-Autostart-enabled=false disable; OnlyShowIn/NotShowIn
+against COSMIC; TryExec must exist. GNOME's AutostartCondition is not supported
+(entries with it are skipped).
+"""
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import time
+
+DESKTOP = "COSMIC"
+WAIT = 60
+
+
+def log(msg):
+    print(f"session-autostart: {msg}", file=sys.stderr, flush=True)
+
+
+def user_env():
+    try:
+        out = subprocess.run(["systemctl", "--user", "show-environment"],
+                             capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    return dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+
+
+def wait_for_compositor(started):
+    """WAYLAND_DISPLAY from the user manager, once its socket is newer than us."""
+    runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    deadline = time.monotonic() + WAIT
+    while time.monotonic() < deadline:
+        env = user_env()
+        display = env.get("WAYLAND_DISPLAY")
+        if display:
+            sock = display if display.startswith("/") else os.path.join(runtime, display)
+            try:
+                if os.stat(sock).st_mtime >= started - 1:
+                    return {k: env[k] for k in ("WAYLAND_DISPLAY", "DISPLAY") if k in env}
+            except OSError:
+                pass
+        time.sleep(0.5)
+    return None
+
+
+def entries():
+    home = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    dirs = [home] + (os.environ.get("XDG_CONFIG_DIRS") or "/etc/xdg").split(":")
+    seen = {}
+    for d in dirs:
+        path = os.path.join(d, "autostart")
+        try:
+            names = sorted(os.listdir(path))
+        except OSError:
+            continue
+        for n in names:
+            if n.endswith(".desktop") and n not in seen:
+                seen[n] = os.path.join(path, n)
+    return seen
+
+
+def parse(path):
+    keys, section = {}, None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith("["):
+                    section = line
+                elif section == "[Desktop Entry]" and "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    keys.setdefault(k.strip(), v.strip())
+    except OSError:
+        return {}
+    return keys
+
+
+def wanted(e):
+    if e.get("Type", "Application") != "Application" or "Exec" not in e:
+        return False
+    if e.get("Hidden", "").lower() == "true" or e.get("X-GNOME-Autostart-enabled", "").lower() == "false":
+        return False
+    only = [x for x in e.get("OnlyShowIn", "").split(";") if x]
+    if only and DESKTOP not in only:
+        return False
+    if DESKTOP in e.get("NotShowIn", "").split(";"):
+        return False
+    if "AutostartCondition" in e:
+        return False
+    tryexec = e.get("TryExec")
+    if tryexec and not (shutil.which(tryexec) if "/" not in tryexec else os.access(tryexec, os.X_OK)):
+        return False
+    return True
+
+
+def argv(exec_line):
+    try:
+        args = shlex.split(exec_line)
+    except ValueError:
+        return []
+    # Field codes (%f %u %i %c %k ...) expand to nothing at autostart; %% is a %.
+    return [a.replace("%%", "%") for a in args if not (len(a) == 2 and a[0] == "%" and a[1] != "%")]
+
+
+def main():
+    started = time.time()
+    extra = wait_for_compositor(started)
+    if extra is None:
+        log("the compositor did not come up — not starting autostart entries")
+        return 1
+    env = {**os.environ, **extra}
+    for name, path in entries().items():
+        e = parse(path)
+        if not wanted(e):
+            continue
+        cmd = argv(e["Exec"])
+        if not cmd:
+            continue
+        try:
+            subprocess.Popen(cmd, env=env, cwd=e.get("Path") or os.path.expanduser("~"),
+                             stdin=subprocess.DEVNULL, start_new_session=True)
+            log(f"started {name}")
+        except OSError as exc:
+            log(f"{name}: {exc}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

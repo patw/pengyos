@@ -1,0 +1,9 @@
+# sha256 of the pinned PengyR source tarball.
+#
+# Downloaded from the exact release tag that PENGY_VERSION pins in pengy.mk:
+#   https://github.com/patw/PengyR/archive/v1.9.0/PengyR-1.9.0.tar.gz
+#
+# The digest below is the sha256 of that tarball as published by GitHub. The
+# SOURCE name (PengyR-1.9.0.tar.gz) must stay in lock-step with PENGY_VERSION in
+# pengy.mk — the recipe tests assert they agree.
+sha256  e4df8288532f61f854e577ef41fca8445db0897ecfa332498e2c86662363431f  PengyR-1.9.0.tar.gz

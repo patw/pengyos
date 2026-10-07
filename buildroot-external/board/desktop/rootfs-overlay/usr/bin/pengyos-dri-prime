@@ -1,0 +1,88 @@
+#!/bin/sh
+# ============================================================================
+# pengyos-dri-prime — DRI_PRIME offload wrapper for the open AMD GPU stack
+# ----------------------------------------------------------------------------
+# Part of the Desktop board rootfs-overlay
+# (usr/bin/pengyos-dri-prime). Launches an application on the discrete
+# AMD GPU (the secondary GPU) while presenting on the integrated one — the
+# standard AMDGPU PRIME offload model.
+#
+# Usage:
+#   pengyos-dri-prime <application> [args...]   # offload to the discrete GPU
+#   pengyos-dri-prime --primary <application>   # force the integrated GPU
+#   pengyos-dri-prime --list                    # enumerate the GPUs
+#
+# AMDGPU PRIME offload: the integrated GPU owns the display (primary,
+# DRI_PRIME=0); an application launched with DRI_PRIME=1 renders on the
+# discrete GPU and its frames are blitted back to the primary for presentation.
+#
+# NVIDIA vendor wiring is OUT of scope (SPEC §2.4–2.5): this wrapper only drives the
+# open amdgpu half. The NVIDIA dGPU is reachable once that half is built.
+# ============================================================================
+
+set -eu
+
+# The discrete (secondary) GPU is offloaded to; the integrated (primary) GPU
+# presents. This is the AMDGPU PRIME offload direction. `DRI_PRIME` defaults to
+# offload (1); `--primary` overrides it to present on the integrated GPU (0).
+OFFLOAD_PRIME=1
+PRIMARY_PRIME=0
+
+# The render-node root and the sysfs DRM root the `--list` branch inspects.
+# Defaults are the real device roots; the env overrides let a caller point the
+# wrapper at a chroot / inspected tree (and let the wrapper be exercised without
+# real hardware).
+DEV_ROOT="${PENGYOS_DRI_PRIME_DEV:-/dev/dri}"
+SYS_ROOT="${PENGYOS_DRI_PRIME_SYS:-/sys/class/drm}"
+
+if [ "$#" -lt 1 ]; then
+    echo "pengyos-dri-prime: usage: pengyos-dri-prime [--primary|--help|--list] <application> [args...]" >&2
+    exit 2
+fi
+
+DRI_PRIME="$OFFLOAD_PRIME"
+
+case "$1" in
+    --primary)
+        DRI_PRIME="$PRIMARY_PRIME"
+        shift
+        ;;
+    --help|-h)
+        cat <<'USAGE'
+pengyos-dri-prime — DRI_PRIME offload wrapper for the open AMD GPU stack.
+
+Usage:
+  pengyos-dri-prime <application> [args...]   # offload to the discrete AMD GPU
+  pengyos-dri-prime --primary <application>   # present on the integrated GPU
+  pengyos-dri-prime --list                    # enumerate the DRM GPUs
+
+The integrated GPU owns the display (DRI_PRIME=0); an app launched with
+DRI_PRIME=1 renders on the discrete GPU and its frames blit back to present.
+USAGE
+        exit 0
+        ;;
+    --list)
+        # Enumerate the DRM render nodes and which GPU each belongs to.
+        # $DEV_ROOT/renderD<n> are the render nodes; $SYS_ROOT/renderD<n>/device
+        #/{vendor,id} identify the PCI device (0x1002 = AMD); the module symlink
+        # says which kernel driver owns it.
+        for node in "$DEV_ROOT"/renderD*; do
+            [ -e "$node" ] || continue
+            dev="${node#"$DEV_ROOT"/}"
+            # sysfs mirrors the render node name: $SYS_ROOT/renderD<n>/device
+            base="$SYS_ROOT/$dev/device"
+            if [ -r "$base/vendor" ]; then
+                # sysfs exposes the PCI vendor/id with their 0x prefix already.
+                printf '%s: vendor=%s id=%s driver=%s
+'                     "$dev"                     "$(cat "$base/vendor" 2>/dev/null || echo '?')"                     "$(cat "$base/id" 2>/dev/null || echo '?')"                     "$(basename "$(readlink -f "$base/module")" 2>/dev/null || echo '?')"
+            else
+                echo "$dev: unavailable (not bound to an amdgpu device)"
+            fi
+        done
+        exit 0
+        ;;
+esac
+
+# Export whatever the case set (offload default, or 0 for --primary).
+export DRI_PRIME
+exec "$@"

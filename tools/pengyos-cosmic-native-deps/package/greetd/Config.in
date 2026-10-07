@@ -1,0 +1,9 @@
+config BR2_PACKAGE_GREETD
+	bool "greetd"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+
+	  Minimal, distro-independent login daemon for Wayland/X11.
+
+	  https://gitlab.com/greetd/greetd

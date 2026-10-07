@@ -1,0 +1,8 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# Python tool: pytest in this tool's directory (offline; fixtures are recorded upstream formats).
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-nightly"
+expect = "exit0"
+timeout = 600

@@ -1,0 +1,16 @@
+# PengyOS — flatpak's system helper (the image copies the host's flatpak; this
+# is its unit). A non-root user's system-wide install (COSMIC Store) goes
+# through the helper over D-Bus, which activates it via systemd
+# (SystemdService=flatpak-system-helper.service); without this unit the Store
+# failed with "Unit flatpak-system-helper.service not found". The helper, like
+# the flatpak CLI, links the host's curl/OpenSSL, kept in /usr/lib/compat.
+[Unit]
+Description=flatpak system helper
+
+[Service]
+BusName=org.freedesktop.Flatpak.SystemHelper
+Environment=XDG_DATA_DIRS=/var/lib/flatpak/exports/share/:/usr/local/share/:/usr/share/
+Environment=LD_LIBRARY_PATH=/usr/lib/compat
+ExecStart=/usr/libexec/flatpak-system-helper
+Type=dbus
+IOSchedulingClass=idle

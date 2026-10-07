@@ -1,0 +1,10 @@
+# PengyOS — polkit's password check (polkit-agent-helper-1, run by COSMIC's
+# authentication dialog, cosmic-osd). Buildroot's polkit installs
+# /usr/lib/pam.d/polkit-1 with Debian's "@include common-auth" lines, which
+# this Linux-PAM rejects ("illegal module type: @include") and whose files
+# don't exist: every admin prompt failed before asking. Plain Unix passwords;
+# an unprivileged caller's password goes through the setuid unix_chkpwd.
+auth      required  pam_unix.so
+account   required  pam_unix.so
+password  required  pam_unix.so sha512 shadow
+session   required  pam_unix.so

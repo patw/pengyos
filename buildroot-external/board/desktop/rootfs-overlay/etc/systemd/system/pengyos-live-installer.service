@@ -1,0 +1,18 @@
+# PengyOS live USB — start the graphical installer in the COSMIC session.
+#
+# The installer stick is the Desktop image plus a PENGYOS-PAYLOAD partition that
+# carries the image to install (see post-image.sh). That partition is what makes
+# a boot "live": an installed disk has none, so this never runs there.
+[Unit]
+Description=PengyOS installer (live USB)
+ConditionPathExists=/dev/disk/by-label/PENGYOS-PAYLOAD
+Wants=systemd-udev-settle.service
+After=systemd-udev-settle.service greetd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/pengyos/live-installer
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

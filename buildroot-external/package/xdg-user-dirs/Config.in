@@ -1,0 +1,11 @@
+config BR2_PACKAGE_XDG_USER_DIRS
+	bool "xdg-user-dirs"
+	depends on BR2_USE_WCHAR # iconv
+	help
+	  Creates and records the well-known user folders (Desktop,
+	  Documents, Downloads, Music, Pictures, Public, Templates,
+	  Videos) in ~/.config/user-dirs.dirs. Browsers, portals and
+	  file managers save to them; a Flatpak app granted
+	  xdg-download writes to a Downloads folder that must exist.
+
+	  https://www.freedesktop.org/wiki/Software/xdg-user-dirs/

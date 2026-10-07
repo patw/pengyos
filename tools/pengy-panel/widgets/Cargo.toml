@@ -1,0 +1,30 @@
+[package]
+name = "widgets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Headless-testable widget core (data + layout) for pengy-panel."
+readme = "../README.md"
+
+# The `widgets` crate is the headless-testable core. It has NO dependencies on
+# Wayland, wlroots, or any rendering crate — that is the whole point of the
+# boundary documented in ARCHITECTURE.md. Keep it that way: every new widget
+# belongs here, and every widget is unit-testable with `cargo test` and no
+# compositor.
+[dependencies]
+
+# The T8 layout benchmark uses the `criterion` library. It is declared a
+# *dev*-dependency on purpose: it is linked only into `cargo bench` / `cargo
+# test` builds and **never** into the published `widgets` rlib, so the empty
+# `[dependencies]` table above — the load-bearing headless-test boundary — is
+# untouched. It costs nothing at the panel's runtime or idle RSS.
+[dev-dependencies]
+criterion = "0.8"
+
+# The layout benchmark uses criterion's own harness, not cargo's built-in one.
+[[bench]]
+name = "layout"
+harness = false

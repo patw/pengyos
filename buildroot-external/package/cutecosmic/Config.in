@@ -1,0 +1,19 @@
+config BR2_PACKAGE_CUTECOSMIC
+	bool "cutecosmic"
+	depends on BR2_PACKAGE_QT6
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	select BR2_PACKAGE_QT6BASE_GUI
+	select BR2_PACKAGE_QT6BASE_DBUS
+	help
+	  Qt platform theme for the COSMIC desktop: Qt applications
+	  follow COSMIC's dark/light mode, accent colours, fonts, icon
+	  theme and file dialogs. Loaded automatically inside a COSMIC
+	  session.
+
+	  Uses private Qt APIs: rebuild it whenever Qt changes.
+
+	  https://github.com/IgKh/cutecosmic
+
+comment "cutecosmic needs Qt6"
+	depends on !BR2_PACKAGE_QT6

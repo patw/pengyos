@@ -1,0 +1,16 @@
+config BR2_PACKAGE_XDG_DESKTOP_PORTAL
+	bool "xdg-desktop-portal"
+	select BR2_PACKAGE_LIBGLIB2
+	select BR2_PACKAGE_JSON_GLIB
+	select BR2_PACKAGE_LIBFUSE3
+	select BR2_PACKAGE_GDK_PIXBUF
+	select BR2_PACKAGE_GSTREAMER1
+	select BR2_PACKAGE_GST1_PLUGINS_BASE
+	select BR2_PACKAGE_PIPEWIRE
+	select BR2_PACKAGE_LIBGUDEV
+	help
+
+	  Portal frontend for sandboxed app sandbox/screencast/screenshot/etc.
+	  Needs a backend (e.g. BR2_PACKAGE_XDG_DESKTOP_PORTAL_BACKEND_COSMIC).
+
+	  https://gitlab.freedesktop.org/xdg/xdg-desktop-portal

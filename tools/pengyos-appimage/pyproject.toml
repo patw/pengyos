@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-appimage"
+version = "0.1.0"
+description = "Inspect, extract, integrate, and sandbox AppImages under PengyOS."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["appimage", "pengyos", "sandbox", "bubblewrap", "linux", "desktop"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Systems Administration",
+]
+# The tool prefers the Python standard library; any third-party dependency
+# must be declared here.
+dependencies = []
+
+[project.optional-dependencies]
+# Test-only dependency. Declare runtime deps above, dev deps under this extra.
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-appimage = "pengyos_appimage.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Make the src-layout package importable during tests without an editable
+# install (this environment is PEP 668 externally-managed).
+pythonpath = ["src"]
+addopts = "-ra"

@@ -1,0 +1,42 @@
+config BR2_PACKAGE_PENGY
+	bool "pengy"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Pengy (PengyR): a local-first AI agent with tools, talking to
+	  any OpenAI-compatible API. One Rust agent core behind three
+	  front ends; pick the ones this image ships below. Unconfigured
+	  by default: each user sets it up (~/.config/pengy).
+
+	  https://github.com/patw/PengyR
+
+if BR2_PACKAGE_PENGY
+
+config BR2_PACKAGE_PENGY_CLI
+	bool "pengy-cli (terminal)"
+	default y
+	help
+	  Terminal REPL + single-shot mode. Rust only (glibc, libgcc).
+
+config BR2_PACKAGE_PENGY_WEB
+	bool "pengy-web (web UI)"
+	help
+	  Axum web UI with live streaming. Rust only.
+
+config BR2_PACKAGE_PENGY_GUI
+	bool "pengy (Qt6 desktop app)"
+	depends on BR2_PACKAGE_QT6
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_QT6BASE_GUI
+	select BR2_PACKAGE_QT6BASE_WIDGETS
+	select BR2_PACKAGE_QT6BASE_NETWORK
+	select BR2_PACKAGE_QT6SVG
+	select BR2_PACKAGE_OPENSSL
+	help
+	  The Qt6 desktop app; the Rust core is linked in statically.
+	  Installs pengy.desktop + icon.
+
+comment "pengy GUI needs Qt6"
+	depends on !BR2_PACKAGE_QT6
+
+endif

@@ -1,0 +1,21 @@
+[Unit]
+Description=PengyOS agent
+Documentation=man:pengy-agent(8) man:systemd.service(5)
+After=network-online.target network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/pengy-agent --preread
+ExecStart=/usr/sbin/pengy-agent --serve
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+# Hardening that applies to every PengyOS service.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=pengyos-core.target

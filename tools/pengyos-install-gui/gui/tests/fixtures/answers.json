@@ -1,0 +1,9 @@
+{
+  "accepted_terms": "true",
+  "selected_disk": "/dev/sda",
+  "layout": "wipe",
+  "hostname": "pengyos-box",
+  "username": "alice",
+  "password": "hunter2",
+  "network_ssid": "home"
+}

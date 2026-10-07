@@ -1,0 +1,72 @@
+# PengyOS divergence ledger
+#
+# Every divergence we carry — a fork, a patch set, or a host-built component —
+# gets an entry here BEFORE it lands. The ledger is what makes the divergence
+# budget (docs/stack-down-replace.md) enforceable instead of rhetorical, and it
+# is what turns "this version number looks wrong" into "this version number looks
+# wrong, and here is the receipt".
+#
+# kind:
+#   patch-set   upstream fix commits carried on a pinned version (version unchanged)
+#   fork        a component we build from our own tree with our own changes
+#   host-built  assembled on the build host, not by a Buildroot recipe (a debt,
+#               not an achievement: it voids byte-identity reproducibility)
+#
+# Required for every entry: id, kind, component, carried_since, expiry,
+# observe_source, upstream_status.
+#
+# `expiry` is the specific upstream event that ends the divergence. An entry with
+# no expiry condition is not an approved divergence.
+#
+# `observe_source`: "pkg-stats" means Buildroot's own scanner can still see the
+# component. A fork or authored pin is invisible to pkg-stats and MUST name its
+# own pengyos-nightly observe source, or it rots silently (the PengyR case:
+# images shipped 1.10.0 while upstream was at 1.11.1 and nothing noticed).
+
+schema = 1
+
+# Budget: at most 10 maintained forks (kind = "fork") at any time.
+# Current fork count: 0. Enforced by the gate, not by good intentions.
+
+[[divergence]]
+id        = "libxml2-2.15.3-cve-2026"
+kind      = "patch-set"
+component = "libxml2"
+pinned_version = "2.15.3"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-05"
+carried_in    = ["26.10.8"]
+patches_dir   = "buildroot-external/patches/libxml2/2.15.3"
+
+# NVD placed 2.15.3 inside each affected range and named one upstream commit per
+# CVE; that is what made the patch shape admissible at all (pengyos-nightly
+# guards: evidence_required, fix_commits_available).
+closes = [
+  "CVE-2026-86137",  # 76fe08d97de8  xmlregexp: out-of-bounds read in the NXT macro
+  "CVE-2026-86138",  # a4cba4b5b5a8  dict: overflow in xmlDictAddQString
+  "CVE-2026-86139",  # 8edbbdb09f24  uri: length check in xmlURIEscapeStr
+  "CVE-2026-86140",  # d1686f91dbda  valid: bounds checks in xmlSnprintfElements
+  "CVE-2026-86142",  # 6b3a736c0edc  xpointer: overflow in xmlXPtrEvalXPtrPart
+  "CVE-2026-86143",  # 90f293ba74d2  io: int overflow before writeCallback
+  "CVE-2026-86144",  # b63cd517afec  xinclude: propagate parse flags
+]
+upstream_fixes = [
+  "76fe08d97de8", "a4cba4b5b5a8", "8edbbdb09f24", "d1686f91dbda",
+  "6b3a736c0edc", "90f293ba74d2", "b63cd517afec",
+]
+
+# The version that would have closed all seven with no divergence at all. Recorded
+# because it is the reason this entry has an expiry instead of a permanent home.
+natural_fix = "2.15.4"
+
+expiry = "Buildroot 2026.08.1 (or a newer Buildroot line) pins libxml2 >= 2.15.4; at that point the patch set is deleted"
+observe_source = "pkg-stats"
+upstream_status = "not-offered"
+
+# Known cost, stated rather than discovered: a patch set does not move the version,
+# so every version-based reader misreads it. pkg-stats does not see patches reached
+# through BR2_GLOBAL_PATCH_DIR at all (support/scripts/pkg-stats:250 walks only the
+# package's own directory), so libxml2 still reports "affected by CVEs" and "newer
+# version 2.15.4 available upstream". The fix is <pkg>_IGNORE_CVES in external.mk
+# with a comment naming each patch file; pkg-stats then suppresses the CVE and flags
+# the entry as a stale ignore once the version moves. Tracked as open work.

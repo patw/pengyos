@@ -1,0 +1,11 @@
+# PengyOS offline test interface.
+#
+# Install to: /etc/systemd/network/20-pengyos-test.netdev
+#
+# A dummy device so the PengyOS network stack (and the PENGYOS_IT=1
+# integration tests) can be exercised without physical hardware or a
+# network connection. Harmless in production: a dummy interface carries
+# no traffic and consumes nothing.
+[NetDev]
+Name=pengyos-test0
+Kind=dummy

@@ -1,0 +1,27 @@
+[project]
+name = "pengyos-layout"
+version = "0.5.0"
+description = "Declarative disk/layout planner for PengyOS installs (ESP + A/B + data, optional LUKS2)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "disk", "layout", "installer", "gpt", "btrfs", "luks"]
+dependencies = []
+
+[project.scripts]
+pengyos-layout = "pengyos_layout.__main__:main"
+
+[dependency-groups]
+dev = ["pytest >= 8.0"]
+
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

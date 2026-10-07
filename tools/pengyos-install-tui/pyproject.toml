@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-install-tui"
+version = "0.1.0"
+description = "Guided Core/Server installer wizard + unattended --auto for PengyOS: a pure, offline-testable wizard state machine (disk, edition, layout, user, network, confirm) driving pengyos-install, plus a non-interactive install.toml front-end."
+readme = "README.md"
+requires-python = ">=3.11"  # tests read pyproject with tomllib; the live stick ships python3.11+
+license = { text = "MIT" }
+authors = [
+    { name = "Pat Wendorf", email = "pat@catbee.ca" },
+]
+keywords = [
+    "pengyos",
+    "installer",
+    "wizard",
+    "tui",
+    "unattended",
+    "core",
+    "server",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Installation/Setup",
+    "Topic :: System :: Systems Administration",
+]
+# Standard library only at runtime. Declare any real dependency here.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+pengyos-install-tui = "pengyos_install_tui.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/patw/pengyos/tree/main/tools/pengyos-install-tui"
+Repository = "https://github.com/patw/pengyos"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pengyos_install_tui*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

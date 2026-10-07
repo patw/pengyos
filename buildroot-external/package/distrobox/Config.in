@@ -1,0 +1,11 @@
+config BR2_PACKAGE_DISTROBOX
+	bool "distrobox"
+	depends on BR2_PACKAGE_PODMAN
+	help
+	  Use any Linux distribution inside the terminal (podman
+	  containers that share $HOME, the display and devices). The
+	  developer's toolchain lane: Buildroot puts no compiler on the
+	  target, so gcc/clang/rustc/go and headers live in a distrobox.
+	  Buildroot 2026.08 does not ship it.
+
+	  https://distrobox.it

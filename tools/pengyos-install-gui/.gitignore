@@ -1,0 +1,12 @@
+# Rust build artifacts
+/target
+**/target
+Cargo.lock.orig
+
+# Cargo registry cache (local only)
+.cargo
+
+# Editor / OS noise
+*.swp
+.DS_Store
+

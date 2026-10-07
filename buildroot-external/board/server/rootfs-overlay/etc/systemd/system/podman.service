@@ -1,0 +1,28 @@
+# ============================================================================
+# PengyOS Server — podman.service (Podman API service)
+# ----------------------------------------------------------------------------
+# Serves the Docker-compatible Podman API on the socket handed over by
+# podman.socket (`podman system service`). Added 2026-09-24: podman.socket
+# referenced this unit (its default Service=) but it was never shipped, so the
+# socket could not be activated even once it could listen.
+#
+# Type=notify: `podman system service` signals readiness via sd_notify, so the
+# unit reports active only once the API is actually accepting connections.
+# The socket owns the lifecycle (Sockets=podman.socket on the socket side), so
+# this unit is started on demand and does not need its own [Install] enable line
+# beyond being pulled in by the socket.
+# ============================================================================
+
+[Unit]
+Description=Podman API Service
+Documentation=man:podman-system-service(1)
+Requires=podman.socket
+After=podman.socket network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/podman system service --time=0
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

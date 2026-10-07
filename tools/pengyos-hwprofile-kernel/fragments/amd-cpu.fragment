@@ -1,0 +1,6 @@
+# AMD CPU family base build.
+# Single concern: the AMD CPU-family kernel features this machine needs —
+# AMD frequency scaling (the amdpm driver) and the AMD northbridge bus.
+CONFIG_CPU_FREQ=y
+CONFIG_CPU_FREQ_AMDPM=y
+CONFIG_AMD_NB=y

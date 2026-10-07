@@ -1,0 +1,15 @@
+config BR2_PACKAGE_POWER_PROFILES_DAEMON
+	bool "power-profiles-daemon"
+	depends on BR2_PACKAGE_SYSTEMD
+	depends on BR2_PACKAGE_POLKIT
+	select BR2_PACKAGE_LIBGLIB2
+	select BR2_PACKAGE_LIBGUDEV
+	select BR2_PACKAGE_UPOWER
+	help
+	  Power profiles (performance / balanced / power-saver) over
+	  D-Bus (org.freedesktop.UPower.PowerProfiles) — what COSMIC's
+	  power menu and Settings → Power switch between. Drives
+	  intel_pstate / amd-pstate energy preferences and platform
+	  profiles. Buildroot 2026.08 does not ship it.
+
+	  https://gitlab.freedesktop.org/upower/power-profiles-daemon

@@ -1,0 +1,20 @@
+# ============================================================================
+# PengyOS — display the post-login banner (etc/motd) as a systemd unit
+# ----------------------------------------------------------------------------
+# A single-session systemd build still wants an explicit, inspectable way to
+# show the /etc/motd banner on login. This oneshot cats the banner; it is
+# enabled to run at session start. Kept as a plain unit (not a drop-in) so it
+# carries its own [Unit] + [Service] sections, mirroring a real shipped unit.
+# ============================================================================
+
+[Unit]
+Description=PengyOS login banner (cat /etc/motd)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/cat /etc/motd
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+// PengyOS: the admin (wheel) installs, updates and removes apps from the COSMIC
+// Store without a password prompt, from their own active local session — as on
+// Ubuntu and Fedora. Anything else flatpak asks for falls to the admin rule
+// (50-pengyos-admin.rules: wheel, with a password).
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.Flatpak.app-install" ||
+         action.id == "org.freedesktop.Flatpak.runtime-install" ||
+         action.id == "org.freedesktop.Flatpak.app-update" ||
+         action.id == "org.freedesktop.Flatpak.runtime-update" ||
+         action.id == "org.freedesktop.Flatpak.app-uninstall" ||
+         action.id == "org.freedesktop.Flatpak.runtime-uninstall" ||
+         action.id == "org.freedesktop.Flatpak.modify-repo") &&
+        subject.active && subject.local && subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

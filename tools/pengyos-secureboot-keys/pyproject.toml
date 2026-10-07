@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-secureboot-keys"
+version = "0.1.0"
+description = "Manage PengyOS Secure Boot key material (PK/KEK/db) and sign UKIs."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "secure-boot", "uefi", "sbsign", "uki", "efi"]
+# Standard library only at runtime. `pytest` is a dev-only dependency.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+pengyos-sbkeys = "pengyos_sbkeys.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_sbkeys*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

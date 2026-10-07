@@ -1,0 +1,37 @@
+[metadata]
+hostname = "pengyos-desktop"
+kernel = "6.8.0-pengyos"
+tool_version = "0.4.0"
+
+[cpu]
+vendor = "GenuineIntel"
+model = "Intel Core i7-12700"
+cores = 12
+threads = 20
+mhz = 3600.0
+
+[[gpu]]
+bus = "0000:00:02.0"
+driver = "i915"
+model = "UHD Graphics 770"
+vendor = "Intel Corporation"
+
+[[storage]]
+bus = "nvme"
+model = "Intel SSD 670p"
+serial = "PHDV345601XY"
+size_bytes = 1000204886016
+transport = "NVMe"
+
+[[storage]]
+bus = "sata"
+model = "Samsung SSD 870 EVO"
+serial = "S3Z9NB0K999999"
+size_bytes = 2000398934016
+transport = "SATA"
+
+[[network]]
+interface = "enp0s3"
+mac = "00:11:22:33:44:56"
+driver = "e1000e"
+speed_mbps = 1000

@@ -1,0 +1,16 @@
+# PengyOS Core — sshd configuration.
+#
+# Key-only root access: the image is reachable over SSH using the public key
+# injected at build time into /root/.ssh/authorized_keys
+# (see board/core/post-build.sh, PENGYOS_AUTHORIZED_KEYS_FILE).
+# Console access is unaffected (the serial getty autologins).
+Port 22
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+UsePAM no
+# No PAM on Core: sshd prints /etc/motd itself.
+PrintMotd yes
+Subsystem sftp /usr/libexec/sftp-server

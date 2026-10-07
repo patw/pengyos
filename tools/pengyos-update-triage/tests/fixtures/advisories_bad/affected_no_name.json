@@ -1,0 +1,9 @@
+{
+  "id": "CVE-2024-9999",
+  "affected": [
+    {
+      "package": { "ecosystem": "alpine" },
+      "ranges": []
+    }
+  ]
+}

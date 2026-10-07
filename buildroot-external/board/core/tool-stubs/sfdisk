@@ -1,0 +1,8 @@
+#!/bin/sh
+# PengyOS stub: 'sfdisk' is intentionally not shipped on this image.
+# It ships a helpful pointer so an agent (or a human) knows the alternative.
+cat >&2 <<'MSG'
+PengyOS: 'sfdisk' is not installed in this image.
+  instead, use: parted or fdisk
+MSG
+exit 127

@@ -1,0 +1,7 @@
+
+PengyOS Desktop -- https://pengyos.catbee.ca
+  pengy-cli              ask Pengy, the built-in assistant
+  pengyos-guest enter dev
+                         a development box (compilers, SDKs) that shares your home
+  pengyos-autologin      turn automatic login to the desktop on or off
+

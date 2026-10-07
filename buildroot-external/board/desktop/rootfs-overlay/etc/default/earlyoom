@@ -1,0 +1,6 @@
+# earlyoom (PengyOS Desktop): when both free RAM and free swap run low, kill the
+# process the kernel would pick, before the machine freezes. The session's own
+# processes are avoided; browser tabs and Electron apps go first.
+# earlyoom.service passes $EARLYOOM_ARGS split on whitespace, with no shell
+# quoting: the patterns must not contain spaces or quotes ("." for a space).
+EARLYOOM_ARGS="-r 0 -m 4 -s 10 --avoid (^|/)(cosmic-comp|cosmic-session|cosmic-panel|Xwayland|pipewire|wireplumber|dbus-daemon|systemd|sshd)$ --prefer (^|/)(Web.Content|Isolated.Web.Co|firefox|chrome|chromium|electron|code)$"

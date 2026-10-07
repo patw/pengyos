@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=COSMIC
+Comment=This session logs you into the COSMIC desktop
+Exec=/usr/libexec/pengyos/start-cosmic
+Type=Application
+DesktopNames=COSMIC

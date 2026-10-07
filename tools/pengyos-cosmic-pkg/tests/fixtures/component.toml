@@ -1,0 +1,22 @@
+# Fixture component manifest for the `vendor` subtask.
+#
+# This is a *hermetic test fixture* (see tests/fixtures/README.md): it describes
+# one demo COSMIC component (`cosmic-demo`) that depends — over git — on
+# `smithay-clipboard`. It is consumed by tests/test_vendor.py to exercise the
+# git-rewrite path fully offline. It is NOT the hand-checkable demo manifest
+# (that lives at examples/cosmic-text.toml).
+
+name = "cosmic-demo"
+git_url = "https://github.com/pop-os/cosmic-demo"
+tag = "v0.1.0"
+license = "MIT OR Apache-2.0"
+
+features = ["default"]
+binaries = ["cosmic-demo"]
+
+# The single git dependency. `vendor` rewrites this git source to the vendored
+# path and copies the checked-out crate from fixtures/workspace/git-sources/.
+[[deps]]
+name = "smithay-clipboard"
+git_url = "https://github.com/pop-os/smithay-clipboard"
+tag = "v0.6.0"

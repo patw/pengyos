@@ -1,0 +1,10 @@
+config BR2_PACKAGE_FZF
+	bool "fzf"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_GO
+	help
+	  fzf is a command-line fuzzy finder: an interactive,
+	  multi-purpose filter over a list of options driven by
+	  your input.
+
+	  https://github.com/junegunn/fzf

@@ -1,0 +1,59 @@
+{
+  "options": {
+    "edition": "server",
+    "luks": false,
+    "swap_size": 0
+  },
+  "partitions": [
+    {
+      "fs": "vfat",
+      "guid": "6DA4DA21-B529-4965-8365-A25600000000",
+      "luks": false,
+      "mount": "/boot/efi",
+      "name": "esp",
+      "role": "esp",
+      "size": 268435456,
+      "start": 0,
+      "type_guid": "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
+    },
+    {
+      "fs": "ext4",
+      "guid": "6DA4DA21-B529-4965-8365-A25600000001",
+      "luks": false,
+      "mount": "/",
+      "name": "rootA",
+      "role": "rootA",
+      "size": 8589934592,
+      "start": 268435456,
+      "type_guid": "0FC63DA8-8483-4772-8E79-3D69D8477DE4"
+    },
+    {
+      "fs": "ext4",
+      "guid": "6DA4DA21-B529-4965-8365-A25600000002",
+      "luks": false,
+      "mount": "/mnt/b",
+      "name": "rootB",
+      "role": "rootB",
+      "size": 8589934592,
+      "start": 8858370048,
+      "type_guid": "0FC63DA8-8483-4772-8E79-3D69D8477DE4"
+    },
+    {
+      "fs": "btrfs",
+      "guid": "6DA4DA21-B529-4965-8365-A25600000003",
+      "luks": false,
+      "mount": "/data",
+      "name": "data",
+      "role": "data",
+      "size": 53418655744,
+      "start": 17448304640,
+      "type_guid": "9FS2FC2B-66DA-4464-BF7D-6011622C226C"
+    }
+  ],
+  "probe": {
+    "device": "/dev/sda",
+    "is_live": false,
+    "sector_size": 512,
+    "total_size": 70866960384
+  }
+}

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-netctl"
+version = "0.1.0"
+description = "PengyOS server-firewall CLI: default-deny nftables ruleset + WireGuard config generator (US-SRV-5)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "nftables", "wireguard", "firewall", "server", "US-SRV-5"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Networking",
+    "Topic :: Security",
+]
+# YAML spec loading; the nft validator and WireGuard key handling are
+# standard-library only.
+dependencies = ["PyYAML>=5.3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+pengyos-netctl = "pengyos_netctl.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_netctl*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: opt-in real-system test (needs root + PENGYOS_IT=1)",
+]

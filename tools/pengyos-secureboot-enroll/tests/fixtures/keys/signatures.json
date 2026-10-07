@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "bindings": [
+    {
+      "path": "/EFI/systemd/systemd-bootx64.efi",
+      "sha256": "503e9e57a71d6b2507fad58bf96a4b27fdc3cd8672f5cab94a24e2dcde838439",
+      "key_id": "ff6c69ebc0f5ed73ceaef43d92a567edfb3ce1dd550c0ca1f06a8d81dab31df7",
+      "signature": "007a769c47a29fab42563ccf8cf2218ec328ae20537098f59ee76f24904ad755663fb2b7550017d95d35a7e5552fe0164569def9a04693d8b6313d472902ed04",
+      "signer": "stdlib-ed25519"
+    },
+    {
+      "path": "/EFI/BOOT/BOOTX64.EFI",
+      "sha256": "7777fc7e30bfacf1f6e6d97996ce5eb49e38697e926ebe2633fc353bf81dc5bc",
+      "key_id": "ff6c69ebc0f5ed73ceaef43d92a567edfb3ce1dd550c0ca1f06a8d81dab31df7",
+      "signature": "67c6a389593f67da2cbf0b2d4f446a10c2b93964d282922aa9ee1a5b5f7f8f165a9cf4ccca6ee9d69cd5bfecff128dab74d923d652a608fe0991f2932089370a",
+      "signer": "stdlib-ed25519"
+    },
+    {
+      "path": "/EFI/Linux/pengyos-server+1.0.0-a.efi",
+      "sha256": "946f7e853412313a39aed3480babb879f27cca7dbd146147f0778ffefcaea507",
+      "key_id": "ff6c69ebc0f5ed73ceaef43d92a567edfb3ce1dd550c0ca1f06a8d81dab31df7",
+      "signature": "3572a5b92191125cc70ef0e7cb3730f2732d501438e9e1782c854dc41ff9ff11d33bde58d3107c90ea7261e6df9af46d1aded021781f6d1ff67973190eba0b09",
+      "signer": "stdlib-ed25519"
+    }
+  ]
+}

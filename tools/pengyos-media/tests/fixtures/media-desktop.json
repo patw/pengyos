@@ -1,0 +1,28 @@
+{
+  "boot_entry": {
+    "kind": "efi",
+    "label": "PengyOS",
+    "loader": "/EFI/BOOT/bootx64.efi"
+  },
+  "edition": "desktop",
+  "installer": {
+    "binary": "pengyos-install",
+    "live_user": "live"
+  },
+  "kind": "iso",
+  "live_rootfs": {
+    "format": "squashfs",
+    "label": "PENGYOS-LIVE",
+    "name": "pengyos-live.sqfs"
+  },
+  "os_release": {
+    "id": "desktop",
+    "pretty_name": "PengyOS",
+    "version_id": ""
+  },
+  "release": {
+    "channel": "testing",
+    "edition": "desktop",
+    "version": "2026.09.1"
+  }
+}

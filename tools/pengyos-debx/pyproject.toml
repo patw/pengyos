@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-debx"
+version = "0.1.0"
+description = "Bounded deb/rpm extractor for PengyOS: extract to an isolated prefix, list maintainer scripts, analyse DT_NEEDED — never executes scripts."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["deb", "rpm", "pengyos", "extractor", "elf", "dt_needed", "sandbox", "linux"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Systems Administration",
+]
+# The tool prefers the Python standard library; any third-party dependency
+# must be declared here.
+dependencies = []
+
+[project.optional-dependencies]
+# Test-only dependency. Declare runtime deps above, dev deps under this extra.
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-debx = "pengyos_debx.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Make the src-layout package importable during tests without an editable
+# install (this environment is PEP 668 externally-managed).
+pythonpath = ["src"]
+addopts = "-ra"

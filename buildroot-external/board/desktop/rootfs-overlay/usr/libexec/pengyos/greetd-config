@@ -1,0 +1,54 @@
+#!/bin/sh
+# Write greetd's config for this boot (greetd.service ExecStartPre).
+#
+# The login screen is always COSMIC's greeter. Automatic login is added only
+# when chosen: /etc/pengyos/autologin.conf, in GDM's custom.conf format so that
+# AccountsService's SetAutomaticLogin (what settings apps call) reads and
+# writes the same file:
+#   [daemon]
+#   AutomaticLoginEnable=True
+#   AutomaticLogin=alex
+# `pengyos-autologin on|off` edits it. The live stick (PENGYOS-PAYLOAD
+# partition) logs root in automatically.
+set -eu
+CONF=/etc/pengyos/autologin.conf
+OUT=/run/greetd/config.toml
+mkdir -p /run/greetd
+
+user=""
+if [ -e /dev/disk/by-label/PENGYOS-PAYLOAD ]; then
+    user=root
+elif [ -f "$CONF" ]; then
+    enable=$(sed -n 's/^[[:space:]]*AutomaticLoginEnable[[:space:]]*=[[:space:]]*//p' "$CONF" | tail -n1)
+    case "$enable" in
+        [Tt]rue|1|[Yy]es)
+            user=$(sed -n 's/^[[:space:]]*AutomaticLogin[[:space:]]*=[[:space:]]*//p' "$CONF" | tail -n1)
+            ;;
+    esac
+    # Only a real account (and never root on an installed system).
+    if [ -n "$user" ] && { [ "$user" = root ] || ! getent passwd "$user" >/dev/null; }; then
+        echo "greetd-config: ignoring automatic login for '$user' (no such user, or root)" >&2
+        user=""
+    fi
+fi
+
+{
+    echo '[terminal]'
+    echo 'vt = 1'
+    echo
+    echo '[general]'
+    echo '# PAM service for users'"'"' sessions (password logins and the automatic one).'
+    echo 'service = "pengyos-session"'
+    echo
+    echo '[default_session]'
+    echo 'command = "/usr/libexec/pengyos/cosmic-greeter-start"'
+    echo 'user = "cosmic-greeter"'
+    if [ -n "$user" ]; then
+        echo
+        echo '[initial_session]'
+        echo 'command = "/usr/libexec/pengyos/start-cosmic"'
+        echo "user = \"$user\""
+    fi
+} > "$OUT.new"
+mv "$OUT.new" "$OUT"
+echo "greetd-config: automatic login: ${user:-off}"

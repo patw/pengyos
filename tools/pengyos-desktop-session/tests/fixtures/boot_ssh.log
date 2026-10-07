@@ -1,0 +1,15 @@
+== systemd ==
+cosmic-comp.service                   loaded   active   running  COSMIC Compositor
+cosmic-session@1000.service           loaded   active   running  PengyOS COSMIC session (cosmic-session@.service)
+pipewire.service                      loaded   active   running  PipeWire Sound Server
+wireplumber.service                   loaded   active   running  WirePlumber session manager
+xdg-desktop-portal-cosmic.service     loaded   active   running  COSMIC portals
+== processes ==
+cosmic-comp
+cosmic-session
+cosmic-panel
+pipewire
+wireplumber
+xdg-desktop-portal-cosmic
+== wayland ==
+/run/user/1000/wayland-0

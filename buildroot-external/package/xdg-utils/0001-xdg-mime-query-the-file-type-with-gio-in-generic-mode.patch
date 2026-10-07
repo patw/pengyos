@@ -1,0 +1,25 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] xdg-mime: query the file type with gio in generic mode
+
+Desktops xdg-utils does not know (COSMIC) run the generic backend, which
+needs `mimetype` (Perl File::MimeInfo) or `file` to find a file's type, so
+`xdg-open FILE` failed on an image that ships neither. GLib's `gio info`
+reads the shared-mime-info database -- the one the desktop itself uses --
+so prefer it when it is installed.
+
+Upstream: not submitted
+---
+--- a/scripts/xdg-mime.in
++++ b/scripts/xdg-mime.in
+@@ -128,7 +128,10 @@
+ 
+ info_generic()
+ {
+-    if mimetype --version >/dev/null 2>&1; then
++    if gio help info >/dev/null 2>&1; then
++        DEBUG 1 "Running gio info \"$1\""
++        gio info "$1" 2> /dev/null | grep standard::content-type | cut -d' ' -f4
++    elif mimetype --version >/dev/null 2>&1; then
+         DEBUG 1 "Running mimetype --brief --dereference \"$1\""
+         mimetype --brief --dereference "$1"
+     else

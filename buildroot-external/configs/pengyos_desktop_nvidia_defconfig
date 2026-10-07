@@ -1,0 +1,999 @@
+# ============================================================================
+# GENERATED — do not edit. pengyos_desktop_nvidia_defconfig = core + server + desktop + nvidia-compute + nvidia
+# Edit buildroot-external/configs/layers/*.config, then run
+# scripts/compose-defconfigs.py (docs: configs/layers/README.md).
+# ============================================================================
+
+# ############################################################################
+# ## layer: core
+# ############################################################################
+
+# ============================================================================
+# PengyOS Core — the systemd base every edition builds on
+# ----------------------------------------------------------------------------
+# The core layer of the external-tree (BR2_EXTERNAL) defconfigs; its board glue
+# is board/core.
+#
+# Buildroot defconfigs are bare filenames (no ".defconfig" suffix).
+#
+# Every symbol below exists in Buildroot 2026.08 (verified against
+# buildroot-2026.08's kconfig sources). Buildroot silently ignores unknown
+# symbols in a defconfig, so a made-up BR2_ name is a silent no-op — the
+# symbol-existence verifier (tests/test_symbol_verifier.py) checks every name
+# here against the vendored 2026.08 kconfig list (data/buildroot-2026.08-
+# symbols.txt) and fails the suite on any symbol Buildroot would drop.
+# ============================================================================
+
+# --- Architecture -----------------------------------------------------------
+# x86-64 (choice symbol; the toolchain/endianness details follow from it).
+BR2_x86_64=y
+
+# --- Toolchain / C library --------------------------------------------------
+# systemd will not run on musl/uClibc: BR2_INIT_SYSTEMD depends on
+# BR2_TOOLCHAIN_USES_GLIBC. Selecting the glibc C library for the Buildroot
+# (internal) toolchain satisfies that. (BR2_TOOLCHAIN_BUILDROOT is selected
+# implicitly by the C-library choice; BR2_TOOLCHAIN_HAS_THREADS comes along
+# with any dynamic glibc toolchain.)
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
+BR2_TOOLCHAIN_HAS_THREADS=y
+
+# --- Reproducible builds -----------------------------------------------------
+# UTC + C locale, fixed kernel build user/host/timestamp, SOURCE_DATE_EPOCH
+# everywhere (scripts/release.sh pins it to the PengyOS commit date). Buildroot
+# only promises identical output for the same output directory: build from the
+# same absolute paths on every host you compare.
+BR2_REPRODUCIBLE=y
+
+# --- System init ------------------------------------------------------------
+# systemd is PID 1.
+BR2_INIT_SYSTEMD=y
+# systemd-analyze (blame / critical-chain): measure where boot time goes on
+# real hardware; the journal alone does not show per-unit durations.
+BR2_PACKAGE_SYSTEMD_ANALYZE=y
+
+# --- System name / accounts -------------------------------------------------
+# BR2_TARGET_GENERIC_HOSTNAME: set by the desktop layer
+# Root password placeholder "pengyos" (override with a real hash in a secure
+# build). Given pre-hashed, with a fixed salt: Buildroot would hash a clear-text
+# value with a random salt, and two builds of one commit would differ in
+# /etc/shadow. `openssl passwd -5 -salt pengyosroot pengyos`, each $ doubled.
+BR2_TARGET_GENERIC_ROOT_PASSWD="$$5$$pengyosroot$$0NxsYkraU5R8qP3TNBTMVJ3Pt2EVVGKNU6vJ9ljsW99"
+
+# --- Serial console / getty -------------------------------------------------
+# Buildroot has no BR2_SERIAL symbol: the serial console IS a getty on a
+# serial port. ttyS0 (the qemu serial line, wired by the kernel fragment's
+# serial8250) hosts the login prompt; the rootfs-overlay ships the
+# getty@.service autologin drop-in that logs in without a password.
+BR2_TARGET_GENERIC_GETTY_PORT="ttyS0"
+
+# --- Userspace packages -----------------------------------------------------
+# D-Bus: the systemd userspace messaging bus.
+BR2_PACKAGE_DBUS=y
+# Core utilities: GNU coreutils. (uutils-coreutils is not a Buildroot package
+# in 2026.08 — the BR2_PACKAGE_UUTILS_COREUTILS name does not exist.)
+BR2_PACKAGE_COREUTILS=y
+# util-linux: the 2026.08 top-level BR2_PACKAGE_UTIL_LINUX package no longer
+# exists; the binaries are split into per-tool subpackages. systemd needs
+# mount/umount/losetup/fsck/swap, which BR2_PACKAGE_UTIL_LINUX_MOUNT ships.
+BR2_PACKAGE_UTIL_LINUX_MOUNT=y
+BR2_PACKAGE_KMOD=y
+BR2_PACKAGE_IPROUTE2=y
+# procps-ng: the real ps/top/free (core utils, SPEC §2.1). BusyBox also ships
+# a ps applet, but procps-ng's is the full-featured one.
+BR2_PACKAGE_PROCPS_NG=y
+BR2_PACKAGE_BASH=y
+BR2_PACKAGE_NFTABLES=y
+BR2_PACKAGE_CHRONY=y
+BR2_PACKAGE_CA_CERTIFICATES=y
+BR2_PACKAGE_OPENSSL=y
+# GNU tar: BusyBox's tar applet has no -z/-J and no --ignore-failed-read, so the
+# nightly pengyos-backup failed every run and every upstream "curl … | tar xz"
+# install line (uv, Go, Syncthing) broke. BusyBox defers to it (noclobber).
+BR2_PACKAGE_TAR=y
+
+# --- SSH (US-CORE-2: reach a headless node over the network) ----------------
+# openssh-server, enabled at boot by the overlay symlink
+# etc/systemd/system/multi-user.target.wants/sshd.service. KEY_UTILS ships
+# ssh-keygen, which sshd.service runs (ssh-keygen -A) to mint host keys on
+# first boot. Root login is key-only (PasswordAuthentication no in the overlay
+# sshd_config); inject a public key at build time via PENGYOS_AUTHORIZED_KEYS_FILE
+# (see board/core/post-build.sh).
+BR2_PACKAGE_OPENSSH=y
+BR2_PACKAGE_OPENSSH_SERVER=y
+BR2_PACKAGE_OPENSSH_CLIENT=y
+BR2_PACKAGE_OPENSSH_KEY_UTILS=y
+
+# --- Hardware firmware (real-hardware support: GPU, wired NIC, WiFi) ---------
+# On the N100 weather station /lib/firmware was empty: i915 (Alder Lake-N GPU)
+# failed to load DMC/GuC firmware and WiFi had no regulatory.db. Ship the small
+# subset an Intel mini-PC actually needs (not all of linux-firmware).
+BR2_PACKAGE_LINUX_FIRMWARE=y
+BR2_PACKAGE_LINUX_FIRMWARE_I915=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_8169=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_9XXX=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_QUZ=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E=y
+# AX200 = iwlwifi-cc-a0 (Buildroot ships it under the 22260 option); miniserv.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22260=y
+# Intel Wireless 8265 (iwlwifi-8265) — behothinkpad.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8265=y
+# Realtek RTL8821CE (rtw88) — behobasement.
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW88=y
+# Broader firmware so the "boot anywhere" stick works on other hardware: AMD GPU,
+# Atheros/Broadcom/Realtek WiFi families.
+BR2_PACKAGE_LINUX_FIRMWARE_AMDGPU=y
+BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_6174=y
+BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_11K_WCN6855=y
+BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XXX=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW89=y
+# regulatory.db — required for any WiFi regulatory domain.
+BR2_PACKAGE_WIRELESS_REGDB=y
+
+# --- Installer / rescue tooling (future: install PengyOS to a target disk) ---
+# The stick doubles as a rescue/installer: partition a target disk (parted /
+# sgdisk / fdisk), format it (mke2fs / mkfs.vfat / btrfs), and make it bootable
+# (grub-install + efibootmgr). grub-install/grub-mkimage/grub-mkconfig come from
+# BR2_TARGET_GRUB2_INSTALL_TOOLS. fdisk is already present via util-linux.
+BR2_PACKAGE_E2FSPROGS=y
+BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y
+BR2_PACKAGE_DOSFSTOOLS=y
+BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
+BR2_PACKAGE_DOSFSTOOLS_FSCK_FAT=y
+BR2_PACKAGE_PARTED=y
+BR2_PACKAGE_BTRFS_PROGS=y
+BR2_PACKAGE_EXFATPROGS=y
+BR2_PACKAGE_EFIBOOTMGR=y
+BR2_PACKAGE_DMIDECODE=y
+BR2_PACKAGE_RSYNC=y
+BR2_PACKAGE_CRYPTSETUP=y
+BR2_PACKAGE_LVM2=y
+BR2_PACKAGE_UTIL_LINUX_FSCK=y
+BR2_PACKAGE_UTIL_LINUX_PARTX=y
+BR2_PACKAGE_UTIL_LINUX_WIPEFS=y
+BR2_TARGET_GRUB2_INSTALL_TOOLS=y
+
+# --- Python (agent-operable OS) ---------------------------------------------
+# Agents script in Python constantly for tasks beyond shell. Ship a
+# batteries-included interpreter + the common stdlib extension modules so an
+# agent (and a human) can operate the system comfortably.
+BR2_PACKAGE_PYTHON3=y
+BR2_PACKAGE_PYTHON3_SSL=y          # ssl / https
+BR2_PACKAGE_PYTHON3_ZLIB=y
+BR2_PACKAGE_PYTHON3_BZIP2=y
+BR2_PACKAGE_PYTHON3_XZ=y
+BR2_PACKAGE_PYTHON3_ZSTD=y
+BR2_PACKAGE_PYTHON3_SQLITE=y       # sqlite3
+BR2_PACKAGE_PYTHON3_READLINE=y     # interactive REPL
+BR2_PACKAGE_PYTHON3_CURSES=y
+BR2_PACKAGE_PYTHON3_PYEXPAT=y      # xml
+BR2_PACKAGE_PYTHON3_UNICODEDATA=y
+BR2_PACKAGE_PYTHON3_DECIMAL=y
+
+# --- Pengy: the built-in agent ------------------------------------------------
+# package/pengy (PengyR): one Rust agent core, three front ends — pengy-cli in
+# every edition, pengy-web from Server, the Qt6 desktop app from Desktop. Ships
+# unconfigured; each user points it at their model (~/.config/pengy).
+BR2_PACKAGE_PENGY=y
+BR2_PACKAGE_PENGY_CLI=y
+
+# --- Rootfs overlay ---------------------------------------------------------
+# $(BR2_EXTERNAL_PENGYOS_PATH) is the absolute path to this external tree
+# (Buildroot exports it because external.desc names the tree "PENGYOS");
+# absolute board-file references keep the target working from any output dir.
+# BR2_ROOTFS_OVERLAY: set by the desktop layer
+
+# --- Kernel -----------------------------------------------------------------
+# Pin the kernel explicitly — never a floating "latest" (SPEC §1.6).
+BR2_LINUX_KERNEL=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="7.2.5"
+# Kernel headers: use a series Buildroot 2026.08 knows (7.1). Headers <= kernel
+# is the correct relationship; AS_KERNEL starves glibc's dependency check when
+# Buildroot does not yet know the kernel's series (learned on the first builds).
+BR2_KERNEL_HEADERS_7_1=y
+# Build the qemu x86_64 defconfig kernel, then layer the systemd fragment on
+# top (BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES). The fragment supplies the
+# kernel symbols systemd needs at boot (virtio, devtmpfs, serial8250, ext4).
+BR2_LINUX_KERNEL_USE_DEFCONFIG=y
+BR2_LINUX_KERNEL_DEFCONFIG="x86_64"
+# BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES: set by the desktop layer
+
+# --- Root filesystem (ext4) --------------------------------------------------
+# 1G: the base system is ~70M, but the firmware set + installer tooling above
+# (i915/amdgpu/wifi firmware, e2fsprogs/parted/btrfs/xfs) add up to hundreds of MB.
+BR2_TARGET_ROOTFS_EXT2=y
+BR2_TARGET_ROOTFS_EXT2_4=y
+# BR2_TARGET_ROOTFS_EXT2_SIZE: set by the nvidia layer
+# Post-build tweaks: hostname, provenance copy, GRUB menu install.
+# BR2_ROOTFS_POST_BUILD_SCRIPT: set by the desktop layer
+
+# --- Bootable USB/disk image: GRUB2 (UEFI) + genimage -------------------------
+# BR2_TARGET_GRUB2 is a *menuconfig* in Buildroot 2026.08 — a valid symbol,
+# settable in defconfigs like any other bool.
+BR2_TARGET_GRUB2=y
+BR2_TARGET_GRUB2_X86_64_EFI=y
+# Video/gfxterm modules so GRUB can draw a full-screen menu with a real font.
+# The stock EFI module list has no video/terminal support, so GRUB falls back to
+# the firmware's tiny 80x25 text mode.
+# serial: grub.cfg probes for a real UART before adding console=ttyS0.
+# BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI: set by the server layer
+BR2_PACKAGE_HOST_DOSFSTOOLS=y
+BR2_PACKAGE_HOST_GENIMAGE=y
+BR2_PACKAGE_HOST_MTOOLS=y
+# post-image.sh stamps the rootfs UUID into grub.cfg + genimage.cfg and
+# assembles the GPT disk image with genimage.
+# BR2_ROOTFS_POST_IMAGE_SCRIPT: set by the desktop layer
+
+# --- Swap on zram (every edition) ---------------------------------------------
+# No edition had any swap: running out of RAM froze the machine. zram-generator
+# (our package) makes /dev/zram0 a zstd-compressed swap device at boot, sized
+# min(RAM, 8 GiB) of uncompressed data, as Fedora and Pop!_OS do. Kernel side:
+# board/core/linux.fragment.
+BR2_PACKAGE_ZRAM_GENERATOR=y
+# util-linux's mkswap/swapon (and the rest of its basic set): systemd-makefs
+# and the generated swap unit drive them with options BusyBox's applets lack
+# ("Usage: mkswap [-L LBL] BLOCKDEV", zram swap failed). zramctl to inspect it.
+# BR2_PACKAGE_UTIL_LINUX_BINARIES: set by the server layer
+BR2_PACKAGE_UTIL_LINUX_ZRAMCTL=y
+BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_PENGYOS_PATH)/patches"
+
+# ############################################################################
+# ## layer: server
+# ############################################################################
+
+# ============================================================================
+# PengyOS Server layer — Core + remote work + services
+# ----------------------------------------------------------------------------
+# Stacked on layers/core.config (everything Core has, Server has). Adds the
+# server toolset (mosh, tmux, ripgrep, jq, the comfort-CLI set), rootless
+# podman, and the server board (overlay: firewall, monitoring,
+# backup, sshd config). See configs/layers/README.md.
+# ============================================================================
+
+# --- Toolchain ---------------------------------------------------------------
+# C++ runtime: mosh is C++, and it is silently dropped without a C++ toolchain
+# (the same trap Core hit). Enable it up front so the Server toolset holds.
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+
+# --- System name --------------------------------------------------------------
+# BR2_TARGET_GENERIC_HOSTNAME: set by the desktop layer
+
+# --- Userspace: Server toolset ----------------------------------------------
+# tmux — persistent terminal sessions for servers/remote admin.
+BR2_PACKAGE_TMUX=y
+# mosh — remote shell with roaming/handoff (works across NAT and flaky links).
+BR2_PACKAGE_MOSH=y
+# ripgrep — server-side text search.
+BR2_PACKAGE_RIPGREP=y
+# jq — JSON on the command line (config/data wrangling, backup manifests).
+BR2_PACKAGE_JQ=y
+
+# --- Userspace: Server comfort-CLI set (US-SRV-1) --------------------
+BR2_PACKAGE_BAT=y
+BR2_PACKAGE_EZA=y
+BR2_PACKAGE_FD=y
+BR2_PACKAGE_ZOXIDE=y
+
+# --- Userspace: rootless podman ---------------------------------------------
+# podman — the rootless container engine the Server edition runs on. The
+# overlay's podman.socket + drop-in make it usable without a privileged
+# daemon; the package supplies the `podman` binary.
+BR2_PACKAGE_PODMAN=y
+
+# --- The developer (US-DEV-*, US-DSK-3) ------------------------------------------
+# Every Server is a build box (and so is every Desktop, which stacks on this).
+# Python and its stdlib modules come from Core (ssl, zlib, sqlite, xz/bz2/zstd,
+# readline, curses, expat, decimal); this adds the CJK codecs and pip. `pip install --user`, venvs and uv work against it; wheels that need
+# compiling do so in the distrobox (below).
+BR2_PACKAGE_PYTHON3_CODECSCJK=y
+BR2_PACKAGE_PYTHON_PIP=y
+BR2_PACKAGE_PYTHON_SETUPTOOLS=y
+# Shells and source control. zsh is the Desktop installer's default shell for
+# the user it creates; root keeps bash.
+BR2_PACKAGE_ZSH=y
+BR2_PACKAGE_NCURSES_WCHAR=y
+BR2_PACKAGE_GIT=y
+# The toolchain lane: Buildroot cannot put a compiler on the target (by design,
+# since 2012). gcc/clang/rustc/go/headers live in a distrobox container
+# (podman) that shares $HOME and feels native — our package.
+BR2_PACKAGE_DISTROBOX=y
+# util-linux's standard tools (rev — distrobox-enter needs it —, findmnt, lsblk,
+# a blkid that knows btrfs, …) instead of busybox's cut-down applets.
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+# curl: every "install X" line (rustup, uv, …) and distrobox itself expect it;
+# busybox wget cannot do HTTPS.
+BR2_PACKAGE_LIBCURL=y
+BR2_PACKAGE_LIBCURL_CURL=y
+# The openssl command: pengyos-update checks release signatures (ed25519) with
+# it, so the updater carries no crypto code of its own; also handy for admins.
+BR2_PACKAGE_LIBOPENSSL_BIN=y
+# FUSE (kernel CONFIG_FUSE_FS via libfuse3's kconfig fixup, plus fusermount3):
+# rclone mount, sshfs-style tools, AppImages. The Desktop already pulled it in
+# through its portals; the Server had no /dev/fuse at all.
+BR2_PACKAGE_LIBFUSE3=y
+
+# --- The installer + the partition & state layout (docs/state-layout.md) -------
+# Server and Desktop install the same way: the USB stick carries the image as a
+# payload, `pengyos-install image` lays it onto a disk as ESP + two root slots +
+# a btrfs data partition, and installed systems boot the root READ-ONLY through
+# preinit. The engine and the console installer are stdlib-only Python
+# (post-build.sh installs them). What they need beyond Core:
+#   zstd    the payload is zstd-compressed
+#   sgdisk  partitioning + relabelling (GUIDs, backup GPT) the installed disk
+#   sudo    the created user is the admin (wheel; overlay: /etc/sudoers.d/wheel)
+BR2_PACKAGE_ZSTD=y
+BR2_PACKAGE_GPTFDISK=y
+BR2_PACKAGE_GPTFDISK_SGDISK=y
+BR2_PACKAGE_SUDO=y
+# Login sessions: PAM + systemd-logind, so an SSH (or console) login is a real
+# logind session — /run/user/UID, the user's systemd manager and a delegated
+# cgroup. Rootless podman (and so distrobox) needs that: without it runc failed
+# with "rootless needs no limits + no cgrouppath" for every SSH user.
+# sshd uses PAM (overlay: /etc/pam.d/sshd, UsePAM yes) but stays key-only.
+BR2_PACKAGE_LINUX_PAM=y
+# File permissions (board/server/permissions.txt): unix_chkpwd
+# setuid so pam_unix can check an unprivileged user's password.
+BR2_ROOTFS_DEVICE_TABLE="system/device_table.txt $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/permissions.txt"
+BR2_PACKAGE_SYSTEMD_LOGIND=y
+# GRUB: Core's modules + loadenv/test — the installed grub.cfg picks the root
+# slot from grubenv.
+BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux ext2 fat part_msdos part_gpt normal efi_gop gfxterm gfxmenu font all_video videoinfo loadenv test smbios serial"
+
+# --- Board: server ----------------------------------------------
+# The Server's overlay (sshd config, nftables firewall, monitoring + backup
+# timers, podman socket, rootless-podman defaults) and post-build stack on
+# Core's; the post-image script replaces Core's.
+# BR2_ROOTFS_OVERLAY: set by the desktop layer
+# BR2_ROOTFS_POST_BUILD_SCRIPT: set by the desktop layer
+# BR2_ROOTFS_POST_IMAGE_SCRIPT: set by the desktop layer
+# Kernel: stacked on Core's fragment (fragments accumulate across layers).
+# BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES: set by the desktop layer
+
+# --- Pengy web UI (package/pengy; the CLI comes from Core) --------------------
+BR2_PACKAGE_PENGY_WEB=y
+
+# ############################################################################
+# ## layer: desktop
+# ############################################################################
+
+# ============================================================================
+# PengyOS Desktop layer — Server + the graphical stack + apps + full hardware
+# ----------------------------------------------------------------------------
+# Stacked on layers/core.config + layers/server.config (everything Server has,
+# Desktop has). Adds the Wayland/COSMIC stack, desktop hardware support, the
+# installer, and the developer set, on the desktop board.
+# See configs/layers/README.md.
+# ============================================================================
+
+# --- System name --------------------------------------------------------------
+BR2_TARGET_GENERIC_HOSTNAME="pengyos-desktop"
+
+# --- Userspace additions to the base -------------------------------------------
+# polkit: authorizes the flatpak system helper so cosmic-store can INSTALL apps
+# (the helper routes privileged writes through org.freedesktop.PolicyKit1).
+BR2_PACKAGE_POLKIT=y
+# --- Flatpak: the app lane (SPEC §2.5) ----------------------------------------
+# Built from source (package/flatpak, with package/appstream and
+# package/libfyaml) — it used to be copied from the build host by post-build.
+BR2_PACKAGE_FLATPAK=y
+# update-desktop-database for flatpak's install trigger ("Open with" sees new apps).
+BR2_PACKAGE_DESKTOP_FILE_UTILS_TARGET=y
+# --- Flatpak sandbox runtime (bwrap + xdg-dbus-proxy) -------------------------
+# flatpak EXECs two runtime helpers for every app run that weren't staged, so
+# `flatpak run org.mozilla.firefox` died:
+#   error: Failed to execute child process "bwrap" (No such file or directory)
+# and, once bwrap was present,
+#   bwrap: execvp xdg-dbus-proxy: No such file or directory
+#   error: Failed to sync with dbus proxy
+# The app-lane's whole point is the sandbox, so build both into the image
+# (both are stock Buildroot 2026.08 meson recipes, same class as flatpak).
+# bubblewrap installs /usr/bin/bwrap setuid (1755 root:root) so it works even
+# where unprivileged user namespaces are off; xdg-dbus-proxy is the filtered
+# D-Bus proxy the sandbox talks through. Verified end-to-end on the flashed
+# Desktop image: with both on PATH, `flatpak run --command=sh … -c` reaches
+# SANDBOX_OK as the desktop user.
+BR2_PACKAGE_BUBBLEWRAP=y
+BR2_PACKAGE_XDG_DBUS_PROXY=y
+# hicolor-icon-theme: the freedesktop fallback theme's index.theme with a
+# section per directory. Icon lookup ignores any directory without one, so
+# COSMIC's hicolor-only icons (e.g. cosmic-settings' Dark/Light illustrations
+# in scalable/status) resolved to nothing.
+BR2_PACKAGE_HICOLOR_ICON_THEME=y
+
+# --- Board: desktop ------------------------------------------------
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/rootfs-overlay $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/rootfs-overlay $(BR2_EXTERNAL_PENGYOS_PATH)/board/desktop/rootfs-overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/post-build.sh $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/post-build.sh $(BR2_EXTERNAL_PENGYOS_PATH)/board/desktop/post-build.sh"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_PENGYOS_PATH)/board/desktop/post-image.sh"
+# Kernel: the desktop fragment (DRM, audio, Wi-Fi/BT, input, filesystems, …)
+# stacked on Core's and Server's (fragments accumulate across layers).
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/linux.fragment $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/linux.fragment $(BR2_EXTERNAL_PENGYOS_PATH)/board/desktop/linux.fragment"
+# The whole system image. ~2.2G used with the full desktop hardware stack
+# (firmware ~350M, the COSMIC apps ~800M — each statically links its GUI
+# toolkit — Mesa + LLVM, the media driver). Installed systems grow it to their
+# 8 GiB root slot (docs/state-layout.md), so it must stay under 8G.
+# 2.5G used at 3000M (92%) once Xwayland/X11 landed; 3500M then 4000M (the
+# distro-parity additions, 2026-09-30). Slots are 8 GiB.
+# BR2_TARGET_ROOTFS_EXT2_SIZE: set by the nvidia layer
+
+# --- Graphics: Mesa (EGL/GBM/GLES) -------------------------------------------
+# virgl: QEMU's virtio-gpu-gl. llvmpipe: the software rasterizer (LLVM JIT,
+# already in the image for radeonsi) EGL/GBM needs when the DRM device has no
+# GPU driver — a VM, or on real hardware the firmware framebuffer (simpledrm) of
+# a GPU we have no driver for. (softpipe, Mesa's slow reference rasterizer,
+# comes along with lavapipe below.)
+BR2_PACKAGE_MESA3D=y
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_VIRGL=y
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_LLVMPIPE=y
+BR2_PACKAGE_MESA3D_GBM=y
+BR2_PACKAGE_MESA3D_OPENGL_EGL=y
+BR2_PACKAGE_MESA3D_OPENGL_ES=y
+# Fonts: fontconfig/FreeType, and DejaVu as the wide-coverage fallback (COSMIC's
+# own fonts are below).
+BR2_PACKAGE_FONTCONFIG=y
+BR2_PACKAGE_FREETYPE=y
+BR2_PACKAGE_DEJAVU=y
+
+# --- Locales ----------------------------------------------------------------
+# COSMIC, GTK and Qt need a valid UTF-8 locale.
+BR2_GENERATE_LOCALE="en_US.UTF-8 C.UTF-8"
+
+# --- Portals (screenshots, file pickers, sandboxed apps) ---------------------
+# xdg-desktop-portal and COSMIC's backend are our packages (Buildroot has
+# neither; package/xdg-desktop-portal fetches its libglnx and gvdb meson
+# subprojects at pinned revisions).
+BR2_PACKAGE_XDG_DESKTOP_PORTAL=y
+BR2_PACKAGE_COSMIC_PORTAL=y
+# The portals COSMIC's backend doesn't implement (even upstream: it has only
+# Access, FileChooser, RemoteDesktop, Screenshot, Settings, ScreenCast), as
+# Pop!_OS ships them: portals.conf says "cosmic;gtk". Without an AppChooser
+# backend xdg-desktop-portal doesn't offer OpenURI at all, so Flatpak apps
+# could not open a link or a file in another app; Inhibit, Notification,
+# Print, DynamicLauncher were missing too. Needs GTK3 on the host (Wayland +
+# X11 backends; not Broadway, GTK-in-a-web-browser).
+BR2_PACKAGE_LIBGTK3=y
+# BR2_PACKAGE_LIBGTK3_BROADWAY is not set
+BR2_PACKAGE_XDG_DESKTOP_PORTAL_GTK=y
+
+# --- Mesa hardware drivers ---------------------------------------------------
+# Without a hardware driver Mesa falls back to software GL, which has no
+# dmabuf import, so cosmic-comp cannot composite client buffers ("Dmabuf import
+# extension not available": grey screen, no panel). Intel: iris (Gen8+, incl.
+# the N100's Gen12). NVIDIA uses NVIDIA's driver (layers/nvidia.config).
+BR2_PACKAGE_MESA3D_LLVM=y
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_IRIS=y
+# AMD: radeonsi (GL), radv (Vulkan), libdrm_amdgpu, firmware; LLVM for both.
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_RADEONSI=y
+BR2_PACKAGE_MESA3D_VULKAN_DRIVER_AMD=y
+BR2_PACKAGE_LIBDRM_AMDGPU=y
+BR2_PACKAGE_LINUX_FIRMWARE_RADEON=y
+BR2_PACKAGE_LLVM=y
+
+# --- Vulkan -----------------------------------------------------------------
+# COSMIC's apps render through wgpu, which wants Vulkan; without it wgpu falls
+# back to its GL backend, and that backend draws only the LAST canvas of a
+# window: cosmic-monitor showed one graph, in the wrong place, left over from
+# the previous page (behoweather N100 and QEMU llvmpipe, 2026-09-30; the
+# tiny-skia renderer draws the same window correctly). The image had radv but
+# no Vulkan loader, so not even AMD machines used Vulkan.
+# anv (Intel, the N100's Gen12) and lavapipe (CPU: VMs, and a GPU we have no
+# driver for) join radv; the loader picks the device.
+BR2_PACKAGE_VULKAN_LOADER=y
+BR2_PACKAGE_MESA3D_VULKAN_DRIVER_INTEL=y
+BR2_PACKAGE_MESA3D_VULKAN_DRIVER_SWRAST=y
+
+# --- X11 apps: Xwayland -----------------------------------------------------------
+# Steam (and most games through it), plus any app that still only speaks X11,
+# need an X server; cosmic-comp starts Xwayland at login when it finds it on
+# PATH (else it logs "Running without Xwayland"). No Xorg server: the session
+# stays Wayland, X11 clients are windows in it. The X.org client libraries this
+# pulls in are also what NVIDIA's Vulkan driver links (layers/nvidia.config).
+# - libepoxy: Xwayland's glamor, so X11 apps draw on the GPU, not pixman.
+# - GLX: X11 OpenGL apps. Mesa's GLX beside its VA-API drivers requires
+#   libglvnd (Mesa then ships as a glvnd vendor, as on every distro); the
+#   NVIDIA driver plugs into the same libglvnd.
+# - xkbcomp: Xwayland compiles its keymap with it at startup and exits without.
+BR2_PACKAGE_XORG7=y
+BR2_PACKAGE_XWAYLAND=y
+BR2_PACKAGE_XAPP_XKBCOMP=y
+BR2_PACKAGE_LIBEPOXY=y
+BR2_PACKAGE_LIBGLVND=y
+BR2_PACKAGE_MESA3D_OPENGL_GLX=y
+
+# --- GPU firmware (linux-firmware subset) ------------------------------------
+# Without firmware i915 logs adlp_dmc.bin/tgl_guc_70.bin -ENOENT and declares
+# the GPU wedged (no hardware GL). i915 is a module (=m in linux.fragment) so it
+# loads after the rootfs and can find these; a built-in driver with no
+# initramfs never does.
+# Wi-Fi firmware for the drivers in linux.fragment (the N100's Intel CNVi had no
+# driver or firmware: no wlan interface at all).
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22000=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7921=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7922=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_88XX=y
+# The wireless regulatory database (cfg80211: "regulatory.db failed with error
+# -2" without it -> world-roaming limits), and the Realtek r8169 NIC firmware
+# (rtl8168h-2.fw on the N100; it runs without, but the vendor fixes are in it).
+# Bluetooth firmware for btusb (linux.fragment): Intel (ibt-*, the N100's AX101
+# Bluetooth), Realtek, MediaTek.
+BR2_PACKAGE_LINUX_FIRMWARE_IBT=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_87XX_BT=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_88XX_BT=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7921_BT=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7922_BT=y
+
+# --- Input: libinput ------------------------------------------------------------
+# cosmic-comp links libinput.so.10. It used to arrive only because Weston
+# selected it; once Weston went (10-01) a fresh build had none, and 26.10.3's
+# compositor exited at start (127). Name it here. (board/common/
+# check-needed-libs.py now fails the build on any unresolved library.)
+BR2_PACKAGE_LIBINPUT=y
+
+# --- Seat management (libseat) -----------------------------------------------
+# cosmic-comp acquires the DRM device through smithay's libseat backend and
+# must become DRM *master* to drive the scanout. Buildroot auto-selects
+# BR2_PACKAGE_SEATD_BUILTIN when neither logind nor the seatd *daemon* is on;
+# with the builtin backend the compositor logs
+#   smithay::backend::drm::device::fd: Unable to become drm master,
+#   assuming unprivileged mode
+# and the screen stays black. Ship the seatd daemon so libseat's seatd backend
+# can activate the VT and hand out a DRM-master device (logind, below, serves
+# the login1 API alongside it).
+BR2_PACKAGE_SEATD=y
+BR2_PACKAGE_SEATD_DAEMON=y
+# --- Power / session D-Bus API (systemd-logind) ------------------------------
+# COSMIC's power actions (cosmic-osd restart/shutdown confirm, the Power
+# settings page, cosmic-idle suspend, lid/power-key handling) all call
+# org.freedesktop.login1 on the system bus. Without logind the confirm dialog
+# failed with "ServiceUnknown: org.freedesktop.login1" and nothing happened.
+# logind runs ALONGSIDE seatd: the session still gets its DRM master from seatd
+# (LIBSEAT_BACKEND=seatd in start-cosmic and cosmic-greeter-start); logind only serves the
+# login1 API. systemd is built with polkit support (-Dpolkit=enabled) so logind
+# authorizes callers through the polkit daemon already in the image (root is
+# allowed regardless). (logind itself: Server layer.)
+# NOT via BR2_PACKAGE_SYSTEMD_POLKIT: that makes systemd depend on polkit, while
+# polkit's logind session tracking (external.mk) needs libsystemd first -- a
+# dependency cycle that broke any build of systemd after polkit. external.mk
+# sets the meson option instead; systemd needs polkit only at runtime.
+# BR2_PACKAGE_SYSTEMD_POLKIT is not set
+# --- Networking (pengyos-desktop-net) ----------------------------------------
+# The Desktop ships its network defaults as a build-consumed overlay in
+# board/desktop/rootfs-overlay (NetworkManager config, wpa_supplicant,
+# the COSMIC panel default pinning cosmic-applet-network, cosmic-settings
+# network defaults) — see tools/pengyos-desktop-net. That overlay is merged into
+# the image via BR2_ROOTFS_OVERLAY above, and the conflicting systemd-networkd
+# ethernet stub was removed (NetworkManager is the sole network service).
+#
+# Wi-Fi backend: wpa_supplicant is a real Buildroot 2026.08 symbol and configures
+# cleanly (it selects BR2_PACKAGE_WPA_SUPPLICANT_NL80211, the driver interface
+# NetworkManager's wpa_supplicant plugin drives).
+BR2_PACKAGE_WPA_SUPPLICANT=y
+# NetworkManager drives wpa_supplicant over D-Bus (it starts it as `-u`); built
+# without D-Bus it printed its usage and exited, so on the N100 NM showed the
+# Wi-Fi as enabled but "unavailable" with no networks ("Failed to D-Bus activate
+# wpa_supplicant service"). WPA3 (SAE) for current routers, EAP for WPA2/3-
+# Enterprise (work/campus networks), autoscan for roaming.
+BR2_PACKAGE_WPA_SUPPLICANT_DBUS=y
+BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y
+BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
+BR2_PACKAGE_WPA_SUPPLICANT_EAP=y
+BR2_PACKAGE_WPA_SUPPLICANT_AUTOSCAN=y
+# NetworkManager is THE network service on the Desktop (the overlay pins it, the
+# wpa_supplicant backend above is what it drives). It is a stock 2026.08 package
+# (BR2_PACKAGE_NETWORK_MANAGER, package/network-manager/): enabling it pulls dbus,
+# libglib2, util-linux and the keyfile plugin the overlay's /etc/NetworkManager
+# config expects. nmcli (BR2_PACKAGE_NETWORK_MANAGER_CLI) gives the installer a
+# CLI path to the same service. With NM owning the link and the networkd stub
+# removed, NM is the sole network service.
+BR2_PACKAGE_NETWORK_MANAGER=y
+BR2_PACKAGE_NETWORK_MANAGER_CLI=y
+# Wi-Fi hotspot ("share this connection"): NetworkManager's shared mode starts
+# /usr/sbin/dnsmasq for the DNS + DHCP lease pool. external.mk names that path so
+# the build is host-independent, but the image carried no dnsmasq, so a hotspot
+# could never come up. Ship it. Buildroot's dnsmasq only installs an init script
+# under sysvinit, and PengyOS is systemd, so this adds the binary and nothing
+# that starts by itself: NM spawns it per shared connection.
+BR2_PACKAGE_DNSMASQ=y
+# ...but Buildroot builds systemd-networkd by default, and removing the .network
+# stub left networkd itself enabled: systemd-networkd-wait-online then waited
+# out its 2-minute timeout on every boot and failed. NM is the network service,
+# so don't build networkd at all.
+# BR2_PACKAGE_SYSTEMD_NETWORKD is not set
+# The GUI path to Wi-Fi: cosmic-applet-network (in the cosmic-applets package)
+# lives in the cosmic-build release, so post-build.sh drops it into the image
+# (it is NOT a Buildroot recipe). The emitted panel default pins it, and
+# cosmic-settings' network page serves over NetworkManager.
+
+# --- Audio + Bluetooth ---------------------------------------------------------
+# PipeWire + WirePlumber (policy and units in the board overlay), BlueZ.
+# WirePlumber's scripts need Lua 5.3; set it first so its `depends on` holds.
+BR2_PACKAGE_LUA=y
+BR2_PACKAGE_LUA_5_3=y
+BR2_PACKAGE_PIPEWIRE=y
+BR2_PACKAGE_WIREPLUMBER=y
+# PipeWire's Bluetooth audio (the bluez5 SPA plugin) needs SBC — without it
+# WirePlumber logged "PipeWire's BlueZ SPA plugin is missing" and headphones
+# could never play. Opus = a better Bluetooth codec; V4L2 = webcams via PipeWire.
+BR2_PACKAGE_SBC=y
+BR2_PACKAGE_OPUS=y
+BR2_PACKAGE_PIPEWIRE_V4L2=y
+# UPower: batteries, UPS and power state for the panel's battery applet and
+# Settings → Power. Without it the applet could not tell there is no battery and
+# showed "0%" on the (battery-less) N100. lm-sensors: `sensors` for temperatures.
+BR2_PACKAGE_UPOWER=y
+BR2_PACKAGE_LM_SENSORS=y
+BR2_PACKAGE_ALSA_LIB=y
+# ALSA UCM configuration (alsa-ucm-conf, a PengyOS data recipe — Buildroot has
+# none). PipeWire/WirePlumber's UCM path reads /usr/share/alsa/ucm2 to build the
+# card's profiles; without it the HDA card only got a generic Analog profile and
+# the monitor's HDMI speakers never appeared (Sound settings showed only "line
+# out"). Paired with the WirePlumber rule in the board overlay that selects the
+# UCM path (api.alsa.use-acp=false).
+BR2_PACKAGE_ALSA_UCM_CONF=y
+BR2_PACKAGE_BLUEZ5_UTILS=y
+
+# --- Media playback: GStreamer + FFmpeg ----------------------------------------
+# COSMIC Player (iced_video_player: playbin -> videoconvert -> appsink) could
+# play nothing: gst-plugins-base had no appsink, and there were no demuxers or
+# decoders at all (only base's playback/typefind). The Pop!_OS/Fedora set:
+# containers (MP4, MKV/WebM, Ogg, AVI, FLV, MPEG-TS/PS), parsers, FLAC/MP3/
+# Vorbis/Opus/VPx natively, everything else (H.264, HEVC, AAC, AC-3, …)
+# through gst-libav's FFmpeg decoders, AV1 through dav1d, and VA-API hardware
+# decode (va). Audio: alsasink, which ALSA routes into PipeWire
+# (99-pipewire-default.conf); autoaudiosink picks it. The ffmpeg/ffprobe tools
+# and gst-launch/gst-inspect/gst-play come with them.
+BR2_PACKAGE_GSTREAMER1_INSTALL_TOOLS=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_INSTALL_TOOLS=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_APP=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_ALSA=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_AUDIORATE=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_VIDEORATE=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_RAWPARSE=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_SUBPARSE=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_GIO=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_OGG=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_OPUS=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_VORBIS=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_THEORA=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_AUDIOTESTSRC=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_VIDEOTESTSRC=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_JPEG=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PNG=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_APETAG=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_AUDIOFX=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_AUDIOPARSERS=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_AUTODETECT=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_AVI=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_DEINTERLACE=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_FLV=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_ICYDEMUX=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_ID3DEMUX=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_ISOMP4=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_MATROSKA=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_REPLAYGAIN=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_VIDEOFILTER=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_WAVPARSE=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_FLAC=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_MPG123=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_VPX=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_V4L2=y
+BR2_PACKAGE_GST1_PLUGINS_BAD=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_AIFF=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_AUTOCONVERT=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_ID3TAG=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_IVFPARSE=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_MPEGDEMUX=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_MPEGTSDEMUX=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_SUBENC=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_VIDEOPARSERS=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_HLS=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_DASH=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_VA=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_WEBP=y
+BR2_PACKAGE_GST1_LIBAV=y
+BR2_PACKAGE_DAV1D=y
+BR2_PACKAGE_LIBVPX=y
+BR2_PACKAGE_MPG123=y
+BR2_PACKAGE_FLAC=y
+BR2_PACKAGE_LIBVORBIS=y
+BR2_PACKAGE_LIBTHEORA=y
+BR2_PACKAGE_LIBOGG=y
+BR2_PACKAGE_FFMPEG=y
+BR2_PACKAGE_FFMPEG_GPL=y
+BR2_PACKAGE_FFMPEG_FFMPEG=y
+BR2_PACKAGE_FFMPEG_FFPROBE=y
+BR2_PACKAGE_FFMPEG_SWSCALE=y
+# PipeWire's GStreamer elements (pipewiresrc: cameras and screen capture into
+# GStreamer apps).
+BR2_PACKAGE_PIPEWIRE_GSTREAMER=y
+
+# --- Gaming: controllers and GameMode -----------------------------------------
+# Steam is a Flatpak and cannot install udev rules: without Valve's, controllers
+# (and Steam Input's virtual pads through /dev/uinput) and VR headsets were not
+# accessible to the user. GameMode backs the portal interface Flatpak games
+# already see (xdg-desktop-portal offered GameMode with nothing behind it).
+BR2_PACKAGE_STEAM_DEVICES=y
+BR2_PACKAGE_GAMEMODE=y
+
+# --- Out of memory: earlyoom --------------------------------------------------
+# With swap on zram (core layer), a runaway app would otherwise grind the
+# desktop until the kernel's OOM killer acts, minutes later. earlyoom acts
+# first (config: overlay /etc/default/earlyoom). Not systemd-oomd: it kills
+# whole cgroups, and the COSMIC session is one service cgroup, so it would
+# kill the whole desktop.
+BR2_PACKAGE_EARLYOOM=y
+
+# --- Intel laptop audio: SOF firmware (kernel driver in linux.fragment) --------
+BR2_PACKAGE_SOF_FIRMWARE=y
+
+
+# --- Login screen and the desktop user's session (greetd, PAM + logind) --------
+# greetd (our package) runs COSMIC's greeter at boot (overlay greetd.service);
+# the password it takes opens the user's session through PAM (pengyos-session),
+# and pam_systemd makes it a real logind session on seat0 — /run/user/UID, the user's systemd manager
+# (PipeWire), polkit's "active session" (NetworkManager, Settings, Flatpak), and
+# loginctl lock-session. PAM + logind themselves come from the Server layer.
+# The user is in wheel: sudo (Server layer) + a polkit admin rule (overlay)
+# make it the admin.
+# The `seat` group seatd grants its socket to (seatd -g seat), so the desktop
+# user can run the compositor; the users table also adds the greeter's user.
+# Automatic login is opt-in (installer, `pengyos-autologin`), as on Ubuntu.
+BR2_PACKAGE_GREETD=y
+BR2_ROOTFS_USERS_TABLES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/desktop/users.table"
+
+# --- Full hardware control (desktop) -------------------------------------------
+# Hardware video decode/encode: VA-API with Intel's iHD driver (Broadwell and
+# newer, incl. the N100's Gen12 GPU) and Mesa's Gallium VA for AMD (radeonsi);
+# `vainfo` to check it.
+BR2_PACKAGE_INTEL_MEDIADRIVER=y
+BR2_PACKAGE_MESA3D_GALLIUM_VA=y
+BR2_PACKAGE_LIBVA_UTILS=y
+# Thermal management for Intel (DPTF-aware; matters on fanless boxes) and power
+# profiles for COSMIC's power menu / Settings → Power (our package: Buildroot has
+# none). powerprofilesctl needs PyGObject.
+BR2_PACKAGE_THERMALD=y
+BR2_PACKAGE_POWER_PROFILES_DAEMON=y
+BR2_PACKAGE_PYTHON_GOBJECT=y
+# Firmware updates from LVFS (UEFI capsules incl. the system firmware, SSDs,
+# docks, …). fwupd-efi is the capsule loader it stages on the ESP (/efi).
+BR2_PACKAGE_FWUPD=y
+BR2_PACKAGE_FWUPD_EFI=y
+# fwupd-efi's build runs host `uswid`, which imports lzma; Buildroot's recipe
+# does not pull the host Python's xz support in ("No module named '_lzma'").
+BR2_PACKAGE_HOST_PYTHON3_XZ=y
+# Disk health (SMART, NVMe) and the TPM 2.0 userspace.
+BR2_PACKAGE_SMARTMONTOOLS=y
+BR2_PACKAGE_NVME=y
+# With tpm2-tss present systemd is built with TPM2 support, and its
+# systemd-tpm2-generator makes early boot WAIT (90 s) for /dev/tpmrm0 whenever it
+# believes the firmware has a TPM but no driver is bound yet — on a VM or a board
+# whose firmware reports a TPM that never appears, every boot stalled 90 s behind
+# the splash. Nothing here needs the TPM during early boot (no TPM-bound disk
+# unlock), so the overlay masks the generator
+# (etc/systemd/system-generators/systemd-tpm2-generator -> /dev/null).
+BR2_PACKAGE_TPM2_TSS=y
+BR2_PACKAGE_TPM2_TOOLS=y
+# Removable media: UDisks2 (what COSMIC Files mounts drives through, via GIO/gvfs;
+# also fwupd's ESP discovery) and gvfs (its UDisks2 volume monitor is enabled by
+# the gvfs recipe when UDisks is on). Neither was installed, so plugging in a
+# drive did nothing. Plus the tools to check/format the filesystems the kernel
+# now mounts (linux.fragment).
+BR2_PACKAGE_UDISKS=y
+# The user folders (Downloads, Documents, …): created at session start
+# (the session script, /usr/libexec/pengyos/start-cosmic). Also what COSMIC Files' sidebar lists.
+BR2_PACKAGE_XDG_USER_DIRS=y
+# The Secret Service (org.freedesktop.secrets, our package): where browsers,
+# VS Code, the GitHub CLI … keep passwords and tokens. There was none —
+# portals.conf already named oo7-portal for the Secret portal, but nothing
+# provided it. oo7 is the Rust replacement for gnome-keyring.
+BR2_PACKAGE_OO7=y
+# A mouse cursor theme (our package): there was none, so cosmic-comp logged
+# "Unable to load xcursor, using fallback cursor" and drew one arrow for every
+# shape (no text I-beam, no resize arrows); X11 apps got the bare X cursor.
+BR2_PACKAGE_POP_CURSOR_THEME=y
+BR2_PACKAGE_GVFS=y
+BR2_PACKAGE_DOSFSTOOLS_FATLABEL=y
+BR2_PACKAGE_NTFS_3G=y
+BR2_PACKAGE_NTFS_3G_NTFSPROGS=y
+BR2_PACKAGE_XFSPROGS=y
+# Printing (CUPS + filters; USB printers use the usblp driver) and scanning
+# (SANE backends), cameras over PTP (libgphoto2, gvfs's gphoto2 backend).
+BR2_PACKAGE_CUPS=y
+BR2_PACKAGE_CUPS_FILTERS=y
+BR2_PACKAGE_SANE_BACKENDS=y
+# Network discovery for printers and scanners (mDNS/DNS-SD). Without avahi CUPS
+# was built --with-dnssd=no and cups-browsed/SANE's escl backend could find
+# nothing: no network printer or scanner ever appeared. With it, driverless
+# (IPP Everywhere / AirPrint) printers show up in every print dialog on their
+# own. sane-airscan: driverless network scanners (eSCL / WSD). The firewall
+# lets mDNS in (Server layer nftables.conf).
+BR2_PACKAGE_AVAHI=y
+BR2_PACKAGE_AVAHI_DAEMON=y
+# nss-mdns: programs resolve name.local through avahi ("ssh behoserver.local"
+# failed). The package adds mdns4_minimal to nsswitch.conf itself.
+BR2_PACKAGE_NSS_MDNS=y
+BR2_PACKAGE_SANE_AIRSCAN=y
+BR2_PACKAGE_LIBGPHOTO2=y
+# Hardware inspection and control: real lsusb/lspci with ID names (busybox's
+# have none), DMI/SMBIOS, I2C, disk and NIC tuning, Wi-Fi, the UEFI boot
+# manager, lshw, ACPI events.
+BR2_PACKAGE_USBUTILS=y
+BR2_PACKAGE_PCIUTILS=y
+BR2_PACKAGE_HWDATA=y
+BR2_PACKAGE_HWDATA_PCI_IDS=y
+BR2_PACKAGE_HWDATA_USB_IDS=y
+BR2_PACKAGE_HWDATA_PNP_IDS=y
+BR2_PACKAGE_I2C_TOOLS=y
+BR2_PACKAGE_HDPARM=y
+BR2_PACKAGE_ETHTOOL=y
+BR2_PACKAGE_IW=y
+BR2_PACKAGE_LSHW=y
+# Our packages (buildroot-external/package): phones over MTP (and gvfs's MTP
+# backend, external.mk), monitor control over DDC/CI, Thunderbolt/USB4 authorization.
+BR2_PACKAGE_LIBMTP=y
+BR2_PACKAGE_DDCUTIL=y
+BR2_PACKAGE_BOLT=y
+# Audio tools: pw-play / pw-record / pw-cat (PipeWire builds them only with
+# libsndfile) and alsa-utils (aplay, speaker-test, alsamixer) — there was no way
+# to play a test sound from a shell.
+BR2_PACKAGE_LIBSNDFILE=y
+BR2_PACKAGE_ALSA_UTILS=y
+BR2_PACKAGE_ALSA_UTILS_APLAY=y
+BR2_PACKAGE_ALSA_UTILS_ALSAMIXER=y
+BR2_PACKAGE_ALSA_UTILS_SPEAKER_TEST=y
+BR2_PACKAGE_ALSA_UTILS_AMIXER=y
+
+# --- Everyday apps not in COSMIC -----------------------------------------------
+# xdg-open / xdg-mime & co. (our package; not in stock Buildroot): scripts and
+# "open with the default app" from the command line. COSMIC runs xdg-utils'
+# generic backend, patched to ask gio for file types (no `file` in the image).
+BR2_PACKAGE_XDG_UTILS=y
+# Boot splash (our package): Pengy + a spinner from early userspace until the
+# COSMIC session takes the screen (greetd.service.d/x-plymouth-handoff).
+# Needs `splash` on the kernel command line (grub-efi.cfg, pengyos-install).
+BR2_PACKAGE_PLYMOUTH=y
+# COSMIC's sound theme (our package; also answers COSMIC's "Pop" lookups) +
+# the freedesktop theme it selects: notification, volume, battery and plug
+# sounds. Before this /usr/share/sounds held only ALSA's test files.
+BR2_PACKAGE_COSMIC_SOUND_THEME=y
+# Fonts (our packages): Fira Sans/Mono, the interface and monospace fonts
+# COSMIC defaults to (the UI was falling back to DejaVu), and Noto Color Emoji
+# (emoji were empty boxes or monochrome DejaVu glyphs). DejaVu stays as the
+# wide-coverage fallback.
+BR2_PACKAGE_FONT_FIRA=y
+BR2_PACKAGE_FONT_NOTO_COLOR_EMOJI=y
+# Pengy desktop app (package/pengy; CLI from Core, web UI from Server): Qt6
+# Widgets/Network/Svg, native on Wayland (qt6wayland), pinned first in the
+# dock (post-build favorites). Qt's text/image stack uses the system fontconfig,
+# harfbuzz, PNG/JPEG; D-Bus for portals and the system theme.
+BR2_PACKAGE_QT6=y
+BR2_PACKAGE_QT6BASE_GUI=y
+BR2_PACKAGE_QT6BASE_WIDGETS=y
+BR2_PACKAGE_QT6BASE_NETWORK=y
+BR2_PACKAGE_QT6BASE_OPENGL=y
+BR2_PACKAGE_QT6BASE_FONTCONFIG=y
+BR2_PACKAGE_QT6BASE_HARFBUZZ=y
+BR2_PACKAGE_QT6BASE_PNG=y
+BR2_PACKAGE_QT6BASE_JPEG=y
+BR2_PACKAGE_QT6BASE_DBUS=y
+BR2_PACKAGE_QT6SVG=y
+BR2_PACKAGE_QT6WAYLAND=y
+BR2_PACKAGE_PENGY_GUI=y
+# cutecosmic (our package): the Qt platform theme that makes Qt apps follow
+# COSMIC's dark/light mode, accent, fonts, icons and file dialogs; loaded
+# automatically inside the COSMIC session. Built without Qt Quick (patch).
+BR2_PACKAGE_CUTECOSMIC=y
+# The image viewer is COSMIC Viewer (pop-os/cosmic-viewer, built on the host
+# with the other COSMIC apps; post-build installs it). It decodes in Rust, so it
+# needs no image libraries here. The overlay's
+# /usr/share/applications/mimeapps.list makes it the default for images (and
+# COSMIC Edit / Player / Files for text / media / folders).
+
+# ============================================================================
+# Desktop parity, tier 2 (2026-09-30): what Pop!_OS / Fedora / Ubuntu desktops
+# have that COSMIC's own apps use or users expect.
+# ============================================================================
+# COSMIC Settings: Region & Language talks to systemd-localed (locale1), and
+# Users to AccountsService (our package) -- both pages were empty.
+BR2_PACKAGE_SYSTEMD_LOCALED=y
+# Screen brightness survives a reboot: systemd-backlight saves each backlight's
+# level at shutdown (/var/lib/systemd/backlight, on the data partition) and
+# restores it at boot; without it laptops started at the firmware's dim default.
+BR2_PACKAGE_SYSTEMD_BACKLIGHT=y
+BR2_PACKAGE_ACCOUNTSSERVICE=y
+# "Launch using discrete graphics" (launcher, dock, app library, store) asks
+# switcheroo-control (our package) which GPUs there are: hybrid laptops. Its
+# unit is WantedBy=graphical.target and not D-Bus activatable; we boot to
+# multi-user.target, so the overlay enables it there.
+BR2_PACKAGE_SWITCHEROO_CONTROL=y
+# VPNs in the network settings (OpenVPN; WireGuard is built into
+# NetworkManager, wg for the command line) and mobile broadband modems.
+BR2_PACKAGE_OPENVPN=y
+BR2_PACKAGE_NETWORK_MANAGER_OPENVPN=y
+BR2_PACKAGE_WIREGUARD_TOOLS=y
+BR2_PACKAGE_NETWORK_MANAGER_MODEM_MANAGER=y
+# Printers: driverless USB printers/scanners through ipp-usb (our package; they
+# appear to CUPS and SANE like network ones), and drivers for older printers
+# that aren't driverless: Gutenprint (Canon, Epson, …) and HPLIP (HP).
+BR2_PACKAGE_IPP_USB=y
+BR2_PACKAGE_GUTENPRINT=y
+BR2_PACKAGE_HPLIP=y
+# Chinese, Japanese and Korean text (our package: Noto Sans CJK, variable).
+BR2_PACKAGE_FONT_NOTO_CJK=y
+# Thumbnails in COSMIC Files for videos (ffmpegthumbnailer, our package) and
+# PDFs (poppler's pdftocairo; overlay /usr/share/thumbnailers).
+BR2_PACKAGE_FFMPEGTHUMBNAILER=y
+BR2_PACKAGE_POPPLER=y
+BR2_PACKAGE_POPPLER_UTILS=y
+# Bluetooth audio codecs beyond SBC/Opus: AAC (fdk-aac: Apple and most
+# headphones), aptX/aptX HD (libfreeaptx) and LDAC (ldacbt: Sony) -- our
+# packages, wired into PipeWire in external.mk -- and LC3 (LE Audio).
+BR2_PACKAGE_FDK_AAC=y
+BR2_PACKAGE_LIBLC3=y
+BR2_PACKAGE_LIBFREEAPTX=y
+BR2_PACKAGE_LDACBT=y
+# gpg's passphrase prompt in terminals (gnupg2 is in the image).
+BR2_PACKAGE_PINENTRY=y
+BR2_PACKAGE_PINENTRY_NCURSES=y
+
+# ############################################################################
+# ## layer: nvidia-compute
+# ############################################################################
+
+# ============================================================================
+# PengyOS NVIDIA compute layer — the opt-in proprietary driver, headless half
+# ----------------------------------------------------------------------------
+# Stacked on core + server for the Server NVIDIA edition, and under the nvidia
+# (graphics) layer for the Desktop NVIDIA. Never part of a default image.
+#
+# The driver is our nvidia-open package: NVIDIA's open GPU kernel modules plus
+# the matching proprietary userspace, both from one .run (Turing / RTX 20 and
+# newer — the fleet is RTX 30 + RTX 50). Here it is the compute half only:
+# kernel modules, GSP firmware, CUDA, NVML (nvidia-smi), NVENC/NVDEC, MPS.
+# Buildroot's own nvidia-driver package is the legacy 390 branch: it stops at
+# Pascal and does not build on our kernel.
+# ============================================================================
+
+BR2_PACKAGE_NVIDIA_OPEN=y
+# A headless GPU keeps its state between CUDA jobs (the nvidia layer turns this
+# back off: it would keep a laptop's dGPU powered).
+# BR2_PACKAGE_NVIDIA_OPEN_PERSISTENCED: set by the nvidia layer
+
+# GPUs in containers: nvidia-ctk writes a CDI spec when the driver loads, and
+# podman shares the GPUs with `--device nvidia.com/gpu=all` (llama.cpp and
+# friends as quadlets). distrobox --nvidia (the cuda dev box) works without it.
+BR2_PACKAGE_NVIDIA_CONTAINER_TOOLKIT=y
+
+# The driver's compute userspace + GSP firmware add ~350 MB to the Server.
+# BR2_TARGET_ROOTFS_EXT2_SIZE: set by the nvidia layer
+
+# ############################################################################
+# ## layer: nvidia
+# ############################################################################
+
+# ============================================================================
+# PengyOS Desktop NVIDIA layer — the driver's graphics half (Tier-2)
+# ----------------------------------------------------------------------------
+# Stacked on core + server + desktop + nvidia-compute (which selects the driver
+# itself: nvidia-open, CUDA, the container toolkit). Never part of the default
+# Desktop. This layer adds what a Wayland desktop needs from it.
+#
+# Host Vulkan is on: NVIDIA ships its Vulkan ICD inside libGLX_nvidia, which
+# links the X.org client libraries; the Desktop layer has those for Xwayland.
+# Without it the loader found only lavapipe, and COSMIC's apps (wgpu) rendered
+# on the CPU. Flatpak apps (Steam) still get NVIDIA Vulkan/GL from the Flathub
+# GL extension that matches this driver version.
+# ============================================================================
+
+# libEGL_nvidia and libGLX_nvidia are glvnd vendor libraries; the Desktop layer
+# already builds Mesa as a glvnd vendor (libEGL_mesa, libGLX_mesa), so both
+# GPUs' EGL/GLX coexist behind one libEGL/libGL.
+BR2_PACKAGE_NVIDIA_OPEN_GRAPHICS=y
+BR2_PACKAGE_NVIDIA_OPEN_VULKAN=y
+# The display keeps the driver initialized; persistence would also keep a
+# laptop's dGPU from powering down.
+# BR2_PACKAGE_NVIDIA_OPEN_PERSISTENCED is not set
+
+# The driver's userspace + GSP firmware add ~600 MB to the Desktop.
+BR2_TARGET_ROOTFS_EXT2_SIZE="4600M"

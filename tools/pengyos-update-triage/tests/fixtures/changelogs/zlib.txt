@@ -1,0 +1,8 @@
+zlib changelog
+
+== 1.3.1 ==
+* fix buffer overread in inflate (CVE-2023-45853)
+* security patch release
+
+== 1.2.13 ==
+* regular release

@@ -1,0 +1,4 @@
+# From https://github.com/alsa-project/alsa-ucm-conf/releases/tag/v1.2.16
+sha256  43ad2f390c760f6a0f2c0b7547175c780d6572ea77a08dd90855861279a74db6  alsa-ucm-conf-1.2.16.tar.gz
+sha512  946fa771c2fd841476b5946af019f14c143b153983468805026f510936677df99301732425db1cd718590f3f0438cf48ed278dceaf1edbd8c9f342cd04da1522  alsa-ucm-conf-1.2.16.tar.gz
+sha256  ebffd84f252e01bbd9887645b7dace140fd28f7d87f5e6e73fd6f539c7dd4733  LICENSE

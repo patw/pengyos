@@ -1,0 +1,27 @@
+[Unit]
+Description=systemd-resolved service
+Documentation=man:systemd-resolved(8) man:systemd.service(5)
+# Resolved owns the stub resolver at 127.0.0.53 and is available as early as
+# possible; it is not strictly required for boot but is expected in Core.
+DefaultDependencies=no
+AllowIsolate=yes
+After=local-fs.target
+Before=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/lib/systemd/systemd-resolved
+Restart=on-failure
+RestartSec=4s
+# Resolved keeps runtime state under /run/resolved.
+RuntimeDirectory=resolved
+RuntimeDirectoryMode=0755
+# Hardening that applies to every PengyOS service.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

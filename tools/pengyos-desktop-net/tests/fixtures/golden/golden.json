@@ -1,0 +1,42 @@
+{
+  "tool": "pengyos-desktop-net",
+  "version": "0.5.0",
+  "artifacts": [
+    {
+      "path": "/etc/NetworkManager/NetworkManager.conf",
+      "kind": "networkmanager",
+      "name": "NetworkManager.conf",
+      "content": "# Managed by pengyos-desktop-net \u2014 NetworkManager (do not edit by hand).\n# NetworkManager is the single network service on PengyOS Desktop.\n\n[main]\nplugins=keyfile\nauth-agent=/usr/sbin/NetworkManagerPolicyAgent\n\n[keyfile]\n# Virtual/bridge devices (libvirt, hotspots) are not managed by NM directly.\nunmanaged-devices=interface-name:virbr*;interface-name:br-*;mac:00:00:00:00:00:*\n"
+    },
+    {
+      "path": "/etc/NetworkManager/conf.d/10-pengyos.conf",
+      "kind": "networkmanager",
+      "name": "10-pengyos.conf",
+      "content": "# Managed by pengyos-desktop-net \u2014 NM manages all real devices.\n\n[ifupdown]\nmanaged=true\n\n[device]\n# NetworkManager owns every physical device, including the Wi-Fi link.\ndevices=*\n"
+    },
+    {
+      "path": "/etc/wpa_supplicant.conf",
+      "kind": "wpa_supplicant",
+      "name": "wpa_supplicant.conf",
+      "content": "# Managed by pengyos-desktop-net \u2014 wpa_supplicant (Wi-Fi backend).\n# NetworkManager drives wpa_supplicant over its wpa_supplicant plugin.\n\nctrl_interface=/run/wpa_supplicant\nupdate_config=1\nscan_ssid=1\nbss_mode=managed\n\nnetwork={\n    scan_ssid=1\n    # A pre-shared-key Wi-Fi network. The SSID/passphrase are filled in by the\n    # user (cosmic-settings / the installer) and never shipped in the overlay.\n    ssid=\"your-ssid\"\n    psk=\"your-passphrase\"\n}\n"
+    },
+    {
+      "path": "wifi-firmware.txt",
+      "kind": "wifi-firmware",
+      "name": "wifi-firmware.txt",
+      "content": "# Managed by pengyos-desktop-net \u2014 Wi-Fi firmware subset reference.\n# The kernel driver lives in pengyos-desktop-drivers; this lists the firmware\n# subset the Wi-Fi backend (wpa_supplicant + mac80211) needs at boot.\n#\n# linux-firmware packages (Debian/Ubuntu):\n#   firmware-linux-nonfree   (broadcom, rtl8xxx, ...)\n#   firmware-realtek\n#   firmware-atheros\n#   firmware-marvell\n"
+    },
+    {
+      "path": "~/.config/cosmic/panel.toml",
+      "kind": "cosmic-panel",
+      "name": "panel.toml",
+      "content": "# Managed by pengyos-desktop-net \u2014 COSMIC default panel layout.\n# The stock COSMIC default panel omits the network applet; listing\n# cosmic-applet-network here guarantees a GUI path to Wi-Fi on every session.\n\n[panel]\nposition=\"bottom\"\nexpand=true\nhide_when_active=true\nauto_hide=true\n\n[[panel.left]]\ntype=\"applet\"\napplet=\"cosmic-applet-network\"\n\n[[panel.left]]\ntype=\"applet\"\napplet=\"cosmic-applet-bluetooth\"\n\n[[panel.top]]\ntype=\"workspace-switcher\"\n\n[[panel.right]]\ntype=\"applet\"\napplet=\"cosmic-applet-notifications\"\n\n[[panel.right]]\ntype=\"applet\"\napplet=\"cosmic-applet-tray\"\n"
+    },
+    {
+      "path": "~/.config/cosmic-settings/network.toml",
+      "kind": "cosmic-settings",
+      "name": "network.toml",
+      "content": "# Managed by pengyos-desktop-net \u2014 cosmic-settings network defaults.\n# The network page is served over NetworkManager; these are the defaults the\n# Desktop ships so the GUI Network page is present on every session.\n\n[network]\nmanager=\"NetworkManager\"\nshow_wifi=true\nshow_ethernet=true\nallow_disabled=true\n"
+    }
+  ]
+}

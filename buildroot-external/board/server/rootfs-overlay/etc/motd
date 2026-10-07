@@ -1,0 +1,6 @@
+
+PengyOS Server -- https://pengyos.catbee.ca
+  pengy-cli              ask Pengy, the built-in assistant (pengy-web: in a browser)
+  pengyos-guest enter dev
+                         a development box (compilers, SDKs) that shares your home
+

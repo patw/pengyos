@@ -1,0 +1,96 @@
+{
+  "batches": [
+    {
+      "batch": 0,
+      "gate": {
+        "require": [
+          "applied"
+        ],
+        "type": "all_healthy"
+      },
+      "hosts": [
+        "canary-1"
+      ]
+    },
+    {
+      "batch": 1,
+      "gate": {
+        "require": [
+          "applied"
+        ],
+        "type": "all_healthy"
+      },
+      "hosts": [
+        "core-1"
+      ]
+    },
+    {
+      "batch": 2,
+      "gate": {
+        "require": [
+          "applied"
+        ],
+        "type": "all_healthy"
+      },
+      "hosts": [
+        "core-2"
+      ]
+    },
+    {
+      "batch": 3,
+      "gate": {
+        "require": [
+          "applied"
+        ],
+        "type": "all_healthy"
+      },
+      "hosts": [
+        "edge-1"
+      ]
+    },
+    {
+      "batch": 4,
+      "gate": {
+        "require": [
+          "applied"
+        ],
+        "type": "all_healthy"
+      },
+      "hosts": [
+        "edge-2"
+      ]
+    }
+  ],
+  "image": "img-2026.09.25",
+  "inventory": "tests/fixtures/inventory.toml",
+  "rollback": {
+    "hosts": [
+      {
+        "host": "canary-1",
+        "new": "img-2026.09.25",
+        "prior": "UNKNOWN"
+      },
+      {
+        "host": "core-1",
+        "new": "img-2026.09.25",
+        "prior": "UNKNOWN"
+      },
+      {
+        "host": "core-2",
+        "new": "img-2026.09.25",
+        "prior": "UNKNOWN"
+      },
+      {
+        "host": "edge-1",
+        "new": "img-2026.09.25",
+        "prior": "UNKNOWN"
+      },
+      {
+        "host": "edge-2",
+        "new": "img-2026.09.25",
+        "prior": "UNKNOWN"
+      }
+    ]
+  },
+  "schema": "pengyos-fleet-rollout/plan/v1"
+}

@@ -1,0 +1,7 @@
+config BR2_PACKAGE_XDG_DESKTOP_PORTAL
+	bool "xdg-desktop-portal"
+	help
+
+	  Portal backend for sandboxed app sandbox/screencast/etc.
+
+	  https://gitlab.freedesktop.org/xdg/xdg-desktop-portal

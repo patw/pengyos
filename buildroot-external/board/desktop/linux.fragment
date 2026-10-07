@@ -1,0 +1,281 @@
+# ============================================================================
+# PengyOS Desktop — Linux kernel config fragment
+# ----------------------------------------------------------------------------
+# Stacked on the Core (core) and Server fragments by the defconfig
+# layers (configs/layers/): this file only adds to / overrides them. Graphics
+# (DRM/KMS: virtio-gpu for VMs; amdgpu, i915, nouveau and radeon for real
+# hardware, which Mesa drives), audio, Wi-Fi and Bluetooth, input, and the
+# filesystems a desktop mounts.
+# ============================================================================
+
+# --- devtmpfs / tmpfs (systemd hard requirements) ---------------------------
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_TMPFS=y
+CONFIG_TMPFS_XATTR=y
+
+# --- Serial console (QEMU default UART) -------------------------------------
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+
+# --- virtio block/net for QEMU ----------------------------------------------
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_VIRTIO_NET=y
+CONFIG_VIRTIO_PCI=y
+
+# --- Filesystem -------------------------------------------------------------
+CONFIG_EXT4_FS=y
+
+# --- Modules / networking basics --------------------------------------------
+CONFIG_MODULES=y
+CONFIG_NET=y
+
+# --- DRM / KMS (GPU display path) -------------------------------------------
+CONFIG_DRM=y
+CONFIG_DRM_KMS_HELPER=y
+# virtio-gpu is what the QEMU board presents; it drives Mesa's VirGL userspace.
+CONFIG_DRM_VIRTIO_GPU=y
+# Common in-kernel modeset drivers for real hardware (generic, no proprietary).
+# ALL of them modules, for the reason spelled out for i915 below: amdgpu,
+# radeon and nouveau all load firmware at probe, and a built-in driver probes
+# before the rootfs exists (was =y here — black screen on real AMD/NVIDIA).
+CONFIG_DRM_AMDGPU=m
+# i915 MUST be a module, not built-in: a built-in driver probes BEFORE the rootfs
+# is mounted, so it can never find /lib/firmware/i915/* -> -ENOENT -> the kernel
+# declares the GPU wedged ("Failed to initialize GPU") and real Intel hardware
+# gets no hardware GL (QEMU's virtio-gpu hides this completely). As a module it
+# loads AFTER the rootfs and the firmware is found. (Same lesson as Core.)
+CONFIG_DRM_I915=m
+CONFIG_DRM_NOUVEAU=m
+CONFIG_DRM_RADEON=m
+
+# --- Framebuffer console ----------------------------------------------------
+# No fbcon on the Desktop: boot text never reaches the screen (the serial
+# console still has it) and the display goes straight to the greeter/session.
+CONFIG_FB=y
+# CONFIG_FRAMEBUFFER_CONSOLE is not set
+# CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY is not set
+
+# --- fbdev emulation so the composed scanout is readable as /dev/fb0 ----
+CONFIG_DRM_FBDEV_EMULATION=y
+# --- Storage on real hardware -------------------------------------------------
+# NVMe was missing: the N100's M.2 SSD (1e4b:1202) had no driver, so the
+# installer could only see the USB stick (QEMU's virtio disks hid this).
+# Built in (no firmware needed). VMD: Intel "RAID/VMD" mode hides NVMe behind it.
+CONFIG_BLK_DEV_NVME=y
+CONFIG_VMD=y
+# --- Wi-Fi ---------------------------------------------------------------------
+# Modules, like i915: a built-in driver probes before the rootfs is mounted and
+# never finds its firmware. Intel (CNVi AX1xx/AX2xx, 9xxx, AX2xx PCIe),
+# MediaTek MT7921/7922, Realtek rtw88. Firmware: BR2_PACKAGE_LINUX_FIRMWARE_*.
+CONFIG_WLAN=y
+CONFIG_WLAN_VENDOR_INTEL=y
+CONFIG_IWLWIFI=m
+CONFIG_IWLMVM=m
+CONFIG_WLAN_VENDOR_MEDIATEK=y
+CONFIG_MT7921E=m
+CONFIG_WLAN_VENDOR_REALTEK=y
+CONFIG_RTW88=m
+CONFIG_RTW88_8822BE=m
+CONFIG_RTW88_8822CE=m
+CONFIG_RTW88_8821CE=m
+# --- Laptop input: I2C touchpads / touchscreens ------------------------------
+# The DesignWare options sit under I2C_DESIGNWARE_CORE: without it both lines
+# below were silently dropped (no touchpad on Intel/AMD laptops).
+CONFIG_I2C_DESIGNWARE_CORE=m
+CONFIG_I2C_DESIGNWARE_PLATFORM=m
+CONFIG_I2C_DESIGNWARE_PCI=m
+CONFIG_I2C_HID_ACPI=m
+CONFIG_HID_MULTITOUCH=m
+# I2C-HID touchpads raise their interrupt through a GPIO: the platform's pinctrl
+# driver must exist, or the touchpad probes but never reports. Built in, like
+# distro kernels (no firmware). Kaby Lake (Sunrisepoint), Cannon/Comet, Tiger,
+# Jasper, Alder/Raptor, Meteor Lake; AMD (Renoir/Cezanne/Rembrandt).
+CONFIG_GPIOLIB=y
+CONFIG_PINCTRL_SUNRISEPOINT=y
+CONFIG_PINCTRL_CANNONLAKE=y
+CONFIG_PINCTRL_TIGERLAKE=y
+CONFIG_PINCTRL_JASPERLAKE=y
+CONFIG_PINCTRL_ALDERLAKE=y
+CONFIG_PINCTRL_METEORLAKE=y
+CONFIG_PINCTRL_AMD=y
+# --- Audio: HDA codec drivers ---------------------------------------------------
+# The HDA controller was built in with NO codec drivers: on the N100
+# "snd_hda_intel: Cannot probe codecs, giving up" -> no sound card at all (not
+# even HDMI audio). Modules (loaded by udev when the codec is found): HDMI/DP
+# audio for Intel/AMD/NVIDIA GPUs, the common analog codecs (Realtek ALC* — incl.
+# ALC897 on N100 boxes via the ALC662 driver — Conexant, Cirrus, Analog Devices,
+# IDT/SigmaTel, VIA, Senary), and the generic parser as fallback.
+# Intel laptops with digital mics or SoundWire need SOF (below).
+CONFIG_SND_HDA_GENERIC=m
+CONFIG_SND_HDA_CODEC_HDMI=m
+CONFIG_SND_HDA_CODEC_HDMI_GENERIC=m
+CONFIG_SND_HDA_CODEC_HDMI_INTEL=m
+CONFIG_SND_HDA_CODEC_HDMI_ATI=m
+CONFIG_SND_HDA_CODEC_HDMI_NVIDIA=m
+CONFIG_SND_HDA_CODEC_REALTEK=m
+CONFIG_SND_HDA_CODEC_ALC260=m
+CONFIG_SND_HDA_CODEC_ALC262=m
+CONFIG_SND_HDA_CODEC_ALC268=m
+CONFIG_SND_HDA_CODEC_ALC269=m
+CONFIG_SND_HDA_CODEC_ALC662=m
+CONFIG_SND_HDA_CODEC_ALC680=m
+CONFIG_SND_HDA_CODEC_ALC861=m
+CONFIG_SND_HDA_CODEC_ALC861VD=m
+CONFIG_SND_HDA_CODEC_ALC880=m
+CONFIG_SND_HDA_CODEC_ALC882=m
+CONFIG_SND_HDA_CODEC_CONEXANT=m
+CONFIG_SND_HDA_CODEC_CIRRUS=m
+CONFIG_SND_HDA_CODEC_CS420X=m
+CONFIG_SND_HDA_CODEC_ANALOG=m
+CONFIG_SND_HDA_CODEC_SIGMATEL=m
+CONFIG_SND_HDA_CODEC_VIA=m
+CONFIG_SND_HDA_CODEC_SENARYTECH=m
+# AMD APU audio coprocessor (ACP): the digital microphone on Renoir/Cezanne
+# (snd_rn_pci_acp3x — miniserv) and Rembrandt (snd_pci_acp6x — beholaptop)
+# laptops/minis. Speakers and HDMI stay on HDA; without ACP the internal mic
+# is missing. ASoC is needed for the ACP drivers only.
+CONFIG_SND_SOC=m
+CONFIG_SND_SOC_AMD_ACP=m
+CONFIG_SND_SOC_AMD_RENOIR=m
+CONFIG_SND_SOC_AMD_RENOIR_MACH=m
+CONFIG_SND_SOC_AMD_ACP6x=m
+CONFIG_SND_SOC_AMD_YC_MACH=m
+# --- Bluetooth -------------------------------------------------------------------
+# There was no Bluetooth in the kernel at all (the panel icon was cosmetic).
+# USB controllers (Intel CNVi/AX2xx pairs like the N100's 8087:0026, Realtek,
+# MediaTek) via btusb; firmware: BR2_PACKAGE_LINUX_FIRMWARE_{IBT,*_BT}. UHID for
+# Bluetooth LE mice/keyboards.
+CONFIG_BT=m
+CONFIG_BT_BREDR=y
+CONFIG_BT_LE=y
+CONFIG_BT_RFCOMM=m
+CONFIG_BT_HIDP=m
+CONFIG_BT_HCIBTUSB=m
+CONFIG_BT_HCIBTUSB_RTL=y
+CONFIG_BT_HCIBTUSB_MTK=y
+CONFIG_UHID=m
+# The HDA controller must be a module too (x86_64_defconfig builds it in): built
+# in, it probes at ~0.7 s, before the rootfs holds the codec modules above, and
+# gives up for good ("Cannot probe codecs, giving up"). Same lesson as i915.
+CONFIG_SND_HDA_INTEL=m
+# --- Hardware sweep on the N100 (2026-09-28) -------------------------------------
+# CPU idle: intel_idle (x86_64_defconfig leaves it off) — the N100 ran acpi_idle
+# with only C1-C3; intel_idle reaches the deep package C-states (power, heat).
+CONFIG_INTEL_IDLE=y
+# CPU/package power reporting (powercap/RAPL) and CPU temperature (coretemp);
+# NVMe and SATA drive temperatures as hwmon sensors.
+CONFIG_POWERCAP=y
+CONFIG_INTEL_RAPL=m
+CONFIG_SENSORS_CORETEMP=m
+CONFIG_NVME_HWMON=y
+CONFIG_SENSORS_DRIVETEMP=m
+# Intel LPSS: the low-speed I2C/SPI/UART controllers (00:15.x, 00:19.x, 00:1e.x
+# had no driver). Laptop touchpads and touchscreens hang off these I2C buses.
+CONFIG_X86_INTEL_LPSS=y
+CONFIG_MFD_INTEL_LPSS_PCI=m
+CONFIG_MFD_INTEL_LPSS_ACPI=m
+CONFIG_SPI=y
+CONFIG_SPI_PXA2XX=m
+CONFIG_SERIAL_8250_DW=m
+# TPM 2.0 (the N100's firmware TPM "PTT" is a CRB TPM; discrete ones are TIS).
+CONFIG_TCG_TPM=m
+CONFIG_TCG_CRB=m
+CONFIG_TCG_TIS=m
+# The chipset watchdog (iTCO) — systemd can use it to reset a hung machine.
+CONFIG_ITCO_WDT=m
+# Wireless core as modules: built in, cfg80211 looked for regulatory.db before
+# the rootfs was mounted ("Direct firmware load for regulatory.db failed").
+CONFIG_CFG80211=m
+CONFIG_MAC80211=m
+# --- Removable media and EFI variables ---------------------------------------------
+# The kernel read only FAT and ISO9660: most USB sticks/SD cards (exFAT), Windows
+# disks (NTFS, via the in-kernel ntfs3), Linux disks (btrfs, XFS, F2FS), DVD/
+# Blu-ray (UDF) and Mac disks (HFS+) could not be mounted.
+CONFIG_EXFAT_FS=m
+CONFIG_NTFS3_FS=m
+# (btrfs is built in by the Server fragment: it is the data partition's.)
+CONFIG_XFS_FS=m
+CONFIG_F2FS_FS=m
+CONFIG_UDF_FS=m
+CONFIG_HFSPLUS_FS=m
+# --- Plug-in devices (all modules, loaded by udev on hotplug) ----------------------
+# USB serial: FTDI / CP210x / CH34x / PL2303 adapters and ACM boards (Arduino,
+# modems, weather stations, 3D printers, …).
+CONFIG_USB_SERIAL=m
+CONFIG_USB_SERIAL_GENERIC=y
+CONFIG_USB_SERIAL_FTDI_SIO=m
+CONFIG_USB_SERIAL_CP210X=m
+CONFIG_USB_SERIAL_CH341=m
+CONFIG_USB_SERIAL_PL2303=m
+CONFIG_USB_SERIAL_OPTION=m
+CONFIG_USB_ACM=m
+# USB audio (DACs, headsets, interfaces) and MIDI.
+CONFIG_SND_USB_AUDIO=m
+# Webcams (UVC) and V4L2 (PipeWire's camera support uses it).
+CONFIG_MEDIA_SUPPORT=m
+CONFIG_MEDIA_USB_SUPPORT=y
+CONFIG_MEDIA_CAMERA_SUPPORT=y
+CONFIG_VIDEO_DEV=m
+CONFIG_USB_VIDEO_CLASS=m
+# Game controllers: Xbox (xpad), PlayStation, Nintendo, Steam; the joystick
+# device; uinput (Steam Input, remote-desktop input, virtual devices).
+CONFIG_INPUT_JOYDEV=m
+CONFIG_INPUT_JOYSTICK=y
+CONFIG_JOYSTICK_XPAD=m
+CONFIG_JOYSTICK_XPAD_FF=y
+CONFIG_JOYSTICK_XPAD_LEDS=y
+# HID_PLAYSTATION and the Logitech receiver driver need multicolor LEDs, and
+# LOGITECH_DJ sits under HID_LOGITECH: without these the three lines were dropped.
+CONFIG_LEDS_CLASS_MULTICOLOR=m
+CONFIG_HID_LOGITECH=m
+CONFIG_HID_PLAYSTATION=m
+CONFIG_PLAYSTATION_FF=y
+CONFIG_HID_NINTENDO=m
+CONFIG_HID_STEAM=m
+CONFIG_HID_APPLE=m
+CONFIG_HID_LOGITECH_DJ=m
+CONFIG_INPUT_UINPUT=m
+# USB networking: Realtek/ASIX Ethernet dongles, phone tethering (RNDIS/CDC/NCM).
+CONFIG_USB_USBNET=m
+CONFIG_USB_RTL8152=m
+CONFIG_USB_NET_AX8817X=m
+CONFIG_USB_NET_AX88179_178A=m
+CONFIG_USB_NET_CDCETHER=m
+CONFIG_USB_NET_CDC_NCM=m
+CONFIG_USB_NET_RNDIS_HOST=m
+CONFIG_USB_IPHETH=m
+# Fast USB storage (UAS), USB4 / Thunderbolt.
+CONFIG_USB_UAS=m
+CONFIG_USB4=m
+# Monitor control over DDC/CI (ddcutil) and DisplayPort AUX.
+CONFIG_I2C_CHARDEV=m
+CONFIG_DRM_DISPLAY_DP_AUX_CHARDEV=y
+
+# --- Audio: Intel SOF (Sound Open Firmware) ------------------------------------
+# The Intel audio DSP driver most Intel laptops since ~2019 need (digital
+# microphones, SoundWire codecs); firmware + topologies from our sof-firmware
+# package. snd-intel-dspcfg picks SOF only where the hardware needs it (DMIC
+# in the ACPI NHLT, SoundWire); everything else keeps snd-hda-intel. The
+# platform drivers (Cometlake .. Pantherlake) default on with SOF_PCI.
+CONFIG_SND_SOC_SOF_TOPLEVEL=y
+CONFIG_SND_SOC_SOF_PCI=m
+CONFIG_SND_SOC_SOF_INTEL_TOPLEVEL=y
+CONFIG_SND_SOC_SOF_HDA_LINK=y
+CONFIG_SND_SOC_SOF_HDA_AUDIO_CODEC=y
+CONFIG_SND_SOC_SOF_INTEL_SOUNDWIRE=m
+CONFIG_SOUNDWIRE=m
+CONFIG_SOUNDWIRE_INTEL=m
+CONFIG_SND_SOC_DMIC=m
+CONFIG_SND_SOC_INTEL_SKL_HDA_DSP_GENERIC_MACH=m
+# SoundWire laptops' machine driver needs the long card names (and Intel LPSS,
+# set with the touchpad drivers above).
+CONFIG_SND_SOC_INTEL_USER_FRIENDLY_LONG_NAMES=y
+CONFIG_SND_SOC_INTEL_SOUNDWIRE_SOF_MACH=m
+CONFIG_SND_SOC_INTEL_SOF_RT5682_MACH=m
+CONFIG_SND_SOC_INTEL_SOF_SSP_AMP_MACH=m
+CONFIG_SND_SOC_INTEL_SOF_NAU8825_MACH=m
+CONFIG_SND_SOC_INTEL_SOF_CS42L42_MACH=m
+CONFIG_SND_SOC_INTEL_SOF_DA7219_MACH=m
+CONFIG_SND_SOC_INTEL_SOF_ES8336_MACH=m

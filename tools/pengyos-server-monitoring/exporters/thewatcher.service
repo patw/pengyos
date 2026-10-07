@@ -1,0 +1,30 @@
+[Unit]
+Description=TheWatcher system metrics sink (PengyOS server-monitoring)
+Documentation=https://github.com/patw/thewatcher
+After=network-online.target node-exporter.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thewatcher
+Group=thewatcher
+ExecStart=/usr/local/bin/thewatcher --listen :9725 --scrape-interval=15s --target=node-exporter:9100
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=(af inet af inet6)
+RestrictNamespaces=true
+LockPersonality=true
+RestrictSUIDSGID=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ReadWritePaths=/var/lib/thewatcher
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-update"
+version = "0.1.1"
+description = "On-device updater for PengyOS: read the update feed, verify the signed release, write it into the other root slot, boot it once, keep it if it comes up."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "update", "ab", "grub", "ed25519"]
+
+# Standard library only at runtime (plus the openssl, curl, zstd, e2fsprogs and
+# grub-editenv commands the image ships). pengyos_install provides grub.cfg.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-update = "pengyos_update.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

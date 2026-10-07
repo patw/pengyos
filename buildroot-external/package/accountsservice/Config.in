@@ -1,0 +1,10 @@
+config BR2_PACKAGE_ACCOUNTSSERVICE
+	bool "accountsservice"
+	depends on BR2_PACKAGE_SYSTEMD
+	depends on BR2_PACKAGE_POLKIT
+	help
+	  The D-Bus service for user accounts (org.freedesktop.Accounts):
+	  COSMIC Settings' Users page lists, adds and edits accounts,
+	  names and pictures through it.
+
+	  https://gitlab.freedesktop.org/accountsservice/accountsservice

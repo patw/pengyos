@@ -1,0 +1,15 @@
+[package]
+name = "pengyos-install-model"
+description = "Pure, headless wizard state machine for the PengyOS Desktop installer."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "pengyos_install_model"
+path = "src/lib.rs"
+
+[dependencies]

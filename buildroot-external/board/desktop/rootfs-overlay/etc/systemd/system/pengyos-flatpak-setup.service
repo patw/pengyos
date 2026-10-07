@@ -1,0 +1,15 @@
+# PengyOS Desktop - first-boot action, not a daemon.
+[Unit]
+Description=PengyOS Flatpak first-boot setup (Flathub remote + appstream)
+Documentation=https://github.com/pop-os/cosmic-store
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/flatpak/.pengyos-setup
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/pengyos/pengyos-flatpak-setup.sh
+
+[Install]
+WantedBy=multi-user.target

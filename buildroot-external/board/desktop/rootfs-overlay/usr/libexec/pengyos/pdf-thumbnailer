@@ -1,0 +1,11 @@
+#!/bin/sh
+# PDF thumbnails for COSMIC Files (freedesktop thumbnailer, see
+# /usr/share/thumbnailers/pengyos-pdf.thumbnailer): first page, scaled to SIZE.
+# pdftocairo appends ".png" to the name it is given, so render next to OUTPUT
+# and move it into place.
+# Usage: pdf-thumbnailer SIZE INPUT OUTPUT
+set -eu
+size=$1 in=$2 out=$3
+tmp="${out}.pengyos"
+pdftocairo -png -singlefile -f 1 -l 1 -scale-to "$size" "$in" "$tmp"
+mv -f "${tmp}.png" "$out"

@@ -1,0 +1,380 @@
+# cosmic.toml — the COSMIC component manifest
+#
+# The single source of truth for the Buildroot recipes this repo authors. Each
+# `[[component]]` is one COSMIC git Rust component: where it lives
+# (`git_url`), the pinned reference it builds from (`tag`), the license it ships
+# under (`license`), the cargo features/binaries to enable, and the names of the
+# OTHER components in *this* manifest it depends on (`deps`).
+#
+# `group` buckets components for the recipes-lane CLI
+# (`manifest` / `emit --group core|login|shell|apps`); the engine itself is
+# group-agnostic and only sees the component fields below (see
+# `pengyos_cosmic_recipes.manifest`).
+#
+# Pinning rule: `tag` must be a pinned reference the shared
+# `pengyos_cosmic_pkg.manifest.is_pinned` predicate accepts — a full/short commit
+# SHA (7-40 hex) or a `v`-prefixed (or otherwise digit-carrying) version tag. A
+# floating branch/ref (`main`, `master`, `stable`, `latest`) is rejected by both
+# the manifest loader and the emitted-recipe linter, so they never disagree.
+#
+# Deps are declared by *name only*: every name in `deps` must reference another
+# component in this manifest (the closure linter, `pengyos_cosmic_recipes.lint`,
+# asserts this). External git crates and Buildroot system libraries are not
+# tracked here — they are Buildroot/crates.io/vendor concerns, out of scope for
+# this recipes lane.
+
+# ---------------------------------------------------------------------------
+# core — a bootable COSMIC session (compositor + session + platform + protocols)
+# ---------------------------------------------------------------------------
+
+[[component]]
+name = "cosmic-protocols"
+group = "core"
+git_url = "https://github.com/pop-os/cosmic-protocols"
+# No version tag exists on this repo; pinned to a concrete commit on `main`.
+tag = "c0cff4db14c37ed954983158e4055aa94c7741d9"
+license = "MIT"
+features = []
+binaries = []
+deps = []
+
+[[component]]
+name = "libcosmic"
+group = "core"
+git_url = "https://github.com/pop-os/libcosmic"
+tag = "87ab8179e1bd9880239c340855ae8862034bd0e8"
+license = "MPL-2.0"
+features = []
+binaries = []
+# libcosmic wraps the COSMIC wayland protocols.
+deps = ["cosmic-protocols"]
+
+[[component]]
+name = "cosmic-comp"
+group = "core"
+git_url = "https://github.com/pop-os/cosmic-comp"
+# cosmic-comp releases are tagged `epoch-*`, which the shared `is_pinned`
+# predicate does not accept, so pin to the epoch-1.8.0 commit SHA instead.
+tag = "0fbd4574ef4caf74769a617d205fd1fc909ac9b1"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-comp"]
+deps = ["libcosmic", "cosmic-protocols"]
+
+[[component]]
+name = "cosmic-session"
+group = "core"
+git_url = "https://github.com/pop-os/cosmic-session"
+tag = "1e4f10b5821982688e4a8a39f819be0bc2ad3e74"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-session"]
+# cosmic-session orchestrates the session (spawning cosmic-comp over D-Bus) and
+# carries no direct COSMIC-component Rust dependency.
+deps = []
+
+# ---------------------------------------------------------------------------
+# login — the login/greeter (cosmic-greeter, the greetd greeter)
+# ---------------------------------------------------------------------------
+
+[[component]]
+name = "cosmic-greeter"
+group = "login"
+git_url = "https://github.com/pop-os/cosmic-greeter"
+# cosmic-greeter releases are tagged `epoch-*`, which the shared `is_pinned`
+# predicate does not accept, so pin to the epoch-1.8.0 commit SHA instead.
+tag = "bfb2745176e3fd0824e008d3efb2b37bce5ae0db"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-greeter"]
+# cosmic-greeter is the greetd greeter: it speaks the agreetd protocol that the
+# greetd login daemon drives, and it runs inside cosmic-comp. It is built on the
+# libcosmic crate; the greetd daemon itself is a Buildroot package
+# (BR2_PACKAGE_GREETD), a non-Rust system dep out of scope for this recipes lane.
+deps = ["libcosmic"]
+
+# ---------------------------------------------------------------------------
+# shell — the COSMIC shell: panel, launcher, applets, settings, osd,
+# notifications, background, icons, idle, randr
+# ---------------------------------------------------------------------------
+#
+# These are the interactive shell components. Every one is pinned to the
+# epoch-1.8.0 commit SHA (the `epoch-*` tag is not pinned by `is_pinned`).
+# `cosmic-randr` and `cosmic-bg` ship MPL-2.0; `cosmic-icons` is an icon theme
+# (CC-BY-SA-4.0, no Rust, no binary). Inter-component deps are the COSMIC crates
+# each Cargo.toml pulls from `pop-os/*` (libcosmic, cosmic-protocols, and the
+# config crates of the sibling shell components); external git crates and
+# Buildroot system libs are not tracked here.
+
+[[component]]
+name = "cosmic-panel"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-panel"
+tag = "b5cc19e351b82eed999097ced1ff267d27bf8e7a"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-panel"]
+# cosmic-panel (the Wayland panel) is built on the libcosmic crate and the
+# COSMIC wayland protocols.
+deps = ["libcosmic", "cosmic-protocols"]
+
+[[component]]
+name = "cosmic-launcher"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-launcher"
+tag = "cc3d42bcc8fbcb67e6312f2766394e18b4d937d5"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-launcher"]
+# cosmic-launcher is built on the libcosmic crate; `pop-launcher` is an external
+# pop-os repo, not a tracked component here.
+deps = ["libcosmic"]
+
+[[component]]
+name = "cosmic-applets"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-applets"
+tag = "82e7cd814addb0641959b634227fe550374e195b"
+license = "GPL-3.0-only"
+features = []
+# cosmic-applets is a workspace of applets; the ones enabled by default are
+# forwarded as cargo binaries.
+binaries = [
+    "cosmic-applets",
+    "cosmic-applet-audio",
+    "cosmic-applet-battery",
+    "cosmic-applet-bluetooth",
+    "cosmic-applet-minimize",
+    "cosmic-applet-network",
+    "cosmic-applet-notifications",
+    "cosmic-applet-power",
+    "cosmic-applet-status-area",
+    "cosmic-applet-tiling",
+    "cosmic-applet-time",
+    "cosmic-applet-workspaces",
+    "cosmic-panel-button",
+]
+# The workspace pulls the libcosmic crate and the COSMIC wayland protocols.
+deps = ["libcosmic", "cosmic-protocols"]
+
+[[component]]
+name = "cosmic-bg"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-bg"
+tag = "9d82a34dab4e73d90ba66c9f72d18d0f9b8be208"
+license = "MPL-2.0"
+features = []
+binaries = ["cosmic-bg"]
+# cosmic-bg (wallpaper/background management) is built on the cosmic-config
+# crate from libcosmic.
+deps = ["libcosmic"]
+
+[[component]]
+name = "cosmic-randr"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-randr"
+tag = "6e8e795970fa06d434af22775e415b517f7552d3"
+license = "MPL-2.0"
+features = []
+binaries = ["cosmic-randr"]
+# cosmic-randr is a library (output management) that the shell builds on; it
+# carries no inter-component Rust dependency of its own.
+deps = []
+
+[[component]]
+name = "cosmic-settings"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-settings"
+tag = "7421ff0ab482c942eef23fbe9280edacfbeb35cc"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-settings"]
+# cosmic-settings is built on the libcosmic crate, and on the config crates of
+# the sibling shell components (cosmic-randr, cosmic-bg, cosmic-idle,
+# cosmic-panel) and of cosmic-comp.
+deps = [
+    "libcosmic",
+    "cosmic-randr",
+    "cosmic-bg",
+    "cosmic-comp",
+    "cosmic-idle",
+    "cosmic-panel",
+]
+
+[[component]]
+name = "cosmic-settings-daemon"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-settings-daemon"
+tag = "f97bee648c579b5fe2f2000bf3d129f1a7b08f17"
+license = "GPL-3.0-or-later"
+features = []
+binaries = ["cosmic-settings-daemon"]
+# The settings daemon is built on the libcosmic crate and the cosmic-comp config
+# crate.
+deps = ["libcosmic", "cosmic-comp"]
+
+[[component]]
+name = "cosmic-osd"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-osd"
+tag = "3faadf56bdaea4b088ea8dc5e808b167cec86de3"
+license = "GPL-3.0-or-later"
+features = []
+binaries = ["cosmic-osd"]
+# The on-screen-display is built on the libcosmic crate, the cosmic-comp config
+# crate, the cosmic-randr shell crate, and the cosmic-settings-daemon
+# subscription crate.
+deps = [
+    "libcosmic",
+    "cosmic-comp",
+    "cosmic-randr",
+    "cosmic-settings-daemon",
+]
+
+[[component]]
+name = "cosmic-notifications"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-notifications"
+tag = "aa4dac2702506395ab76da1f6755e03b2ccb0db8"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-notifications"]
+# The notifications daemon is built on the libcosmic crate and the cosmic-panel
+# config crate.
+deps = ["libcosmic", "cosmic-panel"]
+
+[[component]]
+name = "cosmic-idle"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-idle"
+tag = "c95d066b5b640509a6369634b669ca60dc50e168"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-idle"]
+# The idle/inhibit manager is built on the cosmic-config crate from libcosmic
+# and the cosmic-settings-daemon config crate.
+deps = ["libcosmic", "cosmic-settings-daemon"]
+
+[[component]]
+name = "cosmic-icons"
+group = "shell"
+git_url = "https://github.com/pop-os/cosmic-icons"
+# An icon theme (no Rust): pinned to a concrete commit on `main`.
+tag = "343c007f37cd71716e68f01c43ecf2764b7f7c47"
+license = "CC-BY-SA-4.0"
+features = []
+binaries = []
+# The icon theme carries no inter-component Rust dependency.
+deps = []
+
+# ---------------------------------------------------------------------------
+# apps — the COSMIC application set
+# ---------------------------------------------------------------------------
+#
+# These are the COSMIC desktop applications. Every one is a Rust cargo component
+# pinned to its epoch-1.8.0 commit SHA (the `epoch-*` tag is not pinned by
+# `is_pinned`). Licenses are GPL-3.0-only (verified against each Cargo.toml
+# `license` field or, where absent, the repo's GPLv3 LICENSE file). Inter-component
+# deps are the COSMIC crates each Cargo.toml pulls from `pop-os/*` (libcosmic,
+# cosmic-protocols, and the sibling app crates); external git crates
+# (cosmic-mime-apps, cosmic-syntax-theme, dbus-settings-bindings, …), crates.io
+# deps and Buildroot system libs are not tracked here.
+#
+# Build order (the dep DAG): cosmic-screenshot and cosmic-player build directly
+# on libcosmic; cosmic-files builds on libcosmic + cosmic-protocols; cosmic-edit
+# and cosmic-term build on cosmic-files; cosmic-store builds on cosmic-panel
+# (shell) + libcosmic.
+
+[[component]]
+name = "cosmic-files"
+group = "apps"
+git_url = "https://github.com/pop-os/cosmic-files"
+# Files ships no `epoch-*` tag that `is_pinned` rejects — pin to the
+# epoch-1.8.0 commit SHA.
+tag = "d1f0af78e64f9e8ddb52c486913d53a234ce3cf2"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-files"]
+# cosmic-files (the file manager) is built on the libcosmic crate and the
+# COSMIC wayland protocols (via cosmic-client-toolkit). cosmic-mime-apps is an
+# external pop-os repo, not a tracked component here.
+deps = ["libcosmic", "cosmic-protocols"]
+
+[[component]]
+name = "cosmic-edit"
+group = "apps"
+git_url = "https://github.com/pop-os/cosmic-edit"
+tag = "bfc98bf21930fe5d9c32b7c238442499191b6319"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-edit"]
+# cosmic-edit (the text editor) is built on the libcosmic crate and the sibling
+# cosmic-files app crate. cosmic-syntax-theme is an external pop-os repo.
+deps = ["cosmic-files", "libcosmic"]
+
+[[component]]
+name = "cosmic-term"
+group = "apps"
+git_url = "https://github.com/pop-os/cosmic-term"
+tag = "9129277bed1e810418a3138d683c1bc15656234f"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-term"]
+# cosmic-term (the terminal) is built on the libcosmic crate and the sibling
+# cosmic-files app crate (cosmic-text is a crates.io dep, not tracked here).
+deps = ["cosmic-files", "libcosmic"]
+
+[[component]]
+name = "cosmic-store"
+group = "apps"
+git_url = "https://github.com/pop-os/cosmic-store"
+tag = "c6e57a18a8abaf4ae6b5755576982839f8e53900"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-store"]
+# cosmic-store (the software center) is built on the libcosmic crate and the
+# cosmic-panel config crate (optional). dbus-settings-bindings is an external
+# pop-os repo.
+deps = ["cosmic-panel", "libcosmic"]
+
+[[component]]
+name = "cosmic-screenshot"
+group = "apps"
+git_url = "https://github.com/pop-os/cosmic-screenshot"
+tag = "5ddcf1804192ff98823bd37a778286db5a00f3dd"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-screenshot"]
+# cosmic-screenshot (the screenshot tool) is a standalone daemon: it carries no
+# inter-component Rust dependency of its own.
+deps = []
+
+[[component]]
+name = "cosmic-player"
+group = "apps"
+git_url = "https://github.com/pop-os/cosmic-player"
+tag = "66b3f34335a500ce5dc93880d06f7ae94905872f"
+license = "GPL-3.0-only"
+features = []
+binaries = ["cosmic-player"]
+# cosmic-player (the media player) is built on the libcosmic crate
+# (iced_video_player / mpris-server are crates.io deps, not tracked here).
+deps = ["libcosmic"]
+
+# ---------------------------------------------------------------------------
+# NOTE — cosmic-workspaces is NOT a cargo component (not authored here)
+# ---------------------------------------------------------------------------
+#
+# The task list names `cosmic-workspaces` among the apps, but
+# pop-os/cosmic-workspaces is a JavaScript GNOME Shell extension (extension.js /
+# prefs.js / metadata.json, GPLv3) — not a Rust cargo component: it ships no
+# Cargo.toml, no binary and no `is_pinned`-acceptable tag (its default branch is
+# `master_jammy`, with no `epoch-*`/`v` tag; `git ls-remote` shows only
+# branches). The recipes lane authors Buildroot *cargo* recipes for Rust
+# components only, so cosmic-workspaces does not belong in this manifest.
+#
+# This exclusion is intentional and pinned by tests (tests/test_excluded.py):
+# the loader would happily accept `cosmic-workspaces` as a valid component name,
+# so its absence is asserted, not assumed. It needs a *non-cargo* Buildroot
+# recipe (a shell-extension install path) or a separate handling path — out of
+# scope for the cargo recipes lane.

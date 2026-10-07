@@ -1,0 +1,37 @@
+# Example PengyOS initramfs spec (initramfs.toml).
+#
+#   pengyos-initramfs build --root /path/to/root --spec initramfs.toml --out init.cpio.gz
+#
+# Every include path is relative to --root and must be a relative POSIX path
+# (no leading '/', no '..'). See spec.md for the full format and validation rules.
+
+binaries = [
+    "bin/busybox",
+]
+
+files = [
+    "etc/os-release",
+    "etc/fstab",
+]
+
+# Explicit directory entries. The kernel's initramfs populate does not
+# create missing parent directories, so nested file paths above need their
+# parent directories packed in the archive.
+directories = [
+    "etc",
+]
+
+modules = [
+    # "lib/modules/6.1.0/pengyos/kernel/drivers/block/loop.ko",
+]
+
+[build]
+mtime = "2000-01-01T00:00:00Z"
+uid = 0
+gid = 0
+user = "root"
+group = "root"
+
+[init]
+path = "init"
+mode = "0755"

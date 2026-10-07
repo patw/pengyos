@@ -1,0 +1,11 @@
+Architecture:            x86_64
+CPU(s):                  8
+Thread(s) per core:      2
+Core(s) per socket:      2
+Socket(s):               2
+Vendor ID:               Intel
+Model name:              Intel(R) Core(TM) i7-1068G7 @ 2.30GHz
+CPU MHz:                 2300.000
+BogoMIPS:                4600.00
+Virtualization:          VT-x
+Cache (L1):              32K

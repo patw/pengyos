@@ -1,0 +1,11 @@
+# PengyOS Desktop — let the person at the seat use USB devices from the browser.
+#
+# WebUSB (firmware flashers, QMK keyboards, WebADB, Pixel/Android flash tools)
+# opens /dev/bus/usb/* read-write, and WebSerial (ESP Web Tools, Arduino,
+# Meshtastic) the USB serial ports. Stock nodes are root-only for writing, so
+# Chrome listed the device and then failed to open it. Tag them "uaccess":
+# logind gives the user with the active local session an ACL, and takes it
+# away when they log out or switch away. Hubs are left alone.
+# Before 73-seat-late.rules, which turns the tag into the ACL.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{bDeviceClass}!="09", TAG+="uaccess"
+SUBSYSTEM=="tty", ENV{ID_BUS}=="usb", TAG+="uaccess"

@@ -1,0 +1,15 @@
+# PengyOS — look for a new release (pengyos-update-check.timer, daily).
+#
+# Only checks: records the answer in /var/lib/pengyos-update/state.json (read by
+# the desktop's "PengyOS Updates" app and its notifier) and in the login
+# message. Installing is always the user's choice.
+[Unit]
+Description=Check for PengyOS updates
+Wants=network-online.target
+After=network-online.target pengyos-update-confirm.service
+ConditionKernelCommandLine=pengyos.data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pengyos-update check --save --quiet
+Nice=10

@@ -1,0 +1,27 @@
+[Unit]
+Description=Journal Service
+Documentation=man:systemd-journald(8) man:systemd.service(5)
+# Journaling is needed very early, so this unit is not tied to the usual
+# DefaultDependencies. It conflicts with shutdown so the journal stays open
+# until the very end.
+Conflicts=shutdown.target
+After=local-fs.target swap.target
+Before=shutdown.target
+
+[Service]
+Type=notify
+ExecStart=/usr/lib/systemd/systemd-journald
+Restart=on-failure
+RestartSec=5s
+# journald keeps its state under /run/journald.
+RuntimeDirectory=journald
+RuntimeDirectoryMode=0755
+# Hardening that applies to every PengyOS service.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+
+[Install]
+WantedBy=multi-user.target

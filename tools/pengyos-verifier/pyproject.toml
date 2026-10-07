@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-verifier"
+version = "0.7.0"
+description = "External witness for PengyOS builds: verifies attest chain, SBOM, signatures, and repro score."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "verification", "attest", "sbom", "reproducible", "signing"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+]
+# Runtime is stdlib-only; declare any real dependency here.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+pengyos-verifier = "pengyos_verifier.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pengyos_verifier*"]
+
+[tool.pytest.ini_options]
+# Keep the project root importable without an editable install so the suite
+# runs with no network and no root.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra"

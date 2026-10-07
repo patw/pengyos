@@ -1,0 +1,10 @@
+# Buildroot users table (makeusers): groups the image defines.
+# seat: seatd.service runs `seatd -g seat`; members may open the seat, i.e. run
+# the COSMIC compositor as themselves. The installer adds the desktop user.
+- -1 seat -1 - - - - -
+# bluetooth: BlueZ's D-Bus policy grants the bluetooth group access to bluetoothd.
+- -1 bluetooth -1 - - - - -
+# cosmic-greeter: the login screen runs as this system user (greetd's
+# default_session). Locked password; the seat and GPU/input device groups let
+# its cosmic-comp open the display.
+cosmic-greeter -1 cosmic-greeter -1 ! /var/lib/cosmic-greeter /bin/false seat,video,render,input COSMIC login screen

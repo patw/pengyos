@@ -1,0 +1,6 @@
+# PengyOS: keep the system's own partitions out of COSMIC Files (UDisks), as
+# distros hide theirs. The ESP, both root slots and the data volume are
+# mounted by the system itself (or kept empty, root-b); listed as drives they
+# only offered "unable to access device". Matched by GPT partition name, which
+# the installer sets (pengyos-install image).
+SUBSYSTEM=="block", ENV{ID_PART_ENTRY_NAME}=="PENGYOS-ESP|pengyos-root-a|pengyos-root-b|pengyos-data", ENV{UDISKS_IGNORE}="1"

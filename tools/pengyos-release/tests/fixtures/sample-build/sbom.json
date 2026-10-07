@@ -1,0 +1,18 @@
+{
+  "generator": "pengyos-build",
+  "packages": [
+    {
+      "name": "musl",
+      "version": "1.2.5"
+    },
+    {
+      "name": "linux-headers",
+      "version": "6.8.0"
+    },
+    {
+      "name": "busybox",
+      "version": "1.36.1"
+    }
+  ],
+  "sbom": "pengyos/1.0"
+}

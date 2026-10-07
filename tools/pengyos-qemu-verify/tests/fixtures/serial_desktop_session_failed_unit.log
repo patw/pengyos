@@ -1,0 +1,32 @@
+==PS==
+      2 cosmic-applet-a
+      2 cosmic-applet-b
+      1 cosmic-applet-i
+      1 cosmic-applet-m
+      2 cosmic-applet-n
+      1 cosmic-applet-p
+      2 cosmic-applet-s
+      2 cosmic-applet-t
+      1 cosmic-app-libr
+      1 cosmic-app-list
+      1 cosmic-bg
+      1 cosmic-comp
+      1 cosmic-files-ap
+      1 cosmic-greeter
+      1 cosmic-greeter-
+      1 cosmic-idle
+      1 cosmic-launcher
+      1 cosmic-notifica
+      1 cosmic-osd
+      1 cosmic-panel
+      5 cosmic-panel-bu
+      1 cosmic-session
+      1 cosmic-settings
+      1 cosmic-toplevel
+      1 cosmic-workspac
+      1 pengyos-install
+      1 pop-launcher
+==FAILED==
+● cosmic-session.service loaded failed failed COSMIC Session
+
+==END==

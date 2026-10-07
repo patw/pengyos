@@ -1,0 +1,38 @@
+# PengyOS Updates — the desktop side of pengyos-update: an app that shows what
+# is available and installs it on request, and a session notifier that says so
+# when (and only when) the user wants to hear about it.
+#
+# The decision logic (lib.rs) is std + serde_json and fully `cargo test`-able
+# without a display. The libcosmic window and the D-Bus notifier are behind the
+# `cosmic` feature (off by default), like pengyos-install-gui.
+[package]
+name = "pengyos-updates"
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+description = "PengyOS Updates: update app + notifier for the COSMIC desktop."
+
+[features]
+default = []
+cosmic = ["dep:libcosmic", "dep:zbus"]
+
+[lib]
+name = "pengyos_updates"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-updates"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+zbus = { version = "5", optional = true }
+
+# Same pinned libcosmic and feature set as pengyos-install-gui, so both build
+# from one cache (CARGO_TARGET_DIR=~/cosmic-build/install-gui).
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
+features = ["about", "single-instance", "markdown", "qr_code", "wgpu", "xdg-portal"]

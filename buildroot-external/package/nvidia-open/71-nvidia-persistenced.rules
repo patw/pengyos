@@ -1,0 +1,4 @@
+# nvidia-open: start nvidia-persistenced once the nvidia module is loaded, which
+# udev does only when an NVIDIA GPU is present (a VM or a machine without one
+# never starts it, so it never fails there).
+ACTION=="add", SUBSYSTEM=="module", KERNEL=="nvidia", TAG+="systemd", ENV{SYSTEMD_WANTS}+="nvidia-persistenced.service"

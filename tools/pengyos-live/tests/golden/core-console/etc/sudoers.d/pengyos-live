@@ -1,0 +1,6 @@
+# This file is managed by pengyos-live. Do not edit by hand.
+#
+# Let the live user (live) run the PengyOS installer without a
+# password, so it can autostart on the live session and complete the
+# install without a human typing a password. Scoped to pengyos-install.
+live ALL=(ALL) NOPASSWD: /usr/bin/pengyos-install

@@ -1,0 +1,63 @@
+{
+  "buildroot_tag": "2026.08",
+  "classification": [
+    {
+      "br_symbols": [
+        "BR2_PACKAGE_GREETD"
+      ],
+      "name": "greetd",
+      "reason": "1 of 1 symbol(s) absent from 2026.08: BR2_PACKAGE_GREETD",
+      "status": "recipe_needed"
+    },
+    {
+      "br_symbols": [
+        "BR2_PACKAGE_XDG_DESKTOP_PORTAL"
+      ],
+      "name": "xdg-desktop-portal",
+      "reason": "1 of 1 symbol(s) absent from 2026.08: BR2_PACKAGE_XDG_DESKTOP_PORTAL",
+      "status": "recipe_needed"
+    },
+    {
+      "br_symbols": [
+        "BR2_PACKAGE_XDG_DESKTOP_PORTAL_BACKEND_COSMIC"
+      ],
+      "name": "cosmic-portal",
+      "reason": "1 of 1 symbol(s) absent from 2026.08: BR2_PACKAGE_XDG_DESKTOP_PORTAL_BACKEND_COSMIC",
+      "status": "recipe_needed"
+    },
+    {
+      "br_symbols": [
+        "BR2_PACKAGE_LIBDISPLAY_INFO"
+      ],
+      "name": "libdisplay-info",
+      "reason": "all 1 symbol(s) present in 2026.08: BR2_PACKAGE_LIBDISPLAY_INFO",
+      "status": "shipped"
+    },
+    {
+      "br_symbols": [
+        "BR2_PACKAGE_SEATD"
+      ],
+      "name": "seatd",
+      "reason": "all 1 symbol(s) present in 2026.08: BR2_PACKAGE_SEATD",
+      "status": "shipped"
+    },
+    {
+      "br_symbols": [
+        "BR2_PACKAGE_FIRA_BRAND_BRICKS",
+        "BR2_PACKAGE_FIRA_FONT",
+        "BR2_PACKAGE_FIRA_EXTRA",
+        "BR2_PACKAGE_FIRA_LIGHT",
+        "BR2_PACKAGE_FIRA_MONO",
+        "BR2_PACKAGE_FIRA_MONO_EXTRA",
+        "BR2_PACKAGE_NOTO_FONTS_CJK",
+        "BR2_PACKAGE_NOTO_FONTS_MONO",
+        "BR2_PACKAGE_NOTO_FONTS_SC",
+        "BR2_PACKAGE_NOTO_FONTS_TC"
+      ],
+      "name": "fonts",
+      "reason": "10 of 10 symbol(s) absent from 2026.08: BR2_PACKAGE_FIRA_BRAND_BRICKS, BR2_PACKAGE_FIRA_FONT, BR2_PACKAGE_FIRA_EXTRA, BR2_PACKAGE_FIRA_LIGHT, BR2_PACKAGE_FIRA_MONO, BR2_PACKAGE_FIRA_MONO_EXTRA, BR2_PACKAGE_NOTO_FONTS_CJK, BR2_PACKAGE_NOTO_FONTS_MONO, BR2_PACKAGE_NOTO_FONTS_SC, BR2_PACKAGE_NOTO_FONTS_TC",
+      "status": "recipe_needed"
+    }
+  ],
+  "source": "buildroot-2026.08-symbols.txt (tag 2026.08)"
+}

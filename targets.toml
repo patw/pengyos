@@ -1,0 +1,44 @@
+# PengyOS build targets — canonical file lives at the repo root, next to the
+# `buildroot-external` tree it references (pengyos-build resolves external_tree
+# relative to this file, and its validator forbids '..' components).
+[[targets]]
+name = "pengyos-core"
+br_version = "2026.08"
+external_tree = "buildroot-external"
+defconfig = "pengyos_core_defconfig"
+
+[[targets]]
+name = "pengyos-server"
+br_version = "2026.08"
+external_tree = "buildroot-external"
+defconfig = "pengyos_server_defconfig"
+
+# Desktop: the Server/Core systemd base + the COSMIC desktop.
+[[targets]]
+name = "pengyos-desktop"
+br_version = "2026.08"
+external_tree = "buildroot-external"
+defconfig = "pengyos_desktop_defconfig"
+
+# NVIDIA Server: the Server plus the driver's compute half (CUDA, NVML,
+# persistenced, CDI for podman). Opt-in like the Desktop NVIDIA below; its
+# os-release says IMAGE_ID=pengyos-server-nvidia, so it has its own update feed.
+[[targets]]
+name = "pengyos-server-nvidia"
+br_version = "2026.08"
+external_tree = "buildroot-external"
+defconfig = "pengyos_server_nvidia_defconfig"
+board = "server"
+
+# NVIDIA blob Desktop variant (opt-in, Tier-2 concession): the Desktop
+# defconfig with the proprietary NVIDIA blob symbol set. Opt-in
+# only -- never in the default image; see spec.md Non-goals + the Tier-2
+# record. Registered here so `pengyos-build build pengyos-desktop-nvidia`
+# discovers it; the blob symbols are asserted absent from the defaults by
+# `pengyos-desktop-nvidia lint`.
+[[targets]]
+name = "pengyos-desktop-nvidia"
+br_version = "2026.08"
+external_tree = "buildroot-external"
+defconfig = "pengyos_desktop_nvidia_defconfig"
+board = "desktop"

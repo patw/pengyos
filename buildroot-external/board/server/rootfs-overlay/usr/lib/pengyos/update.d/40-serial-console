@@ -1,0 +1,22 @@
+#!/bin/sh
+# PengyOS update step: no fixed serial console on the kernel command line.
+#
+# Run as root by `pengyos-update apply` from the NEW image, before the updater
+# rewrites grub.cfg from the kernel arguments it finds there. Installs before
+# 26.10.5 boot with `console=ttyS0,115200`, and a phantom COM1 (a ThinkPad L14
+# Gen 1 AMD with its Security Chip off, 2026-10-03) made every boot crawl for
+# minutes behind a black screen. Swap it for ${pengyos_serial}, which a grub.cfg
+# written by a current updater sets only when GRUB finds a real UART (an older
+# updater's grub.cfg leaves it empty: no serial console until the next update).
+set -eu
+cfg="$PENGYOS_ESP/EFI/BOOT/grub.cfg"
+[ -f "$cfg" ] || { echo "no grub.cfg on the boot partition; nothing to do"; exit 0; }
+if ! grep -q 'console=ttyS0,115200' "$cfg"; then
+    echo "no fixed serial console in grub.cfg"
+    exit 0
+fi
+sed 's/ console=ttyS0,115200/ ${pengyos_serial}/' "$cfg" > "$cfg.new"
+sync
+mv -f "$cfg.new" "$cfg"
+sync
+echo "serial console in grub.cfg: only where GRUB finds a real UART"

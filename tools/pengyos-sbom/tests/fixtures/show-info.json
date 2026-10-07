@@ -1,0 +1,156 @@
+{
+  "busybox": {
+    "type": "target",
+    "name": "busybox",
+    "virtual": false,
+    "version": "1.37.0",
+    "licenses": "GPL-2.0+",
+    "license_files": ["COPYING"],
+    "redistributable": true,
+    "dl_dir": "",
+    "downloads": [
+      {
+        "source": "busybox-1.37.0.tar.bz2",
+        "uris": [
+          "https://www.busybox.net/downloads/busybox-1.37.0.tar.bz2",
+          "https://busybox.net/downloads/busybox-1.37.0.tar.bz2"
+        ]
+      }
+    ],
+    "hashes": ["package/busybox/busybox.hash"],
+    "patches": ["package/busybox/0001-foo.patch"],
+    "package_dir": "package/busybox",
+    "stamp_dir": "build/busybox",
+    "source_dir": "build/busybox",
+    "build_dir": "build/busybox",
+    "install_target": true,
+    "install_staging": false,
+    "install_images": false,
+    "dependencies": ["host-pkgconf", "zlib"],
+    "reverse_dependencies": [],
+    "cpe-id": "cpe:2.3:a:busybox:busybox:1.37.0:*:*:*:*:*:*:*"
+  },
+  "zlib": {
+    "type": "target",
+    "name": "zlib",
+    "virtual": false,
+    "version": "1.3.1",
+    "licenses": "MIT, GPL-2.0+",
+    "license_files": ["LICENSE"],
+    "redistributable": true,
+    "dl_dir": "",
+    "downloads": [
+      {
+        "source": "zlib-1.3.1.tar.xz",
+        "uris": ["https://zlib.net/zlib-1.3.1.tar.xz"]
+      }
+    ],
+    "hashes": ["package/zlib/zlib.hash"],
+    "patches": [],
+    "package_dir": "package/zlib",
+    "stamp_dir": "build/zlib",
+    "source_dir": "build/zlib",
+    "build_dir": "build/zlib",
+    "install_target": true,
+    "install_staging": false,
+    "install_images": false,
+    "dependencies": [],
+    "reverse_dependencies": ["busybox", "zstd"],
+    "cpe-id": "cpe:2.3:a:zlib:zlib:1.3.1:*:*:*:*:*:*:*"
+  },
+  "zstd": {
+    "type": "target",
+    "name": "zstd",
+    "virtual": false,
+    "version": "1.5.5",
+    "licenses": "BSD-3-Clause",
+    "license_files": ["COPYING"],
+    "redistributable": false,
+    "dl_dir": "",
+    "downloads": [
+      {
+        "source": "zstd-1.5.5.tar.gz",
+        "uris": [
+          "https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5.tar.gz",
+          "https://download.zlib.net/zstd/zstd-1.5.5.tar.gz"
+        ]
+      }
+    ],
+    "hashes": ["package/zstd/zstd.hash"],
+    "patches": [],
+    "package_dir": "package/zstd",
+    "stamp_dir": "build/zstd",
+    "source_dir": "build/zstd",
+    "build_dir": "build/zstd",
+    "install_target": true,
+    "install_staging": false,
+    "install_images": false,
+    "dependencies": ["zlib"],
+    "reverse_dependencies": [],
+    "cpe-id": "cpe:2.3:a:facebook:zstd:1.5.5:*:*:*:*:*:*:*"
+  },
+  "host-zlib": {
+    "type": "host",
+    "name": "zlib",
+    "virtual": false,
+    "version": "1.3.1",
+    "licenses": "MIT, GPL-2.0+",
+    "license_files": ["LICENSE"],
+    "redistributable": true,
+    "dl_dir": "",
+    "downloads": [
+      {
+        "source": "zlib-1.3.1.tar.xz",
+        "uris": ["https://zlib.net/zlib-1.3.1.tar.xz"]
+      }
+    ],
+    "hashes": ["package/zlib/zlib.hash"],
+    "patches": [],
+    "package_dir": "package/zlib",
+    "stamp_dir": "build/host-zlib",
+    "source_dir": "build/host-zlib",
+    "build_dir": "build/host-zlib",
+    "dependencies": [],
+    "reverse_dependencies": ["zstd"]
+  },
+  "host-pkgconf": {
+    "type": "host",
+    "name": "pkgconf",
+    "virtual": false,
+    "version": "2.2.0",
+    "licenses": "BSD-2-Clause",
+    "license_files": ["LICENSE"],
+    "redistributable": true,
+    "dl_dir": "",
+    "downloads": [
+      {
+        "source": "pkgconf-2.2.0.tar.xz",
+        "uris": ["https://distfiles.devtoolset.org/pkgconf-2.2.0.tar.xz"]
+      }
+    ],
+    "hashes": ["package/pkgconf/pkgconf.hash"],
+    "patches": [],
+    "package_dir": "package/pkgconf",
+    "stamp_dir": "build/host-pkgconf",
+    "source_dir": "build/host-pkgconf",
+    "build_dir": "build/host-pkgconf",
+    "dependencies": [],
+    "reverse_dependencies": ["busybox"]
+  },
+  "linux-headers": {
+    "type": "target",
+    "name": "linux-headers",
+    "virtual": true,
+    "package_dir": "package/linux",
+    "stamp_dir": "build/linux-headers",
+    "source_dir": "",
+    "build_dir": "",
+    "dependencies": [],
+    "reverse_dependencies": []
+  },
+  "rootfs-ext4": {
+    "type": "rootfs",
+    "image_name": "rootfs.ext4",
+    "dependencies": ["busybox", "zlib", "zstd"]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "attestation": "pengyos/attestation/1",
+  "builder": "pengyos-release",
+  "notes": "local, non-networked build",
+  "reproducible": true
+}

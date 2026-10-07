@@ -1,0 +1,11 @@
+{
+  "id": "CVE-2024-9998",
+  "affected": [
+    {
+      "package": { "name": "glibc", "ecosystem": "alpine" },
+      "ranges": [
+        { "type": "SEMVER", "events": [{}, { "fixed": "2.40" }] }
+      ]
+    }
+  ]
+}

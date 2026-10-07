@@ -1,0 +1,12 @@
+config BR2_PACKAGE_FFMPEGTHUMBNAILER
+	bool "ffmpegthumbnailer"
+	depends on BR2_PACKAGE_FFMPEG
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_LIBPNG
+	select BR2_PACKAGE_JPEG
+	help
+	  Video thumbnails for file managers: registers a freedesktop
+	  thumbnailer (/usr/share/thumbnailers) that COSMIC Files runs
+	  for video files.
+
+	  https://github.com/dirkvdb/ffmpegthumbnailer

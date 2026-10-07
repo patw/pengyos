@@ -1,0 +1,24 @@
+# Workspace for PengyOS install-gui — the libcosmic Desktop installer wizard.
+#
+# Two crates:
+#   * `model` — the pure, headless wizard state machine (stdlib only, 100% cargo-testable).
+#   * `gui`   — the libcosmic front-end that renders the model. Its libcosmic
+#               back-end is feature-gated behind `cosmic` (off by default) so the
+#               workspace stays green and offline in `cargo test`; the app shell
+#               is built where libcosmic is available.
+[workspace]
+resolver = "2"
+members = ["model", "gui"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+repository = "https://github.com/patw/pengyos"
+homepage = "https://github.com/patw/pengyos/tree/main/tools/pengyos-install-gui"
+
+[workspace.dependencies]
+# Kept intentionally minimal. The model crate uses the standard library only,
+# so the workspace's default `cargo test` needs no third-party crates and no
+# network. libcosmic deps live in the gui crate behind the `cosmic` feature.

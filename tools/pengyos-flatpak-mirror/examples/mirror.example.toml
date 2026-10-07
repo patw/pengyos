@@ -1,0 +1,25 @@
+# Example mirror.toml for pengyos-flatpak-mirror
+#
+# Copy to `mirror.toml` and edit. The `sync` command loads this schema:
+#   remote          — the remote to mirror from (flatpak/ostree remote name or URL)
+#   remote-name     — optional local remote name to register (defaults to `remote`)
+#   apps[]          — apps to mirror, each pinned to a specific commit
+#   collections[]   — collection IDs to pull (omit to derive from `apps`)
+#
+# See spec.md and README.md ("Manifest") for the schema.
+
+# The remote to mirror from.
+remote = "flathub"
+
+# Optional: the local remote name to register with flatpak.
+remote-name = "pengyos"
+
+# Apps to mirror, each pinned to a specific commit.
+# The OSTree ref mirrored is `{id}/{arch}/{branch}` (arch/branch default).
+apps = [
+  { id = "org.gnome.Calculator", commit = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", collection-id = "org.gnome" },
+  { id = "org.mozilla.firefox",  commit = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789" },
+]
+
+# Which collection IDs to pull. Omit to derive from `apps`.
+collections = ["org.gnome", "org.mozilla"]

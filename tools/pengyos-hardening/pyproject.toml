@@ -1,0 +1,37 @@
+[project]
+name = "pengyos-hardening"
+version = "0.7.4"
+description = "PengyOS hardening — a declarative security baseline plus an overlay/defconfig linter that audits BR2_EXTERNAL rootfs-overlays and defconfigs against it."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "buildroot", "hardening", "security", "defconfig", "linux-distro"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+pengyos-hardening = "pengyos_hardening.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["pengyos_hardening"]
+
+[tool.pytest.ini_options]
+# The test-suite is the objective function for this repo.
+# Keep it hermetic: no network, no root, no real hardware.
+# Integration tests are opt-in via PENGYOS_IT=1.
+testpaths = ["tests"]
+# Put the repo root on sys.path so the shipped, stdlib-only
+# ``pengyos_hardening`` package is importable both by the tests and standalone
+# (`python3 -m pengyos_hardening`).
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+  "error::DeprecationWarning",
+]

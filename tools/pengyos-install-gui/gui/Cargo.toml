@@ -1,0 +1,58 @@
+[package]
+name = "pengyos-install-gui"
+description = "libcosmic front-end that renders the PengyOS Desktop installer wizard (the model crate)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+# The libcosmic back-end is behind the `cosmic` feature (off by default) so the
+# workspace's default `cargo test` builds this crate with the standard library
+# only — no network, no display, no heavy dependencies.
+#
+# NOTE: the libcosmic crates (`cosmic-desktop`, `cosmic-config`, ...) are NOT on
+# crates.io; they are git-hosted under pop-os and pull a large tree (iced,
+# winit, wayland). They are added, pinned by revision, behind the `cosmic`
+# feature — which is OFF by default — so the workspace's default `cargo test`
+# stays offline and std-only. The `cosmic` feature is turned on only where
+# libcosmic is available (see the "Gui: build the libcosmic app shell"
+# iteration and COSMIC_DEPS.md).
+[features]
+default = []
+# Turning on `cosmic` pulls the git-hosted libcosmic crates (and their huge
+# iced/winit/wayland/smithay/wgpu tree). Off by default on purpose.
+cosmic = ["dep:libcosmic", "dep:serde_json"]
+
+[lib]
+name = "pengyos_install_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-install-gui"
+path = "src/main.rs"
+
+[dependencies]
+# Std-only by default. The libcosmic crates are added (git, pinned) behind the
+# `cosmic` feature in the "Gui: build the libcosmic app shell" iteration.
+pengyos-install-model = { path = "../model" }
+# Parses the engine's `disks --json` list and `--progress json` lines (cosmic only).
+serde_json = { version = "1", optional = true }
+
+# The libcosmic ecosystem (umbrella crate re-exporting cosmic-desktop,
+# cosmic-config, cosmic-widgets, cosmic-theme, cosmic-apps-core). Git-hosted
+# under pop-os, pinned by revision so `cargo build --features cosmic` is
+# reproducible. See COSMIC_DEPS.md for the rationale and the transitive pins.
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"  # HEAD of pop-os/libcosmic (pinned)
+features = [
+    "about",        # About widget (summary screen)
+    "single-instance",
+    "markdown",
+    "qr_code",
+    "wgpu",         # GPU-accelerated rendering
+    "xdg-portal",   # xdg-portal dialogs on Linux
+]

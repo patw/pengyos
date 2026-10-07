@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PengyOS Updates
+GenericName=Software Updates
+Comment=Install new versions of PengyOS
+Exec=pengyos-updates
+Icon=software-update-available
+Terminal=false
+Categories=System;Settings;
+Keywords=update;upgrade;version;release;rollback;
+StartupNotify=true

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-backup"
+version = "0.1.0"
+description = "Backup planner (restic/rustic) that emits a systemd timer + service and proves restore with a tree-hash check (US-SRV-4)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["backup", "restic", "rustic", "systemd", "restore", "pengyos"]
+dependencies = [
+    # backup.yaml is the planner's input. YAML is not in the stdlib, so it is
+    # the one declared runtime dependency. A bundled minimal fallback reader is
+    # used when PyYAML is unavailable (see pengyos_backup.config).
+    "PyYAML>=5.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+pengyos-backup = "pengyos_backup.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_backup*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

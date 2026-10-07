@@ -1,0 +1,28 @@
+# Managed by pengyos-desktop-net — COSMIC default panel layout.
+# The stock COSMIC default panel omits the network applet; listing
+# cosmic-applet-network here guarantees a GUI path to Wi-Fi on every session.
+
+[panel]
+position="bottom"
+expand=true
+hide_when_active=true
+auto_hide=true
+
+[[panel.left]]
+type="applet"
+applet="cosmic-applet-network"
+
+[[panel.left]]
+type="applet"
+applet="cosmic-applet-bluetooth"
+
+[[panel.top]]
+type="workspace-switcher"
+
+[[panel.right]]
+type="applet"
+applet="cosmic-applet-notifications"
+
+[[panel.right]]
+type="applet"
+applet="cosmic-applet-tray"

@@ -1,0 +1,32 @@
+# PengyOS — build artifacts and machine-local junk (never tracked)
+
+# Local image copies — large binaries
+dist/
+build/
+build-*/
+output/
+out/
+
+# Buildroot checkouts / output if ever placed in-tree
+buildroot/
+BR2_EXTERNAL*/output/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Rust
+target/
+
+# Editors / OS
+*.swp
+*~
+.DS_Store
+
+# Syncthing — this repo syncs over Syncthing; never commit its transit/
+# conflict files (they appear as ".syncthing.<name>.tmp" / "*.sync-conflict-*").
+.syncthing.*.tmp
+*.sync-conflict-*

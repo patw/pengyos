@@ -1,0 +1,32 @@
+# PengyOS Desktop - the login screen: greetd running COSMIC's greeter
+# (cosmic-greeter on cosmic-comp, as the cosmic-greeter user), as Pop!_OS does.
+# After a password is accepted greetd starts the COSMIC session as that user
+# (/usr/libexec/pengyos/start-cosmic, PAM service pengyos-session).
+#
+# Automatic login is opt-in, like Ubuntu's: the installer's "Log in
+# automatically", or `pengyos-autologin on USER` later. greetd then starts that
+# user's session at boot without the greeter (greetd's initial_session: once
+# per boot, so logging out shows the login screen). The live stick logs root in
+# automatically. greetd-config writes /run/greetd/config.toml for all of this.
+[Unit]
+Description=PengyOS login screen (greetd + COSMIC greeter)
+Documentation=https://github.com/pop-os/cosmic-greeter https://git.sr.ht/~kennylevinsen/greetd
+After=systemd-user-sessions.service systemd-udev-settle.service seatd.service
+Wants=systemd-udev-settle.service seatd.service
+Conflicts=getty@tty1.service
+StartLimitBurst=5
+StartLimitIntervalSec=30
+
+[Service]
+Type=simple
+ExecStartPre=/usr/libexec/pengyos/greetd-config
+ExecStart=/usr/bin/greetd --config /run/greetd/config.toml
+IgnoreSIGPIPE=no
+SendSIGHUP=yes
+TimeoutStopSec=30s
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+Alias=display-manager.service

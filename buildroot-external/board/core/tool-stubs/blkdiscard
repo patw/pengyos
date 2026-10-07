@@ -1,0 +1,8 @@
+#!/bin/sh
+# PengyOS stub: 'blkdiscard' is intentionally not shipped on this image.
+# It ships a helpful pointer so an agent (or a human) knows the alternative.
+cat >&2 <<'MSG'
+PengyOS: 'blkdiscard' is not installed in this image.
+  instead, use: dd (zero the device) or a fresh mkfs
+MSG
+exit 127

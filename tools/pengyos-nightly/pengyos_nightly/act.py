@@ -1,0 +1,762 @@
+"""act: take one allowed action all the way to the testing channel.
+
+The order is the safety property:
+
+    guards -> branch -> edit -> recompose defconfigs -> VERSION -> commit
+           -> gate -> build + boot-check + sign + publish (release.sh)
+           -> merge to main -> record
+
+Everything before `release.sh` is local and reversible. `release.sh` is the first
+thing that can affect a machine, and it already refuses a dirty tree and refuses
+to publish an image that was not boot-checked. `main` only moves after a
+successful publish, so main is "what the fleet can actually get".
+
+A failing step stops the run, restores main's working tree, leaves the branch for
+inspection, and records the failure. Nothing is half-published.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+from pengyos_nightly import config as C
+from pengyos_nightly import edits as E
+from pengyos_nightly import guards as G
+from pengyos_nightly import state as S
+
+DRY = "(dry run)"
+
+
+def _run(run, argv, **kw) -> subprocess.CompletedProcess:
+    return run(argv, capture_output=True, text=True, **kw)
+
+
+def _git(run, repo: Path, *args, check=True) -> str:
+    p = _run(run, ["git", "-C", str(repo), *args])
+    if check and p.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} failed: {p.stderr.strip()[:400]}")
+    return (p.stdout or "").strip()
+
+
+def published_versions(site: Path) -> set[str]:
+    """Versions already in the update feed, across every image."""
+    out: set[str] = set()
+    for img in sorted((site / "update").glob("*")) if (site / "update").is_dir() else []:
+        if not img.is_dir():
+            continue
+        for v in img.glob("*"):
+            if v.is_dir() and (v / "manifest.json").exists():
+                out.add(v.name)
+    return out
+
+
+def next_version(repo: Path, site: Path) -> tuple[str, str]:
+    """The version this release should carry.
+
+    A VERSION that has never been published is not a used version: 26.10.8 was
+    built and gated but never published, so publishing it is not a new release
+    line — bumping past it would leave a phantom version in the history.
+    """
+    current = (repo / "VERSION").read_text().strip()
+    if current not in published_versions(site):
+        return current, f"{current} has never been published, so it is reused"
+    parts = current.split(".")
+    parts[-1] = str(int(parts[-1]) + 1)
+    bumped = ".".join(parts)
+    return bumped, f"{current} is already published, so this release is {bumped}"
+
+
+def notes_for(action: dict, version: str, version_note: str = "") -> str:
+    lines = [f"PengyOS {version} - nightly {action['lane']} lane.", ""]
+    if version_note:
+        lines.append(f"({version_note})")
+        lines.append("")
+    cves = action.get("cves") or []
+    closes = set(action.get("closes") or [])
+    if closes:
+        if action.get("shape") == "patch_dir":
+            lines.append(f"{action['component']} {action['current']} carries "
+                         f"{len(action.get('patches') or [])} upstream fix commit(s), "
+                         f"closing {len(closes)} security issue(s):")
+        else:
+            lines.append(f"{action['component']} {action['current']} -> {action['target']} "
+                         f"closes {len(closes)} security issue(s):")
+        for c in cves:
+            if c["cve"] not in closes:
+                continue
+            commit = (c.get("fix_commit") or {}).get("sha", "")
+            lines.append(f"- {c['cve']} ({c['priority']}"
+                         + (f", CVSS {c['cvss']}" if c.get("cvss") else "")
+                         + (", actively exploited" if c.get("kev") else "")
+                         + (f", upstream {commit[:12]}" if commit else "")
+                         + f"): {c.get('affected_note') or c.get('note', '')}")
+        lines.append("")
+    other = [c["cve"] for c in cves if c["cve"] not in closes]
+    if other:
+        lines.append(f"Still open in {action['component']}: {', '.join(other)}.")
+        lines.append("")
+    lines.append(f"Editions rebuilt: {', '.join(action['editions'])}.")
+    if action.get("risks"):
+        lines.append("")
+        lines += [f"Note: {r}" for r in action["risks"]]
+    return "\n".join(lines) + "\n"
+
+
+def commit_message(action: dict, version: str) -> str:
+    n = len(action.get("closes") or [])
+    if action.get("shape") == "patch_dir":
+        what = (f"carries {len(action.get('patches') or [])} upstream fix commit(s), "
+                f"closing {n} CVE match(es)" if n else
+                f"carries {len(action.get('patches') or [])} upstream fix commit(s)")
+        head = f"nightly {action['lane']}: {action['component']} {action['current']} {what}"
+    else:
+        what = f"closes {n} CVE match(es)" if n else "routine bump"
+        head = (f"nightly {action['lane']}: {action['component']} {action['current']} -> "
+                f"{action['target']} ({what})")
+    return (f"{head}\n\n"
+            f"Applied by pengyos-nightly act; published to {G.CHANNEL} as {version}. "
+            f"Stable is untouched.\n")
+
+
+def _prune_empty(run, repo: Path, path: str) -> None:
+    """Remove directories a reverted file leaves behind, up to the external tree.
+
+    Deleting the last patch under patches/<pkg>/<version>/ leaves two empty
+    directories. They are harmless to a build and misleading to a reader: an empty
+    patches/libxml2/ says "we carry libxml2 patches" when we carry none.
+    """
+    import os
+    cur = (repo / path).parent
+    stop = repo / "buildroot-external"
+    while cur != stop and cur.is_dir():
+        try:
+            os.rmdir(cur)               # only succeeds when empty
+        except OSError:
+            break
+        cur = cur.parent
+
+
+def _revert_dropped(run, repo: Path, action: dict) -> None:
+    """Put the working tree back to main's state for one dropped action.
+
+    A change that failed its pre-flight must not reach the commit that gets published
+    and merged: a patch that does not apply is not something the image carries, and
+    leaving it in main means the next build applies it and fails. Files main does not
+    know about are removed rather than checked out, because `git checkout <path>`
+    errors on a path that does not exist in HEAD.
+    """
+    for e in action.get("edits") or []:
+        path = e.get("path", "")
+        if not path:
+            continue
+        in_head = _run(run, ["git", "-C", str(repo), "cat-file", "-e", f"HEAD:{path}"])
+        if in_head.returncode != 0:
+            target = repo / path
+            if target.is_dir():
+                import shutil
+                shutil.rmtree(target)
+            elif target.exists():
+                target.unlink()
+                _prune_empty(run, repo, path)
+            continue
+        _git(run, repo, "checkout", "HEAD", "--", path)
+
+
+def _commit(run, repo: Path, message: str) -> str:
+    """Commit what is staged, or say nothing was staged.
+
+    An edit can turn out to be a no-op — an `ensure` whose content is already there,
+    a version already at its target — and `git commit` with nothing staged is an
+    error, not a fact about the world. Reporting it as a failure would blame the batch
+    for a change that was already true.
+    """
+    if _run(run, ["git", "-C", str(repo), "diff", "--cached", "--quiet"]).returncode == 0:
+        return "(nothing staged)"
+    _git(run, repo, "commit", "-m", message)
+    return _git(run, repo, "rev-parse", "--short", "HEAD")
+
+
+def published_today(state_dir: Path, today: dt.date) -> int:
+    """Releases this loop already published on `today`, from its own action log.
+
+    `release_cap` needs a fact, not an intention: the only trustworthy record of what
+    reached the feed is what the loop wrote when it succeeded.
+    """
+    path = state_dir / "actions.json"
+    if not path.exists():
+        return 0
+    try:
+        log = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return 0
+    stamp = today.isoformat()
+    # Distinct versions, not entries: a batch writes one entry per change plus one
+    # batch entry, and all of them describe the *same* published image.
+    versions = {a.get("version") for a in log.get("actions", [])
+                if a.get("published") and str(a.get("date", ""))[:10] == stamp
+                and a.get("version")}
+    if versions:
+        return len(versions)
+    return sum(1 for a in log.get("actions", [])
+               if a.get("published") and str(a.get("date", ""))[:10] == stamp
+               and a.get("kind") != "batch")
+
+
+def batch_notes(actions: list[dict], version: str, version_note: str = "") -> str:
+    """One notes file for the whole release: every change, with its own evidence.
+
+    The notes are what a machine on the testing channel (and the operator, the next
+    day) reads to know what actually changed in this image. A batch that only says
+    "twelve updates" is not reviewable; a batch that names each change and the CVE it
+    closed is.
+    """
+    cves = sorted({c for a in actions for c in (a.get("closes") or [])})
+    lines = [f"PengyOS {version} - nightly batch of {len(actions)} change(s).", ""]
+    if version_note:
+        lines.append(f"({version_note})")
+        lines.append("")
+    if cves:
+        lines.append(f"Closes {len(cves)} security issue(s): {', '.join(cves)}.")
+        lines.append("")
+    for a in actions:
+        n = len(a.get("closes") or [])
+        if a.get("shape") == "patch_dir":
+            what = (f"carries {len(a.get('patches') or [])} upstream fix commit(s)"
+                    + (f", closing {n} security issue(s)" if n else ""))
+            lines.append(f"- {a['component']} {a['current']} ({a['lane']}): {what}")
+        else:
+            what = f"closes {n} security issue(s)" if n else "routine bump"
+            lines.append(f"- {a['component']} {a['current']} -> {a['target']} "
+                         f"({a['lane']}, {what})")
+        for c in (a.get("cves") or []):
+            if c["cve"] not in (a.get("closes") or []):
+                continue
+            commit = (c.get("fix_commit") or {}).get("sha", "")
+            lines.append(f"    - {c['cve']} ({c['priority']}"
+                         + (f", CVSS {c['cvss']}" if c.get("cvss") else "")
+                         + (", actively exploited" if c.get("kev") else "")
+                         + (f", upstream {commit[:12]}" if commit else "")
+                         + f"): {c.get('affected_note') or c.get('note', '')}")
+        for r in (a.get("risks") or []):
+            lines.append(f"    - Note: {r}")
+    editions = sorted({e for a in actions for e in (a.get("editions") or [])})
+    lines.append("")
+    lines.append(f"Editions rebuilt: {', '.join(editions)}.")
+    lines.append("Verified as a batch: this image was built with all of the above in it "
+                 "and boot-checked before it was signed.")
+    return "\n".join(lines) + "\n"
+
+
+def batch_commit_message(action: dict, version: str, index: int, total: int) -> str:
+    """One commit per change, so each keeps its own *why* inside one shared branch."""
+    return commit_message(action, version).replace(
+        "Applied by pengyos-nightly act;",
+        f"Applied by pengyos-nightly act (change {index + 1} of {total} in one batch;")
+
+
+def batch_merge_message(actions: list[dict], version: str, branch: str) -> str:
+    names = ", ".join(a["component"] for a in actions)
+    n = len({c for a in actions for c in (a.get("closes") or [])})
+    return (f"Merge {branch}: {len(actions)} change(s) [{names}] as {version} on "
+            f"{G.CHANNEL}\n\n"
+            f"One signed image carrying {len(actions)} change(s)"
+            + (f", {n} CVE match(es) closed" if n else "")
+            + ". Boot-checked before signing. Stable is untouched.\n")
+
+
+def _failed_files(detail: str) -> str:
+    """The files a patch failed on, from make's own output — enough for a human to
+    decide 'strip the test hunks' versus 'wrong fix' without re-running the build."""
+    names = re.findall(r"patching file (\S+)|saving rejects to file (\S+)|FAILED at",
+                       detail)
+    files = [n for pair in names for n in pair if n]
+    if files:
+        return ", ".join(sorted(set(files)))
+    return detail.splitlines()[0][:80] if detail else "the source"
+
+
+def refresh_package(run, build_root: Path, br_version: str, external_tree: str,
+                    targets: list[str], pkg: str) -> list[str]:
+    """Re-extract and re-patch one package in each output tree, and prove the patch
+    applies before anything expensive starts.
+
+    Two separate reasons, both learned the hard way on 2026-10-05:
+
+    * Buildroot's stamps say `.stamp_extracted` / `.stamp_patched` are done, and a
+      new patch under BR2_GLOBAL_PATCH_DIR changes nothing Buildroot can see — an
+      existing tree would rebuild the image with the old, unpatched source still
+      sitting in build/<pkg>-<version>. `<pkg>-dirclean` is what makes the patch real.
+    * A cherry-picked upstream commit can apply to the source and fail on the
+      upstream's own test files (podman's did: 3 hunks OK in
+      libpod/container_internal_common.go, 2 FAILED in test/e2e/run_working_dir_test.go).
+      `<pkg>-patch` runs extract + patch only, so that is caught in seconds instead
+      of twenty minutes into a build — before any publish, not after.
+    """
+    src = build_root / f"buildroot-{br_version}"
+    import os
+    env = {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
+    done = []
+    for t in targets:
+        for step in (f"{pkg}-dirclean", f"{pkg}-patch"):
+            argv = ["make", "-C", str(src), f"O={build_root / 'output' / t}",
+                    f"BR2_EXTERNAL={external_tree}", step]
+            p = _run(run, argv, env=env)
+            if p.returncode != 0:
+                out = (p.stdout or "") + (p.stderr or "")
+                bad = [l for l in out.splitlines() if "FAILED" in l or "error:" in l][:4]
+                raise RuntimeError(f"{step} failed in {t}: "
+                                   + ("; ".join(bad) or out[-400:]))
+        done.append(t)
+    return done
+
+
+def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
+            state_dir: Path, apply: bool = False, run=subprocess.run,
+            today: dt.date | None = None) -> dict:
+    today = today or dt.date.today()
+    journal: list[dict] = []
+    result = {"action": action["id"], "applied": False, "published": False,
+              "journal": journal, "channel": G.CHANNEL}
+
+    def step(name, ok, detail=""):
+        journal.append({"step": name, "ok": ok, "detail": detail})
+        print(f"[act] {name}: {detail or ('ok' if ok else 'failed')}", flush=True)
+        return ok
+
+    def bail(name, detail):
+        step(name, False, detail)
+        if apply:
+            try:
+                _git(run, repo, "checkout", "-f", "main")
+            except RuntimeError as exc:
+                step("restore main", False, str(exc))
+        result["error"] = f"{name}: {detail}"
+        return result
+
+    # --- guards, again, at the moment of action -------------------------------
+    if not action.get("allowed"):
+        return bail("guard", f"action {action['id']} is not allowed in the plan: "
+                             + ", ".join(action.get("refused_by", [])))
+    if not apply:
+        step("dry run", True, f"{DRY}: would apply {len(action['edits'])} edit(s) and "
+                             f"publish to {G.CHANNEL}; nothing on disk changed")
+        for e in action["edits"]:
+            print(E.Edit(**e).preview())
+        return result
+    if not cfg["act_enabled"]:
+        return bail("kill switch", "act_enabled = false in nightly.toml")
+    key = C.release_key(cfg)
+    ok, why = G.key_present(key)
+    if not ok:
+        return bail("key_present", why)
+    remote = C.site_remote(cfg) if cfg["push"] else None
+    if cfg["push"] and not remote:
+        return bail("site_remote", "push = true but PENGYOS_SITE_REMOTE is not set")
+    ok, why = G.clean_tree(repo, run)
+    if not ok:
+        return bail("clean_tree", why)
+    step("guards", True, "action allowed, key present, tree clean")
+
+    # --- branch, edits, VERSION, commit ---------------------------------------
+    # Everything that reads or writes the repo is inside the try: a repo that is not
+    # a repo, or a VERSION file that is not there, is a reported failure, not a
+    # traceback in a cron log.
+    try:
+        base = _git(run, repo, "rev-parse", "HEAD")
+        branch = f"nightly/{today.isoformat()}-{action['component']}"
+        version, why = next_version(repo, site)
+        result["version"] = version
+        result["branch"] = branch
+        _git(run, repo, "checkout", "-b", branch)
+        step("branch", True, branch)
+        touched = E.apply_edits(repo, [E.Edit(**e) for e in action["edits"]])
+        step("edits", True, ", ".join(touched))
+        if any("configs/layers/" in t for t in touched):
+            p = _run(run, ["python3", "scripts/compose-defconfigs.py"], cwd=str(repo))
+            if p.returncode != 0:
+                return bail("compose-defconfigs", (p.stderr or p.stdout).strip()[:400])
+            step("compose-defconfigs", True, "defconfigs regenerated from the layers")
+        (repo / "VERSION").write_text(version + "\n")
+        step("VERSION", True, f"{version} ({why})")
+        _git(run, repo, "add", "-A")
+        _git(run, repo, "commit", "-m", commit_message(action, version))
+        step("commit", True, _git(run, repo, "rev-parse", "--short", "HEAD"))
+    except (RuntimeError, ValueError, OSError) as exc:
+        return bail("local edit", str(exc))
+
+    # --- the gate, before anything is built -----------------------------------
+    p = _run(run, ["python3", "scripts/pengyos_gate.py", "run", "--repo", ".",
+                   "--mode", "full", "--base", base], cwd=str(repo), timeout=3600)
+    if p.returncode != 0:
+        return bail("gate_first", "the repo gate failed; nothing was built or published:\n"
+                                  + (p.stdout + p.stderr)[-1500:])
+    step("gate_first", True, "repo gate green")
+
+    # --- make the change real in the existing trees ---------------------------
+    try:
+        import tomllib
+        targets = tomllib.loads((repo / "targets.toml").read_text())["targets"]
+        by_name = {t["name"]: t for t in targets}
+        br_version = targets[0]["br_version"]
+        # external_tree in targets.toml is relative to the targets file (that is how
+        # pengyos-build resolves it), not to whatever cwd this happens to run from.
+        tree = str((repo / by_name[action["editions"][0]]["external_tree"]).resolve())
+        refreshed = refresh_package(run, build_root, br_version, tree,
+                                    action["editions"], action["component"])
+        step("dirclean", True, f"{action['component']} re-extracted and re-patched in "
+                               f"{', '.join(refreshed)}")
+    except RuntimeError as exc:
+        # Remember it. The pre-flight is cheap but it spends the night's one action
+        # slot, so a candidate that is known not to apply would block a good one
+        # forever, and re-extracting the package in every edition every night is not
+        # free either. This is a human's call, so it is recorded as one.
+        result["patch_failure"] = {"date": today.isoformat(),
+                                   "where": _failed_files(str(exc)),
+                                   "detail": str(exc)[:400]}
+        return bail("dirclean", str(exc))
+
+    # --- build, boot-check, sign, publish -------------------------------------
+    state_dir.mkdir(parents=True, exist_ok=True)
+    notes = state_dir / f"notes-{action['id']}.md"
+    notes.write_text(notes_for(action, version))
+    argv = ["scripts/release.sh", "--publish", "--channel", G.CHANNEL,
+            "--notes", str(notes)]
+    if cfg["skip_cosmic"]:
+        argv.append("--skip-cosmic")
+    if cfg["push"]:
+        argv.append("--push")
+    argv += [t for t in action["editions"]]
+    try:
+        G.assert_locked(argv)
+    except G.GuardError as exc:
+        return bail("channel_locked", str(exc))
+    env = {"PENGYOS_RELEASE_KEY": key or ""}
+    if remote:
+        env["PENGYOS_SITE_REMOTE"] = remote
+    step("release", True, " ".join(argv))
+    p = _run(run, argv, cwd=str(repo), env={**__import__("os").environ, **env})
+    if p.returncode != 0:
+        return bail("release", "build / boot check / publish failed; nothing was "
+                               "published:\n" + (p.stdout + p.stderr)[-2000:])
+    step("published", True, f"{version} on {G.CHANNEL}"
+                           + (" and pushed to the live feed" if cfg["push"] else
+                              " (local site dir only)"))
+
+    # --- main moves only after a successful publish ---------------------------
+    try:
+        _git(run, repo, "checkout", "main")
+        _git(run, repo, "merge", "--no-ff", branch, "-m",
+             f"Merge {branch}: {action['component']} {action['target']} on {G.CHANNEL}")
+        step("merge", True, f"main now contains {branch}")
+    except RuntimeError as exc:
+        return bail("merge", f"published {version} to {G.CHANNEL} but could not merge "
+                             f"{branch} into main: {exc}")
+
+    result["applied"] = result["published"] = True
+    return result
+
+
+def record(result: dict, action: dict, state_dir: Path, st: dict, today: dt.date,
+           run=subprocess.run, repo: Path | None = None) -> None:
+    """actions.json + the attestation chain + state's cooldown map."""
+    path = state_dir / "actions.json"
+    log = json.loads(path.read_text()) if path.exists() else {"actions": []}
+    entry = {"date": today.isoformat(), "action": action["id"],
+             "component": action["component"], "lane": action["lane"],
+             "current": action["current"], "target": action["target"],
+             "shape": action["shape"], "channel": G.CHANNEL,
+             "version": result.get("version", ""), "branch": result.get("branch", ""),
+             "published": result.get("published", False), "error": result.get("error", ""),
+             "cves": list(action.get("closes") or
+                          [c["cve"] for c in action.get("cves", []) if c.get("covered")]),
+             "editions": action["editions"]}
+    log["actions"].append(entry)
+    S.save(path, log)
+    # Only a published action consumes the cooldown. A failed attempt is recorded —
+    # it is evidence about the candidate — but it must not spend the component's
+    # cooldown: the first real run on 2026-10-05 failed at the patch pre-flight and
+    # then found libxml2 blocked for 7 days by its own failure, and the plan moved on
+    # to a different package.
+    if result.get("published"):
+        st.setdefault("actions", {})[action["component"]] = today.isoformat()
+        # A patch shape does not move the version, so pkg-stats keeps reporting the
+        # same CVEs tomorrow. Without recording the fix here the loop cries wolf about
+        # issues it has already closed, re-triages them, and re-proposes the same action
+        # the moment the cooldown expires. This is a distinct resolution kind because it
+        # is a different fact: not "upstream fixed it" but "we carry the fix".
+        if action.get("shape") == "patch_dir":
+            for cve in action.get("closes") or []:
+                key = f"{cve}|{action['component']}"
+                if key in st["cves"]:
+                    st["cves"][key]["patched_by"] = {
+                        "date": today.isoformat(), "version": action["current"],
+                        "release": result.get("version", ""),
+                        "patches": list(action.get("patches") or [])}
+    # A patch that was proved not to applies is remembered too, so the planner refuses
+    # the candidate by name instead of spending the night's one action slot on it again.
+    if result.get("patch_failure"):
+        st.setdefault("patch_failures", {})[action["component"]] = result["patch_failure"]
+    S.save(state_dir / "state.json", st)
+
+    if repo is not None:
+        # The chain is worth having, but a failure here must not turn a recorded,
+        # already-reported action into a traceback: the action log and the state
+        # update above are the parts the next night depends on.
+        try:
+            data = json.dumps(entry, sort_keys=True)
+            _run(run, [sys.executable, "-m", "pengyos_attest", "append",
+                       "--log", str(state_dir / "attest.jsonl"), "--type", "nightly-act",
+                       "--data", data], cwd=str(repo / "tools" / "pengyos-attest"))
+        except (OSError, ValueError) as exc:
+            print(f"[act] attest record skipped: {exc}")
+
+
+# --- phase 3: a batch of actions, one release ---------------------------------
+
+
+def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site: Path,
+              state_dir: Path, apply: bool = False, run=subprocess.run,
+              today: dt.date | None = None) -> dict:
+    """Apply a batch of allowed actions and publish **one** signed image.
+
+    The batch is the unit of work; the signed image is the unit of risk. Everything
+    that is per-change (edits, commits, package pre-flights) runs once per action;
+    everything that is per-image (defconfig recompose, VERSION, the gate, the build,
+    the boot check, the signature, the publish, the merge) runs once for the batch.
+
+    A package whose pre-flight fails is dropped and recorded, and the batch continues
+    without it: one bad cherry-pick must not spend the night. A build or boot failure
+    publishes nothing at all.
+    """
+    today = today or dt.date.today()
+    journal: list[dict] = []
+    result = {"kind": "batch", "applied": False, "published": False,
+              "journal": journal, "channel": G.CHANNEL,
+              "planned": [a["id"] for a in actions], "applied_actions": [],
+              "dropped": []}
+
+    def step(name, ok, detail=""):
+        journal.append({"step": name, "ok": ok, "detail": detail})
+        print(f"[act] {name}: {detail or ('ok' if ok else 'failed')}", flush=True)
+        return ok
+
+    def bail(name, detail):
+        step(name, False, detail)
+        if apply:
+            try:
+                _git(run, repo, "checkout", "-f", "main")
+            except RuntimeError as exc:
+                step("restore main", False, str(exc))
+        result["error"] = f"{name}: {detail}"
+        return result
+
+    # --- guards, again, at the moment of action -------------------------------
+    if not actions:
+        return bail("guard", "the batch is empty")
+    not_allowed = [a["id"] for a in actions if not a.get("allowed")]
+    if not_allowed:
+        return bail("guard", "refusing a batch containing actions the plan did not allow: "
+                             + ", ".join(not_allowed))
+    if not apply:
+        step("dry run", True, f"{DRY}: batch of {len(actions)} action(s), one release to "
+                             f"{G.CHANNEL}; nothing on disk changed")
+        for a in actions:
+            print(f"  - {a['id']}: {len(a['edits'])} edit(s), editions "
+                  f"{', '.join(a['editions'])}")
+            for e in a["edits"]:
+                print(E.Edit(**e).preview())
+        return result
+    if not cfg["act_enabled"]:
+        return bail("kill switch", "act_enabled = false in nightly.toml")
+    key = C.release_key(cfg)
+    ok, why = G.key_present(key)
+    if not ok:
+        return bail("key_present", why)
+    remote = C.site_remote(cfg) if cfg["push"] else None
+    if cfg["push"] and not remote:
+        return bail("site_remote", "push = true but PENGYOS_SITE_REMOTE is not set")
+    done = published_today(state_dir, today)
+    ok, why = G.release_cap(done, cfg.get("max_releases", 1))
+    if not ok:
+        return bail("release_cap", why)
+    ok, why = G.batch_conflict(actions)
+    if not ok:
+        return bail("batch_conflict", why)
+    ok, why = G.clean_tree(repo, run)
+    if not ok:
+        return bail("clean_tree", why)
+    step("guards", True, f"{len(actions)} action(s) allowed, key present, tree clean, {why}")
+
+    # --- one branch; every edit applied, but nothing committed yet ------------
+    # The order matters: pre-flight decides *which* changes are real, and a change
+    # that fails it must not end up in the commit that gets published and merged.
+    try:
+        base = _git(run, repo, "rev-parse", "HEAD")
+        branch = f"nightly/{today.isoformat()}-batch"
+        version, why = next_version(repo, site)
+        result["version"] = version
+        result["branch"] = branch
+        _git(run, repo, "checkout", "-b", branch)
+        step("branch", True, f"{branch} ({len(actions)} action(s))")
+        (repo / "VERSION").write_text(version + "\n")
+        touched: dict[str, list[str]] = {}
+        for a in actions:
+            touched[a["id"]] = E.apply_edits(repo, [E.Edit(**e) for e in a["edits"]])
+            step(f"edit {a['component']}", True, ", ".join(touched[a["id"]]))
+    except (RuntimeError, ValueError, OSError) as exc:
+        return bail("local edit", str(exc))
+
+    # --- pre-flight every package: cheap, and it decides what is real ---------
+    try:
+        import tomllib
+        targets = tomllib.loads((repo / "targets.toml").read_text())["targets"]
+        by_name = {t["name"]: t for t in targets}
+        br_version = targets[0]["br_version"]
+        tree = str((repo / by_name[actions[0]["editions"][0]]["external_tree"]).resolve())
+    except (OSError, ValueError, KeyError) as exc:
+        return bail("targets.toml", f"could not read the build targets: {exc}")
+
+    live: list[dict] = []
+    for a in actions:
+        try:
+            refreshed = refresh_package(run, build_root, br_version, tree,
+                                        a["editions"], a["component"])
+            step("pre-flight", True, f"{a['component']} re-extracted and re-patched in "
+                                     f"{', '.join(refreshed)}")
+            live.append(a)
+        except RuntimeError as exc:
+            # One bad cherry-pick does not spend the night. Record it as a named
+            # failure so the planner refuses this candidate by name next time, drop it
+            # from this batch, and take its edits back out of the tree.
+            result["dropped"].append(a["id"])
+            result.setdefault("patch_failures", {})[a["component"]] = {
+                "date": today.isoformat(), "where": _failed_files(str(exc)),
+                "detail": str(exc)[:400]}
+            step("pre-flight", False, f"{a['component']} dropped from the batch: {exc}")
+            try:
+                _revert_dropped(run, repo, a)
+            except RuntimeError as exc2:
+                return bail("revert dropped", f"{a['component']}: {exc2}")
+    if not live:
+        return bail("pre-flight", "every package in the batch failed its pre-flight; "
+                                  "nothing was built or published")
+
+    # --- commit: VERSION, then one commit per surviving change ----------------
+    # Staged per step, deliberately. `git add -A` before the VERSION commit would
+    # swallow every pending edit into it and leave the per-change commits empty —
+    # one big commit is exactly what "small, atomic commits whose messages say why"
+    # is not, and it is what makes a batch reviewable change by change.
+    try:
+        _git(run, repo, "add", "VERSION")
+        _commit(run, repo, f"nightly batch {version}: set VERSION\n\n{why}\n")
+        step("VERSION", True, version)
+        for i, a in enumerate(live):
+            _git(run, repo, "add", "--", *touched[a["id"]])
+            _commit(run, repo, batch_commit_message(a, version, i, len(live)))
+            step(f"commit {i + 1}/{len(live)}", True,
+                 f"{a['component']}: {', '.join(touched[a['id']])}")
+        if any(any("configs/layers/" in t for t in touched[a["id"]]) for a in live):
+            p = _run(run, ["python3", "scripts/compose-defconfigs.py"], cwd=str(repo))
+            if p.returncode != 0:
+                return bail("compose-defconfigs", (p.stderr or p.stdout).strip()[:400])
+            _git(run, repo, "add", "-A")
+            _commit(run, repo, f"nightly batch {version}: recompose defconfigs from the layers")
+            step("compose-defconfigs", True, "defconfigs regenerated once for the batch")
+    except (RuntimeError, ValueError, OSError) as exc:
+        return bail("local edit", str(exc))
+
+    # --- the gate, once, before anything is built -----------------------------
+    p = _run(run, ["python3", "scripts/pengyos_gate.py", "run", "--repo", ".",
+                   "--mode", "full", "--base", base], cwd=str(repo), timeout=3600)
+    if p.returncode != 0:
+        return bail("gate_first", "the repo gate failed; nothing was built or published:\n"
+                                  + (p.stdout + p.stderr)[-1500:])
+    step("gate_first", True, "repo gate green")
+
+    # --- build, boot-check, sign, publish: once -------------------------------
+    editions = sorted({e for a in live for e in a["editions"]})
+    state_dir.mkdir(parents=True, exist_ok=True)
+    notes = state_dir / f"notes-batch-{today.isoformat()}.md"
+    notes.write_text(batch_notes(live, version))
+    argv = ["scripts/release.sh", "--publish", "--channel", G.CHANNEL,
+            "--notes", str(notes)]
+    if cfg["skip_cosmic"]:
+        argv.append("--skip-cosmic")
+    if cfg["push"]:
+        argv.append("--push")
+    argv += editions
+    try:
+        G.assert_locked(argv)
+    except G.GuardError as exc:
+        return bail("channel_locked", str(exc))
+    env = {"PENGYOS_RELEASE_KEY": key or ""}
+    if remote:
+        env["PENGYOS_SITE_REMOTE"] = remote
+    step("release", True, " ".join(argv))
+    p = _run(run, argv, cwd=str(repo), env={**__import__("os").environ, **env})
+    if p.returncode != 0:
+        result["batch_failure"] = {"date": today.isoformat(),
+                                   "detail": (p.stdout + p.stderr)[-400:]}
+        return bail("release", "build / boot check / publish failed; nothing was "
+                               "published:\n" + (p.stdout + p.stderr)[-2000:])
+    step("published", True, f"{version} on {G.CHANNEL} carrying {len(live)} change(s)"
+                           + (" and pushed to the live feed" if cfg["push"] else
+                              " (local site dir only)"))
+
+    # --- main moves only after a successful publish ---------------------------
+    try:
+        _git(run, repo, "checkout", "main")
+        _git(run, repo, "merge", "--no-ff", branch,
+             "-m", batch_merge_message(live, version, branch))
+        step("merge", True, f"main now contains {branch}")
+    except RuntimeError as exc:
+        return bail("merge", f"published {version} to {G.CHANNEL} but could not merge "
+                             f"{branch} into main: {exc}")
+
+    result["applied"] = result["published"] = True
+    result["applied_actions"] = [a["id"] for a in live]
+    result["editions"] = editions
+    return result
+
+
+def record_batch(result: dict, actions: list[dict], state_dir: Path, st: dict,
+                 today: dt.date, run=subprocess.run, repo: Path | None = None) -> None:
+    """Record the batch: one action entry per change that shipped, one batch entry,
+    the cooldown map, and the `patched_by` facts for patch shapes."""
+    by_id = {a["id"]: a for a in actions}
+    shipped = [by_id[i] for i in (result.get("applied_actions") or []) if i in by_id]
+    for action in shipped:
+        record(result, action, state_dir, st, today, run=run, repo=repo)
+    for component, bad in (result.get("patch_failures") or {}).items():
+        st.setdefault("patch_failures", {})[component] = bad
+
+    entry = {"kind": "batch", "date": today.isoformat(),
+             "published": bool(result.get("published")),
+             "version": result.get("version", ""), "branch": result.get("branch", ""),
+             "channel": G.CHANNEL,
+             "changes": [a["component"] for a in shipped],
+             "cves": sorted({c for a in shipped for c in (a.get("closes") or [])}),
+             "editions": result.get("editions", []),
+             "dropped": result.get("dropped", []), "error": result.get("error", "")}
+    path = state_dir / "actions.json"
+    log = json.loads(path.read_text()) if path.exists() else {"actions": []}
+    log["actions"].append(entry)
+    S.save(path, log)
+    S.save(state_dir / "state.json", st)
+
+    if repo is None or not shipped:
+        return
+    try:
+        data = json.dumps({"kind": "batch", "version": result.get("version", ""),
+                           "changes": [a["component"] for a in shipped],
+                           "cves": entry["cves"], "dropped": entry["dropped"]},
+                          sort_keys=True)
+        _run(run, [sys.executable, "-m", "pengyos_attest", "append",
+                   "--log", str(state_dir / "attest.jsonl"), "--type", "nightly-batch",
+                   "--data", data], cwd=str(repo / "tools" / "pengyos-attest"))
+    except (OSError, ValueError) as exc:
+        print(f"[act] batch attest record skipped: {exc}")

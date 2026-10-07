@@ -1,0 +1,35 @@
+# PengyOS baseline: default configuration for physical interfaces.
+#
+# Install to: /etc/systemd/network/10-default.network
+#
+# Matches the conventional interface name prefixes produced by systemd's
+# predictable naming (systemd.net-naming-scope(8)): wired (en*), legacy
+# names (eth*), wireless (wlan*) and WWAN (wwan*).
+#
+# Virtual interfaces (docker*, veth*, tap*, tun*, virbr*, br-*, wg*) are
+# intentionally NOT matched: container/VM tooling must manage those on its
+# own, and the baseline must never claim them.
+[Match]
+Name=en* eth* wlan* wwan*
+
+[Network]
+Description=PengyOS default interface
+DHCP=yes
+IPv6AcceptRA=yes
+LLDP=yes
+# Bring the link up even when no cable is attached, so DHCP retries in the
+# background and the interface recovers as soon as a carrier appears.
+ConfigureWithoutCarrier=yes
+
+[DHCPv4]
+UseDNS=yes
+UseDomains=yes
+UseRoutes=yes
+
+[DHCPv6]
+UseDNS=yes
+UseDomains=yes
+
+[IPv6AcceptRA]
+UseDNS=yes
+UseAutonomousPrefix=yes

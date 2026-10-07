@@ -1,0 +1,23 @@
+# ============================================================================
+# PengyOS Server — pengyos-backup.timer (backup cadence)
+# ----------------------------------------------------------------------------
+# Triggers pengyos-backup.service daily at 02:00 (OnCalendar=*-*-* 02:00:00),
+# off-peak so backups do not compete with daytime I/O. Persistent=yes means a
+# missed run (host asleep) is caught up on the next boot/run, so a long downtime
+# does not skip a nightly backup.
+#
+# Timers are enabled by a symlink in timers.target.wants/ (systemd's own
+# convention for on-calendar units), NOT multi-user.target.wants.
+# ============================================================================
+
+[Unit]
+Description=PengyOS Server backup timer
+Documentation=file:/usr/libexec/pengyos/pengyos-backup.sh
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=yes
+Unit=pengyos-backup.service
+
+[Install]
+WantedBy=timers.target

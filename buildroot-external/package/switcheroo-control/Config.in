@@ -1,0 +1,11 @@
+config BR2_PACKAGE_SWITCHEROO_CONTROL
+	bool "switcheroo-control"
+	depends on BR2_PACKAGE_SYSTEMD
+	select BR2_PACKAGE_LIBGUDEV
+	help
+	  Lists the GPUs of a hybrid machine over D-Bus
+	  (net.hadess.SwitcherooControl): COSMIC's launcher, dock,
+	  app library and store offer "Launch using discrete graphics"
+	  through it.
+
+	  https://gitlab.freedesktop.org/hadess/switcheroo-control

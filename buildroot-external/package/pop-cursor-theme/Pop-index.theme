@@ -1,0 +1,7 @@
+# Pop's cursors only (pop-cursor-theme); Pop's icons are not installed.
+# COSMIC's icon theme names Pop as its parent, so the theme must exist.
+[Icon Theme]
+Name=Pop
+Comment=Pop cursors
+Inherits=hicolor
+Directories=

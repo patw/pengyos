@@ -1,0 +1,22 @@
+# ============================================================================
+# PengyOS Desktop — amdgpu runtime-PM / d3cold udev rule
+# ----------------------------------------------------------------------------
+# Part of the Desktop board rootfs-overlay
+# (etc/udev/rules.d/). Drives the amdgpu DRM device to the deepest idle power
+# well (d3cold) when the integrated GPU is idle, which is the dominant power
+# win on a hybrid AMD-iGPU + NVIDIA-dGPU laptop.
+#
+# NVIDIA vendor wiring is OUT of scope (SPEC §2.4–2.5): this rule only touches the
+# open amdgpu DRM device (the iGPU that owns the eDP panel).
+# ============================================================================
+
+# amdgpu DRM device (the PCI bus id of the amdgpu PCI device). Idle -> d3cold.
+# RUNTIME_AUTOSUSPEND_DELAY_MS arms the autosuspend timer (idle before trip).
+ACTION=="add", SUBSYSTEM=="drm", DRIVER=="amdgpu", \
+  ATTR{device/runtime_power/autosuspend_delay_ms}=2000, \
+  ATTR{device/runtime_power/state}="auto"
+
+# Re-arm the timer whenever the amdgpu device is re-activated (e.g. after a
+# PRIME offload round-trip) so it trips d3cold again once idle.
+ACTION=="change", SUBSYSTEM=="drm", DRIVER=="amdgpu", \
+  ATTR{device/runtime_power/state}="auto"

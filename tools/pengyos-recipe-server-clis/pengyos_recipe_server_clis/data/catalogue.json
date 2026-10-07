@@ -1,0 +1,59 @@
+{
+  "_comment": "PengyOS Server comfort-CLI Buildroot catalogue. COMMITTED DATA: the authoritative release metadata (version, tag, upstream URL, license, source sha256) for the six CLIs Buildroot 2026.08 does not ship. Regenerate the version/sha256 from the live upstream release (see tools/pengyos-recipe-server-clis). Emitted recipes are derived deterministically from this file.",
+  "tools": [
+    {
+      "name": "zoxide",
+      "repo": "ajeetdsouza/zoxide",
+      "version": "0.10.0",
+      "tag": "v0.10.0",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "sha256": "4fcd4272b013a10b637dbcc299c58a9924b94470a9042677ca1a204cc2e9150e"
+    },
+    {
+      "name": "sd",
+      "repo": "chmln/sd",
+      "version": "1.1.0",
+      "tag": "v1.1.0",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "sha256": "defdce484f8c92f265e1282490572575028967c2c55d356111d1e49a3ea9a88e"
+    },
+    {
+      "name": "node_exporter",
+      "repo": "prometheus/node_exporter",
+      "version": "1.12.1",
+      "tag": "v1.12.1",
+      "license": "Apache-2.0",
+      "license_file": "LICENSE",
+      "sha256": "a90f1df0fde58d216d4a7d342e64831d2e3257db8084deadbe69754d34b15142"
+    },
+    {
+      "name": "btop",
+      "repo": "aristocratos/btop",
+      "version": "1.4.7",
+      "tag": "v1.4.7",
+      "license": "Apache-2.0",
+      "license_file": "LICENSE",
+      "sha256": "933de2e4d1b2211a638be463eb6e8616891bfba73aef5d38060bd8319baeefc6"
+    },
+    {
+      "name": "helix",
+      "repo": "helix-editor/helix",
+      "version": "25.07.1",
+      "tag": "25.07.1",
+      "license": "MPL-2.0",
+      "license_file": "LICENSE",
+      "sha256": "27c8bc3eba46bc7bab1e3629c6b28ff94882eeff17366b3ea69cd8ceffba7541"
+    },
+    {
+      "name": "neovim",
+      "repo": "neovim/neovim",
+      "version": "0.12.5",
+      "tag": "v0.12.5",
+      "license": "Apache-2.0",
+      "license_file": "LICENSE.txt",
+      "sha256": "a810c95332317bd0017e1ca07e376a8472c79075cbed00fa3737d190a8a0a45a"
+    }
+  ]
+}

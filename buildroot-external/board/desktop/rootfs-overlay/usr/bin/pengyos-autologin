@@ -1,0 +1,52 @@
+#!/bin/sh
+# pengyos-autologin - turn automatic login to the desktop on or off.
+#
+#   pengyos-autologin status
+#   sudo pengyos-autologin on [USER]   (default: the user running sudo)
+#   sudo pengyos-autologin off
+#
+# Off (the default), the desktop starts at the login screen and asks for your
+# password. On, it starts straight into USER's desktop at boot; logging out
+# still shows the login screen. Anyone who can switch the computer on then
+# gets that desktop, so leave it off on laptops and shared machines.
+# Takes effect at the next boot. The setting is /etc/pengyos/autologin.conf
+# (GDM's format, shared with AccountsService).
+set -eu
+CONF=/etc/pengyos/autologin.conf
+
+current() {
+    [ -f "$CONF" ] || return 0
+    en=$(sed -n 's/^[[:space:]]*AutomaticLoginEnable[[:space:]]*=[[:space:]]*//p' "$CONF" | tail -n1)
+    case "$en" in [Tt]rue|1|[Yy]es) sed -n 's/^[[:space:]]*AutomaticLogin[[:space:]]*=[[:space:]]*//p' "$CONF" | tail -n1 ;; esac
+}
+
+need_root() {
+    [ "$(id -u)" = 0 ] || { echo "pengyos-autologin: run it with sudo" >&2; exit 1; }
+}
+
+case "${1:-status}" in
+    status)
+        u=$(current)
+        if [ -n "$u" ]; then echo "automatic login: on ($u)"; else echo "automatic login: off (the login screen asks for a password)"; fi
+        ;;
+    on)
+        need_root
+        u="${2:-${SUDO_USER:-}}"
+        [ -n "$u" ] || { echo "usage: sudo pengyos-autologin on USER" >&2; exit 2; }
+        [ "$u" != root ] || { echo "pengyos-autologin: not for root" >&2; exit 2; }
+        getent passwd "$u" >/dev/null || { echo "pengyos-autologin: no user '$u'" >&2; exit 2; }
+        mkdir -p "$(dirname "$CONF")"
+        printf '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=%s\n' "$u" > "$CONF.new"
+        mv "$CONF.new" "$CONF"
+        echo "automatic login: on ($u), from the next boot"
+        ;;
+    off)
+        need_root
+        mkdir -p "$(dirname "$CONF")"
+        printf '[daemon]\nAutomaticLoginEnable=False\n' > "$CONF.new"
+        mv "$CONF.new" "$CONF"
+        echo "automatic login: off, from the next boot"
+        ;;
+    *)
+        echo "usage: pengyos-autologin status | on [USER] | off" >&2; exit 2 ;;
+esac

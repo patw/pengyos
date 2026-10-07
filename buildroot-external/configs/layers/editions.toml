@@ -1,0 +1,8 @@
+# Which layers make each edition's defconfig (scripts/compose-defconfigs.py).
+# Core ⊆ Server ⊆ Desktop: an edition only ever adds layers.
+[editions]
+pengyos_core_defconfig = ["core"]
+pengyos_server_defconfig = ["core", "server"]
+pengyos_desktop_defconfig = ["core", "server", "desktop"]
+pengyos_server_nvidia_defconfig = ["core", "server", "nvidia-compute"]
+pengyos_desktop_nvidia_defconfig = ["core", "server", "desktop", "nvidia-compute", "nvidia"]

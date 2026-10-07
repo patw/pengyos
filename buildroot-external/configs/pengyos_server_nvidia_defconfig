@@ -1,0 +1,384 @@
+# ============================================================================
+# GENERATED — do not edit. pengyos_server_nvidia_defconfig = core + server + nvidia-compute
+# Edit buildroot-external/configs/layers/*.config, then run
+# scripts/compose-defconfigs.py (docs: configs/layers/README.md).
+# ============================================================================
+
+# ############################################################################
+# ## layer: core
+# ############################################################################
+
+# ============================================================================
+# PengyOS Core — the systemd base every edition builds on
+# ----------------------------------------------------------------------------
+# The core layer of the external-tree (BR2_EXTERNAL) defconfigs; its board glue
+# is board/core.
+#
+# Buildroot defconfigs are bare filenames (no ".defconfig" suffix).
+#
+# Every symbol below exists in Buildroot 2026.08 (verified against
+# buildroot-2026.08's kconfig sources). Buildroot silently ignores unknown
+# symbols in a defconfig, so a made-up BR2_ name is a silent no-op — the
+# symbol-existence verifier (tests/test_symbol_verifier.py) checks every name
+# here against the vendored 2026.08 kconfig list (data/buildroot-2026.08-
+# symbols.txt) and fails the suite on any symbol Buildroot would drop.
+# ============================================================================
+
+# --- Architecture -----------------------------------------------------------
+# x86-64 (choice symbol; the toolchain/endianness details follow from it).
+BR2_x86_64=y
+
+# --- Toolchain / C library --------------------------------------------------
+# systemd will not run on musl/uClibc: BR2_INIT_SYSTEMD depends on
+# BR2_TOOLCHAIN_USES_GLIBC. Selecting the glibc C library for the Buildroot
+# (internal) toolchain satisfies that. (BR2_TOOLCHAIN_BUILDROOT is selected
+# implicitly by the C-library choice; BR2_TOOLCHAIN_HAS_THREADS comes along
+# with any dynamic glibc toolchain.)
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
+BR2_TOOLCHAIN_HAS_THREADS=y
+
+# --- Reproducible builds -----------------------------------------------------
+# UTC + C locale, fixed kernel build user/host/timestamp, SOURCE_DATE_EPOCH
+# everywhere (scripts/release.sh pins it to the PengyOS commit date). Buildroot
+# only promises identical output for the same output directory: build from the
+# same absolute paths on every host you compare.
+BR2_REPRODUCIBLE=y
+
+# --- System init ------------------------------------------------------------
+# systemd is PID 1.
+BR2_INIT_SYSTEMD=y
+# systemd-analyze (blame / critical-chain): measure where boot time goes on
+# real hardware; the journal alone does not show per-unit durations.
+BR2_PACKAGE_SYSTEMD_ANALYZE=y
+
+# --- System name / accounts -------------------------------------------------
+# BR2_TARGET_GENERIC_HOSTNAME: set by the server layer
+# Root password placeholder "pengyos" (override with a real hash in a secure
+# build). Given pre-hashed, with a fixed salt: Buildroot would hash a clear-text
+# value with a random salt, and two builds of one commit would differ in
+# /etc/shadow. `openssl passwd -5 -salt pengyosroot pengyos`, each $ doubled.
+BR2_TARGET_GENERIC_ROOT_PASSWD="$$5$$pengyosroot$$0NxsYkraU5R8qP3TNBTMVJ3Pt2EVVGKNU6vJ9ljsW99"
+
+# --- Serial console / getty -------------------------------------------------
+# Buildroot has no BR2_SERIAL symbol: the serial console IS a getty on a
+# serial port. ttyS0 (the qemu serial line, wired by the kernel fragment's
+# serial8250) hosts the login prompt; the rootfs-overlay ships the
+# getty@.service autologin drop-in that logs in without a password.
+BR2_TARGET_GENERIC_GETTY_PORT="ttyS0"
+
+# --- Userspace packages -----------------------------------------------------
+# D-Bus: the systemd userspace messaging bus.
+BR2_PACKAGE_DBUS=y
+# Core utilities: GNU coreutils. (uutils-coreutils is not a Buildroot package
+# in 2026.08 — the BR2_PACKAGE_UUTILS_COREUTILS name does not exist.)
+BR2_PACKAGE_COREUTILS=y
+# util-linux: the 2026.08 top-level BR2_PACKAGE_UTIL_LINUX package no longer
+# exists; the binaries are split into per-tool subpackages. systemd needs
+# mount/umount/losetup/fsck/swap, which BR2_PACKAGE_UTIL_LINUX_MOUNT ships.
+BR2_PACKAGE_UTIL_LINUX_MOUNT=y
+BR2_PACKAGE_KMOD=y
+BR2_PACKAGE_IPROUTE2=y
+# procps-ng: the real ps/top/free (core utils, SPEC §2.1). BusyBox also ships
+# a ps applet, but procps-ng's is the full-featured one.
+BR2_PACKAGE_PROCPS_NG=y
+BR2_PACKAGE_BASH=y
+BR2_PACKAGE_NFTABLES=y
+BR2_PACKAGE_CHRONY=y
+BR2_PACKAGE_CA_CERTIFICATES=y
+BR2_PACKAGE_OPENSSL=y
+# GNU tar: BusyBox's tar applet has no -z/-J and no --ignore-failed-read, so the
+# nightly pengyos-backup failed every run and every upstream "curl … | tar xz"
+# install line (uv, Go, Syncthing) broke. BusyBox defers to it (noclobber).
+BR2_PACKAGE_TAR=y
+
+# --- SSH (US-CORE-2: reach a headless node over the network) ----------------
+# openssh-server, enabled at boot by the overlay symlink
+# etc/systemd/system/multi-user.target.wants/sshd.service. KEY_UTILS ships
+# ssh-keygen, which sshd.service runs (ssh-keygen -A) to mint host keys on
+# first boot. Root login is key-only (PasswordAuthentication no in the overlay
+# sshd_config); inject a public key at build time via PENGYOS_AUTHORIZED_KEYS_FILE
+# (see board/core/post-build.sh).
+BR2_PACKAGE_OPENSSH=y
+BR2_PACKAGE_OPENSSH_SERVER=y
+BR2_PACKAGE_OPENSSH_CLIENT=y
+BR2_PACKAGE_OPENSSH_KEY_UTILS=y
+
+# --- Hardware firmware (real-hardware support: GPU, wired NIC, WiFi) ---------
+# On the N100 weather station /lib/firmware was empty: i915 (Alder Lake-N GPU)
+# failed to load DMC/GuC firmware and WiFi had no regulatory.db. Ship the small
+# subset an Intel mini-PC actually needs (not all of linux-firmware).
+BR2_PACKAGE_LINUX_FIRMWARE=y
+BR2_PACKAGE_LINUX_FIRMWARE_I915=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_8169=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_9XXX=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_QUZ=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E=y
+# AX200 = iwlwifi-cc-a0 (Buildroot ships it under the 22260 option); miniserv.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22260=y
+# Intel Wireless 8265 (iwlwifi-8265) — behothinkpad.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8265=y
+# Realtek RTL8821CE (rtw88) — behobasement.
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW88=y
+# Broader firmware so the "boot anywhere" stick works on other hardware: AMD GPU,
+# Atheros/Broadcom/Realtek WiFi families.
+BR2_PACKAGE_LINUX_FIRMWARE_AMDGPU=y
+BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_6174=y
+BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_11K_WCN6855=y
+BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XXX=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW89=y
+# regulatory.db — required for any WiFi regulatory domain.
+BR2_PACKAGE_WIRELESS_REGDB=y
+
+# --- Installer / rescue tooling (future: install PengyOS to a target disk) ---
+# The stick doubles as a rescue/installer: partition a target disk (parted /
+# sgdisk / fdisk), format it (mke2fs / mkfs.vfat / btrfs), and make it bootable
+# (grub-install + efibootmgr). grub-install/grub-mkimage/grub-mkconfig come from
+# BR2_TARGET_GRUB2_INSTALL_TOOLS. fdisk is already present via util-linux.
+BR2_PACKAGE_E2FSPROGS=y
+BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y
+BR2_PACKAGE_DOSFSTOOLS=y
+BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
+BR2_PACKAGE_DOSFSTOOLS_FSCK_FAT=y
+BR2_PACKAGE_PARTED=y
+BR2_PACKAGE_BTRFS_PROGS=y
+BR2_PACKAGE_EXFATPROGS=y
+BR2_PACKAGE_EFIBOOTMGR=y
+BR2_PACKAGE_DMIDECODE=y
+BR2_PACKAGE_RSYNC=y
+BR2_PACKAGE_CRYPTSETUP=y
+BR2_PACKAGE_LVM2=y
+BR2_PACKAGE_UTIL_LINUX_FSCK=y
+BR2_PACKAGE_UTIL_LINUX_PARTX=y
+BR2_PACKAGE_UTIL_LINUX_WIPEFS=y
+BR2_TARGET_GRUB2_INSTALL_TOOLS=y
+
+# --- Python (agent-operable OS) ---------------------------------------------
+# Agents script in Python constantly for tasks beyond shell. Ship a
+# batteries-included interpreter + the common stdlib extension modules so an
+# agent (and a human) can operate the system comfortably.
+BR2_PACKAGE_PYTHON3=y
+BR2_PACKAGE_PYTHON3_SSL=y          # ssl / https
+BR2_PACKAGE_PYTHON3_ZLIB=y
+BR2_PACKAGE_PYTHON3_BZIP2=y
+BR2_PACKAGE_PYTHON3_XZ=y
+BR2_PACKAGE_PYTHON3_ZSTD=y
+BR2_PACKAGE_PYTHON3_SQLITE=y       # sqlite3
+BR2_PACKAGE_PYTHON3_READLINE=y     # interactive REPL
+BR2_PACKAGE_PYTHON3_CURSES=y
+BR2_PACKAGE_PYTHON3_PYEXPAT=y      # xml
+BR2_PACKAGE_PYTHON3_UNICODEDATA=y
+BR2_PACKAGE_PYTHON3_DECIMAL=y
+
+# --- Pengy: the built-in agent ------------------------------------------------
+# package/pengy (PengyR): one Rust agent core, three front ends — pengy-cli in
+# every edition, pengy-web from Server, the Qt6 desktop app from Desktop. Ships
+# unconfigured; each user points it at their model (~/.config/pengy).
+BR2_PACKAGE_PENGY=y
+BR2_PACKAGE_PENGY_CLI=y
+
+# --- Rootfs overlay ---------------------------------------------------------
+# $(BR2_EXTERNAL_PENGYOS_PATH) is the absolute path to this external tree
+# (Buildroot exports it because external.desc names the tree "PENGYOS");
+# absolute board-file references keep the target working from any output dir.
+# BR2_ROOTFS_OVERLAY: set by the server layer
+
+# --- Kernel -----------------------------------------------------------------
+# Pin the kernel explicitly — never a floating "latest" (SPEC §1.6).
+BR2_LINUX_KERNEL=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="7.2.5"
+# Kernel headers: use a series Buildroot 2026.08 knows (7.1). Headers <= kernel
+# is the correct relationship; AS_KERNEL starves glibc's dependency check when
+# Buildroot does not yet know the kernel's series (learned on the first builds).
+BR2_KERNEL_HEADERS_7_1=y
+# Build the qemu x86_64 defconfig kernel, then layer the systemd fragment on
+# top (BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES). The fragment supplies the
+# kernel symbols systemd needs at boot (virtio, devtmpfs, serial8250, ext4).
+BR2_LINUX_KERNEL_USE_DEFCONFIG=y
+BR2_LINUX_KERNEL_DEFCONFIG="x86_64"
+# BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES: set by the server layer
+
+# --- Root filesystem (ext4) --------------------------------------------------
+# 1G: the base system is ~70M, but the firmware set + installer tooling above
+# (i915/amdgpu/wifi firmware, e2fsprogs/parted/btrfs/xfs) add up to hundreds of MB.
+BR2_TARGET_ROOTFS_EXT2=y
+BR2_TARGET_ROOTFS_EXT2_4=y
+# BR2_TARGET_ROOTFS_EXT2_SIZE: set by the nvidia-compute layer
+# Post-build tweaks: hostname, provenance copy, GRUB menu install.
+# BR2_ROOTFS_POST_BUILD_SCRIPT: set by the server layer
+
+# --- Bootable USB/disk image: GRUB2 (UEFI) + genimage -------------------------
+# BR2_TARGET_GRUB2 is a *menuconfig* in Buildroot 2026.08 — a valid symbol,
+# settable in defconfigs like any other bool.
+BR2_TARGET_GRUB2=y
+BR2_TARGET_GRUB2_X86_64_EFI=y
+# Video/gfxterm modules so GRUB can draw a full-screen menu with a real font.
+# The stock EFI module list has no video/terminal support, so GRUB falls back to
+# the firmware's tiny 80x25 text mode.
+# serial: grub.cfg probes for a real UART before adding console=ttyS0.
+# BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI: set by the server layer
+BR2_PACKAGE_HOST_DOSFSTOOLS=y
+BR2_PACKAGE_HOST_GENIMAGE=y
+BR2_PACKAGE_HOST_MTOOLS=y
+# post-image.sh stamps the rootfs UUID into grub.cfg + genimage.cfg and
+# assembles the GPT disk image with genimage.
+# BR2_ROOTFS_POST_IMAGE_SCRIPT: set by the server layer
+
+# --- Swap on zram (every edition) ---------------------------------------------
+# No edition had any swap: running out of RAM froze the machine. zram-generator
+# (our package) makes /dev/zram0 a zstd-compressed swap device at boot, sized
+# min(RAM, 8 GiB) of uncompressed data, as Fedora and Pop!_OS do. Kernel side:
+# board/core/linux.fragment.
+BR2_PACKAGE_ZRAM_GENERATOR=y
+# util-linux's mkswap/swapon (and the rest of its basic set): systemd-makefs
+# and the generated swap unit drive them with options BusyBox's applets lack
+# ("Usage: mkswap [-L LBL] BLOCKDEV", zram swap failed). zramctl to inspect it.
+# BR2_PACKAGE_UTIL_LINUX_BINARIES: set by the server layer
+BR2_PACKAGE_UTIL_LINUX_ZRAMCTL=y
+BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_PENGYOS_PATH)/patches"
+
+# ############################################################################
+# ## layer: server
+# ############################################################################
+
+# ============================================================================
+# PengyOS Server layer — Core + remote work + services
+# ----------------------------------------------------------------------------
+# Stacked on layers/core.config (everything Core has, Server has). Adds the
+# server toolset (mosh, tmux, ripgrep, jq, the comfort-CLI set), rootless
+# podman, and the server board (overlay: firewall, monitoring,
+# backup, sshd config). See configs/layers/README.md.
+# ============================================================================
+
+# --- Toolchain ---------------------------------------------------------------
+# C++ runtime: mosh is C++, and it is silently dropped without a C++ toolchain
+# (the same trap Core hit). Enable it up front so the Server toolset holds.
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+
+# --- System name --------------------------------------------------------------
+BR2_TARGET_GENERIC_HOSTNAME="pengyos-server"
+
+# --- Userspace: Server toolset ----------------------------------------------
+# tmux — persistent terminal sessions for servers/remote admin.
+BR2_PACKAGE_TMUX=y
+# mosh — remote shell with roaming/handoff (works across NAT and flaky links).
+BR2_PACKAGE_MOSH=y
+# ripgrep — server-side text search.
+BR2_PACKAGE_RIPGREP=y
+# jq — JSON on the command line (config/data wrangling, backup manifests).
+BR2_PACKAGE_JQ=y
+
+# --- Userspace: Server comfort-CLI set (US-SRV-1) --------------------
+BR2_PACKAGE_BAT=y
+BR2_PACKAGE_EZA=y
+BR2_PACKAGE_FD=y
+BR2_PACKAGE_ZOXIDE=y
+
+# --- Userspace: rootless podman ---------------------------------------------
+# podman — the rootless container engine the Server edition runs on. The
+# overlay's podman.socket + drop-in make it usable without a privileged
+# daemon; the package supplies the `podman` binary.
+BR2_PACKAGE_PODMAN=y
+
+# --- The developer (US-DEV-*, US-DSK-3) ------------------------------------------
+# Every Server is a build box (and so is every Desktop, which stacks on this).
+# Python and its stdlib modules come from Core (ssl, zlib, sqlite, xz/bz2/zstd,
+# readline, curses, expat, decimal); this adds the CJK codecs and pip. `pip install --user`, venvs and uv work against it; wheels that need
+# compiling do so in the distrobox (below).
+BR2_PACKAGE_PYTHON3_CODECSCJK=y
+BR2_PACKAGE_PYTHON_PIP=y
+BR2_PACKAGE_PYTHON_SETUPTOOLS=y
+# Shells and source control. zsh is the Desktop installer's default shell for
+# the user it creates; root keeps bash.
+BR2_PACKAGE_ZSH=y
+BR2_PACKAGE_NCURSES_WCHAR=y
+BR2_PACKAGE_GIT=y
+# The toolchain lane: Buildroot cannot put a compiler on the target (by design,
+# since 2012). gcc/clang/rustc/go/headers live in a distrobox container
+# (podman) that shares $HOME and feels native — our package.
+BR2_PACKAGE_DISTROBOX=y
+# util-linux's standard tools (rev — distrobox-enter needs it —, findmnt, lsblk,
+# a blkid that knows btrfs, …) instead of busybox's cut-down applets.
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+# curl: every "install X" line (rustup, uv, …) and distrobox itself expect it;
+# busybox wget cannot do HTTPS.
+BR2_PACKAGE_LIBCURL=y
+BR2_PACKAGE_LIBCURL_CURL=y
+# The openssl command: pengyos-update checks release signatures (ed25519) with
+# it, so the updater carries no crypto code of its own; also handy for admins.
+BR2_PACKAGE_LIBOPENSSL_BIN=y
+# FUSE (kernel CONFIG_FUSE_FS via libfuse3's kconfig fixup, plus fusermount3):
+# rclone mount, sshfs-style tools, AppImages. The Desktop already pulled it in
+# through its portals; the Server had no /dev/fuse at all.
+BR2_PACKAGE_LIBFUSE3=y
+
+# --- The installer + the partition & state layout (docs/state-layout.md) -------
+# Server and Desktop install the same way: the USB stick carries the image as a
+# payload, `pengyos-install image` lays it onto a disk as ESP + two root slots +
+# a btrfs data partition, and installed systems boot the root READ-ONLY through
+# preinit. The engine and the console installer are stdlib-only Python
+# (post-build.sh installs them). What they need beyond Core:
+#   zstd    the payload is zstd-compressed
+#   sgdisk  partitioning + relabelling (GUIDs, backup GPT) the installed disk
+#   sudo    the created user is the admin (wheel; overlay: /etc/sudoers.d/wheel)
+BR2_PACKAGE_ZSTD=y
+BR2_PACKAGE_GPTFDISK=y
+BR2_PACKAGE_GPTFDISK_SGDISK=y
+BR2_PACKAGE_SUDO=y
+# Login sessions: PAM + systemd-logind, so an SSH (or console) login is a real
+# logind session — /run/user/UID, the user's systemd manager and a delegated
+# cgroup. Rootless podman (and so distrobox) needs that: without it runc failed
+# with "rootless needs no limits + no cgrouppath" for every SSH user.
+# sshd uses PAM (overlay: /etc/pam.d/sshd, UsePAM yes) but stays key-only.
+BR2_PACKAGE_LINUX_PAM=y
+# File permissions (board/server/permissions.txt): unix_chkpwd
+# setuid so pam_unix can check an unprivileged user's password.
+BR2_ROOTFS_DEVICE_TABLE="system/device_table.txt $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/permissions.txt"
+BR2_PACKAGE_SYSTEMD_LOGIND=y
+# GRUB: Core's modules + loadenv/test — the installed grub.cfg picks the root
+# slot from grubenv.
+BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux ext2 fat part_msdos part_gpt normal efi_gop gfxterm gfxmenu font all_video videoinfo loadenv test smbios serial"
+
+# --- Board: server ----------------------------------------------
+# The Server's overlay (sshd config, nftables firewall, monitoring + backup
+# timers, podman socket, rootless-podman defaults) and post-build stack on
+# Core's; the post-image script replaces Core's.
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/rootfs-overlay $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/rootfs-overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/post-build.sh $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/post-build.sh"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_PENGYOS_PATH)/board/server/post-image.sh"
+# Kernel: stacked on Core's fragment (fragments accumulate across layers).
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/linux.fragment $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/linux.fragment"
+
+# --- Pengy web UI (package/pengy; the CLI comes from Core) --------------------
+BR2_PACKAGE_PENGY_WEB=y
+
+# ############################################################################
+# ## layer: nvidia-compute
+# ############################################################################
+
+# ============================================================================
+# PengyOS NVIDIA compute layer — the opt-in proprietary driver, headless half
+# ----------------------------------------------------------------------------
+# Stacked on core + server for the Server NVIDIA edition, and under the nvidia
+# (graphics) layer for the Desktop NVIDIA. Never part of a default image.
+#
+# The driver is our nvidia-open package: NVIDIA's open GPU kernel modules plus
+# the matching proprietary userspace, both from one .run (Turing / RTX 20 and
+# newer — the fleet is RTX 30 + RTX 50). Here it is the compute half only:
+# kernel modules, GSP firmware, CUDA, NVML (nvidia-smi), NVENC/NVDEC, MPS.
+# Buildroot's own nvidia-driver package is the legacy 390 branch: it stops at
+# Pascal and does not build on our kernel.
+# ============================================================================
+
+BR2_PACKAGE_NVIDIA_OPEN=y
+# A headless GPU keeps its state between CUDA jobs (the nvidia layer turns this
+# back off: it would keep a laptop's dGPU powered).
+BR2_PACKAGE_NVIDIA_OPEN_PERSISTENCED=y
+
+# GPUs in containers: nvidia-ctk writes a CDI spec when the driver loads, and
+# podman shares the GPUs with `--device nvidia.com/gpu=all` (llama.cpp and
+# friends as quadlets). distrobox --nvidia (the cuda dev box) works without it.
+BR2_PACKAGE_NVIDIA_CONTAINER_TOOLKIT=y
+
+# The driver's compute userspace + GSP firmware add ~350 MB to the Server.
+BR2_TARGET_ROOTFS_EXT2_SIZE="1600M"

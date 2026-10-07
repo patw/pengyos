@@ -1,0 +1,9 @@
+config BR2_PACKAGE_LDACBT
+	bool "ldacbt"
+	depends on BR2_INSTALL_LIBSTDCPP # cmake project language
+	help
+	  Sony's LDAC Bluetooth audio encoder (AOSP libldac, built
+	  standalone), for PipeWire's Bluetooth audio to Sony and other
+	  LDAC headphones.
+
+	  https://github.com/EHfive/ldacBT

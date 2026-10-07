@@ -1,0 +1,5 @@
+{
+  "base_url": "http://127.0.0.1:11434/v1",
+  "timeout_seconds": 30,
+  "max_retries": 3
+}

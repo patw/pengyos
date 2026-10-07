@@ -1,0 +1,4 @@
+[Thumbnailer Entry]
+TryExec=pdftocairo
+Exec=/usr/libexec/pengyos/pdf-thumbnailer %s %i %o
+MimeType=application/pdf;application/x-pdf;

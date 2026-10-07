@@ -1,0 +1,14 @@
+config BR2_PACKAGE_GAMEMODE
+	bool "gamemode"
+	depends on BR2_PACKAGE_SYSTEMD # sd-bus
+	depends on BR2_PACKAGE_DBUS
+	depends on BR2_PACKAGE_POLKIT # the CPU governor helper runs via pkexec
+	select BR2_PACKAGE_INIH
+	help
+	  Feral's GameMode: while a game runs, switch the CPU governor
+	  to performance, raise the game's priority and inhibit the
+	  screensaver. Steam and Lutris request it; Flatpak games reach
+	  it through the GameMode portal (xdg-desktop-portal already
+	  offers that interface, which needs this daemon behind it).
+
+	  https://github.com/FeralInteractive/gamemode

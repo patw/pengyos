@@ -1,0 +1,14 @@
+OVMF 2026.02 (EDK II)
+Loading Boot0001: PengyOS
+EFI stub: Loaded initrd
+[    0.000000] Linux version 6.6.0-pengyos (buildroot@pengyos)
+[    0.000000] Command line: root=/dev/vda rw console=ttyS0
+[    0.111431] Booting paravirtualized kernel on KVM
+[    1.204556] systemd[1]: Detected architecture x86-64.
+[    1.351902] systemd[1]: Reached target Basic System.
+[    1.402219] systemd[1]: Starting Update UTMP about System Boot/Shutdown...
+[    1.445630] systemd[1]: Reached target Login Prompts.
+[    1.450011] systemd[1]: Starting Show Plymouth Boot Screen...
+Welcome to PengyOS Core
+
+pengyos login:

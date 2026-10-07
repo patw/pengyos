@@ -1,0 +1,9 @@
+config BR2_PACKAGE_STARSHIP
+	bool "starship"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  starship is a shell prompt, made fast! And able to display any
+	  information you want in a few seconds.
+
+	  https://github.com/starship/starship

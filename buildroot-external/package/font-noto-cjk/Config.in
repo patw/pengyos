@@ -1,0 +1,9 @@
+config BR2_PACKAGE_FONT_NOTO_CJK
+	bool "font-noto-cjk"
+	help
+	  Noto Sans CJK: Chinese, Japanese and Korean text (web pages,
+	  file names, chat), every weight in one variable-font
+	  collection, as Fedora ships it. Without it CJK text showed as
+	  empty boxes.
+
+	  https://github.com/notofonts/noto-cjk

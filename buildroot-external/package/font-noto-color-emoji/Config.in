@@ -1,0 +1,8 @@
+config BR2_PACKAGE_FONT_NOTO_COLOR_EMOJI
+	bool "font-noto-color-emoji"
+	help
+	  Google's Noto Color Emoji (colour bitmap, CBDT). Without a
+	  colour emoji font, emoji render as empty boxes or as
+	  monochrome outline glyphs borrowed from other fonts.
+
+	  https://github.com/googlefonts/noto-emoji

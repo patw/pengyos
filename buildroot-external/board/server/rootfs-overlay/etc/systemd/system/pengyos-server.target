@@ -1,0 +1,29 @@
+# ============================================================================
+# PengyOS Server — pengyos-server.target (marker / synchronization target)
+# ----------------------------------------------------------------------------
+# Marker / synchronization point for the Server edition. Everything in the
+# Server set (sshd, podman, nftables, the monitoring + backups units that come
+# later) is considered "up" once this target is reached. Other Server units
+# pull it in via WantedBy=pengyos-server.target.
+#
+# The analog for Core is pengyos-core.target. This is the "marker unit" the
+# Server overlay ships so later Server units have a single, inspectable target
+# to wait on.
+#
+# Installed/enabled via the overlay's multi-user.target.wants/ symlink.
+# ============================================================================
+
+[Unit]
+Description=PengyOS Server marker target
+Documentation=man:systemd.special(7) man:pengyos-server.target(8)
+DefaultDependencies=no
+After=multi-user.target
+Before=pengyos-server.target
+
+# An (empty) [Target] section is the spec-recommended shape for a .target unit
+# (freedesktop.org systemd unit file spec); it marks this a genuine target
+# rather than a mislabelled unit.
+[Target]
+
+[Install]
+WantedBy=multi-user.target

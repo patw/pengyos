@@ -1,0 +1,187 @@
+# PengyOS Core — smoke matrix.
+#
+# This file is DATA. It declares the boot *variants* a Core image must survive
+# and the facts each variant must satisfy; `pengyos-qemu-verify smoke` runs it
+# and emits JSON + JUnit, so "passes the smoke matrix" is one command with one
+# exit code and one artifact.
+#
+# Every check was written against real Core serial logs captured on 2026-10-02
+# (tests/fixtures/serial_login_core_uefi{,_tpm}.log): each pattern is satisfied
+# by a good boot, and the suite proves the matrix rejects a real failed boot
+# (tests/fixtures/serial_core_kernel_boot_no_root.log). All checks are blocking:
+# a fact worth listing is worth enforcing.
+#
+# systemd colours its status lines, so a pattern that has to pin an exact unit
+# name allows the ANSI escapes around it (\u001b[...m).
+#
+# A relative `image` resolves against the build root ($PENGYOS_BUILD_ROOT, or
+# ~/build/pengyos), the same place `pengyos-build` writes its output.
+
+version = 1
+name = "core"
+description = "PengyOS Core — GRUB2/UEFI boots systemd to a serial login, networked, with sshd up"
+image = "output/pengyos-core/images/pengyos-core-x86_64.img"
+
+[[variant]]
+id = "uefi"
+description = "plain UEFI/OVMF disk boot (GRUB2 on the ESP)"
+uefi = true
+timeout = 180
+
+[[variant]]
+id = "uefi-tpm"
+description = "UEFI + emulated TPM2 (swtpm): proves the TPM wiring does not wedge the boot"
+uefi = true
+tpm = true
+timeout = 180
+
+# --- boot --------------------------------------------------------------------
+
+[[check]]
+id = "firmware-handoff"
+kind = "present"
+pattern = "BdsDxe: starting Boot\\d+"
+description = "OVMF found the ESP and started its boot loader"
+
+[[check]]
+id = "grub-cmdline"
+kind = "present"
+pattern = "Command line: BOOT_IMAGE=/bzImage root=PARTUUID="
+description = "GRUB booted our menu entry: the kernel got the PARTUUID root that post-image stamped in"
+
+[[check]]
+id = "kernel-started"
+kind = "present"
+pattern = "Linux version \\d"
+description = "the kernel started and printed its version banner"
+
+[[check]]
+id = "rootfs-mounted"
+kind = "present"
+pattern = "VFS: Mounted root \\(ext4 filesystem\\) readonly"
+description = "the ext4 root was found and mounted (no initramfs)"
+
+[[check]]
+id = "systemd-pid1"
+kind = "present"
+pattern = "systemd\\[1\\]: systemd [0-9.]+ running in system mode"
+description = "systemd is PID 1"
+
+[[check]]
+id = "distro-welcome"
+kind = "present"
+pattern = "Welcome to .*PengyOS Core"
+description = "systemd read our os-release: the running system is PengyOS Core"
+
+[[check]]
+id = "rootfs-remounted-rw"
+kind = "present"
+pattern = "EXT4-fs \\(vda\\d+\\): re-mounted .* r/w"
+description = "systemd-remount-fs made the root writable"
+
+# --- network and services ----------------------------------------------------
+
+[[check]]
+id = "nic-link-up"
+kind = "present"
+pattern = "NIC Link is Up"
+description = "the wired NIC driver bound and the link came up"
+
+[[check]]
+id = "networkd-started"
+kind = "present"
+pattern = "Started .*Network Configuration"
+description = "systemd-networkd is running"
+
+[[check]]
+id = "resolved-started"
+kind = "present"
+pattern = "Started .*Network Name Resolution"
+description = "systemd-resolved is running"
+
+[[check]]
+id = "network-target"
+kind = "present"
+# systemd writes a status line in pieces, so a kernel message can land between
+# them: seen on 26.10.3 (Core, uefi-tpm), where a kernel line printed into the
+# middle of this very line made the single-line pattern miss it. Each optional
+# group allows one injected console line (ending in a newline) at a write
+# boundary; the gap is written as [\s\S] because a bare '.' does not cross a
+# newline. Every gap is bounded so the check still proves *this* target:
+# 'Preparation for Network', 'Host and Network Name Lookups' and 'Network is
+# Online' must not satisfy it (tests/test_smoke.py proves they do not).
+pattern = "Reached target (?:[\\s\\S]{0,120}?\\n)?(?:\u001b\\[[0-9;]*m)?(?:[\\s\\S]{0,120}?\\n)?Network(?:[\\s\\S]{0,120}?\\n)?(?:\u001b\\[[0-9;]*m)?(?:[\\s\\S]{0,120}?\\n)?\\."
+description = "network.target was reached (not just 'Preparation for Network'), even when a kernel message split the console line it was printed on"
+
+[[check]]
+id = "chrony-started"
+kind = "present"
+pattern = "Started .*Chrony"
+description = "time sync is running"
+
+[[check]]
+id = "sshd-started"
+kind = "present"
+pattern = "Started .*OpenSSH server daemon"
+description = "sshd is up: Core is managed over SSH"
+
+[[check]]
+id = "multi-user"
+kind = "present"
+pattern = "Reached target .*Multi-User System"
+description = "the default target was reached"
+
+[[check]]
+id = "reached-login"
+kind = "present"
+pattern = "pengyos-core login:"
+description = "the serial console reached a login prompt with the Core hostname"
+# A login *prompt* is not a login. 26.10.3 printed the automatic-login line and
+# then looped 'Permission denied': every check above it still passed. The fact
+# that proves autologin worked is the shell prompt after the login banner, which
+# is why the harness keeps reading the serial log after readiness
+# (boot.DEFAULT_SETTLE_SECONDS) and why the window below is bounded - it is the
+# prompt belonging to *this* login, not a later one.
+[[check]]
+id = "autologin-shell"
+kind = "present"
+pattern = "pengyos-core login: root \\(automatic login\\)[\\s\\S]{0,900}?# "
+description = "autologin produced a working shell (the prompt after the login banner), not just a login line"
+
+[[check]]
+id = "no-login-denied"
+kind = "absent"
+pattern = "Permission denied"
+description = "no login was refused (26.10.3 looped 'Permission denied' after the automatic-login line while every other check passed)"
+
+# --- nothing went wrong ------------------------------------------------------
+
+[[check]]
+id = "no-failed-units"
+kind = "absent"
+pattern = "Failed to start|Dependency failed|emergency mode"
+description = "no unit failed and systemd did not drop to emergency mode"
+
+[[check]]
+id = "no-kernel-panic"
+kind = "absent"
+pattern = "Kernel panic"
+description = "no kernel panic anywhere in the serial log"
+
+[[check]]
+id = "no-oops"
+kind = "absent"
+pattern = "BUG: |Call Trace|Oops:|general protection fault|kernel NULL pointer dereference"
+description = "no oops/BUG/call trace — the kernel came up clean, not merely lucky"
+
+[[check]]
+id = "no-io-errors"
+kind = "absent"
+pattern = "EXT4-fs error|Buffer I/O error|I/O error"
+description = "no storage/filesystem I/O errors"
+
+[[check]]
+id = "no-init-failure"
+kind = "absent"
+pattern = "not syncing: No working init|Attempted to kill init"
+description = "userspace brought itself up without an init failure"

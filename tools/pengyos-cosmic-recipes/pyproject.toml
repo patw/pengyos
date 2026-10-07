@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-cosmic-recipes"
+version = "0.1.0"
+description = "Manifest-driven Buildroot cargo recipes for the COSMIC components, over the pengyos-cosmic-pkg engine, with a dependency-closure linter."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf", email = "pat@catbee.ca" }]
+# stdlib-only at test time; declare any real dependency here.
+# The only external dependency is the sibling pengyos-cosmic-pkg engine, which
+# is imported from its own tools dir (see conftest.py), not pip-installed.
+dependencies = []
+
+[project.scripts]
+# The recipes-lane CLI (also runnable as ``python -m pengyos_cosmic_recipes``).
+pengyos-cosmic-recipes = "pengyos_cosmic_recipes.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

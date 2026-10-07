@@ -1,0 +1,12 @@
+config BR2_PACKAGE_ZRAM_GENERATOR
+	bool "zram-generator"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on BR2_PACKAGE_SYSTEMD
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  systemd's generator for swap (and scratch) devices on zram:
+	  compressed swap in RAM, the default on Fedora and Pop!_OS.
+	  Ships a default /usr/lib/systemd/zram-generator.conf
+	  (zstd, size min(RAM, 8 GiB)) and the matching VM tuning.
+
+	  https://github.com/systemd/zram-generator

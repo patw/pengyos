@@ -1,0 +1,77 @@
+#!/bin/sh
+# merge-accounts LOWER_ETC UPPER_ETC
+#
+# Rebuild the account files in UPPER_ETC (the machine's /etc overlay layer on the
+# data partition) so a newer system image and the machine's own accounts combine:
+#
+#   passwd, shadow   every account the image (LOWER_ETC) defines comes from the
+#                    image, so a system user a newer image adds appears — except
+#                    root's password (shadow), which is the machine's.
+#   group, gshadow   groups the image defines come from the image, but with the
+#                    machine's members added (the user stays in wheel, video, …).
+#   the rest         accounts/groups only the machine has: kept if their id is
+#                    >= 1000 (people — adduser never goes lower), dropped if below
+#                    (system accounts an older image had and this one dropped).
+#                    shadow/gshadow keep exactly the names passwd/group kept.
+#
+# "Defined by the image" is by name, not by id range: Buildroot hands out
+# automatic ids for system groups that can land at 1000+.
+#
+# Without this the overlay would freeze passwd/group/shadow at install time.
+# Run by preinit on every boot, before /etc is overlaid. Nothing to do until the
+# machine has its own passwd.
+set -eu
+lower=$1 upper=$2
+[ -f "$upper/passwd" ] || exit 0
+
+write() {  # $1 = target file, stdin = content; atomic, keeps the mode
+    tmp="$1.pengyos-merge"
+    cat > "$tmp"
+    if [ -f "$1" ]; then chmod "$(stat -c %a "$1")" "$tmp"; fi
+    mv -f "$tmp" "$1"
+}
+
+# merge FILE KEEP_UPPER_NAMES MEMBER_FIELD [NAMES_FROM]
+#   KEEP_UPPER_NAMES: space-separated names whose line comes from upper even
+#   though the image has them ("root" for shadow); MEMBER_FIELD: the field
+#   holding a comma-separated member list to union (0 = none); NAMES_FROM: for
+#   shadow/gshadow, the merged passwd/group whose names decide which machine-only
+#   lines stay (without it, machine-only lines stay when field 3, the id, >= 1000).
+merge() {
+    [ -f "$upper/$1" ] || return 0
+    [ -f "$lower/$1" ] || return 0
+    awk -F: -v OFS=: -v keep=" $2 " -v mf="$3" -v byname="${4:+1}" '
+        FNR == 1 { layer++ }
+        byname && layer == 1 { known[$1] = 1; next }                 # merged passwd/group
+        layer == 1 + byname { order[++n] = $1; line[$1] = $0; next } # image
+        {                                                             # machine
+            if (!($1 in line)) {
+                if (byname ? ($1 in known) : ($3 + 0 >= 1000)) extra[++m] = $0
+                next
+            }
+            if (index(keep, " " $1 " ")) { line[$1] = $0; next }
+            if (mf > 0 && $mf != "") {
+                nf = split(line[$1], img, ":")
+                have = "," img[mf] ","
+                cnt = split($mf, add, ",")
+                for (i = 1; i <= cnt; i++)
+                    if (add[i] != "" && index(have, "," add[i] ",") == 0) {
+                        img[mf] = (img[mf] == "" ? add[i] : img[mf] "," add[i])
+                        have = have add[i] ","
+                    }
+                out = img[1]
+                for (i = 2; i <= nf; i++) out = out ":" img[i]
+                line[$1] = out
+            }
+        }
+        END {
+            for (i = 1; i <= n; i++) print line[order[i]]
+            for (i = 1; i <= m; i++) print extra[i]
+        }
+    ' ${4:+"$4"} "$lower/$1" "$upper/$1" | write "$upper/$1"
+}
+
+merge passwd  ""     0
+merge shadow  "root" 0 "$upper/passwd"
+merge group   ""     4
+merge gshadow ""     4 "$upper/group"

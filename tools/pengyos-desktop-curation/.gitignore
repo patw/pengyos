@@ -1,0 +1,18 @@
+# Python build/test noise.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments.
+.venv/
+venv/
+env/
+
+# Installed package (the loop runs `pip install -e .`).
+*.egg

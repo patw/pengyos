@@ -1,0 +1,9 @@
+[package]
+name = "smithay-clipboard"
+version = "0.6.0"
+edition = "2021"
+description = "Fixture copy of smithay-clipboard (demo data, not the real crate)."
+license = "MIT"
+
+[dependencies]
+serde = "1.0"

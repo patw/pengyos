@@ -1,0 +1,57 @@
+# PengyOS Desktop — default applications (freedesktop mimeapps.list, the
+# distribution-wide default; a user's ~/.config/mimeapps.list and Settings →
+# Default Applications override it). Without it nothing opened an image.
+# Images: COSMIC Viewer (pop-os/cosmic-viewer). Web: Firefox (a Flatpak,
+# installed on first boot by pengyos-browser-setup; its .desktop is exported
+# to /var/lib/flatpak/exports/share, on XDG_DATA_DIRS).
+[Default Applications]
+x-scheme-handler/http=org.mozilla.firefox.desktop;
+x-scheme-handler/https=org.mozilla.firefox.desktop;
+text/html=org.mozilla.firefox.desktop;
+application/xhtml+xml=org.mozilla.firefox.desktop;
+application/pdf=org.mozilla.firefox.desktop;
+image/bmp=com.system76.CosmicViewer.desktop;
+image/gif=com.system76.CosmicViewer.desktop;
+image/jpeg=com.system76.CosmicViewer.desktop;
+image/jpg=com.system76.CosmicViewer.desktop;
+image/pjpeg=com.system76.CosmicViewer.desktop;
+image/png=com.system76.CosmicViewer.desktop;
+image/tiff=com.system76.CosmicViewer.desktop;
+image/webp=com.system76.CosmicViewer.desktop;
+image/x-bmp=com.system76.CosmicViewer.desktop;
+image/x-png=com.system76.CosmicViewer.desktop;
+image/x-portable-anymap=com.system76.CosmicViewer.desktop;
+image/x-portable-bitmap=com.system76.CosmicViewer.desktop;
+image/x-portable-graymap=com.system76.CosmicViewer.desktop;
+image/x-portable-pixmap=com.system76.CosmicViewer.desktop;
+image/avif=com.system76.CosmicViewer.desktop;
+image/heif=com.system76.CosmicViewer.desktop;
+image/heic=com.system76.CosmicViewer.desktop;
+image/jxl=com.system76.CosmicViewer.desktop;
+image/svg+xml=com.system76.CosmicViewer.desktop;
+image/x-icon=com.system76.CosmicViewer.desktop;
+image/x-qoi=com.system76.CosmicViewer.desktop;
+text/plain=com.system76.CosmicEdit.desktop
+text/markdown=com.system76.CosmicEdit.desktop
+text/x-log=com.system76.CosmicEdit.desktop
+application/x-shellscript=com.system76.CosmicEdit.desktop
+application/json=com.system76.CosmicEdit.desktop
+application/xml=com.system76.CosmicEdit.desktop
+inode/directory=com.system76.CosmicFiles.desktop
+video/mp4=com.system76.CosmicPlayer.desktop
+video/webm=com.system76.CosmicPlayer.desktop
+video/x-matroska=com.system76.CosmicPlayer.desktop
+video/quicktime=com.system76.CosmicPlayer.desktop
+video/x-msvideo=com.system76.CosmicPlayer.desktop
+video/mpeg=com.system76.CosmicPlayer.desktop
+video/ogg=com.system76.CosmicPlayer.desktop
+audio/mpeg=com.system76.CosmicPlayer.desktop
+audio/ogg=com.system76.CosmicPlayer.desktop
+audio/flac=com.system76.CosmicPlayer.desktop
+audio/x-flac=com.system76.CosmicPlayer.desktop
+audio/x-wav=com.system76.CosmicPlayer.desktop
+audio/wav=com.system76.CosmicPlayer.desktop
+audio/mp4=com.system76.CosmicPlayer.desktop
+audio/aac=com.system76.CosmicPlayer.desktop
+audio/opus=com.system76.CosmicPlayer.desktop
+audio/webm=com.system76.CosmicPlayer.desktop

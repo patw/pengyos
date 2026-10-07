@@ -1,0 +1,14 @@
+config BR2_PACKAGE_XDG_DESKTOP_PORTAL_GTK
+	bool "xdg-desktop-portal-gtk"
+	depends on BR2_PACKAGE_XDG_DESKTOP_PORTAL
+	depends on BR2_PACKAGE_LIBGTK3
+	help
+	  The GTK portal backend: the portals COSMIC's own backend
+	  does not implement, as Pop!_OS ships it. AppChooser (without
+	  it xdg-desktop-portal does not offer OpenURI, so Flatpak
+	  apps cannot open links or files in another app), Print,
+	  Notification, Inhibit, Email, DynamicLauncher, Account,
+	  Lockdown. COSMIC's backend still answers FileChooser,
+	  Screenshot, ScreenCast and Settings (portals.conf).
+
+	  https://github.com/flatpak/xdg-desktop-portal-gtk

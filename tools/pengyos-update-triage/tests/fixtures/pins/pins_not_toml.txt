@@ -1,0 +1,4 @@
+this is not valid toml at all
+[[component]]
+name = "glibc"
+version = "2.39"

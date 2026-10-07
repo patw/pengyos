@@ -1,0 +1,33 @@
+#!/bin/sh
+# Start a user's COSMIC session: what greetd runs once the greeter accepted a
+# password, or at boot for automatic login (PAM service pengyos-session:
+# pam_systemd has already made this a logind session on seat0).
+#
+# - XDG_DATA_DIRS: Flatpak apps' exported .desktop files and icons first.
+# - LIBSEAT_BACKEND=seatd: cosmic-comp opens the seat through seatd (the user
+#   is in the seat group); desktop.config explains why not logind.
+# - xdg-user-dirs-update: ~/Downloads, ~/Documents, … exist before any app
+#   (a Flatpak browser's download into a missing ~/Downloads was lost).
+# - The session bus comes from dbus-run-session. On it: an ssh-agent for the
+#   whole session, and the keyring started first -- activated on demand it owns
+#   its name a moment before the Login keyring is set up, and an app's first
+#   "which keyring is the default?" in that moment got none.
+# - XDG autostart entries (/etc/xdg/autostart, ~/.config/autostart): started by
+#   session-autostart on this bus once the compositor is up (cosmic-session
+#   leaves autostart to systemd, whose user bus is not this one).
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=COSMIC
+export XDG_CURRENT_DESKTOP=COSMIC
+export XDG_DATA_DIRS=/var/lib/flatpak/exports/share:/usr/local/share:/usr/share
+export XDG_CONFIG_DIRS=/etc/xdg
+export LANG="${LANG:-en_US.UTF-8}"
+export LIBSEAT_BACKEND=seatd
+cd "$HOME" 2>/dev/null || cd /
+/usr/bin/xdg-user-dirs-update || true
+exec /usr/bin/dbus-run-session -- /bin/sh -c '
+    eval "$(ssh-agent -s)" >/dev/null
+    /usr/libexec/pengyos/session-autostart &
+    dbus-send --session --type=method_call --dest=org.freedesktop.DBus \
+        /org/freedesktop/DBus org.freedesktop.DBus.StartServiceByName \
+        string:org.freedesktop.secrets uint32:0
+    exec /usr/bin/cosmic-session /usr/bin/cosmic-comp'

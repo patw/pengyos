@@ -1,0 +1,17 @@
+# PengyOS — keep the system slot that just started (pengyos-update).
+#
+# After `pengyos-update apply`, GRUB boots the new image ONCE (grubenv
+# pengyos_try). Reaching multi-user here means it came up, so make its slot the
+# default (pengyos_slot). If it never gets this far, the next boot is the old
+# slot again. Does nothing when the running slot already is the default.
+[Unit]
+Description=Keep this PengyOS system slot (it started cleanly)
+After=multi-user.target
+ConditionKernelCommandLine=pengyos.data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pengyos-update confirm
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-desktop-nvidia"
+version = "0.4.0"
+description = "PengyOS desktop-nvidia: containment lint for the opt-in NVIDIA Desktop edition (package nvidia-open, Tier-2 concession)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "buildroot", "nvidia", "proprietary-driver", "defconfig", "tier-2"]
+# Runtime dependencies: none (standard library only).
+dependencies = []
+
+[project.optional-dependencies]
+# The test-suite runner. Declared so `pip install -e .[test]` is reproducible.
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-desktop-nvidia = "pengyos_desktop_nvidia.__main__:main"
+
+[tool.setuptools]
+packages = ["pengyos_desktop_nvidia"]
+
+[tool.pytest.ini_options]
+# Keep the suite hermetic: no network, no root, no display, no hardware.
+# Opt-in integration tests live behind PENGYOS_IT=1 (see tests/test_integration.py).
+testpaths = ["tests"]
+addopts = "-ra"

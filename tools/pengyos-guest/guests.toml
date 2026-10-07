@@ -1,0 +1,28 @@
+# Example PengyOS guest definitions (Lane 4).
+#
+# `pengyos-guest --config guests.toml apply` uses this file alone; normally
+# guests come from the image's /usr/share/pengyos/guests.d and your
+# ~/.config/pengyos/guests.toml (see README.md). Each guest is a table under
+# `[guests]`, keyed by name:
+#
+#   image       — container image the guest is built from (required).
+#   packages    — installed with the image's package manager on `apply`.
+#   setup       — idempotent shell steps run as you after the packages.
+#   exports     — launcher name -> guest-side executable path.
+#   mounts      — extra "host:guest" (optional ":mode") bind mounts.
+#   nvidia      — share the host's NVIDIA driver (CUDA).
+#   description — shown by `list`.
+
+[guests]
+
+  [guests.wolfi]
+  image = "quay.io/aliyunos/wolfi:latest"
+  packages = ["git", "curl", "fzf"]
+  exports = { "git-editor" = "/var/lib/distrobox/bin/git-editor" }
+  mounts = ["/home/alex/projects:/projects:rw"]
+
+  [guests.nixos]
+  image = "ghcr.io/pengyos/nixos:latest"
+  packages = ["ripgrep", "fd"]
+  exports = { "rg" = "/usr/bin/rg" }
+  mounts = ["/home/alex/data:/data:ro"]

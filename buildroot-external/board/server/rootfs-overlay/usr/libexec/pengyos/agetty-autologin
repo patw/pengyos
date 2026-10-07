@@ -1,0 +1,11 @@
+#!/bin/sh
+# agetty for the console gettys (getty@tty1, serial-getty@ttyS0 drop-ins):
+# root is logged in automatically only on a LIVE boot (the install stick, a
+# flashed image). An installed system boots with pengyos.data= on the kernel
+# line and asks for a login like any server — its root has the password set at
+# install, and anyone at the keyboard or on the serial line would otherwise be
+# root.
+if grep -q 'pengyos\.data=' /proc/cmdline; then
+    exec /sbin/agetty "$@"
+fi
+exec /sbin/agetty -a root "$@"

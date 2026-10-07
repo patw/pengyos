@@ -1,0 +1,8 @@
+# PengyOS — make the previous system (the other slot) the default again.
+[Unit]
+Description=Go back to the previous PengyOS version
+ConditionKernelCommandLine=pengyos.data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pengyos-update rollback

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-fleet"
+version = "0.1.0"
+description = "Collect hardware facts for a fleet of hosts and emit one declarative hwprofile per machine for PengyOS."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "fleet", "inventory", "hardware", "profile", "linux", "reproducible"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+]
+# Runtime is stdlib-only; declare any real dependency here.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+pengyos-fleet = "pengyos_fleet.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pengyos_fleet*"]
+
+[tool.pytest.ini_options]
+# Keep the project root importable without an editable install so the suite
+# runs with no network, no root, and no real hardware.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra"

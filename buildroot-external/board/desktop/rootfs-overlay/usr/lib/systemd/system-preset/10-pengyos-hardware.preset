@@ -1,0 +1,12 @@
+# PengyOS: hardware management daemons, on by default (Buildroot's presets do
+# not cover them). fwupd and UPower start on demand over D-Bus; the refresh
+# timer fetches LVFS firmware metadata daily.
+enable thermald.service
+enable power-profiles-daemon.service
+enable smartd.service
+enable fwupd-refresh.timer
+# Printing: CUPS starts on demand (socket/path activation); cups-browsed finds
+# network printers. UDisks2 and bolt are D-Bus activated.
+enable cups.socket
+enable cups.path
+enable cups-browsed.service

@@ -1,0 +1,45 @@
+# COSMIC sources the Desktop image is built from, pinned to exact commits.
+# scripts/build-cosmic.sh clones each into $PENGYOS_COSMIC_SRC/<name>, checks out
+# the commit, applies board/desktop/cosmic-patches/<name>/*.patch, and runs the
+# cargo arguments (a `-` means source-only: post-build.sh reads its data files).
+#
+# The set is epoch-1.9.0 (cosmic-greeter 1.9.1) as of 2026-10-05. Note that an
+# `epoch-*` tag is a Pop *release snapshot*, not a per-repo change: 10 of these
+# rows already pointed at the commit epoch-1.9.0 tags (cosmic-idle and
+# cosmic-randr have not changed since epoch-1.0.10), so only 16 rows actually
+# moved. See docs/cosmic-epoch-1.9.md.
+#
+# libcosmic has no epoch tags and each component's own Cargo.lock pinned its own
+# libcosmic commit (14 distinct ones). build-cosmic.sh now forces one rev across
+# the whole set; the rev lives in scripts/cosmic-libcosmic.pin.
+#
+# name	repository	commit	cargo arguments
+cosmic-comp	https://github.com/pop-os/cosmic-comp	0fbd4574ef4caf74769a617d205fd1fc909ac9b1	build --release
+cosmic-session	https://github.com/pop-os/cosmic-session	1e4f10b5821982688e4a8a39f819be0bc2ad3e74	build --release
+cosmic-panel	https://github.com/pop-os/cosmic-panel	b5cc19e351b82eed999097ced1ff267d27bf8e7a	build --release
+cosmic-applets	https://github.com/pop-os/cosmic-applets	82e7cd814addb0641959b634227fe550374e195b	build --release
+cosmic-launcher	https://github.com/pop-os/cosmic-launcher	cc3d42bcc8fbcb67e6312f2766394e18b4d937d5	build --release
+cosmic-settings	https://github.com/pop-os/cosmic-settings	7421ff0ab482c942eef23fbe9280edacfbeb35cc	build --release
+cosmic-settings-daemon	https://github.com/pop-os/cosmic-settings-daemon	f97bee648c579b5fe2f2000bf3d129f1a7b08f17	build --release
+cosmic-notifications	https://github.com/pop-os/cosmic-notifications	aa4dac2702506395ab76da1f6755e03b2ccb0db8	build --release
+cosmic-osd	https://github.com/pop-os/cosmic-osd	3faadf56bdaea4b088ea8dc5e808b167cec86de3	build --release
+cosmic-idle	https://github.com/pop-os/cosmic-idle	c95d066b5b640509a6369634b669ca60dc50e168	build --release
+cosmic-bg	https://github.com/pop-os/cosmic-bg	9d82a34dab4e73d90ba66c9f72d18d0f9b8be208	build --release
+cosmic-randr	https://github.com/pop-os/cosmic-randr	6e8e795970fa06d434af22775e415b517f7552d3	build --release
+cosmic-screenshot	https://github.com/pop-os/cosmic-screenshot	5ddcf1804192ff98823bd37a778286db5a00f3dd	build --release
+cosmic-greeter	https://github.com/pop-os/cosmic-greeter	bfb2745176e3fd0824e008d3efb2b37bce5ae0db	build --release --workspace
+cosmic-term	https://github.com/pop-os/cosmic-term	9129277bed1e810418a3138d683c1bc15656234f	build --release
+cosmic-files	https://github.com/pop-os/cosmic-files	d1f0af78e64f9e8ddb52c486913d53a234ce3cf2	build --release --workspace
+cosmic-edit	https://github.com/pop-os/cosmic-edit	bfc98bf21930fe5d9c32b7c238442499191b6319	build --release
+cosmic-store	https://github.com/pop-os/cosmic-store	c6e57a18a8abaf4ae6b5755576982839f8e53900	build --release
+cosmic-player	https://github.com/pop-os/cosmic-player	66b3f34335a500ce5dc93880d06f7ae94905872f	build --release
+cosmic-app-library	https://github.com/pop-os/cosmic-app-library	0a3996de82c264095ade047661f7a3088f99013e	build --release
+cosmic-workspaces-epoch	https://github.com/pop-os/cosmic-workspaces-epoch	28e257daa86643aee4166f192fb3e000ac3f7605	build --release
+cosmic-viewer	https://github.com/pop-os/cosmic-viewer	d820ab36b84d0fe97b9e1fb96683b9597f03ac83	build --release
+cosmic-monitor	https://github.com/pop-os/cosmic-monitor	fdcc323f533137430fa5609a6986daebda2d5741	build --release
+pop-launcher	https://github.com/pop-os/launcher	6390080a98a4a59b4e8196d28de97d3cb4d138ec	build --release -p pop-launcher-bin
+cosmic-icons	https://github.com/pop-os/cosmic-icons	343c007f37cd71716e68f01c43ecf2764b7f7c47	-
+cosmic-sound-theme	https://github.com/pop-os/cosmic-sound-theme	7aabe449093787163c74c25aa1bd4663fb4c324c	-
+cosmic-workspaces	https://github.com/pop-os/cosmic-workspaces	6d90fb4f453b5ad68ba94fdf534d66085a7e4f52	-
+cosmic-protocols	https://github.com/pop-os/cosmic-protocols	c0cff4db14c37ed954983158e4055aa94c7741d9	-
+libcosmic	https://github.com/pop-os/libcosmic	87ab8179e1bd9880239c340855ae8862034bd0e8	-

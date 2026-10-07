@@ -1,0 +1,66 @@
+# starship.toml — Starship prompt theme for the PengyOS server comfort set (US-SRV-1)
+#
+# Minimal, dependency-free prompt. NO telemetry: `telemetry = false` and there
+# are no remote/URL modules, so the prompt never phone-homes.
+#
+# Load it from your profile:
+#     eval "$(starship init bash)"   # or zsh
+# or source the profile, which does this when `starship` is on PATH.
+
+# Starship's built-in telemetry opt-out (default is false; state it explicitly).
+telemetry = false
+
+# A compact, single-line prompt. The only dynamic bits are the module markers.
+format = """
+[$symbol ]$shell$directory$git_branch$git_status$nodejs$golang$python$ruby$aws$terraform
+$line$$"""
+
+[directory]
+style = "cyan bold"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[shell]
+symbol = "❯"
+
+[shell.zsh]
+symbol = "❯"
+
+[shell.bash]
+symbol = "❯"
+
+[git_status]
+ahead = "⇡${count}"
+behind = "⇣${count}"
+dirty = "🔥"
+
+[nodejs]
+symbol = "⬇ "
+format = "via [$symbol]($style)"
+style = "green bold"
+
+[golang]
+symbol = "🐹 "
+format = "via [$symbol]($style)"
+style = "cyan bold"
+
+[python]
+symbol = "🐍 "
+format = "via [$symbol]($style)"
+style = "yellow bold"
+
+[ruby]
+symbol = "💎 "
+format = "via [$symbol]($style)"
+style = "red bold"
+
+[aws]
+symbol = "☁️  "
+format = "via [$symbol($style )]($style)"
+style = "bold yellow"
+
+[terraform]
+symbol = "🏪 "
+format = "via [$symbol($style )]($style)"
+style = "bold 6bold"

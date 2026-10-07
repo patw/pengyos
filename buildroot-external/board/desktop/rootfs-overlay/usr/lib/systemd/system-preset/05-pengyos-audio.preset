@@ -1,0 +1,10 @@
+# PengyOS: audio runs per user (the desktop session's own PipeWire +
+# WirePlumber, enabled in /etc/systemd/user), not as system-wide services.
+# Buildroot's 80-buildroot.preset would enable the system-wide units on first
+# boot; the first matching preset line wins, so this file (05-) turns them off.
+disable pipewire.service
+disable pipewire.socket
+disable pipewire-manager.socket
+disable pipewire-pulse.service
+disable pipewire-pulse.socket
+disable wireplumber.service

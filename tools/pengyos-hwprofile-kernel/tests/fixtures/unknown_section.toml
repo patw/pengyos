@@ -1,0 +1,15 @@
+[metadata]
+hostname = "unknown"
+kernel = "6.8.0-pengyos"
+tool_version = "0.1.0"
+
+[cpu]
+vendor = "GenuineIntel"
+model = "Xeon"
+cores = 4
+threads = 8
+mhz = 2400.0
+
+# An unknown top-level section -> schema violation on the top-level section set.
+[extra]
+foo = "bar"

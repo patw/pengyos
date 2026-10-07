@@ -1,0 +1,160 @@
+# PengyOS desktop wallpaper candidates — prompt manifest
+#
+# Provenance record for the 20 candidate backgrounds drawn on 2026-10-06. Each
+# entry is the *exact* scene text handed to the generator; the shared style
+# block lives in generate.sh so every candidate keeps one mascot and one look.
+#
+# Palette anchors are COSMIC's own accent swatches (the Appearance → Accent
+# colour row), read from libcosmic cosmic-theme/src/model/light.ron:
+#
+#   accent_blue      #00525A   accent_yellow   #534800
+#   accent_indigo    #2E496D   accent_green    #185529  (PengyOS default)
+#   accent_purple    #68217C   accent_orange   #624000
+#   accent_pink      #86043A   accent_red      #78292E
+#   accent_warm_grey #554742
+#   ext_blue #6ACAD8  ext_purple #D58CFF  ext_pink #FF9CDD  ext_indigo #95C4FC
+#   ext_orange #FBB86C  ext_yellow #F7E062  ext_warm_grey #9B8E8A
+#
+# Generated with the image_gen skill (gemini-3.1-flash-image), --ar 16:9 --res 2K.
+
+[meta]
+aspect_ratio = "16:9"
+resolution = "2K"
+model = "gemini-3.1-flash-image"
+generated = "2026-10-06"
+
+# ---------------------------------------------------------------- seasons ----
+
+[[wallpaper]]
+name = "spring-thaw"
+caption = "Spring: first crocuses through the last of the snow."
+palette = ["#185529", "#95C4FC", "#FF9CDD"]
+prompt = """Pengy the penguin stands on a mossy bank beside a half-melted stream in early spring, a chunk of broken ice drifting past. Purple and yellow crocuses push through patches of leftover snow, a red robin lands nearby, mist hangs over the water, soft morning light through new leaves. Deep pine green and pale ice blue, a touch of blossom pink. Wide landscape, Pengy small-to-medium in the right third."""
+
+[[wallpaper]]
+name = "summer-meadow"
+caption = "Summer: fireflies rising over a long grass meadow at dusk."
+palette = ["#185529", "#F7E062", "#6ACAD8"]
+prompt = """Pengy the penguin waddles through tall summer grass and wildflowers in a meadow at dusk, fireflies starting to glow around him, warm golden last light, a distant tree line and a wide dusk sky fading from warm gold to deep teal. Warm yellows and deep greens. Wide landscape, Pengy in the left third."""
+
+[[wallpaper]]
+name = "autumn-maple"
+caption = "Autumn: a wind of maple leaves under a big old maple tree."
+palette = ["#624000", "#FBB86C", "#78292E"]
+prompt = """Pengy the penguin stands under a huge old maple tree, a wind of orange and red maple leaves swirling around him, acorns and a fallen raked pile at his feet, warm low afternoon sun, a cool shadowed field behind. Burnt orange, deep brown-olive and muted crimson. Wide landscape, Pengy in the right third."""
+
+[[wallpaper]]
+name = "winter-snowfall"
+caption = "Winter: quiet heavy snowfall among spruce trees at blue hour."
+palette = ["#6ACAD8", "#2E496D", "#95C4FC"]
+prompt = """Pengy the penguin stands in a quiet spruce forest during heavy falling snow at blue hour, thick soft snowflakes, snow-laden branches, deep indigo-blue twilight, a faint cold glow on the snow. Cool teals and deep indigo. Wide landscape, Pengy centred slightly left, lots of open sky."""
+
+# ------------------------------------------------- north american holidays ----
+
+[[wallpaper]]
+name = "halloween-pumpkin-patch"
+caption = "Halloween: a jack-o'-lantern glow in the pumpkin patch."
+palette = ["#68217C", "#FBB86C", "#185529"]
+prompt = """Pengy the penguin stands in a night pumpkin patch carrying a carved grinning jack-o'-lantern that glows warm orange, a huge full moon low on the horizon, bats silhouetted, hay bales and string lights, deep purple night sky. Purple, warm orange, dark green vines. Wide landscape, Pengy in the left third."""
+
+[[wallpaper]]
+name = "thanksgiving-harvest"
+caption = "Thanksgiving: harvest table of squash, corn and pie at dusk."
+palette = ["#624000", "#FBB86C", "#86043A"]
+prompt = """Pengy the penguin stands behind a wooden harvest table outdoors at dusk, piled with pumpkins, squash, ears of corn, grapes, apples and a warm pie, a lantern glowing, autumn leaves and a barn silhouette behind, warm amber light. Deep brown-olive, warm amber, muted berry red. Wide landscape, Pengy centred."""
+
+[[wallpaper]]
+name = "canada-day"
+caption = "Canada Day: fireworks over a lake, maple leaf in hand."
+palette = ["#78292E", "#95C4FC", "#F7E062"]
+prompt = """Pengy the penguin stands on a wooden dock at a northern lake at night holding a single big red maple leaf overhead, fireworks bursting in gold and red over the water, a canoe pulled up beside the dock, pine shoreline and stars reflected in the lake. Deep red, night blue, gold sparks. Wide landscape, Pengy in the right third."""
+
+[[wallpaper]]
+name = "groundhog-day"
+caption = "Groundhog Day: Pengy and a groundhog checking the shadow."
+palette = ["#554742", "#95C4FC", "#6ACAD8"]
+prompt = """Pengy the penguin stands in a snowy February field beside a groundhog at the edge of its burrow, both looking at a long shadow cast on the snow by a fence post, cold clear morning light, distant bare trees and a wooden fence. Warm grey-brown earth tones against cool snow blue. Wide landscape, Pengy in the left third."""
+
+[[wallpaper]]
+name = "christmas-lights"
+caption = "Christmas: a spruce tree lit by warm lights in a dark room."
+palette = ["#185529", "#F7E062", "#86043A"]
+prompt = """Pengy the penguin hangs a star on top of a spruce Christmas tree lit with warm white and gold string lights, simple ornaments and a few wrapped gifts below, a snowy window and dark blue night behind, cozy warm glow against deep green shadow. Deep pine green, warm gold, muted red. Wide landscape, Pengy in the left third."""
+
+[[wallpaper]]
+name = "new-year-fireworks"
+caption = "New Year: fireworks over the city skyline from the hill."
+palette = ["#2E496D", "#FF9CDD", "#F7E062"]
+prompt = """Pengy the penguin stands on a snowy hill overlooking a small city skyline at midnight, fireworks bursting in pink, gold and blue above the buildings, the city lights reflected on a frozen river, cold deep indigo night. Deep indigo with bright celebratory bursts. Wide landscape, Pengy small in the right third, skyline low in frame."""
+
+[[wallpaper]]
+name = "easter-egg-hunt"
+caption = "Easter: an egg hunt in the grass on a spring morning."
+palette = ["#D58CFF", "#95C4FC", "#185529"]
+prompt = """Pengy the penguin crouches in fresh spring grass holding a woven basket, painted eggs in soft pastel purple, blue, pink and yellow scattered in the grass and hanging on a low branch, morning sun, a few blossom petals in the air. Soft pastels over fresh green. Wide landscape, Pengy centred slightly right."""
+
+# ------------------------------------------------------------- adventures ----
+
+[[wallpaper]]
+name = "mountain-summit"
+caption = "Adventure: summit flag at alpenglow after the climb."
+palette = ["#2E496D", "#FBB86C", "#95C4FC"]
+prompt = """Pengy the penguin with a small backpack and a trekking pole plants a little flag on a rocky mountain summit at alpenglow, a sea of clouds below the peak, jagged peaks catching warm pink-orange light against a deep blue sky, rope and boot tracks in the snow. Deep indigo-blue with warm alpenglow. Wide landscape, Pengy in the right third."""
+
+[[wallpaper]]
+name = "canoe-lake"
+caption = "Adventure: first light paddling a quiet northern lake."
+palette = ["#00525A", "#6ACAD8", "#F7E062"]
+prompt = """Pengy the penguin paddles a canoe across a perfectly still northern lake at first light, glassy water with mirror reflections of pines, a loon gliding ahead, low mist over the surface, warm gold sunrise light on the horizon against cool teal water. Deep teal, cool blue, warm gold. Wide landscape, Pengy in the left third."""
+
+[[wallpaper]]
+name = "deep-sea-dive"
+caption = "Adventure: a helmet dive among kelp and fish."
+palette = ["#00525A", "#6ACAD8", "#D58CFF"]
+prompt = """Pengy the penguin wearing an old-fashioned brass diving helmet and suit wanders along a sunlit seabed, tall kelp swaying, a school of small silver fish, purple anemones and coral, shafts of sunlight from the surface above, bubbles rising. Deep teal-blue water with purple accents. Wide landscape, Pengy in the right third."""
+
+[[wallpaper]]
+name = "terminal-den"
+caption = "Adventure: Pengy at the glowing terminal in the home lab."
+palette = ["#185529", "#6ACAD8", "#F7E062"]
+prompt = """Pengy the penguin sits at a desk in a cosy dim home lab facing three curved monitors full of green and cyan terminal text and scrolling logs, a mug of coffee, a mechanical keyboard, cables and a small penguin figurine on the desk, screen glow lighting him against deep green shadow. Deep green with cyan and warm gold glow. Wide landscape, Pengy centred slightly left."""
+
+[[wallpaper]]
+name = "ski-slope"
+caption = "Adventure: carving fresh powder on the last run."
+palette = ["#95C4FC", "#6ACAD8", "#2E496D"]
+prompt = """Pengy the penguin carves a turn on skis down a steep slope of untouched powder, a big fan of snow spray bursting behind him, pine forest and a blue ridge in the background, bright cold morning light, deep blue shadows on the snow. Cool blues and whites with deep indigo shadow. Wide landscape, Pengy in the left third with motion to the right."""
+
+[[wallpaper]]
+name = "desert-roadtrip"
+caption = "Adventure: a van on an empty desert highway at sunset."
+palette = ["#554742", "#FBB86C", "#624000"]
+prompt = """Pengy the penguin stands beside a small loaded camper van parked on the shoulder of an empty desert highway at sunset, a wide road curving toward distant mesas and a Joshua tree, warm low sun, long shadows, deep warm grey-brown earth with amber sky. Warm grey-brown, amber, deep olive-brown. Wide landscape, Pengy in the right third."""
+
+[[wallpaper]]
+name = "lighthouse-storm"
+caption = "Adventure: the lighthouse beam cutting through the storm."
+palette = ["#2E496D", "#F7E062", "#95C4FC"]
+prompt = """Pengy the penguin in a yellow oilskin jacket stands at the base of a rocky coastal lighthouse in a blowing rainstorm, the beam cutting a warm gold shaft through the dark rain, big waves breaking on the rocks, a small fishing boat in the swell, deep indigo storm sky. Deep indigo-blue with a warm gold beam. Wide landscape, lighthouse right, Pengy in the left third."""
+
+[[wallpaper]]
+name = "aurora-campfire"
+caption = "Adventure: campfire under the northern lights."
+palette = ["#185529", "#6ACAD8", "#D58CFF"]
+prompt = """Pengy the penguin sits by a small campfire on a frozen lake at night roasting something on a stick, a green and violet aurora rippling across the whole sky with stars, mirrored perfectly in the ice below, dark pine silhouettes and a small tent. Deep green-teal aurora with violet. Wide landscape, Pengy in the left third, aurora filling the sky."""
+
+[[wallpaper]]
+name = "city-rainfall"
+caption = "Adventure: neon-lit street crossing in the evening rain."
+palette = ["#68217C", "#FF9CDD", "#6ACAD8"]
+prompt = """Pengy the penguin holds an umbrella and crosses a wet city street at night in the rain, neon shop signs in purple, pink and cyan reflecting in the flooded gutter, a blurred bus and traffic lights, wet pavement, deep purple night. Deep purple with pink and cyan neon reflections. Wide landscape, Pengy in the right third."""
+
+# ------------------------------------------------------- remade brand image ----
+# Replaces the original cosmic-pengy-16x9.png (1344x768, actually 7:4) with the
+# same subject rendered in the family style of the set above, at exact 16:9.
+
+[[wallpaper]]
+name = "cosmic-pengy"
+caption = "Cosmic Pengy: the original, redrawn in the family style."
+palette = ["#2E496D", "#6ACAD8", "#D58CFF", "#F7E062"]
+prompt = """Pengy the penguin floats weightlessly in deep space wearing a rounded glass space helmet over his head and a simple light suit, flippers spread wide in open-armed delight, a small ringed planet curving below him, a distant comet with a long tail, a teal and violet nebula drifting behind, scattered stars and a few tiny distant moons. Pengy lit by a warm key light from the upper left with a soft cyan rim glow. Deep indigo-space blue, teal and violet nebula, warm gold starlight. Wide landscape, Pengy in the right third, wide open starfield on the left."""

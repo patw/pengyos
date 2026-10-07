@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# editor / OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# pengyos-tiers working state (committed rulesets live in the repo)
+*.tiers.local.toml

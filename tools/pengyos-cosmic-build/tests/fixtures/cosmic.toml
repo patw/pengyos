@@ -1,0 +1,38 @@
+# Minimal fixture manifest for the pengyos-cosmic-build test suite.
+#
+# A hand-checkable, network-free stand-in for the real recipes-lane manifest
+# (tools/pengyos-cosmic-recipes/cosmic.toml). It is demo data, not a hermetic
+# fixture of the real manifest — it only needs to be a parseable, non-empty
+# manifest so the CLI framework can reach the (placeholder) feature body.
+
+name = "pengyos-cosmic-build-fixture"
+
+[[component]]
+name = "cosmic-comp"
+group = "core"
+git_url = "https://github.com/pop-os/libcosmic/cosmic-comp"
+tag = "v0.1.0"
+license = "MIT OR Apache-2.0"
+features = []
+binaries = ["cosmic-comp"]
+deps = ["libcosmic", "cosmic-protocols"]
+
+[[component]]
+name = "libcosmic"
+group = "core"
+git_url = "https://github.com/pop-os/libcosmic"
+tag = "v0.1.0"
+license = "MIT OR Apache-2.0"
+features = []
+binaries = []
+deps = ["cosmic-protocols"]
+
+[[component]]
+name = "cosmic-protocols"
+group = "core"
+git_url = "https://github.com/pop-os/cosmic-protocols"
+tag = "v0.1.0"
+license = "MIT OR Apache-2.0"
+features = []
+binaries = []
+deps = []

@@ -1,0 +1,190 @@
+# PengyOS Server — smoke matrix.
+#
+# This file is DATA, in the same format as core.toml. Every check was written
+# against real Server serial logs captured on 2026-10-02
+# (tests/fixtures/serial_login_server_uefi{,_tpm}.log). The suite also runs it
+# over a real Core boot, which must fail exactly the Server-only facts — so a
+# Server check that can't tell the two editions apart fails the tests.
+#
+# This is the Server image as built (the live/disk image), not an installed
+# A/B system.
+
+version = 1
+name = "server"
+description = "PengyOS Server — Core plus nftables, podman, sshd, backup/metrics/update timers"
+image = "output/pengyos-server/images/pengyos-server-x86_64.img"
+
+[[variant]]
+id = "uefi"
+description = "plain UEFI/OVMF disk boot (GRUB2 on the ESP)"
+uefi = true
+timeout = 180
+
+[[variant]]
+id = "uefi-tpm"
+description = "UEFI + emulated TPM2 (swtpm): proves the TPM wiring does not wedge the boot"
+uefi = true
+tpm = true
+timeout = 180
+
+# --- boot --------------------------------------------------------------------
+
+[[check]]
+id = "firmware-handoff"
+kind = "present"
+pattern = "BdsDxe: starting Boot\\d+"
+description = "OVMF found the ESP and started its boot loader"
+
+[[check]]
+id = "grub-cmdline"
+kind = "present"
+pattern = "Command line: BOOT_IMAGE=/bzImage root=PARTUUID="
+description = "GRUB booted our menu entry: the kernel got the PARTUUID root that post-image stamped in"
+
+[[check]]
+id = "rootfs-mounted"
+kind = "present"
+pattern = "VFS: Mounted root \\(ext4 filesystem\\)"
+description = "the ext4 root was found and mounted (no initramfs)"
+
+[[check]]
+id = "systemd-pid1"
+kind = "present"
+pattern = "systemd\\[1\\]: systemd [0-9.]+ running in system mode"
+description = "systemd is PID 1"
+
+[[check]]
+id = "distro-welcome"
+kind = "present"
+pattern = "Welcome to .*PengyOS Server"
+description = "systemd read our os-release: the running system is PengyOS Server"
+
+# --- network -----------------------------------------------------------------
+
+[[check]]
+id = "nic-link-up"
+kind = "present"
+pattern = "NIC Link is Up"
+description = "the wired NIC driver bound and the link came up"
+
+[[check]]
+id = "networkd-started"
+kind = "present"
+pattern = "Started .*Network Configuration"
+description = "systemd-networkd is running"
+
+[[check]]
+id = "network-online"
+kind = "present"
+pattern = "Reached target .*Network is Online"
+description = "network-online.target was reached: DHCP configured the link"
+
+[[check]]
+id = "nftables-loaded"
+kind = "present"
+pattern = "Finished .*nftables firewall"
+description = "the default-deny nftables ruleset loaded"
+
+# --- services ----------------------------------------------------------------
+
+[[check]]
+id = "sshd-started"
+kind = "present"
+pattern = "Started .*PengyOS Server sshd"
+description = "the Server's sshd unit is up"
+
+[[check]]
+id = "podman-socket"
+kind = "present"
+pattern = "Listening on .*podman\\.socket"
+description = "the podman API socket is listening"
+
+[[check]]
+id = "podman-service"
+kind = "present"
+pattern = "Started .*Podman API Service"
+description = "the podman API service started"
+
+[[check]]
+id = "backup-timer"
+kind = "present"
+pattern = "Started .*PengyOS Server backup timer"
+description = "scheduled backups are armed"
+
+[[check]]
+id = "metrics-timer"
+kind = "present"
+pattern = "Started .*PengyOS Server metrics collection timer"
+description = "metrics collection is armed"
+
+[[check]]
+id = "update-timer"
+kind = "present"
+pattern = "Started .*Check for PengyOS updates daily"
+description = "the daily update check is armed"
+
+[[check]]
+id = "multi-user"
+kind = "present"
+pattern = "Reached target .*Multi-User System"
+description = "the default target was reached"
+
+[[check]]
+id = "server-target"
+kind = "present"
+pattern = "Reached target .*PengyOS Server marker target"
+description = "the Server edition's own target was reached"
+
+[[check]]
+id = "reached-login"
+kind = "present"
+pattern = "pengyos-server login:"
+description = "the serial console reached a login prompt with the Server hostname"
+# A login *prompt* is not a login. 26.10.3 printed the automatic-login line and
+# then looped 'Permission denied': every check above it still passed. The fact
+# that proves autologin worked is the shell prompt after the login banner, which
+# is why the harness keeps reading the serial log after readiness
+# (boot.DEFAULT_SETTLE_SECONDS) and why the window below is bounded.
+[[check]]
+id = "autologin-shell"
+kind = "present"
+pattern = "pengyos-server login: root \\(automatic login\\)[\\s\\S]{0,900}?# "
+description = "autologin produced a working shell (the prompt after the login banner), not just a login line"
+
+[[check]]
+id = "no-login-denied"
+kind = "absent"
+pattern = "Permission denied"
+description = "no login was refused (26.10.3 looped 'Permission denied' after the automatic-login line while every other check passed)"
+
+# --- nothing went wrong ------------------------------------------------------
+
+[[check]]
+id = "no-failed-units"
+kind = "absent"
+pattern = "Failed to start|Dependency failed|emergency mode"
+description = "no unit failed and systemd did not drop to emergency mode"
+
+[[check]]
+id = "no-kernel-panic"
+kind = "absent"
+pattern = "Kernel panic"
+description = "no kernel panic anywhere in the serial log"
+
+[[check]]
+id = "no-oops"
+kind = "absent"
+pattern = "BUG: |Call Trace|Oops:|general protection fault|kernel NULL pointer dereference"
+description = "no oops/BUG/call trace — the kernel came up clean, not merely lucky"
+
+[[check]]
+id = "no-io-errors"
+kind = "absent"
+pattern = "EXT4-fs error|Buffer I/O error|I/O error"
+description = "no storage/filesystem I/O errors"
+
+[[check]]
+id = "no-init-failure"
+kind = "absent"
+pattern = "not syncing: No working init|Attempted to kill init"
+description = "userspace brought itself up without an init failure"

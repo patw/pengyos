@@ -1,0 +1,63 @@
+#!/bin/sh
+# PengyOS live USB: mount the install payload and start the graphical installer
+# inside the running COSMIC session. Started by pengyos-live-installer.service,
+# which only runs when the PENGYOS-PAYLOAD partition exists (i.e. on the
+# installer stick, never on an installed disk).
+set -eu
+
+MNT=/run/pengyos/payload
+mkdir -p "$MNT"
+mountpoint -q "$MNT" || mount -o ro /dev/disk/by-label/PENGYOS-PAYLOAD "$MNT"
+
+# Re-open the installer from the App Library if it gets closed (live only:
+# written into root's own data dir, which XDG searches first).
+mkdir -p /root/.local/share/applications
+cat > /root/.local/share/applications/io.catbee.pengyos.Installer.desktop <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Install PengyOS
+Comment=Install PengyOS from this USB stick onto a disk
+Exec=/usr/bin/pengyos-install-gui
+Icon=drive-harddisk
+Terminal=false
+Categories=System;
+DESKTOP
+
+# Pin the installer first in the live dock ("Try PengyOS" closes the window; this
+# is how you get back to it). Root's own dock config, so installed systems (a
+# different user, and no payload) never see it.
+fav=/root/.config/cosmic/com.system76.CosmicAppList/v1/favorites
+mkdir -p "$(dirname "$fav")"
+{
+    echo '['
+    echo '    "io.catbee.pengyos.Installer",'
+    sed -n 's/^ *\("[^"]*"\),\{0,1\} *$/    \1,/p' /usr/share/cosmic/com.system76.CosmicAppList/v1/favorites
+    echo ']'
+} > "$fav"
+
+# Wait for the COSMIC session and borrow its environment (Wayland socket, session
+# bus, XDG dirs) from the panel. Retry until WAYLAND_DISPLAY is captured AND its
+# socket exists: at startup the panel can exit and be respawned between pidof
+# and reading its environ, which once left the installer with no display
+# ("neither WAYLAND_DISPLAY nor WAYLAND_SOCKET nor DISPLAY is set").
+i=0
+while :; do
+    i=$((i + 1))
+    [ "$i" -gt 180 ] && { echo "live-installer: no COSMIC session after 180s" >&2; exit 1; }
+    unset WAYLAND_DISPLAY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS
+    for panel in $(pidof cosmic-panel); do
+        while IFS= read -r kv; do
+            case "$kv" in
+                WAYLAND_DISPLAY=*|XDG_RUNTIME_DIR=*|DBUS_SESSION_BUS_ADDRESS=*|XDG_CURRENT_DESKTOP=*|\
+                XDG_SESSION_TYPE=*|HOME=*|XDG_CONFIG_HOME=*|XDG_DATA_DIRS=*|LANG=*) export "$kv" ;;
+            esac
+        done <<ENV
+$(tr '\0' '\n' < "/proc/$panel/environ" 2>/dev/null)
+ENV
+        [ -n "${WAYLAND_DISPLAY:-}" ] && break
+    done
+    [ -n "${WAYLAND_DISPLAY:-}" ] && [ -S "${XDG_RUNTIME_DIR:-/nonexistent}/$WAYLAND_DISPLAY" ] && break
+    sleep 1
+done
+cd "${HOME:-/root}"
+exec /usr/bin/pengyos-install-gui

@@ -1,0 +1,30 @@
+# Sample PengyOS container service (see spec.md).
+#
+#   pengyos-podman validate --service samples/nginx.yaml
+#   pengyos-podman gen --service samples/nginx.yaml --out units/
+#   pengyos-podman render  --service samples/nginx.yaml --json
+#
+name: nginx
+image: docker.io/library/nginx:1.27
+
+# Run as this user inside the container (rootless podman user). Optional.
+user: "1000:1000"
+
+# systemd Restart= value. One of: no, on-success, on-failure, on-abnormal,
+# on-watchdog, on-abort, always. Defaults to on-failure.
+restart: on-failure
+
+# Published ports: "<host>:<container>" (host side optional).
+ports:
+  - "8080:80"
+
+# Persistent volumes: "<host>:<container>" bind mounts. Host paths live OUTSIDE
+# the image so data survives image updates.
+volumes:
+  - "$HOME/.pengyos/nginx/html:/usr/share/nginx/html:Z"
+  - "$HOME/.pengyos/nginx/log:/var/log/nginx:Z"
+
+# Environment variables exported into the container.
+env:
+  NGINX_HOST: localhost
+  NGINX_PORT: 80

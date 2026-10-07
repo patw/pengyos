@@ -1,0 +1,6 @@
+# PengyOS Desktop — COSMIC session environment.
+# The A/V services (PipeWire/WirePlumber/BlueZ) attach to the running session;
+# these vars point the session at the PipeWire socket + runtime dir.
+export XDG_RUNTIME_DIR=/run/user/$UID
+export PIPWIRE_RUNTIME_DIR=$XDG_RUNTIME_DIR/pipewire-0
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus

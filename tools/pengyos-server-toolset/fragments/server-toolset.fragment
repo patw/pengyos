@@ -1,0 +1,16 @@
+# server-toolset.fragment — PengyOS Server remote-admin comfort set (US-SRV-1)
+#
+# Buildroot external fragment: enables the comfort-package set as
+# BR2_PACKAGE_* symbols. GENERATED FROM toolset.TOOL_TABLE (toolset.py);
+# re-emit with:  python3 -m toolset emit
+# Do not edit by hand.
+BR2_PACKAGE_MOSH=y
+BR2_PACKAGE_TMUX=y
+BR2_PACKAGE_RIPGREP=y
+BR2_PACKAGE_FD=y
+BR2_PACKAGE_BAT=y
+BR2_PACKAGE_EZA=y
+BR2_PACKAGE_FZF=y
+BR2_PACKAGE_ZOXIDE=y
+BR2_PACKAGE_STARSHIP=y
+BR2_PACKAGE_JQ=y

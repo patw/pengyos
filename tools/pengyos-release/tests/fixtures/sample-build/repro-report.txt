@@ -1,0 +1,5 @@
+PengyOS reproducible build report
+---------------------------------
+edition: server
+rootfs: deterministic gzip (mtime=0, no embedded name)
+status: reproducible: yes

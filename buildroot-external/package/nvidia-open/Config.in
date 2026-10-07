@@ -1,0 +1,74 @@
+config BR2_PACKAGE_NVIDIA_OPEN
+	bool "nvidia-open"
+	depends on BR2_x86_64
+	depends on BR2_TOOLCHAIN_USES_GLIBC # prebuilt userspace
+	depends on BR2_LINUX_KERNEL
+	depends on !BR2_PACKAGE_NVIDIA_DRIVER # both ship nvidia.ko
+	help
+	  NVIDIA's proprietary driver with the open GPU kernel modules
+	  (Turing / RTX 20 and newer): nvidia, nvidia-modeset,
+	  nvidia-drm and nvidia-uvm, the GSP firmware, CUDA + NVML
+	  (nvidia-smi), NVENC/NVDEC, and the suspend/resume units.
+	  nouveau is blacklisted. On its own this is the compute
+	  driver a headless server needs; the graphics option adds
+	  what a Wayland desktop needs.
+
+	  Kernel modules and userspace come from the same .run, so
+	  their versions can never drift apart.
+
+	  https://github.com/NVIDIA/open-gpu-kernel-modules
+
+if BR2_PACKAGE_NVIDIA_OPEN
+
+config BR2_PACKAGE_NVIDIA_OPEN_GRAPHICS
+	bool "graphics (EGL, GBM, Wayland)"
+	depends on BR2_PACKAGE_MESA3D_GBM # libgbm: GBM backend + egl-gbm
+	depends on BR2_PACKAGE_WAYLAND # egl-wayland platform libs
+	depends on BR2_PACKAGE_LIBGLVND # libEGL_nvidia is a glvnd vendor lib
+	help
+	  The EGL/GLES/GBM/Wayland userspace a Wayland compositor
+	  needs to render and scan out on an NVIDIA GPU.
+
+	  On in the NVIDIA Desktop; off in the NVIDIA Server.
+
+comment "graphics needs Mesa GBM, Wayland and libglvnd"
+	depends on !BR2_PACKAGE_MESA3D_GBM || !BR2_PACKAGE_WAYLAND || \
+		!BR2_PACKAGE_LIBGLVND
+
+config BR2_PACKAGE_NVIDIA_OPEN_VULKAN
+	bool "Vulkan driver"
+	depends on BR2_PACKAGE_NVIDIA_OPEN_GRAPHICS
+	depends on BR2_PACKAGE_XORG7 # the ICD lives in libGLX_nvidia (libX11)
+	depends on BR2_INSTALL_LIBSTDCPP # vulkan-loader
+	select BR2_PACKAGE_VULKAN_LOADER
+	select BR2_PACKAGE_XLIB_LIBX11
+	select BR2_PACKAGE_XLIB_LIBXEXT
+	help
+	  The NVIDIA Vulkan ICD and its layers (Optimus, present),
+	  plus the Khronos loader. NVIDIA ships the ICD inside
+	  libGLX_nvidia, which links libX11/libXext; it is also the
+	  GLX vendor for OpenGL apps under Xwayland. Adds the X11 EGL
+	  platforms (xcb, xlib) too.
+
+	  On in the NVIDIA Desktop, which has the X.org libraries for
+	  Xwayland. Flatpak apps (Steam, games) bring their own copy
+	  from the Flathub GL extension matching this driver.
+
+comment "Vulkan driver needs X.org libraries (BR2_PACKAGE_XORG7)"
+	depends on BR2_PACKAGE_NVIDIA_OPEN_GRAPHICS
+	depends on !BR2_PACKAGE_XORG7
+
+config BR2_PACKAGE_NVIDIA_OPEN_PERSISTENCED
+	bool "keep the GPUs initialized (nvidia-persistenced)"
+	help
+	  Run nvidia-persistenced whenever the driver is loaded, so a
+	  headless GPU keeps its state between CUDA jobs: no driver
+	  re-initialization at every start, and nvidia-smi answers
+	  at once. For servers; it also keeps a laptop's dGPU from
+	  powering down, so the NVIDIA Desktop leaves it off.
+
+endif
+
+comment "nvidia-open needs a glibc toolchain and a Linux kernel"
+	depends on BR2_x86_64
+	depends on !BR2_TOOLCHAIN_USES_GLIBC || !BR2_LINUX_KERNEL

@@ -1,0 +1,39 @@
+[package]
+name = "pengyos-sign"
+version = "0.2.0"
+edition = "2021"
+description = "Minimal ed25519 artifact signing/verification and simple key management for PengyOS."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/patw/pengyos"
+keywords = ["signing", "ed25519", "cryptography", "pengyos", "reproducible"]
+categories = ["cryptography", "command-line-utilities"]
+
+# A single package builds both the reusable library (`pengyos_sign`) and the
+# CLI binary (`pengyos-sign`). The binary is thin: parse args, call the library.
+[lib]
+name = "pengyos_sign"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-sign"
+path = "src/main.rs"
+
+# Cryptographic dependencies are added per-subtask and declared here, never
+# inline. Subtask 1 (scaffold) had none; subtask 2 (keygen) adds ed25519-dalek,
+# getrandom, and sha2.
+#
+# Cryptographic dependencies are added per-subtask. keygen (subtask 2) pulls in
+# ed25519-dalek (the audited ed25519 implementation), getrandom (a CSPRNG for
+# the 32-byte signing seed), and sha2 (to derive the key id = SHA-256 of the
+# public key). All three build offline once fetched.
+[dependencies]
+ed25519-dalek = "3.0.0"
+getrandom = "0.2"
+sha2 = "0.11"
+
+[dev-dependencies]
+
+[profile.release]
+# Deterministic, reproducible-friendly release builds.
+lto = "thin"

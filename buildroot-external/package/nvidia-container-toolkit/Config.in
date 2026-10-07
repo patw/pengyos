@@ -1,0 +1,16 @@
+config BR2_PACKAGE_NVIDIA_CONTAINER_TOOLKIT
+	bool "nvidia-container-toolkit"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	depends on BR2_PACKAGE_HOST_GO_TARGET_CGO_LINKING_SUPPORTS
+	depends on BR2_PACKAGE_NVIDIA_OPEN
+	select BR2_PACKAGE_HOST_GO
+	help
+	  NVIDIA Container Toolkit, CDI only: nvidia-ctk writes a
+	  Container Device Interface spec for the GPUs and driver
+	  (/var/run/cdi/nvidia.yaml) when the nvidia module loads, and
+	  nvidia-cdi-hook runs inside containers that use it. Podman
+	  then shares the GPUs with any container:
+	    podman run --device nvidia.com/gpu=all ...
+	  No nvidia-container-runtime or Docker integration.
+
+	  https://github.com/NVIDIA/nvidia-container-toolkit

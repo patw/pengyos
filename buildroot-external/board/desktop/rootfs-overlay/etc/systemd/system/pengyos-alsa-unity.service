@@ -1,0 +1,13 @@
+# PengyOS Desktop - sound cards' hardware gain at unity (see the script).
+[Unit]
+Description=PengyOS sound card gain at unity
+After=alsa-restore.service sound.target
+ConditionPathExistsGlob=/dev/snd/control*
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/pengyos/alsa-unity
+
+[Install]
+WantedBy=multi-user.target

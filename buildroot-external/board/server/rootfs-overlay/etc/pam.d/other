@@ -1,0 +1,7 @@
+# PengyOS — the fallback for any PAM-using program without its own file here.
+# Plain Unix accounts and passwords (Linux-PAM denies everything if there is no
+# config at all, which would lock out a program the day it gains PAM support).
+auth      required  pam_unix.so
+account   required  pam_unix.so
+password  required  pam_unix.so sha512 shadow
+session   required  pam_unix.so

@@ -1,0 +1,37 @@
+# ============================================================================
+# PengyOS Server — sshd.service (standalone OpenSSH server)
+# ----------------------------------------------------------------------------
+# Standalone (NOT socket-activated). Fixed 2026-09-28, mirroring the Desktop
+# board's 2026-09-24 fix: the old socket-activated design was broken — the
+# service ran `sshd -D -o ListenAddress=0.0.0.0:22` while sshd.socket already
+# held :22, so every start died with
+#   "Bind to port 22 on 0.0.0.0 failed: Address already in use.
+#    fatal: Cannot bind any address."
+# and no SSH banner was ever sent (socket accepted, service crash-looped).
+# OpenSSH sshd does not consume an Accept=no activation socket, so socket
+# activation cannot work here; run it standalone like the Desktop/Core boards.
+# The old hardening (ProtectSystem=strict + SystemCallFilter=@system-service +
+# NoNewPrivileges) additionally broke sshd's privilege-separated child (SIGSYS),
+# dropping every connection; sshd's own privsep is the sandbox.
+# Host keys are generated per machine on first boot (sshd-keygen.service).
+# ============================================================================
+
+[Unit]
+Description=PengyOS Server sshd
+Documentation=man:sshd(8) man:systemd.service(5)
+After=network-online.target network.target
+Wants=network-online.target
+Requires=sshd-keygen.service
+After=sshd-keygen.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/sshd -t
+ExecStart=/usr/sbin/sshd -D -e
+RuntimeDirectory=sshd
+PIDFile=/run/sshd.pid
+Restart=on-failure
+RestartSec=4s
+
+[Install]
+WantedBy=multi-user.target

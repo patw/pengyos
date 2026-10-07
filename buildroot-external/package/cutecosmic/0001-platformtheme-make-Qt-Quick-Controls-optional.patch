@@ -1,0 +1,62 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] platformtheme: make Qt Quick Controls optional
+
+Qt Quick Controls is only used to choose a style for QML applications.
+On a Widgets-only system (no qt6declarative) the plugin should still
+build: link it, and compile the QML style selection, only when the
+module is found.
+
+Upstream: not submitted
+---
+--- a/platformtheme/CMakeLists.txt
++++ b/platformtheme/CMakeLists.txt
+@@ -1,4 +1,7 @@
+-find_package(Qt6 REQUIRED COMPONENTS Gui QuickControls2 DBus)
++find_package(Qt6 REQUIRED COMPONENTS Gui DBus)
++# Qt Quick Controls is only used to pick a style for QML apps; a Widgets-only
++# system can do without it.
++find_package(Qt6 QUIET COMPONENTS QuickControls2)
+ 
+ if(Qt6_VERSION VERSION_GREATER_EQUAL 6.9.0)
+     find_package(Qt6 COMPONENTS GuiPrivate)
+@@ -21,7 +24,11 @@
+ target_compile_options(cutecosmictheme PRIVATE -Wall -Wextra -pedantic)
+ target_compile_definitions(cutecosmictheme PRIVATE QT_NO_CAST_FROM_ASCII QT_NO_KEYWORDS)
+ 
+-target_link_libraries(cutecosmictheme PRIVATE Qt::GuiPrivate Qt::QuickControls2 Qt::DBus bindings)
++target_link_libraries(cutecosmictheme PRIVATE Qt::GuiPrivate Qt::DBus bindings)
++if(TARGET Qt6::QuickControls2)
++    target_link_libraries(cutecosmictheme PRIVATE Qt::QuickControls2)
++    target_compile_definitions(cutecosmictheme PRIVATE CUTECOSMIC_HAVE_QUICKCONTROLS2)
++endif()
+ 
+ # Find out where to install the plugin
+ find_package(Qt6 COMPONENTS CoreTools QUIET CONFIG)
+--- a/platformtheme/cutecosmictheme.cpp
++++ b/platformtheme/cutecosmictheme.cpp
+@@ -29,7 +29,9 @@
+ #include <QLibraryInfo>
+ #include <QLoggingCategory>
+ #include <QPalette>
++#ifdef CUTECOSMIC_HAVE_QUICKCONTROLS2
+ #include <QQuickStyle>
++#endif
+ 
+ #if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+ static constexpr int DEFAULT_FONT_SIZE = QGenericUnixTheme::defaultSystemFontSize;
+@@ -142,6 +144,7 @@
+ 
+ void CuteCosmicPlatformThemePrivate::setQtQuickStyle()
+ {
++#ifdef CUTECOSMIC_HAVE_QUICKCONTROLS2
+     // Follow the lead of plasma-integration here... If there is a Qt Quick
+     // Controls style (which isn't Fusion) already set, do nothing. But if
+     // there isn't, set KDE's qqc2-desktop-style if it is installed. Some
+@@ -163,6 +166,7 @@
+         // See https://invent.kde.org/frameworks/qqc2-desktop-style/-/work_items/16
+         qApp->setProperty("QQC2_DESKTOP_USE_QICON_FROM_THEME", true);
+     }
++#endif
+ }
+ 
+ void CuteCosmicPlatformThemePrivate::themeChanged()

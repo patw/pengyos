@@ -1,0 +1,31 @@
+# ============================================================================
+# PengyOS Server — nftables.service (firewall)
+# ----------------------------------------------------------------------------
+# Loads the Server firewall ruleset from /etc/nftables.conf (shipped in the
+# overlay) at boot and flushes it on stop. Type=oneshot + RemainAfterExit=yes
+# so systemd treats "firewall loaded" as a stable, reached state.
+#
+# Runs after network-pre.target / before network-online.target so the firewall
+# is in place before the host is considered "online" (spec: nftables enabled).
+# /etc/nftables.conf is the static ruleset the ExecStart loads, so it is the
+# only absolute-path data target this unit references and it is shipped.
+#
+# Installed/enabled via the overlay's multi-user.target.wants/ symlink.
+# ============================================================================
+
+[Unit]
+Description=nftables firewall
+Documentation=man:nft(8)
+After=network-pre.target network.target
+Before=network-online.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/rm -f /run/nftables-active.nft
+ExecStart=/usr/sbin/nft -f /etc/nftables.conf
+ExecStop=/usr/sbin/nft flush ruleset
+
+[Install]
+WantedBy=multi-user.target

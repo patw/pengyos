@@ -1,0 +1,8 @@
+# component: curl
+
+## 8.9.0
+- SOCKS5 heap buffer overflow fix (CVE-2024-2392)
+- security: several hardening improvements across the proxy path
+
+## 8.4.0
+- SOCKS5 heap overflow fix (CVE-2023-38545)

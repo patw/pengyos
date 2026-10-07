@@ -1,0 +1,35 @@
+# ============================================================================
+# PengyOS Server — podman.socket (Podman API socket)
+# ----------------------------------------------------------------------------
+# Exposes the Docker-compatible Podman API on a Unix socket and hands the
+# listening socket to podman.service, which serves it with `podman system
+# service` (see podman.service in this overlay).
+#
+# Fixed 2026-09-24. The previous unit was unrunnable in the minimal image:
+#   * ListenStream used a leading '@' -> systemd treated it as an *abstract*
+#     namespace socket (the comment's "embed the instance id" reading of '@' was
+#     simply wrong), and
+#   * SocketUser=1000 / SocketGroup=podman referenced a uid and group that do
+#     not exist in this image, and Service=podman.service pointed at a unit that
+#     was never shipped,
+# so systemd logged "Failed to listen on ... Podman API socket".
+# It is now a plain path socket under RuntimeDirectory, owned by root.
+#
+# Scope note (US-SRV-2): this is the ROOTFUL API socket — enough to prove the
+# container service is wired and reachable on boot. A truly rootless Podman
+# needs a dedicated user + subuid/subgid + lingering and a per-user user-unit
+# socket; that is a deliberate follow-up, not a blocker.
+# ============================================================================
+
+[Unit]
+Documentation=man:podman-system-service(1) man:systemd.socket(5)
+Before=network-online.target
+Wants=network-online.target
+
+[Socket]
+ListenStream=%t/podman/podman.sock
+SocketMode=0660
+RuntimeDirectory=podman
+
+[Install]
+WantedBy=sockets.target

@@ -1,0 +1,9 @@
+config BR2_PACKAGE_LIBFYAML
+	bool "libfyaml"
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	help
+	  A fully featured YAML 1.2 / JSON parser and emitter in C.
+	  AppStream (and so Flatpak) reads its YAML metadata with it.
+	  Not a stock Buildroot 2026.08 package.
+
+	  https://github.com/pantoniou/libfyaml

@@ -1,0 +1,10 @@
+[Unit]
+Description=PengyOS Core marker target
+Documentation=man:systemd.special(7) man:pengyos-core.target(8)
+# Marker / synchronization point: everything in the Core set is considered
+# "up" once this target is reached. Other Core units pull it in via
+# WantedBy=pengyos-core.target.
+DefaultDependencies=no
+
+[Install]
+WantedBy=multi-user.target

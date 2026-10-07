@@ -1,0 +1,21 @@
+// PengyOS: administrators (wheel) at the computer may check for, install and
+// roll back system updates and switch the update channel from the "PengyOS
+// Updates" app without a password. Updates are signed, and installing one
+// only takes effect at the next restart. Everyone else is asked for an
+// administrator's password (systemd's default for starting units).
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.systemd1.manage-units" ||
+        action.lookup("verb") != "start" ||
+        !subject.local || !subject.active || !subject.isInGroup("wheel")) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    if (unit == "pengyos-update-check.service" ||
+        unit == "pengyos-update-apply.service" ||
+        unit == "pengyos-update-rollback.service" ||
+        unit == "pengyos-update-channel@stable.service" ||
+        unit == "pengyos-update-channel@testing.service") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

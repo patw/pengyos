@@ -1,0 +1,7 @@
+config BR2_PACKAGE_NEOVIM
+	bool "neovim"
+	help
+	  neovim is a hyperextensible, Vim-based refactored text editor
+	  with first-class language server protocol support.
+
+	  https://github.com/neovim/neovim

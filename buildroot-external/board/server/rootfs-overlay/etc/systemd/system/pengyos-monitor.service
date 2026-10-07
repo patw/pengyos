@@ -1,0 +1,31 @@
+# ============================================================================
+# PengyOS Server — pengyos-monitor.service (metrics collection)
+# ----------------------------------------------------------------------------
+# Runs the Server metrics collector (/usr/libexec/pengyos/pengyos-monitor.sh) once per
+# trigger. The authoritative cadence is the paired pengyos-monitor.timer; this
+# service is Type=oneshot so systemd treats each collected sample as a finite,
+# completed job.
+#
+# ExecStart references two shipped targets, both staged in the overlay:
+#   * /usr/libexec/pengyos/pengyos-monitor.sh  — the executable (the collector itself)
+#   * /etc/pengyos/monitor.conf          — its configuration
+# /var/log/pengyos-monitor.log (the log the script appends to) is runtime state
+# created at boot, so it is not shipped — the ExecStart-target consistency check
+# only cares about the data/config targets above, which ARE shipped.
+#
+# The single ExecStart argument is the conf path; the script reads it and falls
+# back to defaults if the conf is absent, so the service still runs.
+#
+# Enabled via timers.target.wants/ (see pengyos-monitor.timer).
+# ============================================================================
+
+[Unit]
+Description=PengyOS Server metrics collection
+Documentation=file:/usr/libexec/pengyos/pengyos-monitor.sh
+After=network.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/pengyos/pengyos-monitor.sh /etc/pengyos/monitor.conf
+RemainAfterExit=yes

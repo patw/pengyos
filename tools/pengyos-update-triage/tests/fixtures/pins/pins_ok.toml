@@ -1,0 +1,48 @@
+# Committed pins fixture — a realistic set of pinned PengyOS components.
+# (This is a *schema* fixture for the loader tests. The "realistic CVE-bearing"
+# advisory fixtures live in
+# tests/fixtures/advisories/ and are cross-referenced by name here.)
+schema = "pengyos.pins/v1"
+description = "Base PengyOS userspace pins (fixture)"
+
+[[component]]
+name = "glibc"
+version = "2.39"
+ecosystem = "alpine"
+aliases = ["libc", "glib"]
+reachability = "core"
+note = "base C library"
+
+[[component]]
+name = "openssl"
+version = "3.0.13"
+ecosystem = "alpine"
+aliases = ["libssl", "libcrypto"]
+reachability = "core"
+note = "TLS / crypto"
+
+[[component]]
+name = "curl"
+version = "8.8.0"
+ecosystem = "alpine"
+reachability = "std"
+
+[[component]]
+name = "zlib"
+version = "1.3.1"
+ecosystem = "alpine"
+reachability = "std"
+
+[[component]]
+name = "python"
+version = "3.12.4"
+ecosystem = "pypi"
+aliases = ["python3"]
+reachability = "std"
+
+[[component]]
+name = "make"
+version = "4.4.1"
+ecosystem = "alpine"
+reachability = "opt"
+note = "developer build tool"

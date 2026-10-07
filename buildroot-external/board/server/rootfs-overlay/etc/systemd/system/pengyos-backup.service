@@ -1,0 +1,31 @@
+# ============================================================================
+# PengyOS Server — pengyos-backup.service (timestamped tarball backups)
+# ----------------------------------------------------------------------------
+# Runs the Server backup routine (/usr/libexec/pengyos/pengyos-backup.sh) once per
+# trigger. The authoritative cadence is the paired pengyos-backup.timer; this
+# service is Type=oneshot so systemd treats each backup as a finite, completed
+# job.
+#
+# ExecStart references two shipped targets, both staged in the overlay:
+#   * /usr/libexec/pengyos/pengyos-backup.sh  — the executable (the routine itself)
+#   * /etc/pengyos/backup.conf          — its configuration
+# /var/backups/pengyos (where the tarballs land) is runtime state created at
+# boot, so it is not shipped — the ExecStart-target consistency check only cares
+# about the data/config targets above, which ARE shipped.
+#
+# The single ExecStart argument is the conf path; the script reads it and falls
+# back to defaults if the conf is absent, so the service still runs.
+#
+# Enabled via timers.target.wants/ (see pengyos-backup.timer).
+# ============================================================================
+
+[Unit]
+Description=PengyOS Server backup
+Documentation=file:/usr/libexec/pengyos/pengyos-backup.sh
+After=network.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/pengyos/pengyos-backup.sh /etc/pengyos/backup.conf
+RemainAfterExit=yes

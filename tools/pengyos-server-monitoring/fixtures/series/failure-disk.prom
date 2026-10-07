@@ -1,0 +1,16 @@
+# HELP node_filesystem_free_bytes Free space in bytes.
+# TYPE node_filesystem_free_bytes gauge
+node_filesystem_free_bytes{instance="node1",mountpoint="/"} 5 0
+node_filesystem_free_bytes{instance="node1",mountpoint="/"} 5 60
+node_filesystem_free_bytes{instance="node1",mountpoint="/"} 5 120
+node_filesystem_free_bytes{instance="node1",mountpoint="/"} 5 180
+node_filesystem_free_bytes{instance="node1",mountpoint="/"} 5 240
+node_filesystem_free_bytes{instance="node1",mountpoint="/"} 5 300
+node_filesystem_free_bytes{instance="node1",mountpoint="/"} 5 360
+node_filesystem_size_bytes{instance="node1",mountpoint="/"} 100 0
+node_filesystem_size_bytes{instance="node1",mountpoint="/"} 100 60
+node_filesystem_size_bytes{instance="node1",mountpoint="/"} 100 120
+node_filesystem_size_bytes{instance="node1",mountpoint="/"} 100 180
+node_filesystem_size_bytes{instance="node1",mountpoint="/"} 100 240
+node_filesystem_size_bytes{instance="node1",mountpoint="/"} 100 300
+node_filesystem_size_bytes{instance="node1",mountpoint="/"} 100 360

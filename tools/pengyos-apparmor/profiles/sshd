@@ -1,0 +1,66 @@
+# sshd — minimal, strict-by-default profile for the PengyOS OpenSSH server.
+#
+# PengyOS ships key-only authentication (password auth is disabled in
+# sshd_config), so this profile deliberately does NOT grant /etc/shadow —
+# a profile that needs it is a signal the host config has drifted.
+# Everything not granted below is DENIED (default-deny posture).
+#
+# Confinement invariants (enforced by tests/test_profiles.py):
+#   * no `complain` / audit-unconfined posture,
+#   * no whole-filesystem allow grants, and no wildcard-tree (`/**`)
+#     write grants at all: tree grants carry read/exec/map only, and
+#     writes are pinned to explicit paths (the profile passes
+#     `validate --strict`),
+#   * no shadow/credential reads.
+
+sshd (sshd.bin) {
+  # --- guardrails: explicit denies on credential material ---------------
+  deny /etc/shadow r,
+  deny /etc/gshadow r,
+  deny /etc/sudoers r,
+  deny /root/** r,
+  deny /home/*/.bash_history r,
+
+  # --- executable & shared libraries (read/exec/map only) ---------------
+  /usr/sbin/sshd rix,
+  /usr/sbin/sshd-session rix,
+  /usr/sbin/sshd-session.* rix,
+  /usr/sbin/sftp-server rix,
+  /usr/lib/openssh/** r,
+  /usr/lib/openssh/ssh-keygen rix,
+  /usr/lib/openssh/ssh-pkcs11-helper ix,
+  /lib/ld-linux-x86-64.so.2 mr,
+  /lib/x86_64-linux-gnu/libc.so.6 mr,
+  /lib/x86_64-linux-gnu/libssl.so.[0-9]* mr,
+  /lib/x86_64-linux-gnu/libcrypto.so.[0-9]* mr,
+  /lib/x86_64-linux-gnu/libz.so.[0-9]* mr,
+  /etc/ld.so.cache r,
+
+  # --- configuration (read-only) ----------------------------------------
+  /etc/ssh/sshd_config r,
+  /etc/ssh/sshd_config.d/** r,
+  /etc/ssh/ssh_host_*_key r,
+  /etc/ssh/ssh_host_*_key.pub r,
+  /etc/passwd r,
+  /etc/group r,
+  /etc/nsswitch.conf r,
+
+  # --- runtime state (explicit paths only, no /** tree writes) -----------
+  # The privsep working directory is traversed, and the only file sshd
+  # writes under /run is the PidFile (PidFile=/run/sshd.pid in
+  # PengyOS sshd_config).
+  /run/sshd r,
+  /run/sshd.pid w,
+  /var/log/auth.log wa,
+  /var/run/utmp w,
+  /dev/log w,
+  /dev/null rw,
+  /dev/urandom r,
+  /dev/tty rw,
+  /proc/1/comm r,
+
+  # --- user home for authorized_keys only (no directory listing, no write)
+  /home/*/ r,
+  /home/*/.ssh/ r,
+  /home/*/.ssh/authorized_keys r,
+}

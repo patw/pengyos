@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-guest"
+version = "0.2.0"
+description = "Declarative distrobox/podman guests for the PengyOS project (Lane 4)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "podman", "distrobox", "guest", "lane4"]
+
+# Standard library only at runtime. TOML ships with 3.11+; the shim in
+# pengyos_guest._toml_compat backfills tomllib on 3.10.
+dependencies = []
+
+[project.optional-dependencies]
+# Dev / test only. Never required to run the tool.
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-guest = "pengyos_guest.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

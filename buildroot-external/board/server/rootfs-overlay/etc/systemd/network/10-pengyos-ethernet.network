@@ -1,0 +1,7 @@
+# PengyOS Server — bring up any wired NIC via DHCP (systemd-networkd).
+# US-SRV: the server gets a lease with no manual configuration.
+[Match]
+Type=ether
+
+[Network]
+DHCP=yes

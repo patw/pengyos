@@ -1,0 +1,34 @@
+config BR2_PACKAGE_FLATPAK
+	bool "flatpak"
+	depends on BR2_PACKAGE_SYSTEMD # system helper, sysusers
+	depends on BR2_PACKAGE_LIBGPG_ERROR_ARCH_SUPPORTS # libostree
+	depends on BR2_TOOLCHAIN_HEADERS_AT_LEAST_5_8 # libostree
+	depends on !BR2_TOOLCHAIN_USES_MUSL # libostree
+	depends on BR2_USE_WCHAR # libglib2
+	depends on BR2_TOOLCHAIN_HAS_THREADS # libglib2
+	depends on BR2_USE_MMU # fork()
+	depends on BR2_PACKAGE_LIBSECCOMP_ARCH_SUPPORTS
+	select BR2_PACKAGE_APPSTREAM
+	select BR2_PACKAGE_BUBBLEWRAP
+	select BR2_PACKAGE_XDG_DBUS_PROXY
+	select BR2_PACKAGE_GDK_PIXBUF
+	select BR2_PACKAGE_JSON_GLIB
+	select BR2_PACKAGE_LIBARCHIVE
+	select BR2_PACKAGE_LIBCAP
+	select BR2_PACKAGE_LIBCURL
+	select BR2_PACKAGE_LIBFUSE3
+	select BR2_PACKAGE_LIBGPGME
+	select BR2_PACKAGE_LIBOSTREE
+	select BR2_PACKAGE_LIBSECCOMP
+	select BR2_PACKAGE_LIBSOUP3 # libostree only fetches over HTTP with it (then via curl)
+	select BR2_PACKAGE_LIBXML2
+	select BR2_PACKAGE_POLKIT # the system helper
+	help
+	  Flatpak: sandboxed desktop applications (the Desktop's app
+	  lane, SPEC §2.5), with its system helper (installs for the
+	  admin, authorized by polkit) and its portal (sub-sandboxes,
+	  needed by Chromium/Electron apps and Steam).
+
+	  Not a stock Buildroot 2026.08 package.
+
+	  https://flatpak.org/

@@ -1,0 +1,10 @@
+#!/bin/sh
+# PengyOS: a macOS-style `open` — open a file or URL with the user's default app.
+#
+# Delegates to xdg-open (package/xdg-utils); `gio open` from GLib, which resolves
+# the same XDG default association (mimeapps.list), is the fallback on an image
+# built without xdg-utils.
+if command -v xdg-open >/dev/null 2>&1; then
+    exec xdg-open "$@"
+fi
+exec gio open "$@"

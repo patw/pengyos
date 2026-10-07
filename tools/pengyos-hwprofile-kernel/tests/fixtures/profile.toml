@@ -1,0 +1,78 @@
+[metadata]
+hostname = "pengyos-laptop"
+kernel = "6.8.0-pengyos"
+tool_version = "0.4.0"
+
+[cpu]
+vendor = "AuthenticAMD"
+model = "AMD Ryzen 7 5700G with Radeon Graphics"
+cores = 8
+threads = 16
+mhz = 1800.0
+
+[[memory]]
+locator = "ChannelA-DIMM0"
+manufacturer = "Crucial"
+memory_type = "DDR4"
+size_bytes = 8589934592
+speed_mhz = 3200
+
+[[memory]]
+locator = "ChannelB-DIMM0"
+manufacturer = "Crucial"
+memory_type = "DDR4"
+size_bytes = 8589934592
+speed_mhz = 3200
+
+
+[[gpu]]
+bus = "0000:00:02.0"
+driver = "amdgpu"
+model = "Vega [Radeon RX Vega]"
+vendor = "Advanced Micro Devices, Inc. [AMD]"
+
+
+[[storage]]
+bus = "nvme"
+model = "Samsung NVMe SSD 980"
+serial = "S1W1NY0KA12345"
+size_bytes = 476944979456
+transport = "NVMe"
+
+[[storage]]
+bus = "sata"
+model = "Samsung SSD 870 EVO"
+serial = "S3Z9NB0K912345"
+size_bytes = 4577693483008
+transport = "sata"
+
+
+[[network]]
+interface = "wlo1"
+mac = "f8:ac:65:b2:1e:84"
+
+[[network]]
+bus = "0000:00:1f.6"
+driver = "e1000e"
+interface = "enp3s0"
+mac = "2c:f0:5d:71:52:31"
+speed_mbps = 1000
+
+
+[[peripherals]]
+bus = "3:002"
+name = "Intel UVC Camera"
+product_id = "1901"
+vendor_id = "8086"
+
+[[peripherals]]
+bus = "5:001"
+name = "PRO CARBON"
+product_id = "7b85"
+vendor_id = "1462"
+
+[[peripherals]]
+bus = "5:002"
+name = "Intel RealSense Depth Camera 435"
+product_id = "0025"
+vendor_id = "8087"

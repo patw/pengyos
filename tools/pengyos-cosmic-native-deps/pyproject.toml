@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-cosmic-native-deps"
+version = "0.1.0"
+description = "Emit + lint Buildroot BR2_EXTERNAL recipes for the native (non-Rust) deps COSMIC needs that 2026.08 does not ship."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["buildroot", "pengyos", "cosmic", "recipes", "reproducible", "br2-external"]
+# Standard library only at runtime. `pytest` is a dev-only dependency.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+pengyos-cosmic-native-deps = "pengyos_cosmic_native_deps.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_cosmic_native_deps*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

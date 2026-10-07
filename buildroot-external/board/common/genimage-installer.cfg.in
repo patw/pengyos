@@ -1,0 +1,36 @@
+# PengyOS — the installer USB stick (Server, Desktop): the edition's disk image
+# (same ESP + root, so it boots the same live system) plus a PENGYOS-PAYLOAD
+# partition carrying the image to install (payload.ext4, built by post-image.sh).
+# The payload partition is what makes the stick boot into the installer.
+# UUID_TMP, DISK_UUID_TMP and BOOT_UUID_TMP are substituted like genimage.cfg;
+# PAYLOAD_UUID_TMP is derived the same way (image-ids.sh).
+
+image IMAGE_TMP {
+	hdimage {
+		partition-table-type = "hybrid"
+		disk-uuid = DISK_UUID_TMP
+		disk-signature = SIGNATURE_TMP
+	}
+
+	partition boot {
+		image = "efi-part.vfat"
+		partition-type-uuid = U
+		partition-uuid = BOOT_UUID_TMP
+		partition-type = 0xEF
+		# 1 MiB alignment.
+		offset = 1M
+		bootable = true
+	}
+
+	partition root {
+		partition-type-uuid = 44479540-f297-41b2-9af7-d131d5f0458a
+		partition-uuid = UUID_TMP
+		image = "rootfs.ext2"
+	}
+
+	partition payload {
+		partition-type-uuid = L
+		partition-uuid = PAYLOAD_UUID_TMP
+		image = "payload.ext4"
+	}
+}

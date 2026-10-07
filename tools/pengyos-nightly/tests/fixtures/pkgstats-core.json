@@ -1,0 +1,459 @@
+{
+ "packages": {
+  "linux": {
+   "tree": "BUILDROOT",
+   "path": "linux/linux.mk",
+   "pkg_path": "linux",
+   "infras": [
+    [
+     "target",
+     "kconfig"
+    ]
+   ],
+   "license": "GPL-2.0",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [],
+   "warnings": 0,
+   "current_version": "7.2.5",
+   "url": "https://www.kernel.org/",
+   "cpeid": "cpe:2.3:o:linux:linux_kernel:7.2.5:-:*:*:*:*:*:*",
+   "cves": [
+    "CVE-1999-0656",
+    "CVE-2007-4998",
+    "CVE-2010-4563",
+    "CVE-2019-3887",
+    "CVE-2019-3819",
+    "CVE-2019-3016",
+    "CVE-2020-25672",
+    "CVE-2020-27815",
+    "CVE-2021-3564",
+    "CVE-2021-20194",
+    "CVE-2021-3669",
+    "CVE-2022-38096",
+    "CVE-2022-4543",
+    "CVE-2026-100074",
+    "CVE-2026-100077",
+    "CVE-2026-100078",
+    "CVE-2026-100079",
+    "CVE-2026-100075",
+    "CVE-2026-100076",
+    "CVE-2026-98109",
+    "CVE-2026-98115",
+    "CVE-2026-98160",
+    "CVE-2026-98161",
+    "CVE-2026-98163",
+    "CVE-2026-98152",
+    "CVE-2026-98162",
+    "CVE-2026-98062"
+   ],
+   "ignored_cves": [],
+   "unsure_cves": [
+    "CVE-2021-46973"
+   ],
+   "stale_cve_ignores": [],
+   "latest_version": {
+    "status": 2,
+    "version": "6.19.14",
+    "id": 375247
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "error",
+     "missing"
+    ],
+    "patches": [
+     "ok",
+     "no patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "ok",
+     "(not checked against CPE dictionary)"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "warning",
+     "no developers"
+    ],
+    "version": [
+     "error",
+     "The newer version 6.19.14 is available upstream"
+    ],
+    "cve": [
+     "error",
+     "affected by CVEs"
+    ]
+   },
+   "developers": []
+  },
+  "busybox": {
+   "tree": "BUILDROOT",
+   "path": "package/busybox/busybox.mk",
+   "pkg_path": "package/busybox",
+   "infras": [
+    [
+     "target",
+     "kconfig"
+    ]
+   ],
+   "license": "GPL-2.0, bzip2-1.0.6",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [
+    "0002-Makefile.flags-strip-non-l-arguments-returned-by-pkg.patch",
+    "0001-networking-libiproute-use-linux-if_packet.h-instead-.patch",
+    "0005-seedrng-fix-getrandom-detection-for-non-glibc-libc.patch",
+    "0012-netstat-sanitize-argv0-for-p-CVE-2024-58251.patch",
+    "0011-wget-dont-allow-control-characters-or-spaces-in-the-URL.patch",
+    "0007-awk.c-fix-CVE-2023-42366-bug-15874.patch",
+    "0004-nslookup-sanitize-all-printed-strings-with-printable.patch",
+    "0009-syslogd-fix-wrong-OPT_locallog-flag-detection.patch",
+    "0008-hwclock-Check-for-SYS_settimeofday-before-calling-sy.patch",
+    "0006-tc-Fix-compilation-with-Linux-v6.8-rc1.patch",
+    "0003-libbb-sockaddr2str-ensure-only-printable-characters-.patch",
+    "0010-testsuite-tar-tests-fix-test-after-cve-2025-46394.patch"
+   ],
+   "warnings": 0,
+   "current_version": "1.38.0",
+   "url": "http://busybox.net/",
+   "cpeid": "cpe:2.3:a:busybox:busybox:1.38.0:-:*:*:*:*:*:*",
+   "cves": [
+    "CVE-2026-38754",
+    "CVE-2026-38753",
+    "CVE-2026-38755"
+   ],
+   "ignored_cves": [
+    "CVE-2022-28391",
+    "CVE-2023-42366",
+    "CVE-2024-58251",
+    "CVE-2025-46394",
+    "CVE-2025-60876"
+   ],
+   "unsure_cves": [],
+   "stale_cve_ignores": [
+    "CVE-2022-28391",
+    "CVE-2023-42366",
+    "CVE-2025-60876",
+    "CVE-2025-46394"
+   ],
+   "latest_version": {
+    "status": 2,
+    "version": "1.38.0",
+    "id": 230
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "error",
+     "lots of patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "ok",
+     "(not checked against CPE dictionary)"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "warning",
+     "no developers"
+    ],
+    "version": [
+     "ok",
+     "up-to-date"
+    ],
+    "cve": [
+     "error",
+     "affected by CVEs"
+    ]
+   },
+   "developers": []
+  },
+  "binutils": {
+   "tree": "BUILDROOT",
+   "path": "package/binutils/binutils.mk",
+   "pkg_path": "package/binutils",
+   "infras": [
+    [
+     "host",
+     "autotools"
+    ]
+   ],
+   "license": "GPL-3.0+, GPL-2.0+, LGPL-2.1+",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [
+    "0003-or1k-Mark-undefined-TLS-symbol-as-STT_TLS.patch",
+    "0004-gprofng-protect-against-standard-library-macros.patch",
+    "0002-poison-system-directories.patch",
+    "0001-sh-conf.patch"
+   ],
+   "warnings": 0,
+   "current_version": "2.45.1",
+   "url": "http://www.gnu.org/software/binutils/",
+   "cpeid": "cpe:2.3:a:gnu:binutils:2.45.1:-:*:*:*:*:*:*",
+   "cves": [
+    "CVE-2025-69648",
+    "CVE-2025-69644",
+    "CVE-2025-69649",
+    "CVE-2025-69652",
+    "CVE-2025-69647",
+    "CVE-2025-69650",
+    "CVE-2025-69651",
+    "CVE-2026-6846"
+   ],
+   "ignored_cves": [
+    "CVE-2025-3198"
+   ],
+   "unsure_cves": [],
+   "stale_cve_ignores": [
+    "CVE-2025-3198"
+   ],
+   "latest_version": {
+    "status": 2,
+    "version": "2.47",
+    "id": 7981
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "warning",
+     "some patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "ok",
+     "(not checked against CPE dictionary)"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "ok",
+     "2 developers"
+    ],
+    "version": [
+     "error",
+     "The newer version 2.47 is available upstream"
+    ],
+    "cve": [
+     "error",
+     "affected by CVEs"
+    ]
+   },
+   "developers": [
+    "Giulio Benetti <giulio.benetti@benettiengineering.com>",
+    "Romain Naour <romain.naour@gmail.com>"
+   ]
+  },
+  "openssh": {
+   "tree": "BUILDROOT",
+   "path": "package/openssh/openssh.mk",
+   "pkg_path": "package/openssh",
+   "infras": [
+    [
+     "target",
+     "autotools"
+    ]
+   ],
+   "license": "BSD-3-Clause, BSD-2-Clause, Public Domain",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [],
+   "warnings": 0,
+   "current_version": "10.5p1",
+   "url": "http://www.openssh.com/",
+   "cpeid": "cpe:2.3:a:openbsd:openssh:10.5:p1:*:*:*:*:*:*",
+   "cves": [
+    "CVE-2007-2768",
+    "CVE-2008-3844",
+    "CVE-2023-51767"
+   ],
+   "ignored_cves": [],
+   "unsure_cves": [],
+   "stale_cve_ignores": [],
+   "latest_version": {
+    "status": 2,
+    "version": "10.5p1",
+    "id": 2565
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "ok",
+     "no patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "ok",
+     "(not checked against CPE dictionary)"
+    ],
+    "url": [
+     "ok",
+     "valid"
+    ],
+    "developers": [
+     "warning",
+     "no developers"
+    ],
+    "version": [
+     "ok",
+     "up-to-date"
+    ],
+    "cve": [
+     "error",
+     "affected by CVEs"
+    ]
+   },
+   "developers": []
+  },
+  "gcc-final": {
+   "tree": "BUILDROOT",
+   "path": "package/gcc/gcc-final/gcc-final.mk",
+   "pkg_path": "package/gcc/gcc-final",
+   "infras": [
+    [
+     "target",
+     "generic"
+    ],
+    [
+     "host",
+     "autotools"
+    ]
+   ],
+   "license": "GPL-3.0-with-GCC-exception",
+   "has_license": false,
+   "has_license_files": false,
+   "has_hash": false,
+   "patch_files": [],
+   "warnings": 0,
+   "current_version": "15.3.0",
+   "url": null,
+   "cpeid": "cpe:2.3:a:gnu:gcc:15.3.0:-:*:*:*:*:*:*",
+   "cves": [
+    "CVE-2023-4039"
+   ],
+   "ignored_cves": [],
+   "unsure_cves": [],
+   "stale_cve_ignores": [],
+   "latest_version": {
+    "status": 4,
+    "version": null,
+    "id": null
+   },
+   "status": {
+    "license": [
+     "ok",
+     "found"
+    ],
+    "license-files": [
+     "ok",
+     "found"
+    ],
+    "hash": [
+     "ok",
+     "found"
+    ],
+    "patches": [
+     "ok",
+     "no patches"
+    ],
+    "pkg-check": [
+     "error",
+     "Missing"
+    ],
+    "cpe": [
+     "ok",
+     "(not checked against CPE dictionary)"
+    ],
+    "url": [
+     "warning",
+     "no Config.in"
+    ],
+    "developers": [
+     "ok",
+     "3 developers"
+    ],
+    "version": [
+     "warning",
+     "No upstream version available on Release Monitoring"
+    ],
+    "cve": [
+     "error",
+     "affected by CVEs"
+    ]
+   },
+   "developers": [
+    "Giulio Benetti <giulio.benetti@benettiengineering.com>",
+    "Romain Naour <romain.naour@gmail.com>",
+    "Thomas Petazzoni <thomas.petazzoni@bootlin.com>"
+   ]
+  }
+ },
+ "commit": "d5180309b1b66ef3b8eaccca70ad69be8e0729a1",
+ "date": "2026-10-03 16:58:59.629786+00:00"
+}

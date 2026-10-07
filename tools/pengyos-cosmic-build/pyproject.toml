@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-cosmic-build"
+version = "0.1.0"
+description = "Vendored, buildable COSMIC recipes + Desktop target wiring over the pengyos-cosmic-pkg engine and the recipes/native-deps lanes."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf", email = "pat@catbee.ca" }]
+# stdlib-only at test time; declare any real dependency here.
+# The engine + lanes are sibling tools imported from their own tools/ dirs
+# (see conftest.py), never pip-installed.
+dependencies = []
+
+[project.scripts]
+# The cosmic-build CLI (also runnable as ``python -m pengyos_cosmic_build``).
+pengyos-cosmic-build = "pengyos_cosmic_build.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

@@ -1,0 +1,8 @@
+#!/bin/sh
+# PengyOS stub: 'sgdisk' is intentionally not shipped on this image.
+# It ships a helpful pointer so an agent (or a human) knows the alternative.
+cat >&2 <<'MSG'
+PengyOS: 'sgdisk' is not installed in this image.
+  instead, use: parted (GPT) or fdisk — e.g. 'parted -s /dev/sdX mklabel gpt'
+MSG
+exit 127

@@ -1,0 +1,3 @@
+[metadata
+hostname = "broken"
+# missing closing bracket on the table header above -> TOML decode error.

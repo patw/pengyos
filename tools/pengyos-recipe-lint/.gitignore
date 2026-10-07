@@ -1,0 +1,12 @@
+# PengyOS recipe-lint — machine-local junk (never tracked)
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+build/
+dist/
+.eggs/
+

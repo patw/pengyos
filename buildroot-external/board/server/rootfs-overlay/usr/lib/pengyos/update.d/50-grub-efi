@@ -1,0 +1,34 @@
+#!/bin/sh
+# PengyOS update step: keep GRUB on the boot partition in step with the image.
+#
+# Run as root by `pengyos-update apply` from the NEW image (signed with it),
+# after the new system is written and before anything boots it. The boot
+# partition is shared by both slots, so the GRUB binary and its font are not
+# part of either slot: this step brings the new image's copies over
+# (/usr/lib/pengyos/boot), keeping the old ones as *.prev. A copy that does not
+# read back identical stops the update.
+set -eu
+src="$PENGYOS_NEW_ROOT/usr/lib/pengyos/boot"
+dst="$PENGYOS_ESP/EFI/BOOT"
+if [ ! -d "$src" ]; then
+    echo "the new image carries no GRUB; keeping the one on the boot partition"
+    exit 0
+fi
+for f in bootx64.efi grub-pengyos.pf2; do
+    [ -f "$src/$f" ] || continue
+    if [ -f "$dst/$f" ] && cmp -s "$src/$f" "$dst/$f"; then
+        echo "$f is current"
+        continue
+    fi
+    cp "$src/$f" "$dst/$f.new"
+    sync
+    if ! cmp -s "$src/$f" "$dst/$f.new"; then
+        rm -f "$dst/$f.new"
+        echo "the copy of $f on the boot partition is damaged" >&2
+        exit 1
+    fi
+    [ -f "$dst/$f" ] && cp "$dst/$f" "$dst/$f.prev"
+    mv -f "$dst/$f.new" "$dst/$f"
+    sync
+    echo "updated $f on the boot partition"
+done

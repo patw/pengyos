@@ -1,0 +1,10 @@
+config BR2_PACKAGE_SOF_FIRMWARE
+	bool "sof-firmware"
+	depends on BR2_x86_64
+	help
+	  Intel Sound Open Firmware: the audio DSP firmware and
+	  topology files for Intel laptops (digital microphones,
+	  SoundWire) with the kernel's SOF driver. Signed by Intel;
+	  the files the kernel loads from /lib/firmware/intel.
+
+	  https://github.com/thesofproject/sof-bin

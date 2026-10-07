@@ -1,0 +1,11 @@
+# Generated art is ~90 MB of PNGs and this repo syncs over Syncthing.
+# Keep the provenance (prompts.toml, generate.sh) tracked; keep the pixels local.
+# Chosen wallpapers get promoted to the desktop rootfs-overlay, where the one
+# tracked wallpaper already lives.
+candidates/
+cropped/
+jpeg/
+contact/
+.prompts/
+generate.log
+batch.out

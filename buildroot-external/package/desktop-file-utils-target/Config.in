@@ -1,0 +1,13 @@
+config BR2_PACKAGE_DESKTOP_FILE_UTILS_TARGET
+	bool "desktop-file-utils (target)"
+	depends on BR2_USE_WCHAR # libglib2
+	depends on BR2_TOOLCHAIN_HAS_THREADS # libglib2
+	depends on BR2_USE_MMU # libglib2
+	select BR2_PACKAGE_LIBGLIB2
+	help
+	  update-desktop-database and desktop-file-validate on the
+	  target. Buildroot 2026.08 builds desktop-file-utils for the
+	  host only; Flatpak's install trigger needs
+	  update-desktop-database so new apps reach "Open with".
+
+	  https://www.freedesktop.org/wiki/Software/desktop-file-utils/

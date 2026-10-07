@@ -1,0 +1,16 @@
+# PengyOS — install the newest release into the other system slot.
+#
+# Started by the "PengyOS Updates" app (polkit lets administrators start it, see
+# /etc/polkit-1/rules.d/60-pengyos-update.rules) or by hand. Progress goes to
+# /run/pengyos-update/progress.json; the switch happens at the next restart.
+[Unit]
+Description=Install the PengyOS update
+Wants=network-online.target
+After=network-online.target
+ConditionKernelCommandLine=pengyos.data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pengyos-update apply --progress
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,17 @@
+config BR2_PACKAGE_UUTILS_COREUTILS
+	bool "uutils-coreutils"
+	depends on BR2_USE_MMU
+	depends on (BR2_INSTALL_LIBC || BR2_TOOLCHAIN_USES_GLIBC)
+help
+	  coreutils ~ GNU coreutils (updated): a cross-platform
+	  reimplementation of the GNU coreutils, written in Rust.
+
+	  This recipe builds the single multicall 'coreutils' binary and
+	  exposes every utility through a symlink to it (busybox-style
+	  multi-call dispatch on argv[0]). Invoking '<pkg>-<utility>' runs
+	  that utility; 'coreutils <utility>' lists and runs them too.
+
+	  https://github.com/uutils/coreutils
+
+comment "uutils-coreutils needs a toolchain w/ libc and MMU"
+	depends on !BR2_USE_MMU || !(BR2_INSTALL_LIBC || BR2_TOOLCHAIN_USES_GLIBC)

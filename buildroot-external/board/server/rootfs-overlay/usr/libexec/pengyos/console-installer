@@ -1,0 +1,33 @@
+#!/bin/sh
+# The console installer on the install stick (Server; the Desktop runs its GUI).
+# Started by /etc/profile.d/pengyos-installer.sh for root's autologin on tty1.
+# Mounts the stick's payload partition and runs `pengyos-install-tui install`;
+# quitting drops to the root shell, a finished install offers the reboot.
+PAYLOAD=/run/pengyos/payload
+LABEL=/dev/disk/by-label/PENGYOS-PAYLOAD
+
+# USB sticks can enumerate after the console is up: give it a moment.
+i=0
+while [ ! -e "$LABEL" ] && [ $i -lt 15 ]; do sleep 1; i=$((i + 1)); done
+[ -e "$LABEL" ] || exit 0
+
+# Keep kernel messages (btrfs, ext4 mounts during the install) off the screen.
+dmesg -n 1 2>/dev/null || true
+
+mkdir -p "$PAYLOAD"
+if ! mountpoint -q "$PAYLOAD" && ! mount -o ro "$LABEL" "$PAYLOAD"; then
+    echo "pengyos: could not mount the install payload ($LABEL)" >&2
+    exit 1
+fi
+
+while :; do
+    if pengyos-install-tui install; then
+        printf '\nRemove the USB stick, then press Enter to reboot. '
+        read -r _ || true
+        systemctl reboot
+        exit 0
+    fi
+    printf '\nEnter: run the installer again.  "shell": a root shell instead. '
+    read -r answer || exit 0
+    [ "$answer" = shell ] && exit 0
+done

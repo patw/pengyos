@@ -1,0 +1,10 @@
+config BR2_PACKAGE_POP_CURSOR_THEME
+	bool "pop-cursor-theme"
+	help
+	  The Pop mouse cursors (from Pop!_OS's icon theme), the
+	  cursors COSMIC is designed with, installed as the system
+	  default cursor theme (/usr/share/icons/default). Only the
+	  X cursor files: the rest of the Pop icon theme is not
+	  installed.
+
+	  https://github.com/pop-os/icon-theme

@@ -1,0 +1,22 @@
+# ============================================================================
+# PengyOS Server — pengyos-monitor.timer (metrics cadence)
+# ----------------------------------------------------------------------------
+# Triggers pengyos-monitor.service hourly (OnCalendar=*-*-* *:00:00). Persistent=
+# yes means a missed tick (host asleep) is caught up on the next boot/run, so a
+# long downtime does not leave a gap in the metrics log.
+#
+# Timers are enabled by a symlink in timers.target.wants/ (systemd's own
+# convention for on-calendar units), NOT multi-user.target.wants.
+# ============================================================================
+
+[Unit]
+Description=PengyOS Server metrics collection timer
+Documentation=file:/usr/libexec/pengyos/pengyos-monitor.sh
+
+[Timer]
+OnCalendar=*-*-* *:00:00
+Persistent=yes
+Unit=pengyos-monitor.service
+
+[Install]
+WantedBy=timers.target

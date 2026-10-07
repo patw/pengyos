@@ -1,0 +1,52 @@
+# The repo gate on every push and pull request: every tool's own tests
+# (verify.toml: pytest / cargo test) plus the wiring lints and recipe source
+# checks that the unit suites cannot see (scripts/pengyos_gate.py). Image builds
+# and QEMU boots stay on the build host: they need hours and KVM.
+name: gate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Python test dependencies
+        run: python -m pip install pytest pyyaml cryptography
+
+      # Disk-image tests use these when present and skip without them; the
+      # QEMU/swtpm/OVMF integration tests are opt-in (PENGYOS_IT) and skip here.
+      - name: Host tools for the image tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gdisk dosfstools mtools zstd
+
+      # The Rust tools' default `cargo test` is std-only (libcosmic is behind an
+      # off-by-default feature), so the runner's stable toolchain is enough.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tools/*/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('tools/*/Cargo.lock') }}
+
+      - name: Gate (full, whole repo)
+        run: python scripts/pengyos_gate.py run --repo . --mode full --base none --junit gate-junit.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-junit
+          path: gate-junit.xml

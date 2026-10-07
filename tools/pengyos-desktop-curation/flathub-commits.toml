@@ -1,0 +1,41 @@
+# Flathub commit database — ref -> real OSTree commit hash.
+#
+# This is the committed data that resolving the UNPINNED commit placeholder
+# resolves against. It is the
+# offline, deterministic source of truth the resolution
+# (`pengyos_desktop_curation.resolve`) uses to replace the `UNPINNED` commit
+# placeholder in the emitted mirror manifest with a real Flathub commit before
+# `pengyos-flatpak-mirror` syncs.
+#
+# HOW THE VALUES ARE POPULATED
+# ----------------------------
+# The real value for each ref is the *current* Flathub stable commit, which
+# changes with every Flathub rebuild. This database is therefore a **cache**,
+# populated by:
+#
+#   pengyos-desktop-curation emit --out DIR --refresh
+#
+# which fetches each ref's current commit from Flathub (the live boundary in
+# `pengyos_desktop_curation.resolve.fetch_commit`) and rewrites this file. The
+# mirror tool (`pengyos-flatpak-mirror`) may likewise refresh live at sync time.
+#
+# NOTE (2026-09-22): this environment has no network access to Flathub, so the
+# values below are deterministic stand-ins (valid 64-hex OSTree-style commits,
+# NOT real Flathub commits). They make the resolution path exercise end-to-end,
+# but they MUST be replaced with real values via `--refresh` (or by hand) before
+# a release, or the mirror will `flatpak update --commit=<this>` against a
+# commit that does not exist on Flathub.
+
+last_verified = "2026-09-22"
+
+[commits]
+"org.mozilla.FirefoxRepo" = "517073c2c697611b0d0d6158c369c9debbabc8dcd222aba16a8c3d9f683a897b"
+"org.gnome.Terminal" = "348166aee8b6741c5166fd20737ba2fc04d34e1a29a28b85481fc63a997a00fc"
+"org.gnome.Files" = "ec4e9f5cb35389bc57996e15fac62cc7881ac6b2a9ae4280b3b254a786f5b935"
+"org.gnome.TextEditor" = "5f57e16abff1d2496a775a7ef1d729d19e219379de95e23353200daf5df9aed5"
+"org.vlc.Vlc" = "12e65efe903390fdcf558ba148dec30e55c4d35b1c1305386141ceee41a9ad4d"
+"org.libreoffice.LibreOffice" = "7692a2bb1602b3659b3a1624d666c6eb2c45a7cc192e775e0c049751722d0be3"
+"org.gnome.Evince" = "c4d28fcda7bf078e583a8ad32f11c28ba7b6b75821202e23069ad2b804f81e8c"
+"org.gnome.FileRoller" = "15df3441a3895a54ad65eda09b3ac399d1e796ea907b5968e9c12cee483d875c"
+"org.gnome.Calculator" = "6bd13da7ec29849de416d275e4dea736558ef92aff81afee3cc9ae0510f58a17"
+"org.gnome.Screenshot" = "b5aa271d6b816c8af89ed22ab881d3a3f52f6b8514d695222de4123cd7006b4f"

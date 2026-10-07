@@ -1,0 +1,7 @@
+config BR2_PACKAGE_LIBFREEAPTX
+	bool "libfreeaptx"
+	help
+	  aptX and aptX HD Bluetooth audio codec (free implementation),
+	  for PipeWire's Bluetooth audio.
+
+	  https://github.com/regularhunter/libfreeaptx

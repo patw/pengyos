@@ -1,0 +1,9 @@
+# PengyOS — the login screen itself: greetd runs COSMIC's greeter as the
+# cosmic-greeter system user without a password. pam_systemd gives it a logind
+# session of class "greeter" (greetd sets XDG_SESSION_CLASS) with its own
+# /run/user/UID, which cosmic-comp and the greeter need.
+auth      required  pam_permit.so
+account   required  pam_permit.so
+session   required  pam_limits.so
+session   required  pam_env.so
+session   optional  pam_systemd.so

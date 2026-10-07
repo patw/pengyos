@@ -1,0 +1,10 @@
+config BR2_PACKAGE_STEAM_DEVICES
+	bool "steam-devices"
+	help
+	  Valve's udev rules giving the logged-in user access to game
+	  controllers (Steam Controller/Deck, PlayStation, Xbox,
+	  Nintendo, 8BitDo, …), VR headsets (Index, Vive) and
+	  /dev/uinput, which Steam Input uses to present them as
+	  virtual pads. Steam as a Flatpak cannot install these itself.
+
+	  https://github.com/ValveSoftware/steam-devices

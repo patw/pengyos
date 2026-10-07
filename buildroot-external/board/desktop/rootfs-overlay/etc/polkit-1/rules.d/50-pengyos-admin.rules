@@ -1,0 +1,5 @@
+// PengyOS: members of wheel are administrators. Actions that need an admin
+// ("auth_admin") ask for the *user's own* password instead of root's.
+polkit.addAdminRule(function(action, subject) {
+    return ["unix-group:wheel"];
+});

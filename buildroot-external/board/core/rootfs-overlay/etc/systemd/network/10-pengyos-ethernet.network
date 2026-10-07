@@ -1,0 +1,7 @@
+# PengyOS Core — bring up any wired NIC via DHCP (systemd-networkd).
+# US-CORE-1: the node's NIC comes up with no manual configuration.
+[Match]
+Type=ether
+
+[Network]
+DHCP=yes

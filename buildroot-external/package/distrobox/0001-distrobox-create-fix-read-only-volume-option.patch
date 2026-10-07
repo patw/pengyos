@@ -1,0 +1,19 @@
+distrobox-create: fix the read-only volume option on podman+runc
+
+For a read-only top-level directory the option became "ro:rslave", which
+podman rejects ("incorrect volume format"): options are comma-separated.
+Only hosts with a read-only root (image-based systems) take this path.
+
+Signed-off-by: Pat Wendorf <dungeons@gmail.com>
+---
+--- a/distrobox-create	2026-09-28 20:25:34.704816938 -0400
++++ b/distrobox-create	2026-09-28 20:25:34.707079894 -0400
+@@ -751,7 +751,7 @@
+ 				tr ',' '\n' | grep -q "^ro$"; then
+ 
+ 				result_command="${result_command}
+-				--volume ${rootdir}:/run/host${rootdir}:ro${rslave}"
++				--volume ${rootdir}:/run/host${rootdir}:ro${rslave:+,rslave}"
+ 				continue
+ 			fi
+ 

@@ -1,0 +1,47 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] battery: no battery icon on machines without a system battery
+
+The upower subscription (cosmic-settings ae5c750, pinned by epoch-1.8)
+reports NoBattery once and then keeps forwarding UPower changes as
+Update events. On a desktop with a wireless mouse or keyboard (a UPower
+"battery" that is not a power supply) the first change flipped the
+applet to a 0% battery icon. cosmic-settings a366fc7 (epoch-1.9) ends
+the stream instead; do the equivalent here: after NoBattery, ignore
+Update events.
+
+Upstream: fixed in cosmic-settings a366fc7 (epoch-1.9)
+---
+diff --git a/cosmic-applet-battery/src/app.rs b/cosmic-applet-battery/src/app.rs
+index f5113eff..0c425744 100644
+--- a/cosmic-applet-battery/src/app.rs
++++ b/cosmic-applet-battery/src/app.rs
+@@ -79,6 +79,9 @@ struct CosmicBatteryApplet {
+     charging_limit: Option<bool>,
+     battery_percent: f64,
+     no_battery: bool,
++    // UPower reported no system battery (a battery that powers the machine,
++    // not a wireless mouse or keyboard); stays set, see UpowerDevice below.
++    no_system_battery: bool,
+     on_battery: bool,
+     gpus: FxHashMap<PathBuf, GPUData>,
+     update_trigger: Option<UnboundedSender<()>>,
+@@ -404,6 +407,11 @@ impl cosmic::Application for CosmicBatteryApplet {
+                 }
+             }
+             Message::UpowerDevice(event) => match event {
++                // The subscription reports NoBattery once, then keeps passing
++                // on UPower changes (fixed upstream in cosmic-settings a366fc7,
++                // after epoch-1.8): a peripheral's charge level then showed a
++                // 0% battery on a desktop. No system battery means no updates.
++                DeviceDbusEvent::Update { .. } if self.no_system_battery => {}
+                 DeviceDbusEvent::Update {
+                     on_battery,
+                     percent,
+@@ -415,6 +423,7 @@ impl cosmic::Application for CosmicBatteryApplet {
+                 }
+                 DeviceDbusEvent::NoBattery => {
+                     self.no_battery = true;
++                    self.no_system_battery = true;
+                 }
+             },
+             Message::KeyboardBacklight(event) => match event {

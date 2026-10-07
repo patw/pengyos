@@ -1,0 +1,28 @@
+# The PengyOS dev box — shipped in the image as
+# /usr/share/pengyos/guests.d/dev.toml (Server and Desktop).
+#
+#   pengyos-guest enter dev              # a shell; created on first use
+#   pengyos-guest enter dev -- make -j8  # one command
+#
+# Your home directory is the same inside and out, so a repo in ~/src builds in
+# the box and is edited on the host. apt, pip, cargo and make all work as on
+# Ubuntu; the host stays untouched. To change it, copy this table into
+# ~/.config/pengyos/guests.toml (yours wins by name), then
+# `pengyos-guest destroy dev` and enter it again.
+
+[guests.dev]
+description = "Ubuntu 24.04 build box: compilers, cmake, git, go, rust, uv"
+image = "docker.io/library/ubuntu:24.04"
+packages = [
+  "build-essential", "cmake", "ninja-build", "pkg-config", "git", "curl",
+  "wget", "ca-certificates", "python3", "python3-venv", "golang",
+]
+# Runs as you inside the box, after the packages, on every apply: keep each
+# step idempotent. rustup and uv install into ~/.cargo and ~/.local.
+setup = [
+  # PATH for the toolchains below, in the box only (/etc is the box's own; your
+  # shared ~/.bashrc stays untouched, so the host PATH does not change).
+  "echo 'export PATH=\"$HOME/.cargo/bin:$HOME/.local/bin:$PATH\"' | sudo tee /etc/profile.d/pengyos-dev.sh >/dev/null",
+  "command -v rustup >/dev/null || curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path",
+  "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh",
+]

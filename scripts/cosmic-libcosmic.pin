@@ -1,0 +1,22 @@
+# One libcosmic commit for the whole COSMIC component set.
+#
+# Why this file exists: libcosmic carries no `epoch-*` tags, and every COSMIC
+# component declares it as an unversioned git dependency, so each component's own
+# Cargo.lock froze its own libcosmic commit. Measured on 2026-10-05, the Desktop
+# image built COSMIC against 14 distinct libcosmic commits (2025-10-13 to
+# 2026-09-21). That is the real mechanism behind the failure we hit once already:
+# a 1.9 greeter on a 1.8 compositor, no wallpaper - not a version-number mismatch,
+# a libcosmic mismatch. See docs/cosmic-epoch-1.9.md.
+#
+# scripts/build-cosmic.sh appends a generated [patch."https://github.com/pop-os/libcosmic"]
+# block to each component naming this rev, using pop-os' own idiom of a trailing
+# `//` in the git URL (cargo requires a patch to point at a DIFFERENT source than
+# the dependency it replaces; cosmic-greeter's commented-out libcosmic patch block
+# and its live cosmic-protocols patches both use it).
+#
+# 87ab8179e1bd9880239c340855ae8862034bd0e8 - libcosmic 2026-09-15 ("chain tasks
+# where not already done"). Chosen because it is what cosmic-greeter and
+# cosmic-settings resolve to at epoch-1.9, and it sits inside the 2026-09-14..22
+# cluster the epoch-1.9 shell core uses. Proven to build: cosmic-idle, whose own
+# lock pinned a 2025-10-13 libcosmic, compiles against this rev.
+87ab8179e1bd9880239c340855ae8862034bd0e8

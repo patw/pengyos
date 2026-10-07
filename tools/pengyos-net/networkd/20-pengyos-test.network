@@ -1,0 +1,13 @@
+# PengyOS offline test interface configuration.
+#
+# Install to: /etc/systemd/network/20-pengyos-test.network
+#
+# Pairs with 20-pengyos-test.netdev. A fixed, RFC 1918 address in the
+# 10.0.0.0/8 space gives integration tests a deterministic peer to
+# ping/ARP at; the range is otherwise unused by the baseline.
+[Match]
+Name=pengyos-test0
+
+[Network]
+Description=PengyOS offline test interface
+Address=10.99.0.1/24

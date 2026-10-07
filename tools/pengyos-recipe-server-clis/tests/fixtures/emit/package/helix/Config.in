@@ -1,0 +1,10 @@
+config BR2_PACKAGE_HELIX
+	bool "helix"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  helix is a post-modern code editor written in Rust — an
+	  evolutionary fork of kakoune with a built-in language server
+	  protocol client.
+
+	  https://github.com/helix-editor/helix

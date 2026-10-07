@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-measured-boot"
+version = "0.1.0"
+description = "Boot under a software TPM (swtpm), read PCRs, and verify them against an expected event-log policy."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["tpm2", "pcr", "swtpm", "measured-boot", "attestation", "pengyos"]
+
+# Standard library only. No third-party runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-measured-boot = "pengyos_measured_boot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pengyos_measured_boot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

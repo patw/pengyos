@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-podman"
+version = "0.1.0"
+description = "PengyOS server-containers: rootless podman + declarative services (US-SRV-2)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["podman", "systemd", "rootless", "containers", "pengyos"]
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-podman = "pengyos_podman.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pengyos_podman*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

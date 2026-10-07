@@ -1,0 +1,19 @@
+# PengyOS Desktop - install Firefox from Flathub, once (first boot with a
+# network). Not on the live stick: its /var is thrown away at shutdown.
+[Unit]
+Description=PengyOS: install the web browser (Firefox Flatpak)
+After=network-online.target pengyos-flatpak-setup.service
+Wants=network-online.target
+ConditionPathExists=!/var/lib/flatpak/.pengyos-browser
+ConditionPathExists=!/dev/disk/by-label/PENGYOS-PAYLOAD
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/pengyos/pengyos-browser-setup.sh
+Restart=on-failure
+RestartSec=10min
+
+[Install]
+WantedBy=multi-user.target

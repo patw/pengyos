@@ -1,0 +1,7 @@
+{
+  "accepted_terms": "true",
+  "selected_disk": "/dev/sda",
+  "layout": "preserve",
+  "hostname": "host",
+  "username": "bob"
+}

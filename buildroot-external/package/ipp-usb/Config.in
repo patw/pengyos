@@ -1,0 +1,16 @@
+config BR2_PACKAGE_IPP_USB
+	bool "ipp-usb"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	depends on BR2_PACKAGE_HOST_GO_TARGET_CGO_LINKING_SUPPORTS
+	depends on BR2_PACKAGE_AVAHI_DAEMON
+	select BR2_PACKAGE_HOST_GO
+	select BR2_PACKAGE_LIBUSB
+	select BR2_PACKAGE_AVAHI_LIBAVAHI_CLIENT
+	help
+	  IPP over USB: makes a driverless USB printer or scanner
+	  (IPP Everywhere / AirPrint / eSCL — almost every printer sold
+	  since ~2015) appear as a network printer on localhost, so
+	  CUPS and SANE (airscan) use it with no driver. Started by udev
+	  when such a device is plugged in.
+
+	  https://github.com/OpenPrinting/ipp-usb

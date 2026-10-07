@@ -1,0 +1,6 @@
+# PengyOS — COSMIC lock screen (cosmic-greeter in locker mode, started by
+# cosmic-session). It only checks the user's password; the session itself is
+# opened by pengyos-session. pam_unix verifies an unprivileged user's password
+# through the setuid unix_chkpwd (Server layer permissions.txt).
+auth      required  pam_unix.so
+account   required  pam_unix.so

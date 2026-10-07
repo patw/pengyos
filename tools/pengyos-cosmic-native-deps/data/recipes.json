@@ -1,0 +1,59 @@
+[
+  {
+    "br_symbols": [
+      "BR2_PACKAGE_GREETD"
+    ],
+    "build_system": "cargo",
+    "download_url": "https://github.com/kennylevinsen/greetd/archive/refs/tags/0.10.3.tar.gz",
+    "hash": "ee5cb70e0add4ca9c9fe57e47581ab0002d44c07743fb5492469f3b570db640b",
+    "license": "GPL-3.0-only",
+    "name": "greetd",
+    "source": "0.10.3.tar.gz",
+    "url": "https://gitlab.com/greetd/greetd",
+    "version": "0.10.3"
+  },
+  {
+    "br_symbols": [
+      "BR2_PACKAGE_XDG_DESKTOP_PORTAL"
+    ],
+    "build_system": "meson",
+    "download_url": "https://github.com/flatpak/xdg-desktop-portal/archive/refs/tags/1.22.1.tar.gz",
+    "hash": "5afeda953c3743efaa1160e73d62c5bfcac2ceca60e0e134e9b48ed651783625",
+    "license": "LGPL-2.1-only",
+    "name": "xdg-desktop-portal",
+    "source": "1.22.1.tar.gz",
+    "url": "https://gitlab.freedesktop.org/xdg/xdg-desktop-portal",
+    "version": "1.22.1"
+  },
+  {
+    "br_symbols": [
+      "BR2_PACKAGE_XDG_DESKTOP_PORTAL_BACKEND_COSMIC"
+    ],
+    "build_system": "cargo",
+    "download_url": "https://github.com/pop-os/xdg-desktop-portal-cosmic/archive/refs/tags/epoch-1.8.0.tar.gz",
+    "hash": "8b37ce6241388539eadf0b001f4136315056593d061fa8352aa7e6785a86e943",
+    "license": "GPL-3.0-or-later",
+    "name": "cosmic-portal",
+    "source": "epoch-1.8.0.tar.gz",
+    "url": "https://github.com/pop-os/xdg-desktop-portal-cosmic",
+    "version": "epoch-1.8.0"
+  },
+  {
+    "br_symbols": [
+      "BR2_PACKAGE_FIRA_BRAND_BRICKS",
+      "BR2_PACKAGE_FIRA_FONT",
+      "BR2_PACKAGE_FIRA_EXTRA",
+      "BR2_PACKAGE_FIRA_LIGHT",
+      "BR2_PACKAGE_FIRA_MONO",
+      "BR2_PACKAGE_FIRA_MONO_EXTRA",
+      "BR2_PACKAGE_NOTO_FONTS_CJK",
+      "BR2_PACKAGE_NOTO_FONTS_MONO",
+      "BR2_PACKAGE_NOTO_FONTS_SC",
+      "BR2_PACKAGE_NOTO_FONTS_TC"
+    ],
+    "build_system": "none",
+    "license": "OFL-1.1",
+    "name": "fonts",
+    "url": "https://gitlab.freedesktop.org/freedesktop/fonts"
+  }
+]

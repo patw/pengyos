@@ -1,0 +1,7 @@
+config BR2_PACKAGE_FIRA_BRAND_BRICKS
+	bool "fonts"
+	help
+
+	  The Fira + Noto font families COSMIC ships with.
+
+	  https://gitlab.freedesktop.org/freedesktop/fonts

@@ -1,0 +1,46 @@
+# Fixture pins/license manifest for the license-audit test suite.
+#
+# Mix of core/leaf tiers and static/dynamic linking so the scaffold and later
+# policy subtasks have something realistic to chew on.
+
+[[component]]
+id = "glibc"
+license = "LGPL-2.1-only"
+tier = "core"
+link = "dynamic"
+
+[[component]]
+id = "musl"
+license = "MIT"
+tier = "core"
+link = "dynamic"
+
+[[component]]
+id = "linux-libc-headers"
+license = "GPL-2.0-only WITH Linux-syscall-note"
+tier = "core"
+link = "dynamic"
+
+[[component]]
+id = "zlib"
+license = "Zlib"
+tier = "leaf"
+link = "dynamic"
+
+[[component]]
+id = "openssl"
+license = "Apache-2.0"
+tier = "leaf"
+link = "dynamic"
+
+[[component]]
+id = "some-copyleft-app"
+license = "GPL-3.0-only"
+tier = "leaf"
+link = "dynamic"
+
+[[component]]
+id = "firmware-blob"
+license = "Proprietary"
+tier = "leaf"
+link = "static"

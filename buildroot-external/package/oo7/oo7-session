@@ -1,0 +1,25 @@
+#!/bin/sh
+# Start oo7-daemon (the Secret Service) with the login keyring unlocked.
+# D-Bus starts this the first time an app asks for org.freedesktop.secrets.
+#
+# The desktop logs in without a password, so there is none to unlock the
+# keyring with (the job pam_oo7 does after a password login). Instead the
+# keyring's password is random, made on first use and sealed with
+# systemd-creds: to the TPM when the machine has one, else to the host key
+# (/var/lib/systemd/credential.secret, root-only). It only unseals on this
+# machine, for this user.
+set -eu
+name=oo7.keyring-encryption-password
+dir="${XDG_CONFIG_HOME:-$HOME/.config}/credstore.encrypted"
+cred="$dir/$name"
+
+if [ ! -s "$cred" ]; then
+    mkdir -p "$dir"
+    chmod 700 "$dir"
+    umask 077
+    head -c 32 /dev/urandom | base64 | tr -d '\n' \
+        | systemd-creds encrypt --user --name="$name" - "$cred.new"
+    mv "$cred.new" "$cred"
+fi
+
+systemd-creds decrypt --user --name="$name" "$cred" - | exec /usr/bin/oo7-daemon --login

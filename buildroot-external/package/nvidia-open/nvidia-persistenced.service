@@ -1,0 +1,11 @@
+# nvidia-open: keep the GPUs initialized while the driver is loaded (headless
+# NVIDIA images). Started by 71-nvidia-persistenced.rules when the nvidia module
+# loads; NVIDIA's sample unit, running as root (the daemon's default).
+[Unit]
+Description=NVIDIA Persistence Daemon
+After=systemd-modules-load.service
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/nvidia-persistenced
+ExecStopPost=/bin/rm -rf /run/nvidia-persistenced

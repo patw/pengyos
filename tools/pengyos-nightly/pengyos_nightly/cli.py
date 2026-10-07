@@ -1,0 +1,505 @@
+"""pengyos-nightly: observe upstream, triage CVEs with the local model, report.
+
+    pengyos-nightly run     [--no-email] [--force-email]
+    pengyos-nightly observe
+    pengyos-nightly triage  [--max-triage N] [--jobs N] [--model ALIAS]
+    pengyos-nightly report  [--no-email] [--force-email] [--mark-reported]
+    pengyos-nightly status          # is the loop alive? read-only, exit 1 if not
+
+Phase 1 of tools/pengyos-nightly/spec.md: nothing is built or published.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import sys
+import time
+import subprocess
+import tomllib
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from pengyos_nightly import (__version__, act as actlane, config as cfgmod, edits,
+                             guards, planner, report, sources, state, triage)
+
+HOME = Path.home()
+
+
+def _paths(args) -> dict:
+    sd = Path(args.state_dir).expanduser()
+    return {"state_dir": sd, "obs": sd / "observations.json", "state": sd / "state.json",
+            "nvd": sd / "nvd", "reports": sd / "reports", "plan": sd / "plan.json",
+            "policy": sd / "nightly.toml", "actions": sd / "actions.json",
+            "site": Path(getattr(args, "site", HOME / "build/pengyos/site")).expanduser()}
+
+
+def _buildroot_dir(build_root: Path, version: str) -> Path:
+    return build_root / f"buildroot-{version}"
+
+
+def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=sources.run_pkgstats) -> dict:
+    p = _paths(args)
+    repo, build_root = Path(args.repo).expanduser(), Path(args.build_root).expanduser()
+    p["state_dir"].mkdir(parents=True, exist_ok=True)
+    errors: dict[str, str] = {}
+    findings: list[dict] = []
+    targets = tomllib.loads((repo / "targets.toml").read_text())["targets"]
+    br_version = targets[0]["br_version"]
+    buildroot = _buildroot_dir(build_root, br_version)
+
+    # Buildroot packages, per edition with a configured tree.
+    per_edition = []
+    for t in targets:
+        out = build_root / "output" / t["name"]
+        if not (out / ".config").exists():
+            continue
+        js = p["state_dir"] / f"pkgstats-{t['name']}.json"
+        try:
+            run_pkgstats(buildroot, out, js, p["nvd"])
+            per_edition.append(sources.parse_pkgstats(json.loads(js.read_text()), t["name"]))
+        except Exception as e:  # one edition failing is reported, not fatal
+            errors[f"pkg-stats {t['name']}"] = str(e)[:300]
+    packages = sources.merge_packages(per_edition)
+    findings += sources.package_findings(packages)
+
+    def guard(name, fn):
+        try:
+            return fn()
+        except Exception as e:
+            errors[name] = str(e)[:300]
+            return []
+
+    findings += guard("buildroot", lambda: sources.buildroot_findings(
+        sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags",
+                                         "https://gitlab.com/buildroot.org/buildroot.git"])),
+        br_version))
+    defconfig = (repo / "buildroot-external/configs/pengyos_core_defconfig").read_text()
+    kver = sources.defconfig_value(defconfig, "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE") or ""
+    findings += guard("kernel.org", lambda: sources.kernel_findings(
+        json.loads(get("https://www.kernel.org/releases.json")), kver))
+    nv_mk = repo / "buildroot-external/package/nvidia-open/nvidia-open.mk"
+    nver = sources.mk_value(nv_mk.read_text(), "NVIDIA_OPEN_VERSION") if nv_mk.exists() else None
+    if nver:
+        findings += guard("nvidia", lambda: sources.nvidia_findings(
+            sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags",
+                                             "https://github.com/NVIDIA/open-gpu-kernel-modules"])),
+            nver))
+
+    # PengyR: the agent every image ships is an authored pin with its own
+    # upstream, so pkg-stats cannot see it go stale. Read the pin out of the
+    # recipe the way the nvidia pin is read.
+    pengy_mk = repo / "buildroot-external/package/pengy/pengy.mk"
+    pver = sources.mk_value(pengy_mk.read_text(), "PENGY_VERSION") if pengy_mk.exists() else None
+    if pver:
+        findings += guard("pengyr", lambda: sources.pengyr_findings(
+            sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags",
+                                             "https://github.com/patw/PengyR"])),
+            pver))
+
+    def cosmic():
+        comps = sources.read_cosmic_components((repo / "scripts/cosmic-components.tsv").read_text())
+        tags = {}
+        for c in comps:
+            try:
+                tags[c["name"]] = sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags", c["url"]]))
+            except Exception as e:
+                errors[f"cosmic {c['name']}"] = str(e)[:200]
+        return sources.cosmic_findings(comps, tags)
+    findings += guard("cosmic", cosmic)
+
+    cves = sorted({c for pk in packages.values() for c in pk["cves"] + pk["unsure_cves"]})
+    kev_all = guard("cisa-kev", lambda: sources.parse_kev(json.loads(get(sources.KEV_URL)))) or {}
+    kev = {c: v for c, v in kev_all.items() if c in set(cves)}
+    epss = guard("epss", lambda: sources.fetch_epss(cves, get=get)) or {}
+
+    obs = {"date": dt.date.today().isoformat(), "kernel": kver, "buildroot": br_version,
+           "packages": packages, "findings": findings, "kev": kev, "epss": epss,
+           "errors": errors}
+    p["obs"].write_text(json.dumps(obs, indent=1, sort_keys=True))
+    return obs
+
+
+def do_triage(args, complete=None) -> list[dict]:
+    """Triage every CVE match not already in state.json; returns the new ones."""
+    p = _paths(args)
+    obs = json.loads(p["obs"].read_text())
+    st = state.load(p["state"])
+    if complete is None and not args.no_model:
+        s = triage.pengy_settings()
+        complete = triage.make_complete(s["base_url"], s.get("api_key", ""), args.model)
+
+    todo = []
+    present = set()
+    for name, pkg in sorted(obs["packages"].items()):
+        for cve in pkg["cves"] + pkg["unsure_cves"]:
+            key = f"{cve}|{name}"
+            present.add(key)
+            rec = st["cves"].get(key)
+            # Triage a match when it is new, or when it came back after being resolved
+            # (the package moved past it and back). A match we carry a patch for is
+            # neither: pkg-stats will keep flagging it because the version did not move,
+            # and re-triaging it every night spends a model call to re-learn a decision
+            # that has already been acted on.
+            if rec is None or (rec.get("resolved") and not rec.get("patched_by")):
+                todo.append((cve, name, {**pkg, "unsure": cve in pkg["unsure_cves"]}))
+    # Mark matches that disappeared (the package moved past them) as resolved.
+    for key, rec in st["cves"].items():
+        if key not in present and not rec.get("resolved"):
+            rec["resolved"] = obs["date"]
+
+    todo = todo[: args.max_triage]
+
+    def one(item):
+        cve, name, pkg = item
+        nvd = sources.nvd_record(p["nvd"], cve)
+        verdict = triage.triage_cve(cve, name, pkg, nvd, obs["kev"], obs["epss"], complete)
+        return {"cve": cve, "package": name, "version": pkg["current"],
+                "editions": pkg["editions"], "cvss": nvd.get("cvss"),
+                "kev": cve in obs["kev"], "epss": (obs["epss"].get(cve) or {}).get("epss"),
+                "first_seen": obs["date"], "reported": False, **verdict}
+
+    with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
+        results = list(pool.map(one, todo))
+    for r in results:
+        st["cves"][f"{r['cve']}|{r['package']}"] = r
+    state.save(p["state"], st)
+    return results
+
+
+def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
+    p = _paths(args)
+    obs = json.loads(p["obs"].read_text())
+    st = state.load(p["state"])
+    today = today or dt.date.today()
+    digest = today.weekday() == 0 and st.get("last_digest") != today.isoformat()
+
+    new_cves = [c for c in st["cves"].values()
+                if not c.get("reported") and not c.get("resolved") and not c.get("patched_by")]
+    new_findings = [f for f in obs["findings"] if state.finding_key(f) not in st["findings"]]
+    errors = obs.get("errors", {})
+    # "Open" means open in the image we ship. A CVE closed by a patch we carry is not
+    # open, even though pkg-stats still flags it - counting it as open would put the
+    # same 7 libxml2 CVEs in every report from now on.
+    open_cves = [c for c in st["cves"].values()
+                 if not c.get("resolved") and not c.get("patched_by")]
+    carried = [c for c in st["cves"].values() if c.get("patched_by")]
+    acted = []
+    if p["actions"].exists():
+        try:
+            acted = [a for a in json.loads(p["actions"].read_text())["actions"]
+                     if a.get("published")]
+        except (ValueError, KeyError):
+            acted = []
+    order = {"P0": 0, "P1": 1, "P2": 2}
+    new_cves.sort(key=lambda c: (order[c["priority"]], -(c.get("cvss") or 0)))
+    open_cves.sort(key=lambda c: (order[c["priority"]], -(c.get("cvss") or 0)))
+
+    # Whenever we DO send, the standing state travels with it. A digest or a forced
+    # report that says only "nothing new" is indistinguishable from a broken loop -
+    # which is how two quiet nights went unnoticed.
+    show_open = digest or bool(args.force_email)
+    body = report.render(today.isoformat(), new_cves, new_findings, errors,
+                         open_cves if show_open else None,
+                         obs["findings"] if show_open else None, digest,
+                         carried if show_open else None, acted if show_open else None)
+    subj = report.subject(today.isoformat(), new_cves, new_findings, errors, digest,
+                          open_cves if show_open else None,
+                          obs["findings"] if show_open else None)
+    p["reports"].mkdir(parents=True, exist_ok=True)
+    out = p["reports"] / f"{today.isoformat()}.html"
+    out.write_text(body)
+
+    should_send = bool(new_cves or new_findings or errors or digest or args.force_email)
+    sent = False
+    if should_send and not args.no_email:
+        send(subj, body, out, to=args.to)
+        sent = True
+    # Only a DELIVERED report consumes the queue. `--no-email` renders to disk and
+    # leaves everything unreported, so the next real run still sends it. Marking on
+    # --no-email is what cost the operator their first digest: a development run on
+    # 2026-10-03 marked 184 CVE matches and 7 findings as reported, and the 19:00
+    # cron run that night correctly found "nothing new" and stayed quiet.
+    # --mark-reported is the explicit opt-in for when you have already read the
+    # on-disk report and want it cleared.
+    if sent or getattr(args, "mark_reported", False):
+        for c in new_cves:
+            c["reported"] = True
+        for f in new_findings:
+            st["findings"][state.finding_key(f)] = today.isoformat()
+        st["last_report"] = today.isoformat()
+        if digest:
+            st["last_digest"] = today.isoformat()
+        state.save(p["state"], st)
+    return {"subject": subj, "report": str(out), "sent": sent, "new_cves": len(new_cves),
+            "new_findings": len(new_findings), "errors": len(errors)}
+
+
+def do_plan(args, today: dt.date | None = None, get=None) -> dict:
+    """Decide what to do, write plan.json, change nothing else."""
+    p = _paths(args)
+    repo, build_root = Path(args.repo).expanduser(), Path(args.build_root).expanduser()
+    if not p["obs"].exists():
+        print("plan: no observations.json - run observe first")
+        return {"actions": [], "refused": [], "counts": {"actions": 0, "refused": 0}}
+    obs = json.loads(p["obs"].read_text())
+    st = state.load(p["state"])
+    cfg = cfgmod.load(p["policy"])
+    plan = planner.build_plan(obs, st, cfg, today or dt.date.today(), repo, build_root,
+                              lambda cve: sources.nvd_raw(p["nvd"], cve),
+                              get or edits.fetch_bytes)
+    p["state_dir"].mkdir(parents=True, exist_ok=True)
+    p["plan"].write_text(json.dumps(plan, indent=1, sort_keys=True))
+    return plan
+
+
+def do_act(args, today: dt.date | None = None, run=subprocess.run) -> dict:
+    """Run the night's batch of allowed actions end to end, as ONE release.
+
+    Dry run unless --apply. The batch is the unit of work; the signed image is the
+    unit of risk: several changes, one branch, one build, one boot check, one
+    signature, one published version (see spec.md, phase 3). `run` is injectable so
+    the batch can be tested against a fake build without faking git.
+    """
+    p = _paths(args)
+    if not p["plan"].exists():
+        print("act: no plan.json - run plan first")
+        return {"error": "no plan"}
+    plan = json.loads(p["plan"].read_text())
+    cfg = cfgmod.load(p["policy"])
+    allowed = [a for a in plan["actions"] if a.get("allowed")]
+    if args.only:
+        allowed = [a for a in allowed if a["id"] == args.only]
+    if not allowed:
+        print(f"act: nothing allowed in the plan ({len(plan['refused'])} candidate(s) refused)")
+        for r in plan["refused"]:
+            print(f"  - {r['id']}: {', '.join(r.get('refused_by', []))}")
+        # Not an error: most nights the correct answer is "nothing to do", and a
+        # non-zero exit here would make a healthy loop look broken to a watchdog.
+        # `status` is the probe for that question.
+        return {"nothing_allowed": True, "refused": len(plan["refused"])}
+    limit = min(cfg["max_actions"], getattr(args, "max", 0) or cfg["max_actions"])
+    batch = allowed[:limit]
+    if len(allowed) > len(batch):
+        print(f"act: {len(allowed)} allowed, batching the first {len(batch)} "
+              f"(max_actions = {cfg['max_actions']}); the rest are queued for the next night")
+    editions = sorted({e for a in batch for e in a["editions"]})
+    cves = sorted({c for a in batch for c in (a.get("closes") or [])})
+    print(f"act: batch of {len(batch)} change(s) "
+          f"[{', '.join(a['component'] for a in batch)}] -> one image for "
+          f"{', '.join(editions)}"
+          + (f", closing {len(cves)} CVE match(es)" if cves else ""))
+    result = actlane.run_batch(batch, cfg, Path(args.repo).expanduser(),
+                               Path(args.build_root).expanduser(), p["site"],
+                               p["state_dir"], apply=args.apply, run=run, today=today)
+    if args.apply:
+        actlane.record_batch(result, batch, p["state_dir"], state.load(p["state"]),
+                             today or dt.date.today(), repo=Path(args.repo).expanduser())
+        if result.get("published"):
+            # Re-plan so plan.json and `status` describe the world after the release,
+            # not the one before it: otherwise status keeps advertising the changes it
+            # just published as the next thing to do.
+            do_plan(args, today=today)
+    return result
+
+
+def _blocked_batches(actions_path: Path, today: dt.date) -> list[dict]:
+    """Batches that ran and published nothing — a blocked loop is not a quiet loop."""
+    if not actions_path.exists():
+        return []
+    try:
+        log = json.loads(actions_path.read_text()).get("actions", [])
+    except (OSError, ValueError):
+        return []
+    return [a for a in log if a.get("kind") == "batch" and not a.get("published")]
+
+
+def do_status(args, now: float | None = None, today: dt.date | None = None) -> dict:
+    """Answer "is the loop alive?" without waiting for an email.
+
+    The loop is silent by design when nothing is new, which is the right default -
+    but silence is exactly what made two dead-looking nights indistinguishable from
+    a healthy one. `status` is the inspectable half of that choice: read-only, no
+    email, non-zero exit when something is actually wrong, so a watchdog or a cron
+    `-f` check can use it later.
+    """
+    p = _paths(args)
+    now = time.time() if now is None else now
+    out: dict = {"ok": True, "problems": []}
+
+    if not p["obs"].exists():
+        print("status: NEVER RUN - no observations.json")
+        return {"ok": False, "problems": ["never observed"]}
+
+    obs = json.loads(p["obs"].read_text())
+    st = state.load(p["state"])
+    age_h = (now - p["obs"].stat().st_mtime) / 3600.0
+    open_cves = [c for c in st["cves"].values()
+                 if not c.get("resolved") and not c.get("patched_by")]
+    carried = [c for c in st["cves"].values() if c.get("patched_by")]
+    serious = sum(c["priority"] in ("P0", "P1") for c in open_cves)
+    unreported = sum(1 for c in open_cves if not c.get("reported"))
+    errors = obs.get("errors") or {}
+
+    out.update(observed=obs["date"], age_hours=round(age_h, 1),
+               packages=len(obs.get("packages", [])), findings=len(obs.get("findings", [])),
+               source_errors=len(errors), tracked=len(open_cves), serious=serious,
+               carried=len(carried),
+               unreported=unreported, findings_recorded=len(st["findings"]),
+               last_report=st.get("last_report") or "never",
+               last_digest=st.get("last_digest") or "never")
+
+    # The act lane's state, so "the loop is quiet" and "the loop has work queued that
+    # it is not doing" are different, visible answers.
+    cfg = cfgmod.load(p["policy"])
+    out["act_enabled"] = cfg["act_enabled"]
+    # The batch is the unit of work and the release is the unit of risk. Status has to
+    # say both even before a plan exists, or "the loop is quiet" hides the fact that a
+    # twelve-change batch is what would run.
+    out["max_actions"] = cfg["max_actions"]
+    out["max_releases"] = cfg.get("max_releases", 1)
+    out["releases_today"] = actlane.published_today(p["state_dir"],
+                                                    today or dt.date.today())
+    if p["plan"].exists():
+        try:
+            plan = json.loads(p["plan"].read_text())
+        except ValueError:
+            plan = {}
+        allowed = [a for a in plan.get("actions", []) if a.get("allowed")]
+        out["plan_date"] = plan.get("date", "?")
+        out["plan_age_hours"] = round((now - p["plan"].stat().st_mtime) / 3600.0, 1)
+        out["actions_allowed"] = len(allowed)
+        out["actions_refused"] = len(plan.get("refused", []))
+        out["actions_done"] = len(st.get("actions", {}))
+        out["batch_size"] = min(cfg["max_actions"], len(allowed))
+        if allowed:
+            out["next_action"] = allowed[0]["id"]
+        if not cfg["act_enabled"] and allowed:
+            out["problems"].append(f"{len(allowed)} action(s) queued but act_enabled = false")
+        elif out["plan_age_hours"] > 30.0:
+            out["problems"].append(f"plan.json is {out['plan_age_hours']:.0f}h old")
+    # A batch that ran and published nothing must not read as a quiet, healthy night —
+    # that is the same ambiguity that made two dead-looking nights indistinguishable
+    # from a working loop. Checked whether or not a plan exists: the action log is the
+    # record of what actually happened.
+    blocked = _blocked_batches(p["actions"], today or dt.date.today())
+    if blocked:
+        out["ok"] = False
+        out["batch_blocked"] = blocked[-1]
+        out["problems"].append("last batch published nothing: "
+                               + (blocked[-1].get("error") or "no reason recorded"))
+
+    # A nightly loop that has not observed in over a day is not quiet, it is stuck.
+    if age_h > 30.0:
+        out["ok"] = False
+        out["problems"].append(f"last observation is {age_h:.0f}h old (expected < 24h)")
+    if errors:
+        out["ok"] = False
+        out["problems"].append(f"{len(errors)} source error(s): "
+                               + ", ".join(sorted(errors)[:4]))
+    if unreported:
+        out["problems"].append(f"{unreported} CVE match(es) triaged but never reported")
+
+    print(f"status: {'OK' if out['ok'] else 'PROBLEMS'} | observed {out['observed']} "
+          f"({out['age_hours']}h ago) | {out['packages']} packages, "
+          f"{out['findings']} findings, {out['source_errors']} source errors | "
+          f"{out['tracked']} CVE matches open ({out['serious']} P0/P1), "
+          f"{out['carried']} closed by patches we carry, {out['unreported']} unreported | "
+          f"last report {out['last_report']}, last digest {out['last_digest']}")
+    if "plan_date" in out:
+        print(f"  act lane: {'on' if out['act_enabled'] else 'OFF'} | "
+              f"plan {out['plan_date']} ({out['plan_age_hours']}h ago) | "
+              f"{out['actions_allowed']} action(s) allowed, {out['actions_refused']} refused, "
+              f"{out['actions_done']} component(s) acted on"
+              + (f" | next batch: {out['batch_size']} change(s) -> {out['max_releases']} "
+                 f"release(s)/night, {out['releases_today']} published today"
+                 if "batch_size" in out else "")
+              + (f" | next: {out['next_action']}" if out.get("next_action") else ""))
+    else:
+        print(f"  act lane: {'on' if out['act_enabled'] else 'OFF'} | no plan.json yet | "
+              f"batch policy: up to {out['max_actions']} change(s) -> {out['max_releases']} "
+              f"release(s)/night, {out['releases_today']} published today")
+    for problem in out["problems"]:
+        print(f"  ! {problem}")
+    return out
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="pengyos-nightly", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--version", action="version", version=f"pengyos-nightly {__version__}")
+    ap.add_argument("--state-dir", default=str(HOME / "build/pengyos/nightly"))
+    ap.add_argument("--repo", default=str(HOME / "Desktop/Personal/pengyos"))
+    ap.add_argument("--build-root", default=str(HOME / "build/pengyos"))
+    ap.add_argument("--site", default=str(HOME / "build/pengyos/site"),
+                    help="the local site dir release.sh publishes into")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    for name in ("run", "observe", "triage", "report", "status", "plan", "act"):
+        sp = sub.add_parser(name)
+        if name in ("run", "triage"):
+            sp.add_argument("--max-triage", type=int, default=400,
+                            help="model calls per run; the rest wait for the next run")
+            sp.add_argument("--jobs", type=int, default=2)
+            sp.add_argument("--model", default="local")
+            sp.add_argument("--no-model", action="store_true", help="rules and fallback only")
+        if name in ("run", "report"):
+            sp.add_argument("--no-email", action="store_true",
+                            help="render the report to disk but do not send it, and do NOT "
+                                 "mark anything as reported: the next run still reports it.")
+            sp.add_argument("--force-email", action="store_true",
+                            help="send even when nothing is new")
+            sp.add_argument("--mark-reported", action="store_true",
+                            help="mark this run's new items as reported even without sending "
+                                 "(for when you have already read the on-disk report)")
+            sp.add_argument("--to", default=None)
+        if name == "plan":
+            sp.add_argument("--json", action="store_true", help="also print plan.json")
+        if name == "act":
+            sp.add_argument("--only", default=None, help="run this action id only")
+            sp.add_argument("--max", type=int, default=0,
+                            help="cap this run's batch below max_actions (0 = use max_actions)")
+            sp.add_argument("--apply", action="store_true",
+                            help="really branch, build, sign and publish; without this the "
+                                 "run is a dry run that changes nothing")
+    args = ap.parse_args(argv)
+
+    if args.cmd in ("run", "observe"):
+        obs = observe(args)
+        print(f"observe: {len(obs['packages'])} packages, {len(obs['findings'])} findings, "
+              f"{len(obs['errors'])} source errors")
+    if args.cmd in ("run", "triage"):
+        new = do_triage(args)
+        print(f"triage: {len(new)} new CVE matches triaged")
+    if args.cmd in ("run", "report"):
+        r = do_report(args)
+        print(f"report: {r['subject']} -> {r['report']} (sent: {r['sent']})")
+    if args.cmd in ("run", "plan"):
+        plan = do_plan(args)
+        print(f"plan: {plan['counts']['actions']} action(s), {plan['counts']['refused']} "
+              f"refused -> {Path(args.state_dir).expanduser() / 'plan.json'}")
+        for a in plan["actions"]:
+            print(f"  action {a['id']}: {a['component']} {a['shape']} "
+                  f"({', '.join(a['editions'])}) closes {len(a['closes'])} CVE match(es)")
+        for r in plan["refused"][:8]:
+            print(f"  refused {r['id']}: {', '.join(r['refused_by'])}")
+        if args.cmd == "plan" and getattr(args, "json", False):
+            print(json.dumps(plan, indent=1, sort_keys=True))
+    if args.cmd == "act":
+        r = do_act(args)
+        if r.get("error"):
+            print(f"act: {r['error']}")
+            return 1
+        if r.get("nothing_allowed"):
+            return 0                     # nothing to do is a healthy night
+        if not r.get("published"):
+            print(f"act: nothing published ({r.get('error', 'dry run')})")
+            return 0 if not args.apply else 1
+    if args.cmd == "status":
+        # Non-zero when the loop is stuck or a source failed, so this can be used
+        # by a watchdog without anyone having to read prose.
+        return 0 if do_status(args)["ok"] else 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

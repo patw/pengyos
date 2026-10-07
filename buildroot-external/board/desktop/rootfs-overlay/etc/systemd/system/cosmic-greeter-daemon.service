@@ -1,0 +1,15 @@
+# COSMIC's greeter daemon (upstream debian/cosmic-greeter-daemon.service): the
+# login screen (running as cosmic-greeter) asks it over the system bus for each
+# user's wallpaper, avatar and theme, which it reads as that user.
+[Unit]
+Description=COSMIC Greeter Daemon
+Before=greetd.service
+
+[Service]
+Type=dbus
+BusName=com.system76.CosmicGreeter
+ExecStart=/usr/bin/cosmic-greeter-daemon
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

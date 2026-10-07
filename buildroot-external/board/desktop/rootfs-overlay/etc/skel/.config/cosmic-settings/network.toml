@@ -1,0 +1,9 @@
+# Managed by pengyos-desktop-net — cosmic-settings network defaults.
+# The network page is served over NetworkManager; these are the defaults the
+# Desktop ships so the GUI Network page is present on every session.
+
+[network]
+manager="NetworkManager"
+show_wifi=true
+show_ethernet=true
+allow_disabled=true

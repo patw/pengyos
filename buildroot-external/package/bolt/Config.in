@@ -1,0 +1,11 @@
+config BR2_PACKAGE_BOLT
+	bool "bolt"
+	depends on BR2_PACKAGE_SYSTEMD
+	depends on BR2_PACKAGE_POLKIT
+	select BR2_PACKAGE_LIBGLIB2
+	help
+	  Thunderbolt / USB4 device authorization (boltd + boltctl): new
+	  Thunderbolt devices stay unconnected until enrolled. Buildroot
+	  2026.08 does not ship it.
+
+	  https://gitlab.freedesktop.org/bolt/bolt

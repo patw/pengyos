@@ -1,0 +1,12 @@
+#!/bin/sh
+# prime-run — run a program on the NVIDIA dGPU of a hybrid (Optimus) laptop
+# while the integrated GPU drives the screen: prime-run <command> [args...]
+if [ "$#" -eq 0 ]; then
+    echo "usage: prime-run <command> [args...]" >&2
+    exit 2
+fi
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __VK_LAYER_NV_optimus=NVIDIA_only
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+exec "$@"

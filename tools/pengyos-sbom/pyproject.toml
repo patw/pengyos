@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-sbom"
+version = "0.1.0"
+description = "PengyOS SBOM: turn Buildroot legal-info/show-info into SPDX 2.3 (+ CycloneDX) with ed25519 signing."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["sbom", "spdx", "cyclonedx", "buildroot", "provenance", "reproducible"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Software Development :: Version Control",
+]
+# Standard library only. No runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-sbom = "pengyos_sbom.cli:main"
+
+[tool.setuptools]
+packages = ["pengyos_sbom"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
