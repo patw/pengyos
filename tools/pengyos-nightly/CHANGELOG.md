@@ -6,6 +6,28 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-07
+
+### Changed
+- **The mailer is machine-local.** `EMAIL_SCRIPT` pointed into one person's home
+  (`~/Personal/skills/email/send_email.py`). It is now `$PENGYOS_EMAIL_SCRIPT`,
+  defaulting to `~/.local/bin/pengyos-email`, and `email_script()` returns `None`
+  when the machine has no mailer configured. `send()` returns a bool: with no
+  mailer it puts nothing on the wire and says `False`, so the queue is not marked
+  reported by a report nobody received - the rule `--no-email` already enforced.
+- `triage.pengy_settings` honours `$PENGY_SETTINGS`; `rehearse.py` honours
+  `$PENGYOS_BUILD_ROOT` instead of a hard-coded absolute home path.
+- README and spec: the cron example and the "needs" list no longer name a
+  specific build host or a personal skill path.
+
+### Tests
+- `test_pengyos_email_script_names_the_mailer` and
+  `test_no_mailer_means_report_only_and_not_reported`. An autouse `conftest`
+  fixture pins `PENGYOS_EMAIL_SCRIPT` to a path that does not exist: on a host
+  that *does* have a mailer, a test which forgot to inject a fake `send` would
+  otherwise email out of the test suite. Injected fakes now return `True`,
+  because "delivered" is the contract `do_report` acts on.
+
 ## [0.10.0] - 2026-10-07
 
 ### Added
