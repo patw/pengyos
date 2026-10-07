@@ -277,7 +277,7 @@ most likely to come back.
 
 ## 5. Rubric — two worked examples
 
-See [`README.md` §Component selection rubric](./README.md#component-selection-rubric).
+See [`docs/principles.md` §Component selection rubric](docs/principles.md#component-selection-rubric).
 
 **Coreutils.** uutils scores best (MIT, memory-safe, the Ubuntu default since 25.10)
 and is the target; GNU coreutils ships today because Buildroot has its recipe and

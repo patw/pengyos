@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-PengyOS is a from-source Linux distribution built with **Buildroot 2026.08**, in three nested editions: **Core ⊆ Server ⊆ Desktop** (plus opt-in Server NVIDIA and Desktop NVIDIA variants). The Desktop runs COSMIC behind greetd. Installed machines use an A/B layout (two read-only ext4 root slots chosen by GRUB, plus a btrfs `data` partition) and update from a signed feed. `README.md` covers the *why*, `SPEC.md` the *what* (component decisions and rejected alternatives), and `USE-CASES.md` the user stories. When `USE-CASES.md` and the spec disagree, `USE-CASES.md` wins.
+PengyOS is a from-source Linux distribution built with **Buildroot 2026.08**, in three nested editions: **Core ⊆ Server ⊆ Desktop** (plus opt-in Server NVIDIA and Desktop NVIDIA variants). The Desktop runs COSMIC behind greetd. Installed machines use an A/B layout (two read-only ext4 root slots chosen by GRUB, plus a btrfs `data` partition) and update from a signed feed. `README.md` is the user-facing front page (editions, install, what isn't ready); `docs/principles.md` holds the *why* (principles, the maintenance loop, the component rubric, the failure modes); `SPEC.md` the *what* (component decisions and rejected alternatives); `USE-CASES.md` the user stories. When `USE-CASES.md` and the spec disagree, `USE-CASES.md` wins.
 
 ## Commands
 

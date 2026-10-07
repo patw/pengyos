@@ -12,10 +12,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 > This file records the **system-level** milestones — a build that boots, an
 > edition that becomes real, an install/update decision that lands, and the
 > integration findings that got us there. Per-tool change history lives with the
-> tool. For the *current* state of each edition, see the status table in
-> [`README.md`](README.md).
+> tool. For the *current* state of each edition, see the edition table and the
+> "What isn't ready" list in [`README.md`](README.md).
 
 ## [Unreleased]
+
+### Docs: the README became the front page (2026-10-07)
+
+`README.md` was rewritten for the person deciding whether to try the OS: what each
+edition actually is, how to install it, what's different here, and what isn't ready
+yet. The design record it carried moved, intact, to **`docs/principles.md`** (new):
+the ten principles, the component selection rubric, the
+OBSERVE → PROPOSE → BUILD → VERIFY → RATIFY loop, the failure-modes table and the
+stack-down summary. The build / QEMU / flash recipe went into `CONTRIBUTING.md`
+("Setting up a development machine"), where the build half already lived. Repointed
+to the new homes: `SPEC.md` §5 (the rubric link), `docs/stack-down-replace.md` (the
+failure-modes citation), and the doc maps in `CONTRIBUTING.md`, `docs/README.md` and
+`CLAUDE.md`.
 
 ### Fixed — the download page offered testing images
 `scripts/release.sh --publish` runs `download-publish` for every release, testing

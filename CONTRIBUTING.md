@@ -29,7 +29,10 @@ now expects, and it is the only posture consistent with being read again next ye
 
 Before anything else, read:
 
-- [`README.md`](README.md) — why the project exists, and its principles.
+- [`docs/principles.md`](docs/principles.md) — why the project exists, and its
+  principles.
+- [`README.md`](README.md) — the front page: what the editions are, how to try them,
+  and what isn't ready yet.
 - [`SPEC.md`](SPEC.md) — what is being built (the component stack).
 - [`USE-CASES.md`](USE-CASES.md) — for whom; the user stories whose acceptance
   criteria become our tests.
@@ -175,6 +178,26 @@ python3 -m pengyos_build build     <target> --targets ../../targets.toml
 `acquire` is the only step that touches the network, and it is idempotent; the
 tree lives in `$PENGYOS_BUILD_ROOT` (default `~/build/pengyos`), never in the
 repo. `configure` and `build` never auto-acquire — they stop and tell you to.
+
+Then boot what you built, headless, and assert it reaches a login prompt:
+
+```sh
+cd tools/pengyos-qemu-verify
+python3 -m pengyos_qemu_verify boot \
+    ~/build/pengyos/output/pengyos-core/images/pengyos-core-x86_64.img --uefi
+python3 -m pengyos_qemu_verify smoke          # Core by default; --matrix smoke/server.toml for Server
+```
+
+To run it on real hardware, write the image to a stick. `scripts/flash-usb.sh` does
+the post-`dd` GPT repair (`sgdisk -e`) that a plain `dd` leaves broken, so prefer it
+over typing the `dd` yourself:
+
+```sh
+sudo scripts/flash-usb.sh ~/build/pengyos/output/pengyos-core/images/pengyos-core-x86_64.img /dev/sdX
+```
+
+`docs/qemu-testing.md` is the fuller runbook: SSH into a booted guest, the serial
+console, testing the installer, and screenshotting the Desktop in a VM.
 
 Per-tool development needs only the tool's own toolchain (Python ≥ 3.11, or a
 recent Rust, or cmake for the C++ tools). Python tools use PEP 723 / `uv` or a

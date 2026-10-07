@@ -11,7 +11,8 @@ in this order if you are picking the project up cold:
 
 | Document | What it answers |
 |---|---|
-| [`../README.md`](../README.md) | *Why does PengyOS exist?* — philosophy, principles, the human–AI process. |
+| [`../README.md`](../README.md) | *Should I try this?* — the front page: what each edition is, how to install it, what's different, what isn't ready. |
+| [`principles.md`](principles.md) | *Why is it built this way?* — the principles, the human–AI maintenance loop, the component rubric, the failure modes we design against. |
 | [`../SPEC.md`](../SPEC.md) | *What are we building?* — the component stack and the keystone decisions. |
 | [`../USE-CASES.md`](../USE-CASES.md) | *For whom, and to what end?* — the user stories whose acceptance criteria become our tests. |
 | [`stack-down-replace.md`](stack-down-replace.md) | *How far down the stack do we go, and what may we fork?* — the replacement ladder, banded by verifiability; the admissibility test a replacement must pass; the divergence budget and fork policy. |

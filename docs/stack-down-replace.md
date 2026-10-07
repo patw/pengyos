@@ -201,8 +201,8 @@ is measured against it: **Lane 1 or it does not ship.**
 - **Principle 9 stays.** Creating a fork is a human sign-off.
 - **Principle 8 stays.** Theme, boot experience, curation, naming remain
   human-led. Band 1 is where the agent implements taste, not where it supplies it.
-- **The kernel and a browser remain non-goals** (README, *Failure modes*). Band 5
-  is not a backlog.
+- **The kernel and a browser remain non-goals** (docs/principles.md, *Failure
+  modes*). Band 5 is not a backlog.
 
 ## Triggers that would reopen a band
 
