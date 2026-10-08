@@ -537,7 +537,7 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
         version, why = next_version(repo, site)
         result["version"] = version
         result["branch"] = branch
-        _git(run, repo, "checkout", "-b", branch)
+        _git(run, repo, "checkout", "-B", branch)
         step("branch", True, branch)
         touched = E.apply_edits(repo, [E.Edit(**e) for e in action["edits"]])
         step("edits", True, ", ".join(touched))
@@ -807,7 +807,7 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
         version, why = next_version(repo, site)
         result["version"] = version
         result["branch"] = branch
-        _git(run, repo, "checkout", "-b", branch)
+        _git(run, repo, "checkout", "-B", branch)
         step("branch", True, f"{branch} ({len(actions)} action(s))")
         (repo / "VERSION").write_text(version + "\n")
         touched: dict[str, list[str]] = {}

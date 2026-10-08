@@ -865,3 +865,29 @@ def test_a_failed_batch_takes_every_declaration_back(tmp_path):
     text = (repo / rel).read_text() if (repo / rel).is_file() else ""
     assert "LIBXML2_IGNORE_CVES" not in text and "FFMPEG_IGNORE_CVES" not in text, text
     assert not _dirty(repo), "the tree is left clean for the next night"
+
+
+def test_a_leftover_nightly_branch_from_a_failed_night_does_not_block_the_next(tmp_path):
+    """2026-10-08: the first batch died at the release step and left
+    nightly/2026-10-08-batch behind. `checkout -b` then refused the retry - "a branch
+    named ... already exists" - so a night that published nothing blocked the same
+    night's second attempt, and the fix had to come from a human deleting a branch.
+
+    The branch is the loop's own scratch space for today's batch. Retrying means
+    starting that branch from main again, which is what `checkout -B` does.
+    """
+    repo, site, state = _repo(tmp_path), _site(tmp_path), tmp_path / "state"
+    cfg = _cfg(key_file=_key(tmp_path))
+    result = A.run_batch([_bump_action()], cfg, repo, tmp_path, site, state,
+                         apply=True, run=Fake(("release.sh",), None, repo), today=TODAY)
+    assert not result["published"]
+    branches = subprocess.run(["git", "-C", str(repo), "branch", "--list"],
+                              capture_output=True, text=True).stdout
+    assert "nightly/2026-10-06-batch" in branches, "the failed night left its branch behind"
+    assert _branch(repo) == "main" and not _dirty(repo)
+
+    fake = Fake((), None, repo)
+    result = A.run_batch([_bump_action()], cfg, repo, tmp_path, site, state,
+                         apply=True, run=fake, today=TODAY)
+    assert result["published"], "the same night may be retried after a failure"
+    assert fake.asked("release.sh") == 1
