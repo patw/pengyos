@@ -450,6 +450,63 @@ def check_overlay_executables(repo: Path) -> list[Check]:
     return out
 
 
+def _git_index_modes(repo: Path, paths: list[str]) -> dict[str, str]:
+    """File modes from the git index — what a fresh clone actually gets."""
+    if not paths:
+        return {}
+    try:
+        p = subprocess.run(["git", "-C", str(repo), "ls-files", "-s", "--", *paths],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    out: dict[str, str] = {}
+    for line in p.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 4:
+            out[parts[3]] = parts[0]
+    return out
+
+
+def check_script_executables(repo: Path) -> list[Check]:
+    """A shell script under `scripts/` with a shebang must be executable *in git*.
+
+    `scripts/release.sh` calls `scripts/build-cosmic.sh` directly, so the file mode in
+    the index is the failure: measured 2026-10-08, `build-cosmic.sh` sat at 100644 and
+    `release.sh` died with `Permission denied` at the COSMIC step. It stayed hidden
+    because the nightly act lane always passes `--skip-cosmic`, so only a human running
+    `release.sh` without it ever reached that line. The same defect in `release.sh`
+    itself (commit 2d894fba) cost a night in pengyos-nightly 0.11.1.
+
+    The mode that matters is the index's, not this disk's: a fresh clone is what every
+    other machine and every build host gets. Falls back to the file mode when there is
+    no git to ask.
+    """
+    scripts = sorted(p for p in (repo / "scripts").glob("*.sh") if p.is_file())
+    if not scripts:
+        return [Check("script-exec", True, "no scripts/*.sh to check")]
+    rel = [str(p.relative_to(repo)) for p in scripts]
+    modes = _git_index_modes(repo, rel)
+    out: list[Check] = []
+    for p, r in zip(scripts, rel):
+        try:
+            has_shebang = p.open(encoding="utf-8", errors="replace").readline().startswith("#!")
+        except OSError:
+            continue
+        if not has_shebang:
+            continue
+        mode = modes.get(r)
+        if mode is None:                      # not in the index: check what is on disk
+            ok = os.access(p, os.X_OK)
+            why = "not in the git index, checked the file mode"
+        else:
+            ok = mode == "100755"
+            why = f"git mode {mode}"
+        out.append(Check(f"script-exec:{r}", ok, "ok" if ok else
+                         f"{r} has a shebang but {why}: a direct call from another "
+                         "script gets Permission denied (chmod +x and commit the mode)"))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="PengyOS repo-level integration gate")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -472,6 +529,7 @@ def main(argv: list[str] | None = None) -> int:
     rep.checks += check_group_overlays(repo)
     rep.checks += check_patch_declarations(repo)
     rep.checks += check_overlay_executables(repo)
+    rep.checks += check_script_executables(repo)
     rep.checks += check_background_sources(repo)
     if args.mode == "full":
         rep.checks += check_toolkit_suite(repo, changed)
