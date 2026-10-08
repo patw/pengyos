@@ -221,6 +221,40 @@ def release_script_executable(repo: Path) -> tuple[bool, str]:
 
 
 
+def patch_failure(component: str, st: dict, version: str = "") -> dict:
+    """The recorded pre-flight failure for a component, or `{}` when it does not bind.
+
+    The **only** reader of `state.json:patch_failures`. The guard and the planner ask
+    the same question through this function, because two copies of the lookup is how a
+    guard and a plan start disagreeing about the same package.
+
+    A known-bad verdict is about a **pinned version**: a commit authored against
+    ffmpeg 8.x that failed on 6.1.5 says nothing about the same commit on 6.1.6, so an
+    entry recorded against a pin we no longer ship stops binding when the pin moves.
+    An entry with no recorded version predates pin tracking and is honoured as
+    version-independent — dropping a recorded failure by accident is the wrong
+    direction to err in.
+    """
+    bad = (st.get("patch_failures") or {}).get(component) or {}
+    if not bad:
+        return {}
+    recorded = str(bad.get("version") or "")
+    if recorded and version and recorded != version:
+        return {}
+    return bad
+
+
+def known_bad_fixes(component: str, st: dict, version: str = "") -> set[str]:
+    """Fix URLs a pre-flight already proved do not apply to this component.
+
+    Empty when nothing was recorded, and empty when the only record is about a version
+    we no longer pin (see `patch_failure`). A record from before per-fix tracking has
+    no fix list and therefore contributes nothing here — that case is a component-wide
+    block, and `patch_does_not_apply` is the one that says so.
+    """
+    return {f for f in (patch_failure(component, st, version).get("fixes") or []) if f}
+
+
 def patch_does_not_apply(component: str, st: dict,
                          fixes: list[str] | None = None) -> tuple[bool, str]:
     """A **specific upstream fix** that was proved not to apply is not retried.

@@ -935,3 +935,19 @@ def test_a_batch_that_fails_after_the_preflight_wipes_the_trees_it_patched(tmp_p
         steps = [c[-1] for c in fake.calls if any(f"{pkg}-" in str(a) for a in c)]
         assert steps and steps[-1] == f"{pkg}-dirclean", \
             f"{pkg}'s build tree still names patches the bail deleted: {steps}"
+
+
+def test_a_recorded_failure_names_the_version_it_was_proved_against(tmp_path):
+    """Without the pin, 'does not apply to 2.15.3' is a permanent block: the day the pin
+    moves, the verdict still binds a version it was never tested against."""
+    actions = [_two_patch_action()]
+    result, fake, repo, site, state, cfg = _run(tmp_path, actions,
+                                                patch_fails={"libxml2": ("0002-b.patch",)},
+                                                cfg=_cfg(key_file=_key(tmp_path)))
+    st = {"cves": {}, "findings": {}, "actions": {}, "patch_failures": {}}
+    A.record_batch(result, actions, state, st, TODAY, run=fake, repo=repo)
+    assert st["patch_failures"]["libxml2"]["version"] == "2.15.3"
+    assert G.known_bad_fixes("libxml2", st, "2.15.3") == {
+        "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa"}
+    assert G.known_bad_fixes("libxml2", st, "2.15.4") == set(), \
+        "a new pin is a new question, not the old answer"

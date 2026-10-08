@@ -582,7 +582,8 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
         # free either. This is a human's call, so it is recorded as one.
         result["patch_failure"] = {"date": today.isoformat(),
                                    "where": _failed_files(str(exc)),
-                                   "detail": str(exc)[:400]}
+                                   "detail": str(exc)[:400],
+                                   "version": action.get("current") or ""}
         return bail("dirclean", str(exc))
 
     # --- build, boot-check, sign, publish -------------------------------------
@@ -858,6 +859,9 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
                     "detail": "; ".join(f"{Path(d['patch']).name}: {d['reason']}"
                                         for d in dropped)[:400],
                     "fixes": sorted({d["fix_url"] for d in dropped if d.get("fix_url")}),
+                    # The verdict is about *this* pin. Without it, "does not apply to
+                    # ffmpeg 6.1.5" becomes a permanent block once the pin moves.
+                    "version": a.get("current") or "",
                     "carried": len(carried)}
                 result.setdefault("patch_drops", {})[a["component"]] = dropped
                 step("pre-flight", True,
@@ -887,7 +891,8 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
         result["dropped"].append(a["id"])
         result.setdefault("patch_failures", {})[a["component"]] = {
             "date": today.isoformat(), "where": _failed_files(error), "detail": error[:400],
-            "fixes": sorted({d["fix_url"] for d in dropped if d.get("fix_url")})}
+            "fixes": sorted({d["fix_url"] for d in dropped if d.get("fix_url")}),
+            "version": a.get("current") or ""}
         step("pre-flight", False, f"{a['component']} dropped from the batch: {error}")
         try:
             _revert_dropped(run, repo, a)

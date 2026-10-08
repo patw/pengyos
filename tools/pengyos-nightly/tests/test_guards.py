@@ -259,3 +259,43 @@ def test_a_tree_move_crossing_the_series_is_not_major_never():
     assert ok and "the event itself" in why, why
     assert not G.major_never({"shape": "recipe_bump", "current": "2.15.3", "target": "3.0.0",
                               "bump_kind": "major"})[0]
+
+
+# --- the known-bad record: one reader, pinned to the version it was proved against
+
+_FFH = "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/"
+_BAD = [_FFH + f"{i:07x}" for i in (1, 2)]
+_GOOD = [_FFH + f"{i:07x}" for i in (9, 10)]
+
+
+def _ffmpeg_st(version="6.1.5", fixes=_BAD):
+    return {"patch_failures": {"ffmpeg": {"date": "2026-10-08", "where": "libavcodec/tiff.c",
+                                          "version": version, "fixes": list(fixes)}}}
+
+
+def _ffmpeg_cves(n):
+    return [{"cve": f"CVE-2026-7000{i}", "affected": True,
+             "fix_commit": {"url": _FFH + f"{i:07x}", "sha": f"{i:07x}",
+                            "host": "code.ffmpeg.org"}} for i in range(1, n + 1)]
+
+
+def test_known_bad_fixes_is_the_one_reader_of_the_record():
+    assert G.known_bad_fixes("ffmpeg", _ffmpeg_st()) == set(_BAD)
+    assert G.known_bad_fixes("libxml2", _ffmpeg_st()) == set()
+    assert G.known_bad_fixes("ffmpeg", {}) == set()
+    assert G.known_bad_fixes("ffmpeg", {"patch_failures": {"ffmpeg": {"date": "2026-10-05"}}}) \
+        == set(), "a record with no fix list is a component block, not a known-bad fix"
+
+
+def test_a_known_bad_verdict_is_about_the_pin_it_was_recorded_against():
+    st = _ffmpeg_st(version="6.1.5")
+    assert G.known_bad_fixes("ffmpeg", st, "6.1.5") == set(_BAD)
+    assert G.known_bad_fixes("ffmpeg", st, "6.1.6") == set(), \
+        "a verdict on 6.1.5 says nothing about 6.1.6"
+    assert G.known_bad_fixes("ffmpeg", st) == set(_BAD), \
+        "an unknown pin keeps honouring the record: dropping one by accident is worse"
+
+
+def test_a_record_without_a_version_binds_at_any_pin():
+    st = {"patch_failures": {"ffmpeg": {"date": "2026-10-08", "where": "x.c", "fixes": _BAD}}}
+    assert G.known_bad_fixes("ffmpeg", st, "6.1.6") == set(_BAD)
