@@ -47,6 +47,15 @@ versions follow [SemVer](https://semver.org/).
   `FFMPEG_IGNORE_CVES` and `GST1_PLUGINS_BAD_IGNORE_CVES` on main for patches no longer
   in the tree - an ignore that reports a CVE closed by a fix we do not carry. A declared
   file tracked in main is now restored from main instead of replayed.
+- **A bail wipes the build trees its pre-flight patched.** Buildroot's legal-info step
+  copies every patch named in `build/<pkg>/.applied_patches_list`, and a pre-flight puts
+  the batch's own patch files in that list. After a bail those files are gone while the
+  build dir still names them, so the *next* build dies with `cp: cannot stat <patch>` - on
+  2026-10-08 that was ffmpeg's legal-info, in a batch that no longer contained ffmpeg.
+  `run_batch` now dircleans every package whose pre-flight ran.
+- **A leftover nightly branch no longer blocks the retry.** `checkout -b nightly/<date>-batch`
+  refused a same-night retry after a failed attempt (`a branch named ... already exists`).
+  The branch is the loop's scratch space for today's batch, so it is `checkout -B`.
 
 ### Added
 - `status` flags `last_delivery_error` and exits non-zero: "no email" stays ambiguous

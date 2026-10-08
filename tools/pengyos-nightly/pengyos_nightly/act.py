@@ -711,6 +711,9 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     # after the pre-flight, from what survived, and a batch that bails has to take them
     # back out too.
     declared: list[E.Edit] = []
+    # Packages whose pre-flight actually ran, so a bail can wipe the build trees that
+    # reference files the bail is about to delete. See dirclean_package.
+    triaged_pkgs: list[tuple[str, list[str]]] = []
 
     def step(name, ok, detail=""):
         journal.append({"step": name, "ok": ok, "detail": detail})
@@ -747,6 +750,14 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
                     else:
                         # Not in main: the batch made it, so the batch removes it.
                         target.unlink()
+                # A pre-flight ran `make <pkg>-patch` with patch files this batch wrote,
+                # and Buildroot recorded them in build/<pkg>/.applied_patches_list. legal-
+                # info copies every name in that list, so once the bail has taken the files
+                # out of the tree the *next* build dies with `cp: cannot stat <patch>` - on
+                # 2026-10-08 that was ffmpeg, in a batch that no longer contained ffmpeg.
+                # Anything whose build tree references a reverted file gets wiped.
+                for comp, editions in triaged_pkgs:
+                    dirclean_package(run, build_root, br_version, tree, editions, comp)
             except RuntimeError as exc:
                 step("restore main", False, str(exc))
         result["error"] = f"{name}: {detail}"
@@ -830,6 +841,7 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     live: list[dict] = []
     for a in actions:
         triaged = triage_package(run, repo, build_root, br_version, tree, a["editions"], a)
+        triaged_pkgs.append((a["component"], a["editions"]))
         carried, dropped, error = triaged["carried"], triaged["dropped"], triaged["error"]
         if triaged["ok"]:
             if dropped:

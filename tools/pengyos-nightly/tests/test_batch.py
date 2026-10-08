@@ -891,3 +891,21 @@ def test_a_leftover_nightly_branch_from_a_failed_night_does_not_block_the_next(t
                          apply=True, run=fake, today=TODAY)
     assert result["published"], "the same night may be retried after a failure"
     assert fake.asked("release.sh") == 1
+
+
+def test_a_batch_that_fails_after_the_preflight_wipes_the_trees_it_patched(tmp_path):
+    """legal-info copies every patch named in `build/<pkg>/.applied_patches_list`.
+
+    A pre-flight puts the patches this batch wrote into that list. If the batch then
+    bails, those files are gone from the tree while the build dir still names them, and
+    the *next* build dies with `cp: cannot stat <patch>` during legal-info - on a package
+    that is not even in the batch. That is how 2026-10-08 failed twice: ffmpeg's legal-info
+    reached for patches the reverted batch had taken back.
+    """
+    result, fake, repo, *_ = _run(tmp_path, [_two_patch_action(), _bump_action()],
+                                  fail=("release.sh",), cfg=_cfg(key_file=_key(tmp_path)))
+    assert not result["published"]
+    for pkg in ("libxml2", "libmtp"):
+        steps = [c[-1] for c in fake.calls if any(f"{pkg}-" in str(a) for a in c)]
+        assert steps and steps[-1] == f"{pkg}-dirclean", \
+            f"{pkg}'s build tree still names patches the bail deleted: {steps}"
