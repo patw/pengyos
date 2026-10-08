@@ -117,7 +117,19 @@ promoted to **stable** once they have been upgraded on real hardware.
    | a `linux.fragment` | `linux-reconfigure`, then `nvidia-open-rebuild` on the NVIDIA targets |
    | `BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI` | `grub2-rebuild` |
    | a file in `package/<name>/` other than the `.mk` (a config file, a theme) | `<name>-reinstall` |
+   | a recipe's **version** (`<PKG>_VERSION`) | `<name>-dirclean`, then build — see below |
    | a host-copied library replaced by a recipe | delete the copy from `target/usr/lib`, then build |
+
+   > **A version bump leaves the previous version installed.** Buildroot installs the new
+   > version's files and never removes the old one's, so `target/` ends up holding both —
+   > measured 2026-10-08 bumping `nvidia-open` 595.104.02 → 610.57.04: **543 MB** of the
+   > old driver still in the Desktop NVIDIA target, and an SBOM naming two versions.
+   > **Deleting those files by hand makes it worse:** `.stamp_installed` still says the
+   > package is done, so the next build re-links the image from a target that no longer
+   > has them — 25 dangling SONAME symlinks and an image with no driver in it at all,
+   > while every boot check stayed green. `<name>-dirclean` is what clears the stamps.
+   > A green boot does not catch this: QEMU has no GPU to load, so a missing driver is
+   > invisible. Check `target/` for the version you actually asked for.
 
    Rebuilding a tree from scratch avoids all of this.
 
