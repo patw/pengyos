@@ -17,6 +17,27 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### NVIDIA driver: 595.104.02 → 610.57.04 (prepared on a branch, not published)
+
+`nvidia-open` moves from the 595 production branch to NVIDIA's 610 feature
+branch, on branch `nvidia-open-610.57.04`. **Not merged, not built, not
+published** — the two things that decide this are not things a plan can decide.
+
+Checked against the 610.57.04 `.run` (463,025,450 bytes, sha256
+`b2e935c66b83bb00c0c857bc8e0ee0fd52de9286b40c9cc1eec29a7ce7eb116d`), extracted and
+compared with what the recipe installs: every versioned library `NVIDIA_OPEN_LIBS`
+names is present, and the side-versions the recipe hardcodes instead of deriving —
+`libnvidia-egl-gbm.so.1.1.3`, `libnvidia-egl-wayland.so.1.1.20`,
+`libnvidia-egl-wayland2.so.1.0.1`, `libnvidia-egl-xcb.so.1.0.5` and `…-xlib.so.1.0.5`,
+`libnvidia-nvvm70.so.4` — are unchanged from 595. `LICENSE` is byte-identical to the
+595 one. So this bump is the version and the hash, not a rewrite of the install list.
+
+What is **not** proved here: `kernel-open/` building against our 7.2 kernel, and the
+driver working on real hardware. `pengyos-desktop-nvidia lint` (ok) and the repo gate
+(43/43) check the tree, not the GPU — which is exactly why `nvidia-open` is report-only
+to the nightly loop (`tools/pengyos-nightly/pengyos_nightly/guards.py`, `DENIED`) and why
+the bump stays a human act.
+
 ### Docs: the README became the front page (2026-10-07)
 
 `README.md` was rewritten for the person deciding whether to try the OS: what each

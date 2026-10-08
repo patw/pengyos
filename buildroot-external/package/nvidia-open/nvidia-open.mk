@@ -7,9 +7,17 @@
 # One .run carries both halves: kernel-open/ (the open kernel modules, with the
 # prebuilt nv-kernel/nv-modeset cores) and the userspace + GSP firmware of the
 # same release. Building both from it keeps them in lockstep -- a module/userspace
-# version mismatch is a dead GPU. Blackwell (RTX 50) needs >= 570; 595 is the
-# production branch and builds against our 7.2 kernel.
-NVIDIA_OPEN_VERSION = 595.104.02
+# version mismatch is a dead GPU. Blackwell (RTX 50) needs >= 570.
+#
+# 595.104.02 was the production branch and built against our 7.2 kernel. 610.57.04
+# is NVIDIA's feature branch, taken deliberately: every library this recipe names
+# is present in its .run, and the side-versions hardcoded below (egl-gbm 1.1.3,
+# egl-wayland 1.1.20 / wayland2 1.0.1, egl-xcb / xlib 1.0.5, nvvm70.so.4) are
+# unchanged from 595, so the bump is the version and the hash - not a rewrite of
+# the install list. What is NOT yet proved here: kernel-open/ building against our
+# 7.2 kernel, and the driver working on real hardware. Both are the reason the
+# nightly loop is forbidden from making this change on its own.
+NVIDIA_OPEN_VERSION = 610.57.04
 NVIDIA_OPEN_SITE = https://download.nvidia.com/XFree86/Linux-x86_64/$(NVIDIA_OPEN_VERSION)
 NVIDIA_OPEN_SOURCE = NVIDIA-Linux-x86_64-$(NVIDIA_OPEN_VERSION).run
 NVIDIA_OPEN_LICENSE = NVIDIA Software License (userspace, GSP firmware), MIT or GPL-2.0 (kernel modules)
