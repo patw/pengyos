@@ -21,6 +21,25 @@ def email_script() -> Path | None:
     return path if path.is_file() else None
 
 
+def mailer_argv(script: Path) -> list[str]:
+    """How to invoke the mailer: whatever its own shebang says, python3 only as a fallback.
+
+    The mailer is machine-local, and on a real host it is usually a shell wrapper around
+    somebody's actual mail setup (`~/.local/bin/pengyos-email` is a bash `exec` of the
+    email skill). Invoking it as `python3 <mailer>` - the leftover from when the mailer
+    *was* a .py file - turned that wrapper into a SyntaxError and took the whole nightly
+    run down with it. The mailer decides how it runs.
+    """
+    if os.access(script, os.X_OK):
+        return [str(script)]                      # the kernel reads the shebang for us
+    try:
+        line = script.read_text(errors="ignore").splitlines()[0]
+    except (OSError, IndexError):
+        line = ""
+    interp = line[2:].split() if line.startswith("#!") else ["python3"]
+    return interp + [str(script)]
+
+
 def _e(s) -> str:
     return html.escape(str(s if s is not None else ""))
 
@@ -169,8 +188,11 @@ def send(subject_line: str, html_body: str, body_file: Path, to: str | None = No
     if script is None:
         return False
     body_file.write_text(html_body)
-    argv = ["python3", str(script), "--quiet", "--html", "--subject", subject_line,
-            "--body-file", str(body_file)]
+    argv = mailer_argv(script) + ["--quiet", "--html", "--subject", subject_line,
+                                  "--body-file", str(body_file)]
     if to:
         argv += ["--to", to]
-    run(argv, check=True, timeout=120)
+    # Captured, not inherited: a failed mailer's own error line is what makes the cron
+    # log and `status` say *why* nothing arrived, instead of a bare traceback.
+    run(argv, check=True, timeout=120, capture_output=True, text=True)
+    return True

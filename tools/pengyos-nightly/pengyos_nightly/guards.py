@@ -266,26 +266,45 @@ def release_cap(published_today: int, limit: int) -> tuple[bool, str]:
     return True, f"release {published_today + 1} of {limit} today"
 
 
+#: Edit kinds `apply_edits` makes idempotent: the line is written only when it is
+#: missing, so applying the same one twice is the same as applying it once.
+IDEMPOTENT_KINDS = ("ensure", "append")
+
+
 def batch_conflict(actions: list[dict]) -> tuple[bool, str]:
-    """Two changes in one batch may not edit the same file.
+    """Two changes in one batch may not edit the same file *differently*.
 
     Batching is safe when the changes are independent, which they usually are: a
     patch under patches/<pkg>/ and a version in a recipe we author do not touch. When
     two candidates do want the same file — the same recipe, the same layer config —
     the order they are applied in changes the result. That is a human's decision, so
     it is refused before a branch exists rather than resolved by whoever ran last.
+
+    Identical idempotent edits are not an ordering problem, and calling them one was
+    a real cost: every stock-package action carries the same `ensure` of
+    BR2_GLOBAL_PATCH_DIR into core.config, so four security actions "conflicted" with
+    each other and 25 CVE fixes across ffmpeg, gst1-plugins-bad, gst1-plugins-good and
+    libsndfile sat unpublished from 2026-10-07 to 2026-10-08. `ensure`/`append` write
+    the line only if it is missing, so two of them are one change. A `replace` or a
+    `create` on the same path still conflicts even when the text matches: applying it
+    twice is not the same as applying it once.
     """
-    seen: dict[str, str] = {}
+    seen: dict[str, tuple[tuple[str, str], str]] = {}
     for a in actions:
         for e in a.get("edits") or []:
             path = e.get("path", "")
             if not path:
                 continue
-            if path in seen and seen[path] != a["id"]:
-                return False, (f"batch_conflict: {seen[path]} and {a['id']} both edit "
-                               f"{path}; one of them needs a human to sequence it")
-            seen[path] = a["id"]
-    return True, f"{len(seen)} file(s), no two actions touching the same one"
+            sig = (e.get("kind", ""), e.get("new", ""))
+            prev = seen.get(path)
+            if prev is not None:
+                same_line = prev[0] == sig and sig[0] in IDEMPOTENT_KINDS
+                if not same_line:
+                    return False, (f"batch_conflict: {prev[1]} and {a['id']} both edit "
+                                   f"{path}; one of them needs a human to sequence it")
+                continue
+            seen[path] = (sig, a["id"])
+    return True, f"{len(seen)} file(s), no two actions editing the same one differently"
 
 
 def patch_shape_allowed(shape: str, cfg: dict) -> tuple[bool, str]:

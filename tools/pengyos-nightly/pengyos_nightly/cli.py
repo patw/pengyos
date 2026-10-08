@@ -212,11 +212,23 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
 
     should_send = bool(new_cves or new_findings or errors or digest or args.force_email)
     sent = False
+    delivery_error = None
     if should_send and not args.no_email:
-        sent = send(subj, body, out, to=args.to)
-        if not sent:
-            print(f"report: no mailer configured (set PENGYOS_EMAIL_SCRIPT); "
-                  f"the report is at {out} and the queue stays unreported")
+        try:
+            sent = send(subj, body, out, to=args.to)
+        except subprocess.CalledProcessError as exc:
+            # A broken mailer is a delivery failure, not a reason to abandon the run:
+            # the plan step still has to happen, or one bad email silently costs the
+            # night's whole act lane.
+            sent = False
+            detail = (exc.stderr or exc.stdout or "").strip().splitlines()
+            delivery_error = f"{exc.cmd[0]} exited {exc.returncode}"
+            if detail:
+                delivery_error += f": {detail[-1]}"
+    if should_send and not args.no_email and not sent:
+        why = (f"delivery failed - {delivery_error}" if delivery_error
+               else "no mailer configured (set PENGYOS_EMAIL_SCRIPT)")
+        print(f"report: {why}; the report is at {out} and the queue stays unreported")
     # Only a DELIVERED report consumes the queue. `--no-email` renders to disk and
     # leaves everything unreported, so the next real run still sends it. Marking on
     # --no-email is what cost the operator their first digest: a development run on
@@ -230,11 +242,18 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
         for f in new_findings:
             st["findings"][state.finding_key(f)] = today.isoformat()
         st["last_report"] = today.isoformat()
+        st["last_delivery_error"] = ""
         if digest:
             st["last_digest"] = today.isoformat()
         state.save(p["state"], st)
+    elif delivery_error:
+        # A failed delivery is a fault in the loop, not a quiet night. Recorded in
+        # state so `status` can name it instead of someone reading a traceback.
+        st["last_delivery_error"] = f"{today.isoformat()}: {delivery_error}"
+        state.save(p["state"], st)
     return {"subject": subj, "report": str(out), "sent": sent, "new_cves": len(new_cves),
-            "new_findings": len(new_findings), "errors": len(errors)}
+            "new_findings": len(new_findings), "errors": len(errors),
+            "delivery_error": delivery_error}
 
 
 def do_plan(args, today: dt.date | None = None, get=None) -> dict:
@@ -453,6 +472,11 @@ def do_status(args, now: float | None = None, today: dt.date | None = None) -> d
                                + ", ".join(sorted(errors)[:4]))
     if unreported:
         out["problems"].append(f"{unreported} CVE match(es) triaged but never reported")
+    # "No email" is only healthy if the loop never had anything to send. A report that
+    # was due and failed to deliver must not read as a quiet night.
+    if st.get("last_delivery_error"):
+        out["ok"] = False
+        out["problems"].append("last report delivery failed: " + st["last_delivery_error"])
 
     print(f"status: {'OK' if out['ok'] else 'PROBLEMS'} | observed {out['observed']} "
           f"({out['age_hours']}h ago) | {out['packages']} packages, "
@@ -520,6 +544,7 @@ def main(argv=None) -> int:
                             help="really branch, build, sign and publish; without this the "
                                  "run is a dry run that changes nothing")
     args = ap.parse_args(argv)
+    report_failed = False
 
     if args.cmd in ("run", "observe"):
         obs = observe(args)
@@ -531,6 +556,9 @@ def main(argv=None) -> int:
     if args.cmd in ("run", "report"):
         r = do_report(args)
         print(f"report: {r['subject']} -> {r['report']} (sent: {r['sent']})")
+        # A report that was due and did not go out is a failed night, even when the
+        # rest of the loop behaved. Cron/log readers get a non-zero exit for it.
+        report_failed = bool(r.get("delivery_error"))
     if args.cmd in ("run", "plan"):
         plan = do_plan(args)
         print(f"plan: {plan['counts']['actions']} action(s), {plan['counts']['refused']} "
@@ -556,7 +584,7 @@ def main(argv=None) -> int:
         # Non-zero when the loop is stuck or a source failed, so this can be used
         # by a watchdog without anyone having to read prose.
         return 0 if do_status(args)["ok"] else 1
-    return 0
+    return 1 if report_failed else 0
 
 
 if __name__ == "__main__":

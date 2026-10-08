@@ -6,6 +6,39 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-08
+
+### Fixed
+- **The mailer is exec'd, not fed to `python3`.** 0.11.0 made the mailer
+  machine-local but `send()` still built `argv = ["python3", <mailer>, ...]`, the
+  leftover from when the mailer *was* a .py file. On behoserver the mailer is
+  `~/.local/bin/pengyos-email`, a bash wrapper that `exec`s the email skill, so bash
+  syntax became a `SyntaxError`, `send()` raised, and the 19:00 `run` died at the
+  report step - no email, and `plan` never ran, so the 21:00 act lane worked off a
+  stale plan. `mailer_argv()` now honours the mailer's own shebang (exec it when it
+  is executable, read the shebang when it is not, `python3` only as the fallback).
+- **`send()` returns `True` on a delivered report.** It fell off the end of the
+  function and returned `None`, so even a successful send left the queue unreported:
+  every following night would re-report the same CVEs and findings, and `last_report`
+  would never move. Only the no-mailer path was tested, which is why it survived 0.11.0.
+- **A failed delivery is contained, not fatal.** `do_report` catches
+  `CalledProcessError`, names the mailer's own error line in the log, records
+  `last_delivery_error` in state, and leaves the queue intact; the run still reaches
+  `plan` and exits 1 so cron/log readers see a failed night.
+
+### Added
+- `status` flags `last_delivery_error` and exits non-zero: "no email" stays ambiguous
+  unless the loop can say whether it had something to send and failed to send it.
+
+### Tests
+- `test_send_execs_the_mailer_it_is_given` (a real shell mailer, real subprocess, argv
+  checked end to end), `test_the_mailer_decides_how_it_is_run` (executable / shebang /
+  no-shebang), `test_a_broken_mailer_fails_the_run_but_does_not_cost_the_night`,
+  `test_a_report_that_failed_to_deliver_is_not_a_quiet_night`. Mutation-checked: dropping
+  `return True`, restoring the `python3` prefix, and removing the `try` each fail at
+  least one of them.
+
+
 ## [0.11.0] - 2026-10-07
 
 ### Changed

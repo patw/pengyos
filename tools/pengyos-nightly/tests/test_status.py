@@ -250,3 +250,25 @@ def test_a_scheduled_bump_with_no_finding_behind_it_is_named(tmp_path):
     _policy(tmp_path, "2027.02")
     result = cli.do_status(args, now=time.time())
     assert any("no newer Buildroot release at all" in p for p in result["problems"]), result["problems"]
+
+
+def test_a_report_that_failed_to_deliver_is_not_a_quiet_night(tmp_path, monkeypatch, capsys):
+    """A bounced report must be as visible as a dead loop.
+
+    2026-10-07: the mailer was a bash wrapper invoked as `python3 <wrapper>`, the report
+    step raised, and every probe still read "quiet". status has to name the failed
+    delivery and exit non-zero, or the loop's designed silence stays a guess.
+    """
+    args = _seed(tmp_path, drain=False)
+    mailer = _dir(tmp_path) / "pengyos-email"
+    mailer.write_text("#!/bin/sh\necho 'smtp: connection refused' >&2\nexit 1\n")
+    mailer.chmod(0o755)
+    monkeypatch.setenv("PENGYOS_EMAIL_SCRIPT", str(mailer))
+
+    r = cli.do_report(args, today=dt.date(2026, 10, 7))
+    assert r["sent"] is False and r["delivery_error"], r
+    result = cli.do_status(args, now=time.time())
+    printed = capsys.readouterr().out
+    assert result["ok"] is False, printed
+    assert any("delivery failed" in p for p in result["problems"]), result["problems"]
+    assert "delivery failed" in printed, printed

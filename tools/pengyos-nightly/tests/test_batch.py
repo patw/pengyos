@@ -720,3 +720,60 @@ def test_status_reports_a_blocked_batch(tmp_path, capsys):
     assert result["ok"] is False, out
     assert any("last batch published nothing" in p for p in result["problems"]), out
     assert "batch policy: up to 12 change(s) -> 1 release(s)/night" in out, out
+
+
+# --- the shared line every stock-package action carries ----------------------
+
+def _ffmpeg_action(**kw):
+    """A second stock package: its own patch file, the same `ensure` on core.config."""
+    base = {"id": "security-ffmpeg-6.1.5", "component": "ffmpeg", "current": "6.1.5",
+            "target": "6.1.5", "closes": ["CVE-2026-90001"],
+            "edits": [{"path": "buildroot-external/patches/ffmpeg/6.1.5/0001-y.patch",
+                       "kind": "create", "new": "From 02fc47e\n", "note": "CVE-2026-90001"},
+                      {"path": "buildroot-external/configs/layers/core.config",
+                       "kind": "ensure", "new": 'BR2_GLOBAL_PATCH_DIR="x"', "note": "dir"}]}
+    base.update(kw)
+    return _patch_action(**base)
+
+
+def test_the_same_idempotent_line_on_a_shared_file_is_not_a_conflict(tmp_path):
+    """The guard was blocking the whole batch on a line it had already written.
+
+    Every stock-package action carries the same `ensure` of BR2_GLOBAL_PATCH_DIR into
+    core.config, so on 2026-10-07 four security actions "conflicted" with each other and
+    25 CVE fixes across ffmpeg, gst1-plugins-bad, gst1-plugins-good and libsndfile went
+    unpublished. `ensure` writes the line only when it is missing: two of them are one
+    change, and there is no order to sequence.
+    """
+    ok, why = G.batch_conflict([_patch_action(), _ffmpeg_action()])
+    assert ok is True, why
+
+    result, fake, repo, *_ = _run(tmp_path, [_patch_action(), _ffmpeg_action()],
+                                  cfg=_cfg(key_file=_key(tmp_path)))
+    assert "batch_conflict" not in (result.get("error") or ""), result.get("error")
+    assert fake.asked("release.sh") == 1, "the batch reaches the release step"
+
+
+def test_shared_file_with_different_content_is_still_a_human_decision(tmp_path):
+    """The relaxation is only for the identical idempotent line. Anything else on the
+    same path stays a conflict, including two actions that want the *same* replacement:
+    `replace` is not idempotent, so applying it twice is not applying it once."""
+    different_text = _ffmpeg_action(edits=[
+        {"path": "buildroot-external/configs/layers/core.config", "kind": "ensure",
+         "new": 'BR2_GLOBAL_PATCH_DIR="different"'}])
+    ok, why = G.batch_conflict([_patch_action(), different_text])
+    assert ok is False and "core.config" in why, why
+
+    identical_replace = _bump_action(id="routine-libmtp-1.1.24", target="1.1.24",
+                                     edits=[{"path": "buildroot-external/package/libmtp/libmtp.mk",
+                                             "kind": "replace",
+                                             "old": "LIBMTP_VERSION = 1.1.22",
+                                             "new": "LIBMTP_VERSION = 1.1.23",
+                                             "note": "the same line, twice"}])
+    ok, why = G.batch_conflict([_bump_action(), identical_replace])
+    assert ok is False and "libmtp.mk" in why, why
+
+    result, fake, repo, *_ = _run(tmp_path, [_bump_action(), identical_replace],
+                                  cfg=_cfg(key_file=_key(tmp_path)))
+    assert "batch_conflict" in result["error"]
+    assert fake.calls == [], "still refused before a branch, a build or a publish"
