@@ -346,8 +346,16 @@ def run_desktop_check(
     smp: int = DEFAULT_SMP,
     probe: str = SESSION_PROBE,
     readiness: "tuple[str, ...]" = DEFAULT_READINESS_MARKERS,
+    required: "tuple[str, ...]" = REQUIRED_PROCESSES,
 ) -> SessionOutcome:
     """Boot the installer stick and ask the running system what is up.
+
+    `required` is the process set that counts as the session. The installer stick
+    must be running the installer GUI; the plain live image has no payload to run it
+    from, so it is checked with `required` minus `pengyos-install` — the session is
+    the claim either way. Both must reach a session: 26.10.15 shipped a plain live
+    image that stopped at the greeter, and only the installer stick was ever
+    session-checked, so nothing noticed.
 
     Writes ``<out_prefix>.png`` (the screenshot), ``<out_prefix>.serial.log``
     and ``<out_prefix>.qemu.log``, then returns the verdict. Raises
@@ -456,4 +464,4 @@ def run_desktop_check(
             except OSError:
                 pass
 
-    return evaluate_session(bytes(log).decode("utf-8", "replace"))
+    return evaluate_session(bytes(log).decode("utf-8", "replace"), required)

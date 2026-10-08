@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-08
+
+### Added
+- **`desktop --no-installer`: check the COSMIC session on an image that carries no
+  installer payload.** The `desktop` check required `cosmic-comp`, `cosmic-panel`
+  *and* `pengyos-install`, which only the installer stick can run — so the plain live
+  desktop image (`pengyos-desktop-x86_64.img`), the one a person actually boots, was
+  never session-checked at all. 26.10.15 shipped one that stopped at the greeter and
+  demanded a password; found on behotv, reproduced under QEMU. The flag drops the one
+  inapplicable process and keeps the session as the claim.
+- `desktop_required(require_installer)` — the required-process set, split out of
+  `_run_desktop` so the choice is testable without booting a guest.
+
+### Tests
+- New fixture `serial_desktop_session_greeter_only.log`: a real capture of the broken
+  boot (cosmic-comp up because the greeter composites, no session). It must fail the
+  check with `--no-installer` too — the flag excuses the installer, not the session.
+
 ## [0.5.0] - 2026-10-05
 
 ### Added

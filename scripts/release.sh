@@ -113,9 +113,13 @@ for t in "${TARGETS[@]}"; do
         pengyos-server|pengyos-server-nvidia)
            verify smoke --matrix smoke/server.toml --image "$(out "${t}")/images/pengyos-server-x86_64.img" ;;
         *) verify boot "$(out "${t}")/images/pengyos-desktop-x86_64.img" --uefi --ram 2048 --timeout 240
-           # A login prompt is not a desktop: boot the installer stick and check the
-           # COSMIC session itself (26.10.3 passed the line above with a dead
-           # compositor and refused console logins).
+           # A login prompt is not a desktop: check the COSMIC session on BOTH desktop
+           # images. Only the installer stick was ever session-checked, so 26.10.15's
+           # plain live image - the one a person actually boots - shipped stopping at
+           # the greeter and nothing noticed. The live image has no installer payload,
+           # so it is checked without that one process.
+           verify desktop "$(out "${t}")/images/pengyos-desktop-x86_64.img" \
+               --no-installer --out "$(out "${t}")/images/qemu-live-check"
            verify desktop "$(out "${t}")/images/pengyos-desktop-x86_64-installer.img" \
                --out "$(out "${t}")/images/qemu-desktop-check" ;;
     esac

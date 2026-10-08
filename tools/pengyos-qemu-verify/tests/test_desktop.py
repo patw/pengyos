@@ -239,3 +239,58 @@ def test_desktop_missing_required_binary_is_reported(tmp_path, capsys, monkeypat
     code = cli.main(["desktop", str(img), "--out", str(tmp_path / "o")])
     assert code == cli.EXIT_USAGE
     assert "is not installed" in capsys.readouterr().err
+
+
+# --- the plain live image: a session, without an installer ------------------
+#
+# 26.10.15 shipped a plain live desktop image that stopped at the greeter. The
+# release script only ever session-checked the *installer* stick, and the check
+# requires pengyos-install, which the plain image has no payload to run — so there
+# was no way to check the image a person actually boots. The greeter fixture is a
+# real capture of that boot (QEMU, 26.10.15): cosmic-comp is up because the greeter
+# itself composites, but there is no session.
+
+GREETER = FIXTURES / "serial_desktop_session_greeter_only.log"
+LIVE_REQUIRED = cli.desktop_required(False)
+
+
+def test_a_session_without_the_installer_passes_when_the_installer_is_not_required():
+    """--no-installer must not weaken the check: it drops one process the image
+    cannot legitimately run, and keeps the session as the claim."""
+    outcome = D.evaluate_session(_read(GOOD), required=LIVE_REQUIRED)
+    assert all(c.passed for c in outcome.checks), [c.name for c in outcome.checks if not c.passed]
+    assert not any("pengyos-install" in c.name for c in outcome.checks), \
+        "the check should not be made at all, not made and excused"
+
+
+def test_a_greeter_still_fails_when_the_installer_is_not_required():
+    """The negative control, from a real capture: a boot that reached the login
+    screen and no session fails the live-image check exactly as it fails the
+    installer check."""
+    outcome = D.evaluate_session(_read(GREETER), required=LIVE_REQUIRED)
+    failed = {c.name for c in outcome.checks if not c.passed}
+    assert "cosmic-panel-running" in failed, failed
+    assert not any("pengyos-install" in c.name for c in outcome.checks), failed
+
+
+def test_the_installer_is_required_by_default():
+    outcome = D.evaluate_session(_read(GREETER))
+    failed = {c.name for c in outcome.checks if not c.passed}
+    assert {"pengyos-install-running", "cosmic-panel-running"} <= failed, failed
+
+
+def test_no_installer_flag_reaches_the_check():
+    args = cli.build_parser().parse_args(["desktop", "/img/live.img", "--no-installer"])
+    assert args.require_installer is False
+    args = cli.build_parser().parse_args(["desktop", "/img/stick.img"])
+    assert args.require_installer is True
+
+
+def test_the_required_set_drops_the_installer_and_nothing_else():
+    """The whole difference between the two images, stated exactly: one process is
+    not applicable, and the session requirements are not negotiable."""
+    full = cli.desktop_required(True)
+    live = cli.desktop_required(False)
+    assert full == D.REQUIRED_PROCESSES
+    assert live == tuple(p for p in full if p != "pengyos-install")
+    assert "cosmic-comp" in live and "cosmic-panel" in live, live

@@ -7,6 +7,6 @@ that "it boots" becomes an automated, machine-checkable fact.
 See ``spec.md`` and ``README.md`` for the full interface and behaviour contract.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = ["__version__"]

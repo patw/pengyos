@@ -336,6 +336,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the Desktop installer stick (-installer.img) to boot.",
     )
     desktop_p.add_argument(
+        "--no-installer",
+        dest="require_installer",
+        action="store_false",
+        default=True,
+        help="This image carries no installer payload (the plain live desktop "
+        "image): require the COSMIC session but not the installer GUI. Without it "
+        "the check would fail an image that is behaving correctly.",
+    )
+    desktop_p.add_argument(
         "--out",
         dest="out_prefix",
         metavar="PREFIX",
@@ -422,6 +431,21 @@ def main(argv: "list[str] | None" = None) -> int:
     return EXIT_NOT_IMPLEMENTED
 
 
+def desktop_required(require_installer: bool) -> "tuple[str, ...]":
+    """The process set the ``desktop`` check requires for one image.
+
+    Split out of :func:`_run_desktop` so the choice is testable without booting a
+    guest: it is the only difference between checking an installer stick and
+    checking the plain live image, and getting it wrong either fails a healthy
+    image or excuses a boot that stopped at the greeter.
+    """
+    from . import desktop as _desktop
+
+    if require_installer:
+        return _desktop.REQUIRED_PROCESSES
+    return tuple(p for p in _desktop.REQUIRED_PROCESSES if p != "pengyos-install")
+
+
 def _run_desktop(args: "argparse.Namespace") -> int:
     """Run the ``desktop`` subcommand: the COSMIC session check.
 
@@ -437,6 +461,7 @@ def _run_desktop(args: "argparse.Namespace") -> int:
     out_prefix = args.out_prefix or os.path.join(
         os.path.dirname(os.path.abspath(args.image)), "qemu-desktop-check"
     )
+    required = desktop_required(args.require_installer)
     try:
         outcome = desktop_mod.run_desktop_check(
             args.image,
@@ -444,6 +469,7 @@ def _run_desktop(args: "argparse.Namespace") -> int:
             timeout=args.timeout,
             settle=args.settle,
             screenshot=args.screenshot,
+            required=required,
         )
     except desktop_mod.DesktopCheckError as exc:
         sys.stderr.write(f"pengyos-qemu-verify: desktop check failed: {exc}\n")
