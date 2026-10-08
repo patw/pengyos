@@ -25,6 +25,28 @@ versions follow [SemVer](https://semver.org/).
   `CalledProcessError`, names the mailer's own error line in the log, records
   `last_delivery_error` in state, and leaves the queue intact; the run still reaches
   `plan` and exits 1 so cron/log readers see a failed night.
+- **`scripts/release.sh` is guarded before anything is spent.** Commit 2d894fba
+  (2026-10-07) flipped it from git mode 100755 to 100644 while editing it. The act lane
+  calls it directly, so the 2026-10-08 batch discovered that at the last step - after the
+  branch, the edits, four pre-flights, three commits and a green gate - as a
+  PermissionError that escaped `run_batch` entirely: no recorded failure, main's working
+  tree never restored, a nightly branch left checked out. New
+  `guards.release_script_executable` runs with the other guards, and both release
+  invocations now catch `OSError` and bail like any other step failure.
+- **A dropped package no longer poisons the build.** A pre-flight that dies mid-patch
+  leaves `build/<pkg>-<version>` extracted, partly patched, with `.applied_patches_list`
+  populated and `.stamp_patched` missing. The full build then re-runs the patch step,
+  `apply-patches.sh` sees basenames it already applied and dies with `Error: duplicate
+  filename` on Buildroot's own patch. That is what cost the 2026-10-08 batch: libsndfile's
+  only carried fix is one Buildroot 2026.08 already ships, the package was dropped
+  correctly, and the build then failed on libsndfile's own 0001-...patch. `triage_package`
+  now dircleans a package it is about to drop (`act.dirclean_package`).
+- **A bail takes every declaration back.** Each `cve_declaration_edit` carries `old` =
+  the whole file as it stood when that action wrote it, so replaying the declarations in
+  order after a bail writes the earlier blocks back. The 2026-10-08 release failure left
+  `FFMPEG_IGNORE_CVES` and `GST1_PLUGINS_BAD_IGNORE_CVES` on main for patches no longer
+  in the tree - an ignore that reports a CVE closed by a fix we do not carry. A declared
+  file tracked in main is now restored from main instead of replayed.
 
 ### Added
 - `status` flags `last_delivery_error` and exits non-zero: "no email" stays ambiguous
@@ -36,7 +58,12 @@ versions follow [SemVer](https://semver.org/).
   no-shebang), `test_a_broken_mailer_fails_the_run_but_does_not_cost_the_night`,
   `test_a_report_that_failed_to_deliver_is_not_a_quiet_night`. Mutation-checked: dropping
   `return True`, restoring the `python3` prefix, and removing the `try` each fail at
-  least one of them.
+  least one of them. On the act lane:
+  `test_a_release_script_that_cannot_be_run_is_refused_before_a_branch`,
+  `test_a_dropped_package_leaves_no_half_patched_tree_behind` and
+  `test_a_failed_batch_takes_every_declaration_back` - the fixture now tracks
+  `cve-declarations.mk` on main the way the real tree does, because whether a file is in
+  main is what decides how a bail can restore it.
 
 
 ## [0.11.0] - 2026-10-07

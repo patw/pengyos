@@ -61,6 +61,11 @@ def _repo(tmp_path):
     # guards.release_script_executable), so the fixture has to be a runnable stub.
     (repo / "scripts" / "release.sh").write_text("#!/bin/sh\n# stub\n")
     (repo / "scripts" / "release.sh").chmod(0o755)
+    # Tracked on main, like it is in the real tree. Whether this file is in main decides
+    # how a bail can take a declaration back out, so the fixture has to match.
+    (repo / "buildroot-external" / "patches").mkdir(exist_ok=True)
+    (repo / "buildroot-external" / "patches" / "cve-declarations.mk").write_text(
+        "# Carried upstream fixes, declared to the tooling that reads this tree.\n")
     run = subprocess.run
     for cmd in [["git", "init", "-q", "-b", "main", str(repo)],
                 ["git", "-C", str(repo), "config", "user.email", "t@t"],
@@ -400,6 +405,28 @@ def test_a_failure_on_buildroots_own_stock_patch_is_not_blamed_on_ours(tmp_path)
         "the whole change is reverted, not one patch of it"
 
 
+def test_a_dropped_package_leaves_no_half_patched_tree_behind(tmp_path):
+    """2026-10-08: the batch was lost to the corpse of a pre-flight.
+
+    libsndfile's only carried fix was one Buildroot 2026.08 already ships, so the
+    pre-flight failed and the package was dropped - correctly. But its build tree was
+    left extracted, partly patched, with `.applied_patches_list` populated and
+    `.stamp_patched` missing. The full build then re-ran the patch step, apply-patches.sh
+    saw basenames it had already applied and died with `Error: duplicate filename` on
+    Buildroot's own 0001-...patch. Nothing was published, and the error pointed at a
+    package that had already been taken out of the batch.
+    """
+    actions = [_two_patch_action(), _bump_action()]
+    result, fake, repo, *_ = _run(tmp_path, actions,
+                                  patch_fails={"libxml2": ("0001-a.patch", "0002-b.patch")},
+                                  cfg=_cfg(key_file=_key(tmp_path)))
+    assert result["dropped"] == ["security-libxml2-2.15.3"]
+    steps = [c[-1] for c in fake.calls if any("libxml2-" in str(a) for a in c)]
+    assert steps and steps[-1] == "libxml2-dirclean", \
+        f"the last thing done to a dropped package must be wiping its tree: {steps}"
+    assert result["published"], "and the rest of the batch still ships"
+
+
 def test_known_bad_fixes_accumulate_across_nights(tmp_path):
     """The known-bad set is a memory, not a snapshot: overwriting it would make the loop
     rediscover the same bad cherry-pick every week."""
@@ -489,13 +516,13 @@ def test_a_declaration_that_cannot_be_written_stops_the_batch(tmp_path, monkeypa
 
 def test_a_batch_that_fails_after_declaring_takes_the_declaration_back(tmp_path):
     """The declaration is written before the build. If the build fails, main is restored
-    - and an untracked declaration left behind is a dirty tree, which is what makes the
-    next night's run refuse to do anything (clean_tree)."""
+    - and a declaration left in the tree is a claim that a CVE is closed by a patch that
+    is not there, as well as a dirty tree that makes the next night refuse to run."""
     result, fake, repo, site, state, cfg = _run(tmp_path, [_two_patch_action()],
                                                  fail=["release.sh"])
     assert not result["published"]
     decl = repo / "buildroot-external/patches/cve-declarations.mk"
-    assert not decl.exists(), decl.read_text() if decl.is_file() else "gone"
+    assert "LIBXML2_IGNORE_CVES" not in decl.read_text(), decl.read_text()
     assert not (repo / "buildroot-external/patches/libxml2").exists()
     assert _branch(repo) == "main" and _dirty(repo) == ""
 
@@ -544,7 +571,8 @@ def test_a_declaration_failure_on_a_later_action_undoes_the_earlier_one(tmp_path
         [s["step"] for s in result["journal"]]
     assert not result["published"] and not fake.asked("release.sh")
     decl = repo / "buildroot-external/patches/cve-declarations.mk"
-    assert not decl.exists(), "the libxml2 declaration was written, then must be taken back"
+    assert "LIBXML2_IGNORE_CVES" not in decl.read_text(), \
+        "the libxml2 declaration was written, then must be taken back"
     assert _branch(repo) == "main" and _dirty(repo) == ""
 
 
@@ -733,7 +761,9 @@ def _ffmpeg_action(**kw):
     base = {"id": "security-ffmpeg-6.1.5", "component": "ffmpeg", "current": "6.1.5",
             "target": "6.1.5", "closes": ["CVE-2026-90001"],
             "edits": [{"path": "buildroot-external/patches/ffmpeg/6.1.5/0001-y.patch",
-                       "kind": "create", "new": "From 02fc47e\n", "note": "CVE-2026-90001"},
+                       "kind": "create", "new": "From 02fc47e\n", "note": "CVE-2026-90001",
+                       "cves": ["CVE-2026-90001"],
+                       "fix_url": "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/02fc47e13f90"},
                       {"path": "buildroot-external/configs/layers/core.config",
                        "kind": "ensure", "new": 'BR2_GLOBAL_PATCH_DIR="x"', "note": "dir"}]}
     base.update(kw)
@@ -815,3 +845,23 @@ def test_a_release_script_that_cannot_be_run_is_refused_before_a_branch(tmp_path
     assert "release_script" in (result.get("error") or ""), result.get("error")
     assert fake.calls == [], "refused before a branch, a pre-flight or a build"
     assert _branch(repo) == "main" and not _dirty(repo)
+
+
+def test_a_failed_batch_takes_every_declaration_back(tmp_path):
+    """More than one declaration in a batch: reverting them one edit at a time put the
+    earlier ones back.
+
+    Each declaration's `old` is the whole file as it stood when that action wrote it, so
+    it already contains the previous package's block. Writing them back in order after a
+    bail leaves those blocks in the tree - and an IGNORE_CVES line for a patch that is no
+    longer there is worse than no line at all: it tells pkg-stats the CVE is closed.
+    On 2026-10-08 a failed release left ffmpeg and gst1-plugins-bad declarations on main.
+    """
+    rel = "buildroot-external/patches/cve-declarations.mk"
+    actions = [_two_patch_action(), _ffmpeg_action()]
+    result, fake, repo, *_ = _run(tmp_path, actions, fail=("release.sh",),
+                                  cfg=_cfg(key_file=_key(tmp_path)))
+    assert not result["published"] and "release" in (result.get("error") or "")
+    text = (repo / rel).read_text() if (repo / rel).is_file() else ""
+    assert "LIBXML2_IGNORE_CVES" not in text and "FFMPEG_IGNORE_CVES" not in text, text
+    assert not _dirty(repo), "the tree is left clean for the next night"

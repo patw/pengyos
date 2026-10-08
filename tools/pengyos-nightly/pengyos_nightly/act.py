@@ -42,6 +42,14 @@ def _git(run, repo: Path, *args, check=True) -> str:
     return (p.stdout or "").strip()
 
 
+def _tracked(run, repo: Path, path: str) -> bool:
+    """Is this path in main? Used to restore a file the right way instead of replaying
+    edits whose order decides the result."""
+    p = _run(run, ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", path])
+    return p.returncode == 0
+
+
+
 def published_versions(site: Path) -> set[str]:
     """Versions already in the update feed, across every image."""
     out: set[str] = set()
@@ -356,6 +364,15 @@ def triage_package(run, repo: Path, build_root: Path, br_version: str, external_
     """
     carried = [e for e in action.get("edits") or [] if e.get("path", "").endswith(".patch")]
     dropped: list[dict] = []
+
+    def give_up(detail: str) -> dict:
+        # Whatever the build tree of a package we are about to drop looks like, it is not
+        # a state the following full build may be handed. See dirclean_package.
+        dirclean_package(run, build_root, br_version, external_tree, editions,
+                         action["component"])
+        return {"ok": False, "carried": carried, "dropped": dropped, "error": detail,
+                "editions": []}
+
     while True:
         try:
             done = refresh_package(run, build_root, br_version, external_tree,
@@ -367,8 +384,7 @@ def triage_package(run, repo: Path, build_root: Path, br_version: str, external_
             name = _failed_patch(detail)
             victim = next((e for e in carried if Path(e["path"]).name == name), None)
             if victim is None:
-                return {"ok": False, "carried": carried, "dropped": dropped, "error": detail,
-                        "editions": []}
+                return give_up(detail)
             dropped.append({"patch": victim["path"], "cves": list(victim.get("cves") or []),
                             "fix_url": victim.get("fix_url", ""),
                             "reason": _patch_reason(detail), "where": _failed_files(detail)})
@@ -379,8 +395,7 @@ def triage_package(run, repo: Path, build_root: Path, br_version: str, external_
             carried.remove(victim)
             action["edits"].remove(victim)
             if not carried:
-                return {"ok": False, "carried": [], "dropped": dropped, "error": detail,
-                        "editions": []}
+                return give_up(detail)
 
 
 def shrink_action(action: dict, carried: list[dict], dropped: list[dict]) -> None:
@@ -438,6 +453,31 @@ def refresh_package(run, build_root: Path, br_version: str, external_tree: str,
                                    + ("; ".join(head) + "\n" + tail if head else tail), out)
         done.append(t)
     return done
+
+
+def dirclean_package(run, build_root: Path, br_version: str, external_tree: str,
+                     targets: list[str], pkg: str) -> None:
+    """Wipe a package's build tree when its pre-flight failed, so it leaves no residue.
+
+    A pre-flight that dies mid-patch leaves `build/<pkg>-<version>` extracted, partly
+    patched, with `.applied_patches_list` populated and `.stamp_patched` missing. The
+    next full `make` re-runs the patch step, `apply-patches.sh` sees basenames it has
+    already applied and dies with `Error: duplicate filename` on Buildroot's own patch -
+    which reads like a problem with the change we just carried and is really the corpse
+    of the pre-flight. Measured on 2026-10-08: libsndfile's only carried fix was one
+    Buildroot 2026.08 already ships, the package was dropped as it should have been, and
+    the whole pengyos-desktop build then failed on libsndfile's own 0001-...patch.
+
+    Failures here are ignored on purpose: a dirclean that cannot run must not turn a
+    contained drop into an aborted night.
+    """
+    src = build_root / f"buildroot-{br_version}"
+    import os
+    env = {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
+    for t in targets:
+        _run(run, ["make", "-C", str(src), f"O={build_root / 'output' / t}",
+                    f"BR2_EXTERNAL={external_tree}", f"{pkg}-dirclean"], env=env)
+
 
 
 def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
@@ -694,10 +734,19 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
                     target = repo / e.path
                     if not target.is_file():
                         continue
-                    if e.kind == "create":
-                        target.unlink()
+                    if _tracked(run, repo, e.path):
+                        # Replaying each edit's `old` is order-dependent. Three packages
+                        # in one batch means three declarations of the same file, each
+                        # `old` holding the previous two blocks: writing them back in
+                        # order leaves the earlier blocks behind. On 2026-10-08 a failed
+                        # release left FFMPEG_IGNORE_CVES and GST1_PLUGINS_BAD_IGNORE_CVES
+                        # on main for patches that were no longer in the tree - a
+                        # declaration that tells pkg-stats a CVE is closed by a fix we do
+                        # not carry. main already has the right content; take it from there.
+                        _git(run, repo, "checkout", "-f", "main", "--", e.path)
                     else:
-                        target.write_text(e.old)
+                        # Not in main: the batch made it, so the batch removes it.
+                        target.unlink()
             except RuntimeError as exc:
                 step("restore main", False, str(exc))
         result["error"] = f"{name}: {detail}"
