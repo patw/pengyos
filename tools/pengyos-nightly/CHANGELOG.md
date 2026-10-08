@@ -6,6 +6,50 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-08
+
+### Changed
+- **A known-bad fix drops its CVE, not the component.**
+  `guards.patch_does_not_apply` refused a whole action when the candidate named *any*
+  upstream fix a pre-flight had already proved does not apply — while the pre-flight's
+  own rule is "the unit of failure is a patch, not a package" (`act.triage_package`).
+  Measured on the live state 2026-10-08: ffmpeg had 19 candidate fixes, 8 known-bad and
+  **11 that had passed pre-flight**, and the plan refused the component outright;
+  gst1-plugins-good lost 6 carried patches to 1 bad fix. The 26.10.14 batch shipped
+  1 change / 1 CVE instead of the 4 changes / 25 CVEs it was queued with. Same bug shape
+  as the `fix_commits_available` veto corrected in 0.6.0 (that one was holding 28
+  fetchable patches behind 17 CVEs with nothing to fetch), different input.
+- **The filter is inside `edits.carried_patches(cves, known_bad=...)`**, not beside it.
+  One function decides what is carriable, and the claim (`carried_cves`), the two guards
+  and `patch_dir` all read the same filtered set — so a known-bad patch is never fetched
+  (the network cost is real) and never claimed, and a guard cannot allow what the edit
+  builder would then refuse. `patch_does_not_apply` keeps its name and refuses only when
+  nothing carriable is left; `fix_commits_available` asks the same filtered question and
+  keeps its own reason ("NVD named no commit" vs "every commit NVD named is already
+  proved bad"), so a candidate is refused once, by the guard that owns it.
+- **A known-bad verdict is about a pinned version.** `patch_failures[component]` now
+  records `version`, and `guards.patch_failure()` — the single reader of the record —
+  stops binding it once the pin moves. "Does not apply to ffmpeg 6.1.5" was a permanent
+  block wearing a temporary one's clothes. Records with no version, and records from
+  before per-fix tracking, keep blocking with the same wording: clearing a known-bad
+  verdict stays a human act, and nothing clears it automatically.
+- **Filtering is not forgetting.** Every dropped CVE stays in `still_open`, is recorded on
+  the action as `skipped_known_bad` (`cve`, `fix`, `recorded`, `failed_on`), appears in
+  `plan.json`, in the release notes with its own reason, and on the plan's action line
+  (`closes 11 CVE match(es), 8 fix(es) skipped as known-bad`).
+
+### Verified
+- `plan` on the live state: **0 allowed / 10 refused → 2 allowed / 8 refused**.
+  `security-ffmpeg-6.1.5` carries 11 patches closing 11 CVE matches (8 fixes skipped as
+  known-bad); `security-gst1-plugins-good-1.24.13` carries 6 patches closing 2 (2
+  skipped). `security-libsndfile-1.2.2` (nothing carriable) and `security-podman-v5.7.0`
+  (legacy record, no fix list) are still refused, by name, with the old wording.
+- 255 tests (239 + 16 new). Every new test was mutation-checked against seven mutants:
+  veto restored, filter removed at its source, recorded version ignored,
+  `skipped_known_bad` bookkeeping dropped, `version` dropped from the record,
+  last-resort refusal removed, notes stopped naming the skips — each mutant failed at
+  least one test.
+
 ## [0.11.1] - 2026-10-08
 
 ### Fixed
