@@ -8,15 +8,31 @@
 #   [daemon]
 #   AutomaticLoginEnable=True
 #   AutomaticLogin=alex
-# `pengyos-autologin on|off` edits it. The live stick (PENGYOS-PAYLOAD
-# partition) logs root in automatically.
+# `pengyos-autologin on|off` edits it.
+#
+# A LIVE boot logs root in automatically, the same test the Server/Core console
+# gettys use (usr/libexec/pengyos/agetty-autologin): an installed system boots
+# with pengyos.data= on the kernel line, a live image does not.
+#
+# This used to test for the PENGYOS-PAYLOAD partition, which only the *installer*
+# stick has. So the plain live image (pengyos-desktop-x86_64.img) showed the
+# greeter and demanded a password from a person trying a trial image — found
+# 2026-10-08 on behotv booting 26.10.15, and reproducible under QEMU: the plain
+# image fails the session check (no cosmic-panel) while the installer stick
+# passes it. The payload label says "the installer is available", not "this boot
+# is live"; those are different facts and only one of them was being asked.
+#
+# PENGYOS_CMDLINE / PENGYOS_GREETD_DIR exist so the tests can drive both branches
+# without a root; unset, they are the real paths.
 set -eu
-CONF=/etc/pengyos/autologin.conf
-OUT=/run/greetd/config.toml
-mkdir -p /run/greetd
+CONF=${PENGYOS_AUTOLOGIN_CONF:-/etc/pengyos/autologin.conf}
+CMDLINE=${PENGYOS_CMDLINE:-/proc/cmdline}
+RUN_DIR=${PENGYOS_GREETD_DIR:-/run/greetd}
+OUT=$RUN_DIR/config.toml
+mkdir -p "$RUN_DIR"
 
 user=""
-if [ -e /dev/disk/by-label/PENGYOS-PAYLOAD ]; then
+if ! grep -q 'pengyos\.data=' "$CMDLINE" 2>/dev/null; then
     user=root
 elif [ -f "$CONF" ]; then
     enable=$(sed -n 's/^[[:space:]]*AutomaticLoginEnable[[:space:]]*=[[:space:]]*//p' "$CONF" | tail -n1)

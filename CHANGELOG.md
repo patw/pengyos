@@ -17,6 +17,34 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: the live desktop image stopped at a login screen (found on 26.10.15)
+
+Found on behotv booting the 26.10.15 validation image: `pengyos-desktop-x86_64.img`
+came up at the COSMIC greeter and asked for a password, instead of logging in and
+showing the desktop. It is not a driver issue and it is not new — it has been true of
+every plain live desktop image.
+
+`greetd-config` decides whether to add an automatic session, and it decided from the
+**`PENGYOS-PAYLOAD` partition label** — a partition only the *installer* stick has.
+That label answers "the installer is available", not "this boot is live", and the two
+are different facts. The Server and Core console gettys already ask the right question
+(`agetty-autologin`: an installed system boots with `pengyos.data=` on the kernel line,
+a live image does not); the Desktop was the one place using the wrong proxy.
+
+Now the Desktop uses the same test. A live boot logs root in; an installed system shows
+the greeter, and `pengyos-autologin on USER` remains the opt-in. 8 tests drive both
+branches, including the negative controls (installed never autologs root, a
+non-existent account is refused), and they fail if the payload label comes back.
+
+**Why nothing caught it:** `scripts/release.sh` session-checks only the *installer*
+image, because `pengyos-qemu-verify desktop` requires `pengyos-install` — a process the
+plain image has no payload to run. So the image a person actually boots was checked by a
+line whose only assertions are "reached a login prompt" and "no kernel panic". A login
+prompt passes that. `pengyos-qemu-verify` 0.6.0 adds `desktop --no-installer`, and
+`release.sh` now session-checks **both** desktop images. Reproduced before the fix and
+verified after: the plain image failed with `cosmic-panel-running FAIL` (greeter on
+screen), and now passes 4/4 reaching the COSMIC session.
+
 ### Docs: the README became the front page (2026-10-07)
 
 `README.md` was rewritten for the person deciding whether to try the OS: what each
