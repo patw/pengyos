@@ -564,7 +564,10 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
     if remote:
         env["PENGYOS_SITE_REMOTE"] = remote
     step("release", True, " ".join(argv))
-    p = _run(run, argv, cwd=str(repo), env={**__import__("os").environ, **env})
+    try:
+        p = _run(run, argv, cwd=str(repo), env={**__import__("os").environ, **env})
+    except OSError as exc:
+        return bail("release", f"could not start scripts/release.sh: {exc}")
     if p.returncode != 0:
         return bail("release", "build / boot check / publish failed; nothing was "
                                "published:\n" + (p.stdout + p.stderr)[-2000:])
@@ -740,7 +743,11 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     ok, why = G.clean_tree(repo, run)
     if not ok:
         return bail("clean_tree", why)
-    step("guards", True, f"{len(actions)} action(s) allowed, key present, tree clean, {why}")
+    ok, runnable = G.release_script_executable(repo)
+    if not ok:
+        return bail("release_script", runnable)
+    step("guards", True, f"{len(actions)} action(s) allowed, key present, tree clean, "
+                         f"{why}, {runnable}")
 
     # --- one branch; every edit applied, but nothing committed yet ------------
     # The order matters: pre-flight decides *which* changes are real, and a change
@@ -881,7 +888,13 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     if remote:
         env["PENGYOS_SITE_REMOTE"] = remote
     step("release", True, " ".join(argv))
-    p = _run(run, argv, cwd=str(repo), env={**__import__("os").environ, **env})
+    try:
+        p = _run(run, argv, cwd=str(repo), env={**__import__("os").environ, **env})
+    except OSError as exc:
+        # A step that cannot even start is still a step failure: bail takes the edits
+        # back out and restores main, instead of throwing past run_batch and leaving a
+        # nightly branch checked out (what a PermissionError did on 2026-10-08).
+        return bail("release", f"could not start scripts/release.sh: {exc}")
     if p.returncode != 0:
         result["batch_failure"] = {"date": today.isoformat(),
                                    "detail": (p.stdout + p.stderr)[-400:]}

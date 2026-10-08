@@ -57,6 +57,10 @@ def _repo(tmp_path):
     # the test asserts it ran exactly once. The real script is not needed here.
     (repo / "scripts").mkdir(exist_ok=True)
     (repo / "scripts" / "compose-defconfigs.py").write_text("# stub\n")
+    # The act lane guards on this being runnable before it branches (see
+    # guards.release_script_executable), so the fixture has to be a runnable stub.
+    (repo / "scripts" / "release.sh").write_text("#!/bin/sh\n# stub\n")
+    (repo / "scripts" / "release.sh").chmod(0o755)
     run = subprocess.run
     for cmd in [["git", "init", "-q", "-b", "main", str(repo)],
                 ["git", "-C", str(repo), "config", "user.email", "t@t"],
@@ -777,3 +781,37 @@ def test_shared_file_with_different_content_is_still_a_human_decision(tmp_path):
                                   cfg=_cfg(key_file=_key(tmp_path)))
     assert "batch_conflict" in result["error"]
     assert fake.calls == [], "still refused before a branch, a build or a publish"
+
+
+def test_a_release_script_that_cannot_be_run_is_refused_before_a_branch(tmp_path):
+    """2026-10-08: commit 2d894fba flipped scripts/release.sh from 100755 to 100644.
+
+    The batch discovered it at the last step - after the branch, the edits, four
+    pre-flights, three commits and a green gate - as a PermissionError that escaped
+    run_batch entirely: no recorded failure, main's working tree never restored, and a
+    nightly branch left checked out. A missing exec bit is a precondition, so it is
+    guarded before anything is spent. (The runnable case is the one every other batch
+    test already publishes through.)
+    """
+    repo = _repo(tmp_path)
+    ok, why = G.release_script_executable(repo)
+    assert ok is True, why
+
+    # Committed, the way it actually happened: a mode change in a commit, so the tree
+    # is clean and only the guard can catch it.
+    (repo / "scripts" / "release.sh").chmod(0o644)
+    subprocess.run(["git", "-C", str(repo), "add", "scripts/release.sh"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "mode: drop +x"],
+                   check=True)
+    ok, why = G.release_script_executable(repo)
+    assert ok is False and "not runnable" in why, why
+    assert not _dirty(repo), "the tree is clean: this is not a dirty-tree failure"
+
+    site, state = _site(tmp_path), tmp_path / "state"
+    cfg = _cfg(key_file=_key(tmp_path))
+    fake = Fake((), None, repo)
+    result = A.run_batch([_bump_action()], cfg, repo, tmp_path, site, state,
+                         apply=True, run=fake, today=TODAY)
+    assert "release_script" in (result.get("error") or ""), result.get("error")
+    assert fake.calls == [], "refused before a branch, a pre-flight or a build"
+    assert _branch(repo) == "main" and not _dirty(repo)

@@ -12,6 +12,7 @@ Two of them are not planner rules but hard walls, checked again on the way out:
 from __future__ import annotations
 
 import datetime as dt
+import os
 import subprocess
 from pathlib import Path
 
@@ -197,6 +198,27 @@ def tree_move_executable(shape: str) -> tuple[bool, str]:
     return False, ("tree_move_not_executable: the bump lane can plan, guard and account for "
                    "a tree move (spec phase 4), but the act lane has no full-rebuild path "
                    "for it yet, so it is published as a decision to review, not an action")
+
+
+def release_script_executable(repo: Path) -> tuple[bool, str]:
+    """The one command the act lane cannot run without must actually be runnable.
+
+    Commit 2d894fba (2026-10-07, "Build path: document and run pengyos-build acquire")
+    flipped scripts/release.sh from git mode 100755 to 100644 while editing it. The
+    2026-10-08 batch found out at the last step - after the branch, the edits, four
+    pre-flights, three commits and a green gate - as a PermissionError that propagated
+    out of run_batch, so no failure was recorded and main's working tree was never
+    restored. A missing exec bit is a precondition, not a build failure: name it before
+    a branch exists, when nothing has been spent yet.
+    """
+    script = repo / "scripts" / "release.sh"
+    if not script.is_file():
+        return False, f"release_script_missing: {script} is not in the repo"
+    if not os.access(script, os.X_OK):
+        return False, ("release_script_not_executable: scripts/release.sh is not runnable "
+                       "(git file mode 100644). chmod +x it and commit the mode.")
+    return True, "scripts/release.sh is runnable"
+
 
 
 def patch_does_not_apply(component: str, st: dict,
