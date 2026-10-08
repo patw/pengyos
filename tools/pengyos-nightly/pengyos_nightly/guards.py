@@ -113,7 +113,7 @@ def evidence_required(action: dict) -> tuple[bool, str]:
     return True, f"{len(covered)} CVE match(es) closed by {action['target']} per NVD's range"
 
 
-def fix_commits_available(action: dict) -> tuple[bool, str]:
+def fix_commits_available(action: dict, known_bad=()) -> tuple[bool, str]:
     """A patch is carried per CVE, and only for a CVE NVD names an upstream fix for.
 
     Per CVE, not per component: `edits.carried_cves` decides what is written to the
@@ -123,15 +123,26 @@ def fix_commits_available(action: dict) -> tuple[bool, str]:
     component because one CVE has no named commit throws away the fixes upstream
     *did* publish — measured 2026-10-06, that veto was holding 28 fetchable patches
     behind 17 CVEs that have nothing to fetch.
+
+    `known_bad` is the same set `patch_does_not_apply` and `patch_dir` use, so the two
+    guards ask one filtered question. This one keeps its own reason: "NVD named no
+    commit" is a fact about the record, while "every commit NVD named is already proved
+    not to apply" is `patch_does_not_apply`'s call to make — naming it there is what
+    keeps a refusal reviewable, and it stops the same candidate being refused twice for
+    two different stories.
     """
     if action.get("shape") != "patch_dir":
         return True, "bump shape: no patch to fetch"
     need = [c for c in action.get("cves", []) if c.get("affected")]
-    carried = E.carried_cves(need)
-    if not carried:
+    fetchable = E.carried_cves(need)
+    carried = E.carried_cves(need, known_bad)
+    if not fetchable:
         return False, ("no_fix_commit: NVD names no upstream commit or review request for "
                        + ", ".join(c["cve"] for c in need)
                        + " (vendor errata are not something to cherry-pick)")
+    if not carried:
+        return True, (f"{len(fetchable)} upstream fix commit(s) named by NVD, every one of "
+                      "them known-bad for this pin — see patch_does_not_apply")
     missing = [c["cve"] for c in need if c["cve"] not in carried]
     if missing:
         return True, (f"{len(carried)} of {len(need)} affected CVE(s) name an upstream fix; "
@@ -256,36 +267,81 @@ def known_bad_fixes(component: str, st: dict, version: str = "") -> set[str]:
 
 
 def patch_does_not_apply(component: str, st: dict,
-                         fixes: list[str] | None = None) -> tuple[bool, str]:
-    """A **specific upstream fix** that was proved not to apply is not retried.
+                         fixes: list[str] | None = None,
+                         action: dict | None = None) -> tuple[bool, str]:
+    """Refuse a candidate only when **nothing carriable is left**.
 
-    Scoped to the fixes, not to the component, deliberately. The cheap-but-not-free
-    pre-flight must not let one bad cherry-pick block every future fix for a package:
-    a commit authored against ffmpeg 8.x failing on 6.1.5 says nothing about a fix
-    written for 6.1.5. `fixes` is the candidate's upstream fix URLs; the candidate is
-    refused when it wants one that already failed, and allowed when it does not.
+    A known-bad **fix** removes the CVEs whose only fix is that one; it does not remove
+    the component. The candidate is allowed while at least one fetchable, not-known-bad
+    fix remains, and refused — with this guard named — only when every fetchable fix it
+    names has already been proved not to apply.
+
+    That is the same correction `fix_commits_available` got on 2026-10-06 (see its
+    docstring: a whole-component veto was holding 28 fetchable patches behind 17 CVEs
+    with nothing to fetch). Measured 2026-10-08, this one was holding 11 carried ffmpeg
+    patches and 6 gst1-plugins-good patches behind 8 and 1 bad fixes, and the
+    26.10.14 batch shipped 1 change instead of the 4 it was queued with.
+
+    The carriable set is `edits.carried_patches` with the known-bad fixes removed — the
+    same function `patch_dir` writes the tree from and the planner takes `closes` from,
+    so the guard cannot allow what the edit builder would then refuse.
+
+    Two input shapes, one rule. Pass the `action` (the planner does) and the question is
+    per CVE. Pass only `fixes` and it is the URL-level question: candidate fixes that are
+    all known-bad is still nothing to try.
 
     A record with no fix list predates per-fix tracking. It is honoured as a
     component-wide block rather than silently dropped: refusing something for the
     wrong reason in the open beats un-blocking it by accident.
     """
-    bad = (st.get("patch_failures") or {}).get(component)
-    if not bad:
+    raw = (st.get("patch_failures") or {}).get(component) or {}
+    if not raw:
         return True, "no recorded patch failure"
-    known = sorted({f for f in (bad.get("fixes") or []) if f})
-    if not known:
+    current = str((action or {}).get("current") or "")
+    known = known_bad_fixes(component, st, current)
+
+    if not (raw.get("fixes") or []):
         return False, (f"patch_does_not_apply: {component}'s upstream patch failed on "
-                       f"{bad.get('where', 'the source')} on {bad.get('date', '?')}; recorded "
+                       f"{raw.get('where', 'the source')} on {raw.get('date', '?')}; recorded "
                        "before per-fix tracking, so it needs a human to adapt the patch, "
                        "pick another fix, or clear state.json:patch_failures")
-    hit = sorted({f for f in (fixes or []) if f in set(known)})
-    if hit:
-        return False, (f"patch_does_not_apply: {len(hit)} of {component}'s candidate fix(es) "
-                       f"already failed on {bad.get('where', 'the source')} "
-                       f"({bad.get('date', '?')}); {len(known)} fix(es) are known-bad for "
-                       f"{component}, the rest are still tryable")
-    return True, (f"{component} has {len(known)} known-bad fix(es); this candidate names "
-                  "none of them")
+    if not known:
+        return True, (f"{component}'s recorded failure was against {raw.get('version')} on "
+                      f"{raw.get('date', '?')}; this candidate is at {current or '?'}, so "
+                      f"{len(raw.get('fixes') or [])} known-bad fix(es) do not bind at this pin")
+
+    cves = [c for c in ((action or {}).get("cves") or []) if c.get("affected")]
+    if cves:
+        fetchable = E.carried_patches(cves)
+        kept = E.carried_patches(cves, known_bad=known)
+        if kept:
+            dropped = len(fetchable) - len(kept)
+            return True, (f"{component} has {len(known)} known-bad fix(es); "
+                          + (f"{dropped} dropped, {len(kept)} of {len(fetchable)} fetchable "
+                             f"fix(es) still carriable" if dropped
+                             else "this candidate names none of them"))
+        if fetchable:
+            return False, (f"patch_does_not_apply: nothing carriable for {component} — all "
+                           f"{len(fetchable)} fetchable fix(es) are known-bad "
+                           f"({raw.get('where', 'the source')}, {raw.get('date', '?')}); "
+                           f"{len(known)} fix(es) are known-bad for {component} and this "
+                           "candidate has nothing else to try, so it needs a human to pick "
+                           "another fix or clear state.json:patch_failures")
+        return True, (f"{component} has {len(known)} known-bad fix(es); this candidate names "
+                      "no fetchable fix at all")
+
+    named = {f for f in (fixes or []) if f}
+    hit = named & known
+    if not hit:
+        return True, (f"{component} has {len(known)} known-bad fix(es); this candidate names "
+                      "none of them")
+    if named - known:
+        return True, (f"{len(hit)} of {component}'s candidate fix(es) are known-bad; "
+                      f"{len(named - known)} still tryable")
+    return False, (f"patch_does_not_apply: all {len(hit)} of {component}'s candidate fix(es) "
+                   f"already failed on {raw.get('where', 'the source')} "
+                   f"({raw.get('date', '?')}); {len(known)} fix(es) are known-bad for "
+                   f"{component} and this candidate names nothing else to try")
 
 
 def cooldown(component: str, log: dict, days: int, today: dt.date) -> tuple[bool, str]:

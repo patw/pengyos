@@ -261,7 +261,7 @@ def test_a_tree_move_crossing_the_series_is_not_major_never():
                               "bump_kind": "major"})[0]
 
 
-# --- the known-bad record: one reader, pinned to the version it was proved against
+# --- known-bad fixes: one reader, version-pinned, last-resort veto -----------
 
 _FFH = "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/"
 _BAD = [_FFH + f"{i:07x}" for i in (1, 2)]
@@ -299,3 +299,41 @@ def test_a_known_bad_verdict_is_about_the_pin_it_was_recorded_against():
 def test_a_record_without_a_version_binds_at_any_pin():
     st = {"patch_failures": {"ffmpeg": {"date": "2026-10-08", "where": "x.c", "fixes": _BAD}}}
     assert G.known_bad_fixes("ffmpeg", st, "6.1.6") == set(_BAD)
+
+
+def test_the_guard_allows_while_anything_is_carriable():
+    """4 affected CVEs, 2 fixes known-bad: allowed, and the reason says what was dropped."""
+    a = {"component": "ffmpeg", "current": "6.1.5", "shape": "patch_dir",
+         "cves": _ffmpeg_cves(4)}
+    ok, why = G.patch_does_not_apply("ffmpeg", _ffmpeg_st(), action=a)
+    assert ok, why
+    assert "2 dropped, 2 of 4 fetchable fix(es) still carriable" in why, why
+
+
+def test_the_guard_refuses_only_when_nothing_is_carriable():
+    a = {"component": "ffmpeg", "current": "6.1.5", "shape": "patch_dir",
+         "cves": _ffmpeg_cves(2)}
+    ok, why = G.patch_does_not_apply("ffmpeg", _ffmpeg_st(), action=a)
+    assert not ok and "nothing carriable" in why and "known-bad" in why, why
+    assert "libavcodec/tiff.c" in why and "2026-10-08" in why, "say which files, for the human"
+
+
+def test_the_two_guards_ask_the_same_filtered_question():
+    """fix_commits_available must not refuse for a reason that is really patch_does_not_apply's,
+    or the plan names the wrong guard and the next night chases the wrong thing."""
+    a = {"component": "ffmpeg", "current": "6.1.5", "shape": "patch_dir",
+         "cves": _ffmpeg_cves(2)}
+    ok, why = G.fix_commits_available(a, set(_BAD))
+    assert ok and "known-bad" in why and "patch_does_not_apply" in why, why
+    assert G.fix_commits_available(a)[0], "unfiltered, NVD's fixes are there"
+    assert not G.patch_does_not_apply("ffmpeg", _ffmpeg_st(), action=a)[0], \
+        "and the refusal is named once, by the guard that owns it"
+
+
+def test_a_candidate_naming_no_fetchable_fix_is_still_fix_commits_availables_problem():
+    a = {"component": "ffmpeg", "current": "6.1.5", "shape": "patch_dir",
+         "cves": [{"cve": "CVE-2026-70001", "affected": True}]}
+    ok, why = G.patch_does_not_apply("ffmpeg", _ffmpeg_st(), action=a)
+    assert ok and "no fetchable fix at all" in why, why
+    held, held_why = G.fix_commits_available(a)
+    assert not held and "no_fix_commit" in held_why, held_why

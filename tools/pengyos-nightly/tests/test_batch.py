@@ -937,6 +937,38 @@ def test_a_batch_that_fails_after_the_preflight_wipes_the_trees_it_patched(tmp_p
             f"{pkg}'s build tree still names patches the bail deleted: {steps}"
 
 
+# --- what the filter skipped is what the notes must name ---------------------
+
+def test_skipped_known_bad_fixes_are_named_in_the_batch_notes(tmp_path):
+    """A CVE whose only named fix is already proved bad is not carried — but it is not
+    forgotten either: the notes a machine and the operator read must say it is open,
+    which fix closed the door, and when that was proved."""
+    skipped = [{"cve": "CVE-2026-18477",
+                "fix": "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa",
+                "recorded": "2026-10-08", "failed_on": "parser.c"}]
+    actions = [_patch_action(still_open=["CVE-2026-18477"], skipped_known_bad=skipped)]
+    _run(tmp_path, actions, cfg=_cfg(key_file=_key(tmp_path)))
+    notes = (tmp_path / "state" / "notes-batch-2026-10-06.md").read_text()
+    assert "1 fix(es) skipped as known-bad" in notes, notes
+    assert ("Still open in libxml2: CVE-2026-18477 — NVD's fix "
+            "https://github.com/GNOME/libxml2/commit/aaaaaaaaaaaa proved not to apply on "
+            "2026-10-08 (failed on parser.c)") in notes, notes
+
+
+def test_a_known_bad_fix_does_not_steal_the_no_fix_reason(tmp_path):
+    """'NVD names no fix' and 'NVD's fix is already proved bad' are different problems
+    and the next reader needs to know which one it has."""
+    actions = [_patch_action(still_open=["CVE-2026-18477", "CVE-2026-8631"],
+                             skipped_known_bad=[{"cve": "CVE-2026-18477",
+                                                 "fix": "https://x/commit/aaaaaaaaaaaa",
+                                                 "recorded": "2026-10-08",
+                                                 "failed_on": "parser.c"}])]
+    _run(tmp_path, actions, cfg=_cfg(key_file=_key(tmp_path)))
+    notes = (tmp_path / "state" / "notes-batch-2026-10-06.md").read_text()
+    assert "Still open in libxml2: CVE-2026-8631 (NVD names no upstream fix" in notes, notes
+    assert "CVE-2026-18477, CVE-2026-8631" not in notes, "not lumped into one wrong reason"
+
+
 def test_a_recorded_failure_names_the_version_it_was_proved_against(tmp_path):
     """Without the pin, 'does not apply to 2.15.3' is a permanent block: the day the pin
     moves, the verdict still binds a version it was never tested against."""

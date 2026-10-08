@@ -269,7 +269,7 @@ def download_hash(url: str, filename: str, get=fetch_bytes) -> HashInfo:
 
 # --- the shapes --------------------------------------------------------------
 
-def carried_patches(cves: list[dict]) -> list[dict]:
+def carried_patches(cves: list[dict], known_bad=()) -> list[dict]:
     """The patches `patch_dir` will write, and the CVEs each one closes.
 
     One entry per upstream fix, in a stable order: two CVEs fixed by the same commit
@@ -277,8 +277,16 @@ def carried_patches(cves: list[dict]) -> list[dict]:
     by it — deduplicating the patch must not shrink the claim. A CVE whose record
     names no fetchable fix is absent from the result: not carried, and not claimed.
 
+    `known_bad` is the set of fix URLs a pre-flight already proved do not apply (see
+    `guards.known_bad_fixes`). A group whose fix is one of them is dropped here rather
+    than beside here, so the guard's question, the claim in the notes and the patches
+    written to the tree are all the same filtered set: a known-bad fix is never fetched
+    and never claimed, and the CVEs whose only fix was that one fall out of `closes`
+    into `still_open`.
+
     Returns `[{"source": <the fix_commit dict>, "cves": [cve id, ...]}, ...]`.
     """
+    bad = {f for f in (known_bad or ()) if f}
     groups: dict[str, dict] = {}
     for c in sorted(cves, key=lambda c: c["cve"]):
         src = c.get("fix_commit") or {}
@@ -289,19 +297,24 @@ def carried_patches(cves: list[dict]) -> list[dict]:
         if not url or patch_url(url) is None:
             continue
         key = src.get("sha") or url
+        # Matched on both spellings: the record stores the URL NVD named, the group is
+        # keyed by the commit sha when the patch text names one.
+        if url in bad or (src.get("sha") and src["sha"] in bad):
+            continue
         groups.setdefault(key, {"source": src, "cves": []})["cves"].append(c["cve"])
     return [groups[k] for k in sorted(groups)]
 
 
-def carried_cves(cves: list[dict]) -> list[str]:
+def carried_cves(cves: list[dict], known_bad=()) -> list[str]:
     """Every CVE the patch set closes — the union over `carried_patches`.
 
     One rule, in one place: the planner takes the action's `closes` from this, the
-    guard asks it what is fetchable, and `patch_dir` writes the patches from
+    guards ask it what is fetchable, and `patch_dir` writes the patches from
     `carried_patches`. The tree and the security claim are computed from the same
-    function, so they cannot drift apart.
+    function, so they cannot drift apart — including the known-bad filter, which both
+    guards therefore ask through the same set.
     """
-    return sorted({cve for g in carried_patches(cves) for cve in g["cves"]})
+    return sorted({cve for g in carried_patches(cves, known_bad) for cve in g["cves"]})
 
 
 # --- is this patch a fix for THIS package? -----------------------------------
@@ -412,14 +425,17 @@ def reroot_patch(text: str, prefix: str) -> str:
 
 
 def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: list[str],
-              get=fetch_bytes, upstream: str = "") -> tuple[list[Edit], list[dict]]:
+              get=fetch_bytes, upstream: str = "",
+              known_bad=()) -> tuple[list[Edit], list[dict]]:
     """A stock Buildroot package: carry the upstream fixes as patches.
 
-    The subset is deliberate, twice over: a CVE whose record names no fetchable fix is
-    not carried (see `carried_patches`), and a fetched patch that is not a fix for this
-    package is not carried either (see `classify_patch`). The return value is the pair
-    the planner needs to stay honest — the edits, and the CVEs refused with the reason
-    for each.
+    The subset is deliberate, three times over: a CVE whose record names no fetchable
+    fix is not carried (see `carried_patches`), a fix a pre-flight already proved does
+    not apply is not carried *or fetched* (`known_bad` — the network cost is real and
+    Buildroot has already answered that question), and a fetched patch that is not a
+    fix for this package is not carried either (see `classify_patch`). The return value
+    is the pair the planner needs to stay honest — the edits, and the CVEs refused with
+    the reason for each.
 
     This is the shape the build proved (2026-10-05). The version override did not:
     `LIBXML2_VERSION = 2.15.4` in external.mk made Buildroot *download* 2.15.4 while
@@ -437,7 +453,7 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
     edits: list[Edit] = []
     refused: list[dict] = []
     n = 0
-    for group in carried_patches(cves):
+    for group in carried_patches(cves, known_bad):
         src = group["source"]
         # One review request can be several commits: each becomes its own patch file,
         # because Buildroot pipes one file to one `patch` invocation.

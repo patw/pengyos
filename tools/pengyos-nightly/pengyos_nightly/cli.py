@@ -578,7 +578,9 @@ def main(argv=None) -> int:
               f"refused -> {Path(args.state_dir).expanduser() / 'plan.json'}")
         for a in plan["actions"]:
             print(f"  action {a['id']}: {a['component']} {a['shape']} "
-                  f"({', '.join(a['editions'])}) closes {len(a['closes'])} CVE match(es)")
+                  f"({', '.join(a['editions'])}) closes {len(a['closes'])} CVE match(es)"
+                  + (f", {len(a['skipped_known_bad'])} fix(es) skipped as known-bad"
+                     if a.get("skipped_known_bad") else ""))
         for r in plan["refused"][:8]:
             print(f"  refused {r['id']}: {', '.join(r['refused_by'])}")
         if args.cmd == "plan" and getattr(args, "json", False):

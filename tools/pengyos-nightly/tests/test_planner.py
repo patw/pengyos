@@ -722,3 +722,137 @@ def test_the_plan_is_deterministic(tmp_path):
     a = _plan(tmp_path, obs, _st(_triaged("CVE-2026-86137", "libxml2")), nvd)
     b = _plan(tmp_path, obs, _st(_triaged("CVE-2026-86137", "libxml2")), nvd)
     assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+# --- known-bad fixes: a filter, not a veto ------------------------------------
+#
+# `patch_does_not_apply` used to refuse a whole component if the candidate named any
+# fix a pre-flight had proved does not apply — the same shape as the `fix_commits_available`
+# veto fixed on 2026-10-06. Measured 2026-10-08 it was holding 11 carried ffmpeg patches
+# and 6 gst1-plugins-good patches behind 8 and 1 bad fixes, and the batch that shipped
+# carried 1 change instead of the 4 it was queued with. These fixtures are the ffmpeg
+# shape: N fixes, some known-bad, and the plan must carry the rest.
+
+_FFH = "https://code.ffmpeg.org/FFmpeg/FFmpeg/commit/"
+
+
+def _fix_url(i: int) -> str:
+    """A distinct, fetchable fix-commit URL (hex sha, on a host that serves .patch)."""
+    return f"{_FFH}{i:07x}"
+
+
+def _ffmpeg_obs(current="6.1.5"):
+    return _obs(ffmpeg=_pkg(current=current, latest="7.0.2",
+                            cpeid=f"cpe:2.3:a:ffmpeg:ffmpeg:{current}:-:*:*:*:*:*:*"))
+
+
+def _ffmpeg_nvd(tmp_path, n):
+    """n CVEs, each naming its own upstream fix, all affected at the pinned version."""
+    return _nvd(tmp_path, *[(f"CVE-2026-{70000 + i}", _rec(
+        "ffmpeg", "ffmpeg", "*", [_fix_url(i)], versionEndExcluding="6.1.7"))
+        for i in range(1, n + 1)])
+
+
+def _ffmpeg_st(n, bad=(), recorded="6.1.5"):
+    """State for n ffmpeg CVEs, with `bad` recorded as known-bad against `recorded`."""
+    st = _st(*[_triaged(f"CVE-2026-{70000 + i}", "ffmpeg") for i in range(1, n + 1)])
+    st["patch_failures"] = {"ffmpeg": {"date": "2026-10-08", "where": "libavcodec/tiff.c",
+                                       "version": recorded,
+                                       "fixes": [_fix_url(i) for i in bad]}}
+    return st
+
+
+def test_a_known_bad_fix_drops_its_cve_not_the_component(tmp_path):
+    """The unit of failure is a patch. One bad cherry-pick takes its CVE to `still_open`
+    and leaves the component actionable for everything else."""
+    obs, st, nvd = _ffmpeg_obs(), _ffmpeg_st(3, bad=(2,)), _ffmpeg_nvd(tmp_path, 3)
+    a = _by_id(_plan(tmp_path, obs, st, nvd), "security-ffmpeg-6.1.5")
+    assert a["allowed"], a["guards"]
+    assert a["closes"] == ["CVE-2026-70001", "CVE-2026-70003"], "the claim is the kept set"
+    assert a["still_open"] == ["CVE-2026-70002"], "filtering is not forgetting"
+    assert len(a["patches"]) == 2
+    s = a["skipped_known_bad"][0]
+    assert (s["cve"], s["fix"]) == ("CVE-2026-70002", _fix_url(2))
+    assert s["recorded"] == "2026-10-08" and "libavcodec/tiff.c" in s["failed_on"], s
+
+
+def test_a_component_whose_only_fix_is_known_bad_is_still_refused(tmp_path):
+    """The libsndfile shape, 2026-10-08: 1 candidate fix, 1 known-bad, 0 carriable.
+    Refused, by this guard, and by exactly one guard."""
+    obs = _obs(libsndfile=_pkg(current="1.2.2", latest="1.2.3",
+                               cpeid="cpe:2.3:a:libsndfile:libsndfile:1.2.2:-:*:*:*:*:*:*"))
+    fix = "https://github.com/libsndfile/libsndfile/commit/9a82911"
+    nvd = _nvd(tmp_path, ("CVE-2026-05001", _rec("libsndfile", "libsndfile", "*", [fix],
+                                                  versionEndExcluding="1.2.3")))
+    st = _st(_triaged("CVE-2026-05001", "libsndfile"))
+    st["patch_failures"] = {"libsndfile": {"date": "2026-10-08", "where": "src/ALAC/ag_dec.c",
+                                           "version": "1.2.2", "fixes": [fix]}}
+    a = _by_id(_plan(tmp_path, obs, st, nvd), "security-libsndfile-1.2.2")
+    assert not a["allowed"] and "patch_does_not_apply" in a["refused_by"], a["guards"]
+    assert "nothing carriable" in a["refused_reason"][0], a["refused_reason"]
+    assert a["refused_by"] == ["patch_does_not_apply"], \
+        "one guard owns the reason: NVD did name a fix, it is just already proved bad"
+    assert a["skipped_known_bad"][0]["cve"] == "CVE-2026-05001", "named even when refused"
+
+
+def test_a_legacy_failure_record_still_blocks_the_component(tmp_path):
+    """The podman shape: a record from before per-fix tracking. It stays a component-wide
+    block, with the wording a human already knows, rather than being un-blocked by accident."""
+    obs = _obs(podman=_pkg(current="v5.7.0", latest="v5.7.0",
+                           cpeid="cpe:2.3:a:redhat:podman:5.7.0:-:*:*:*:*:*:*",
+                           editions=["pengyos-server"]))
+    nvd = _nvd(tmp_path, ("CVE-2026-44444", _rec(
+        "redhat", "podman", "*", ["https://github.com/containers/podman/commit/abc1234"],
+        versionEndExcluding="v5.7.1")))
+    st = _st(_triaged("CVE-2026-44444", "podman"))
+    st["patch_failures"] = {"podman": {"date": "2026-10-05",
+                                       "where": "test/e2e/run_working_dir_test.go"}}
+    a = _by_id(_plan(tmp_path, obs, st, nvd), "security-podman-v5.7.0")
+    assert not a["allowed"] and "patch_does_not_apply" in a["refused_by"]
+    assert "before per-fix tracking" in a["refused_reason"][0], a["refused_reason"]
+    assert a["skipped_known_bad"] == [], "no fix list to filter: the whole component is held"
+
+
+def test_the_planner_never_fetches_a_known_bad_fix(tmp_path):
+    """Buildroot has already answered this question; asking the network again costs a
+    fetch and re-opens a decision the pre-flight made."""
+    seen: list[str] = []
+
+    def get(url):
+        seen.append(url)
+        return PATCH_TEXT.encode() if url.endswith(".patch") else b"a fake tarball"
+
+    obs, st, nvd = _ffmpeg_obs(), _ffmpeg_st(3, bad=(2,)), _ffmpeg_nvd(tmp_path, 3)
+    _plan_get(tmp_path, obs, st, nvd, get)
+    assert _fix_url(2) + ".patch" not in seen, "the known-bad fix was fetched anyway"
+    assert _fix_url(1) + ".patch" in seen and _fix_url(3) + ".patch" in seen, \
+        "the kept fixes must still be fetched: seen = " + ", ".join(seen)
+
+
+def test_a_known_bad_verdict_expires_when_the_pin_moves(tmp_path):
+    """"Does not apply to ffmpeg 6.1.5" is a fact about 6.1.5. Recorded against a pin
+    we no longer ship, it stops binding — and it still binds at the pin it named."""
+    st = _ffmpeg_st(3, bad=(2,), recorded="6.1.5")
+    nvd = _ffmpeg_nvd(tmp_path, 3)
+
+    moved = _by_id(_plan(tmp_path, _ffmpeg_obs(current="6.1.6"), st, nvd),
+                   "security-ffmpeg-6.1.6")
+    assert moved["allowed"] and moved["skipped_known_bad"] == [], moved["guards"]
+    assert len(moved["patches"]) == 3, "the fix is tryable again at the new pin"
+
+    same = _by_id(_plan(tmp_path, _ffmpeg_obs(current="6.1.5"), st, nvd),
+                  "security-ffmpeg-6.1.5")
+    assert [s["cve"] for s in same["skipped_known_bad"]] == ["CVE-2026-70002"], \
+        "the negative control: at the pin it was proved against, it still binds"
+
+
+def test_the_real_ffmpeg_shape_19_fixes_8_known_bad_carries_11(tmp_path):
+    """The regression this change exists to fix, stated exactly as measured on
+    2026-10-08: 19 candidate fixes, 8 known-bad, 11 that passed pre-flight. Before the
+    change the plan refused the component and shipped nothing."""
+    obs, st, nvd = _ffmpeg_obs(), _ffmpeg_st(19, bad=tuple(range(1, 9))), _ffmpeg_nvd(tmp_path, 19)
+    a = _by_id(_plan(tmp_path, obs, st, nvd), "security-ffmpeg-6.1.5")
+    assert a["allowed"], [g for g in a["guards"] if not g["ok"]]
+    assert len(a["patches"]) == 11 and len(a["closes"]) == 11
+    assert len(a["skipped_known_bad"]) == 8
+    assert len(a["still_open"]) == 8, "the dropped CVEs are still open, and still named"

@@ -80,6 +80,7 @@ def _stock_recipe(build_root: Path, br_version: str, pkg: str,
 
 def _verdicts(name: str, action: dict, pkg: dict, cfg: dict, st: dict,
               today: dt.date, index: int) -> list[dict]:
+    known_bad = G.known_bad_fixes(name, st, action["current"])
     checks = [
         ("denied_component", lambda: G.denied_component(name, cfg)),
         ("bump_event_approved", lambda: G.bump_event_approved(name, action["target"], cfg)),
@@ -89,9 +90,8 @@ def _verdicts(name: str, action: dict, pkg: dict, cfg: dict, st: dict,
         ("major_never", lambda: G.major_never(action)),
         ("confirmed_only", lambda: G.confirmed_only(action)),
         ("evidence_required", lambda: G.evidence_required(action)),
-        ("fix_commits_available", lambda: G.fix_commits_available(action)),
-        ("patch_does_not_apply", lambda: G.patch_does_not_apply(
-            name, st, [c["fix_commit"]["url"] for c in action["cves"] if c.get("fix_commit")])),
+        ("fix_commits_available", lambda: G.fix_commits_available(action, known_bad)),
+        ("patch_does_not_apply", lambda: G.patch_does_not_apply(name, st, action=action)),
         ("patch_shape_allowed", lambda: G.patch_shape_allowed(action["shape"], cfg)),
         ("tree_move_not_executable", lambda: G.tree_move_executable(action["shape"])),
         ("cooldown", lambda: G.cooldown(name, st.get("actions", {}), cfg["cooldown_days"],
@@ -223,16 +223,29 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
     # function `patch_dir` iterates, so the notes, the commit message and the
     # `patched_by` record can never overstate the patch set. The affected CVEs left
     # out are recorded as `still_open` and named in the notes, not dropped.
-    closes = (E.carried_cves([c for c in cves if c.get("affected")])
+    #
+    # `known_bad` is part of that one rule, not a second filter beside it: a fix a
+    # pre-flight already proved does not apply is dropped from the claim, from the
+    # patches, and from the fetches, and the CVEs whose only fix was that one land in
+    # `still_open` with the reason recorded in `skipped_known_bad`.
+    known_bad = G.known_bad_fixes(name, st, current)
+    failure = G.patch_failure(name, st, current)
+    closes = (E.carried_cves([c for c in cves if c.get("affected")], known_bad)
               if shape == "patch_dir" else
               [c["cve"] for c in cves if c.get("covered")])
     still_open = ([c["cve"] for c in cves if c.get("affected") and c["cve"] not in closes]
                   if shape == "patch_dir" else [])
+    skipped = [{"cve": c["cve"], "fix": (c.get("fix_commit") or {}).get("url", ""),
+                "recorded": str(failure.get("date") or ""),
+                "failed_on": str(failure.get("where") or "")}
+               for c in cves
+               if c.get("affected") and (c.get("fix_commit") or {}).get("url", "") in known_bad]
     action = {"id": f"{lane}-{name}-{target}", "lane": lane, "component": name,
               "current": current, "target": target, "bump_kind": kind, "shape": shape,
               "editions": list(pkg.get("editions") or []), "cves": cves,
               "closes": closes, "still_open": still_open, "tree": pkg.get("tree", ""),
               "latest_upstream": pkg.get("latest", ""),
+              "skipped_known_bad": skipped,
               "recipe": pkg.get("mk_path") or pkg.get("pkg_path", "")}
 
     # A tree move is a decision the operator reads in the plan, so its edit is built
@@ -268,7 +281,8 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
             e, refused = E.patch_dir(repo, name, current,
                                      [c for c in cves if c.get("affected")],
                                      action["editions"], get,
-                                     upstream=EV.upstream_component(name))
+                                     upstream=EV.upstream_component(name),
+                                     known_bad=known_bad)
             hi = None
         else:
             p = repo / "buildroot-external" / "package" / name

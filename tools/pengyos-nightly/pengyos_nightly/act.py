@@ -103,10 +103,23 @@ def notes_for(action: dict, version: str, version_note: str = "") -> str:
                          + (f", upstream {commit[:12]}" if commit else "")
                          + f"): {c.get('affected_note') or c.get('note', '')}")
         lines.append("")
-    other = action.get("still_open") or [c["cve"] for c in cves if c["cve"] not in closes]
+    other = [c for c in (action.get("still_open") or
+                         [c["cve"] for c in cves if c["cve"] not in closes])]
+    skipped = action.get("skipped_known_bad") or []
+    skipped_ids = {s["cve"] for s in skipped}
+    other = [c for c in other if c not in skipped_ids]
     if other:
         lines.append(f"Still open in {action['component']}: {', '.join(other)} "
                      f"(NVD names no upstream fix to carry for these).")
+        lines.append("")
+    # Filtering is not forgetting. A CVE whose only named fix is one a pre-flight
+    # already proved does not apply stays open here, with the fix and the date named,
+    # until something else closes it.
+    for s in skipped:
+        lines.append(f"Still open in {action['component']}: {s['cve']} — NVD's fix {s['fix']} "
+                     f"was proved not to apply on {s['recorded'] or '?'} "
+                     f"(failed on {s['failed_on'] or 'the source'}); not carried, not retried.")
+    if skipped:
         lines.append("")
     for d in (action.get("dropped_patches") or []):
         lines.append(f"Not carried: {Path(d['patch']).name}: {d['reason']}"
@@ -240,7 +253,9 @@ def batch_notes(actions: list[dict], version: str, version_note: str = "") -> st
         n = len(a.get("closes") or [])
         if a.get("shape") == "patch_dir":
             what = (f"carries {len(a.get('patches') or [])} upstream fix commit(s)"
-                    + (f", closing {n} security issue(s)" if n else ""))
+                    + (f", closing {n} security issue(s)" if n else "")
+                    + (f", {len(a['skipped_known_bad'])} fix(es) skipped as known-bad"
+                       if a.get("skipped_known_bad") else ""))
             lines.append(f"- {a['component']} {a['current']} ({a['lane']}): {what}")
         else:
             what = f"closes {n} security issue(s)" if n else "routine bump"
@@ -256,8 +271,15 @@ def batch_notes(actions: list[dict], version: str, version_note: str = "") -> st
                          + (f", upstream {commit[:12]}" if commit else "")
                          + f"): {c.get('affected_note') or c.get('note', '')}")
         if a.get("still_open"):
-            lines.append(f"    - Still open in {a['component']}: {', '.join(a['still_open'])} "
-                         f"(NVD names no upstream fix to carry for these)")
+            open_ids = [c for c in a["still_open"]
+                        if c not in {s["cve"] for s in (a.get("skipped_known_bad") or [])}]
+            if open_ids:
+                lines.append(f"    - Still open in {a['component']}: {', '.join(open_ids)} "
+                             f"(NVD names no upstream fix to carry for these)")
+        for s in (a.get("skipped_known_bad") or []):
+            lines.append(f"    - Still open in {a['component']}: {s['cve']} — NVD's fix "
+                         f"{s['fix']} proved not to apply on {s['recorded'] or '?'} "
+                         f"(failed on {s['failed_on'] or 'the source'})")
         for d in (a.get("dropped_patches") or []):
             lines.append(f"    - Not carried: {Path(d['patch']).name}: {d['reason']}"
                          + (f" ({', '.join(d['cves'])})" if d.get("cves") else ""))
