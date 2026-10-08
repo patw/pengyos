@@ -44,6 +44,30 @@ prompt passes that. `pengyos-qemu-verify` 0.6.0 adds `desktop --no-installer`, a
 `release.sh` now session-checks **both** desktop images. Reproduced before the fix and
 verified after: the plain image failed with `cosmic-panel-running FAIL` (greeter on
 screen), and now passes 4/4 reaching the COSMIC session.
+### NVIDIA driver: 595.104.02 -> 610.57.04 (merged; proven on behotv)
+
+`nvidia-open` moves from the 595 production branch to NVIDIA's 610 feature branch.
+595.104.02 was already the newest release on the production branch, so the only way to
+move was onto a feature branch - which is an operator's call, and is why this went
+through a branch, a QEMU validation build, and a real-hardware boot rather than the
+nightly loop (`nvidia-open` is report-only to it: `guards.DENIED`).
+
+Checked against the 610.57.04 `.run` (463,025,450 bytes, sha256
+`b2e935c66b83bb00c0c857bc8e0ee0fd52de9286b40c9cc1eec29a7ce7eb116d`), extracted and
+compared with what the recipe installs: every versioned library `NVIDIA_OPEN_LIBS` names
+is present, and the side-versions the recipe hardcodes instead of deriving -
+`libnvidia-egl-gbm.so.1.1.3`, `libnvidia-egl-wayland.so.1.1.20`,
+`libnvidia-egl-wayland2.so.1.0.1`, `libnvidia-egl-xcb.so.1.0.5` and `...-xlib.so.1.0.5`,
+`libnvidia-nvvm70.so.4` - are unchanged from 595. `LICENSE` is byte-identical. So the
+bump is the version and the hash, not a rewrite of the install list.
+
+Proven on behotv (RTX 3070) 2026-10-08, booting the 26.10.15 validation build: NVRM
+610.57.04 built by our gcc 15.3.0 against kernel 7.2.5; `nvidia`, `nvidia-modeset`,
+`nvidia-drm` and `nvidia-uvm` all loaded; GSP firmware present for 610 only;
+`nvidia-drm` is the display (card1, DP-1/2/3 + HDMI-A-1/2); and `nvidia-smi` lists
+COSMIC processes on the GPU (`cosmic-app-library`, `cosmic-files-applet`,
+`xdg-desktop-portal-cosmic`, `cosmic-term`). No failed units.
+
 
 ### Docs: the README became the front page (2026-10-07)
 
