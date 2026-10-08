@@ -160,6 +160,48 @@ else
     echo "post-build: cosmic-portal data not found at ${PCDIR} (portal backend data skipped)"
 fi
 
+# --- Background portal backend (org.freedesktop.impl.portal.Background) --------
+# xdg-desktop-portal exports org.freedesktop.portal.Background only if some
+# backend declares it: init_background() returns as soon as no .portal file names
+# the interface. Neither COSMIC's backend nor portal-gtk declares it, so the
+# interface does not exist and flatpak apps that ask to run in the background or
+# to autostart fail with UnknownMethod and report it as a denied permission
+# (SyncThingy on 26.10.13: "Background permission request failed").
+#
+# The core already does the permission store, the Access dialog and writing
+# ~/.config/autostart/<id>.desktop with a flatpak-rewritten Exec; the backend
+# only answers GetAppState and NotifyBackground. Why each answer is what it is:
+# board/desktop/background-portal/README.md.
+BG_SRC="${BOARD_DIR}/background-portal/background-portal.c"
+BG_BIN="${TARGET_DIR}/usr/libexec/pengyos/background-portal"
+BG_CC="$(ls "${HOST_DIR}"/bin/*-buildroot-linux-gnu-gcc 2>/dev/null | head -1)"
+if [ -z "${BG_CC}" ] || [ ! -f "${BG_SRC}" ] || [ -z "${STAGING_DIR}" ]; then
+    echo "post-build: Background portal NOT built (need a cross gcc, ${BG_SRC} and STAGING_DIR) — flatpak autostart will fail" >&2
+else
+    mkdir -p "${TARGET_DIR}/usr/libexec/pengyos"
+    PKG_CONFIG_SYSROOT_DIR="${STAGING_DIR}" \
+    PKG_CONFIG_PATH="${STAGING_DIR}/usr/lib/pkgconfig" \
+    PKG_CONFIG_LIBDIR="${STAGING_DIR}/usr/lib/pkgconfig" \
+        "${BG_CC}" -Wall -O2 -o "${BG_BIN}" "${BG_SRC}" \
+            $("${HOST_DIR}/bin/pkg-config" --cflags --libs gio-2.0) \
+        || { echo "post-build: Background portal failed to compile" >&2; exit 1; }
+    "${BG_CC%gcc*}strip" "${BG_BIN}" 2>/dev/null || true
+    echo "post-build: built the Background portal backend"
+
+    # Route it. The .portal file (which declares the interface) and the D-Bus
+    # activation file come from the overlay; this names it for the interface in
+    # the portals.conf installed above — the same mechanism the Secret portal
+    # already uses for oo7-portal.
+    BG_CONF="${TARGET_DIR}/usr/share/xdg-desktop-portal/portals.conf"
+    if [ -f "${BG_CONF}" ]; then
+        grep -q "impl.portal.Background" "${BG_CONF}" || \
+            echo "org.freedesktop.impl.portal.Background=pengyos-background;" >> "${BG_CONF}"
+        echo "post-build: portals.conf routes Background to pengyos-background"
+    else
+        echo "post-build: no portals.conf to route Background in" >&2
+    fi
+fi
+
 # --- COSMIC shell defaults: panel layout / dock / applets --------------------
 # cosmic-panel ships its default config as `data/default_schema/` and its own
 # install rule copies it to <prefix>/share/cosmic/ (see cosmic-panel/justfile:
