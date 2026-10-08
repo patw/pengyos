@@ -1,0 +1,14 @@
+# cosmic-session.target — the COSMIC session's own target, which pulls in
+# graphical-session.target (and with it the portal units, flatpak helpers, gvfs
+# and at-spi). cosmic-session expects this unit to exist and starts it;
+# /usr/libexec/pengyos/session-target also starts it, once the compositor's
+# Wayland socket is there and WAYLAND_DISPLAY has been imported into the user
+# manager.
+#
+# graphical-session.target itself refuses a manual start, so it is reached
+# through this target rather than started directly.
+
+[Unit]
+Description=COSMIC graphical session
+Wants=graphical-session.target
+After=graphical-session.target

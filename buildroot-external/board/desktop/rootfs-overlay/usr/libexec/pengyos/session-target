@@ -1,0 +1,54 @@
+#!/bin/sh
+# Bring the graphical session target up, once the compositor exists.
+#
+# The portal units (xdg-desktop-portal, xdg-document-portal,
+# xdg-permission-store, flatpak-portal, flatpak-session-helper, the gvfs daemons
+# and at-spi-dbus-bus) are PartOf=graphical-session.target, and
+# graphical-session.target refuses a manual start (RefuseManualStart=yes) — it is
+# meant to be pulled in by the session's own target. cosmic-session expects a
+# cosmic-session.target for exactly that and we did not ship one, so nothing ever
+# started the chain: the portal ran only because something D-Bus-activated it on
+# the session bus, and on the systemd user bus it failed outright
+# ("Dependency failed for Portal service").
+#
+# Order matters. Importing WAYLAND_DISPLAY before the target starts is what puts
+# it in the D-Bus activation environment, and the COSMIC portal backend panics
+# (exit 101) when it is activated without one. So: wait for the compositor's
+# socket, import the display, then start the target.
+#
+# start-cosmic runs this in the background; it must not race the compositor.
+set -u
+
+RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+sock=""
+i=0
+while [ "$i" -lt 120 ]; do
+    for c in "$RUNTIME"/wayland-*; do
+        if [ -S "$c" ]; then
+            sock="$c"
+            break
+        fi
+    done
+    [ -n "$sock" ] && break
+    sleep 0.5
+    i=$((i + 1))
+done
+
+if [ -z "$sock" ]; then
+    echo "session-target: no Wayland socket in ${RUNTIME} after 60s; leaving the session as it is" >&2
+    exit 0
+fi
+
+WAYLAND_DISPLAY="${sock##*/}"
+export WAYLAND_DISPLAY
+
+systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP ||
+    echo "session-target: could not import WAYLAND_DISPLAY into the user manager" >&2
+
+if ! systemctl --user start cosmic-session.target; then
+    echo "session-target: cosmic-session.target failed to start" >&2
+    exit 1
+fi
+
+echo "session-target: graphical session up (${WAYLAND_DISPLAY})" >&2
