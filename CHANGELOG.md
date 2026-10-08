@@ -44,6 +44,30 @@ prompt passes that. `pengyos-qemu-verify` 0.6.0 adds `desktop --no-installer`, a
 `release.sh` now session-checks **both** desktop images. Reproduced before the fix and
 verified after: the plain image failed with `cosmic-panel-running FAIL` (greeter on
 screen), and now passes 4/4 reaching the COSMIC session.
+
+### Fixed: the same live image had no audio (found on 26.10.15)
+
+Found on the same behotv boot as the login-screen defect above: COSMIC's Sound
+settings listed **no device profiles** and the box played nothing over HDMI (the TV,
+which works on that machine under Ubuntu). The four `10-pengyos-live-root.conf`
+drop-ins (pipewire / pipewire-pulse, service and socket) let root's PipeWire run on a
+live boot, and they gated that on the **`PENGYOS-PAYLOAD` partition label** — the same
+wrong proxy, failing the same way. The plain live image has no payload, so
+`ConditionPathExists` never held, PipeWire and WirePlumber were skipped
+(`no trigger condition checks were met`), and root's session had no sound server at
+all — hence no sinks and no profiles to show. Starting PipeWire by hand on the box
+brought the NVIDIA HDMI sink straight up (`GA104 … Digital Stereo (HDMI)`,
+`api.alsa.use-acp=true`) and a tone reached `card0/pcm3p`; the driver, codec, ELD and
+ACP profile were all fine. The drop-ins now use
+`ConditionKernelCommandLine=|!pengyos.data`, the same kernel-line test `greetd-config`
+and `agetty-autologin` use (the Server update units already spell it
+`ConditionKernelCommandLine=pengyos.data`). Note `ConditionKernelCommandLine=` matches
+a whole word or a `word=value` pair, which is why the argument is `pengyos.data`, not
+`pengyos.data=`. Positive/negative control on the box: with the kernel-line condition
+`systemctl --user start pipewire` goes **active**; with the payload condition it is
+**skipped**. `scripts/tests/test_pipewire_live_root.py` guards the shape and the
+matching rule.
+
 ### NVIDIA driver: 595.104.02 -> 610.57.04 (merged; proven on behotv)
 
 `nvidia-open` moves from the 595 production branch to NVIDIA's 610 feature branch.

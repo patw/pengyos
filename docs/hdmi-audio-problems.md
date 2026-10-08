@@ -610,3 +610,45 @@ HDMI-only output) and a real laptop (analog default). The laptop end is still
 BotTalk: `b87c92d051676183d2010000` (fleet inventory + decision),
 `1e2236a2ceb0a5df1e010000` (root cause), `64753f335d02ca5d1b010000` (ledger),
 `9bd0660d2cfee32d70010000` (debug recipe).
+
+---
+
+## 16. A *second*, unrelated "no audio" — PipeWire never started (behotv, 2026-10-08)
+
+Do not conflate this with §0–§15. There the sound server ran and its split-mode sink
+was silent. Here **there was no sound server at all**, so nothing could be measured
+the usual way (`wpctl status` had no devices, COSMIC Sound showed no device profiles).
+
+Symptom: on behotv (10.0.23.22, RTX 3070, PengyOS **Desktop NVIDIA** 26.10.15, the
+live test image — not Ubuntu) HDMI audio to the TV was dead. Same box/cable/TV are
+fine under Ubuntu.
+
+First checks that localise it fast:
+- `systemctl --user is-active pipewire pipewire-pulse wireplumber` → all `inactive`.
+- `journalctl --user -u pipewire` → `PipeWire Multimedia Service skipped, no trigger
+  condition checks were met.` and `wireplumber.service: Bound to unit pipewire.service,
+  but unit isn't active.`
+- The condition came from `/etc/systemd/user/pipewire*.d/10-pengyos-live-root.conf`,
+  which gated root's PipeWire on `ConditionPathExists=|/dev/disk/by-label/PENGYOS-PAYLOAD`.
+  That label only exists on the **installer stick**; the plain live image
+  (`pengyos-desktop-x86_64.img`) has no payload partition, and its session is **root**,
+  so the condition never held.
+
+Proof it was only the guard: `setsid pipewire & setsid wireplumber &` (or a fixed
+drop-in) brought up `GA104 High Definition Audio Controller … Digital Stereo (HDMI)`
+with `api.alsa.use-acp = true`, and a generated 700 Hz tone reached `card0/pcm3p`
+(captured on the sink monitor, peak 20000). The driver, codec, ELD (`eld#0.4`,
+monitor `65S423CA`) and ACP profile were all correct.
+
+This is the **same wrong proxy** as the login-screen defect found on the same boot
+(greetd-config gated autologin on the payload label too). Fixed by using the boot:
+`ConditionKernelCommandLine=|!pengyos.data` (an installed system boots with
+`pengyos.data=` on the kernel line). Gotcha: `ConditionKernelCommandLine=` matches a
+**whole word or a `word=value` pair**, so the argument must be `pengyos.data`, not
+`pengyos.data=` (verified: `loglevel=` does *not* match `loglevel=4`, but `loglevel`
+does). Repo: CHANGELOG "Fixed: the same live image had no audio"; guard
+`scripts/tests/test_pipewire_live_root.py`.
+
+Lesson (same as the greeter): a guard that requires a feature the artifact lacks
+silently excludes the artifact — "the installer is available" and "this boot is live"
+are different facts, and only the kernel line can tell them apart.
