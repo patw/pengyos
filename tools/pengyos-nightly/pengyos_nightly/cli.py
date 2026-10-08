@@ -325,14 +325,27 @@ def do_act(args, today: dt.date | None = None, run=subprocess.run) -> dict:
 
 
 def _blocked_batches(actions_path: Path, today: dt.date) -> list[dict]:
-    """Batches that ran and published nothing — a blocked loop is not a quiet loop."""
+    """Batches that ran and published nothing **since the last one that did**.
+
+    A blocked loop is not a quiet loop - but a failure a later batch already recovered
+    from is not a current problem either. Reading the most recent *failure* instead of
+    the most recent *batch* kept `status` reporting "last batch published nothing" all
+    morning on 2026-10-08, after 26.10.14 had been built, signed, published and merged.
+    """
     if not actions_path.exists():
         return []
     try:
         log = json.loads(actions_path.read_text()).get("actions", [])
     except (OSError, ValueError):
         return []
-    return [a for a in log if a.get("kind") == "batch" and not a.get("published")]
+    out = []
+    for a in reversed(log):
+        if a.get("kind") != "batch":
+            continue
+        if a.get("published"):
+            break
+        out.append(a)
+    return list(reversed(out))
 
 
 def _bump_lane(cfg: dict, obs: dict) -> dict:

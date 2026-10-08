@@ -754,6 +754,32 @@ def test_status_reports_a_blocked_batch(tmp_path, capsys):
     assert "batch policy: up to 12 change(s) -> 1 release(s)/night" in out, out
 
 
+def test_status_reads_a_recovered_batch_as_recovered(tmp_path, capsys):
+    """Three failed attempts and then a publish is a working loop, not a blocked one.
+
+    On 2026-10-08 the batch failed three times before 26.10.14 shipped. `status` kept
+    naming the last *failure*, so the morning read "last batch published nothing" about
+    a release that was already on the testing feed and merged into main.
+    """
+    args = flow._args(tmp_path)
+    flow._fake_repo(tmp_path)
+    get, run_cmd, run_pkgstats = flow._fakes(tmp_path)
+    cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats)
+    cli.do_triage(args, complete=flow.model('{"priority":"P1","reachable":"local",'
+                                            '"rationale":"x"}'))
+    cli.do_report(args, send=lambda *a, **k: True, today=dt.date(2026, 10, 6))
+    (Path(args.state_dir) / "actions.json").write_text(json.dumps({"actions": [
+        {"kind": "batch", "date": "2026-10-08", "published": False,
+         "error": "release: legal-info failed", "changes": [], "dropped": []},
+        {"kind": "batch", "date": "2026-10-08", "published": True, "version": "26.10.14",
+         "changes": ["security-gst1-plugins-bad-1.24.13"], "dropped": []}]}))
+
+    result = cli.do_status(args, now=time.time())
+    out = capsys.readouterr().out
+    assert not any("last batch published nothing" in p for p in result["problems"]), out
+    assert "1 published today" in out, out
+
+
 # --- the shared line every stock-package action carries ----------------------
 
 def _ffmpeg_action(**kw):

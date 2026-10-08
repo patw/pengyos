@@ -56,6 +56,10 @@ versions follow [SemVer](https://semver.org/).
 - **A leftover nightly branch no longer blocks the retry.** `checkout -b nightly/<date>-batch`
   refused a same-night retry after a failed attempt (`a branch named ... already exists`).
   The branch is the loop's scratch space for today's batch, so it is `checkout -B`.
+- **`status` reads a recovered batch as recovered.** `_blocked_batches` returned every
+  unpublished batch in the log and `status` named the last one, so three failed attempts
+  followed by a successful 26.10.14 still read "last batch published nothing" all morning.
+  It now reports only the unpublished batches *since the last published one*.
 
 ### Added
 - `status` flags `last_delivery_error` and exits non-zero: "no email" stays ambiguous
