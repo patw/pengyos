@@ -69,6 +69,32 @@ host (`IsStatusNotifierHostRegistered = true`), SyncThingy appeared in the panel
 tray within seconds of starting. Discord needs one restart to register — it had
 already tried, and failed, before any host existed.
 
+**Why nothing caught it the first time:** the 2026-09-30 "no tray icons" fix
+answered the journal message it had — "was not provided by any .service files" —
+by installing the `.service` file. The symptom moved from "no watcher name on the
+bus" to "unit not found", and nothing checked the pair. A half-fix that only
+changes the error text is not a fix.
+
+**What the new check found on its first real run — and what it got wrong.** Run
+against a built Desktop tree it reported 36 dbus-activated services and 7
+findings, six of which were false positives: `dbus-org.bluez.service`,
+`…Avahi`, `…ModemManager1`, `…nm_dispatcher`, `…resolve1`, `…timesync1` have no
+unit file in `target/` because Buildroot's `SYSTEMD_PRESET_ALL` hook runs while
+assembling the rootfs *image*, and systemd creates the `dbus-<BusName>.service`
+alias there, not in `target/`. Confirmed on behoweather: all 8 such aliases point
+at a unit carrying the matching `BusName` (bluetooth=org.bluez,
+avahi-daemon=org.freedesktop.Avahi, …, and systemd spells `_` as `-`). The check
+now resolves an alias against the `BusName=` of every unit the image ships, with
+a test for each direction — an alias with no unit behind it still fails.
+
+**And it caught a second, different defect in itself:** the commit that added it
+rewrote `board/desktop/post-build.sh` and dropped its `100755`, so the build host
+died at `target-finalize` with `Permission denied` — the third time that file has
+lost its +x. `scripts/pengyos_gate.py` now checks the git index mode of every
+script Buildroot declares in `BR2_ROOTFS_POST_BUILD_SCRIPT` /
+`BR2_ROOTFS_POST_IMAGE_SCRIPT` (sourced files like `image-ids.sh` and
+`/etc/profile.d/*` are deliberately not in the set — 0644 is right for them).
+
 ### Fixed: the live desktop image stopped at a login screen (found on 26.10.15)
 
 Found on behotv booting the 26.10.15 validation image: `pengyos-desktop-x86_64.img`

@@ -467,6 +467,55 @@ def _git_index_modes(repo: Path, paths: list[str]) -> dict[str, str]:
     return out
 
 
+def _post_scripts(repo: Path) -> list[str]:
+    """Repo-relative paths of every script Buildroot *executes* by path: the
+    BR2_ROOTFS_POST_BUILD_SCRIPT / BR2_ROOTFS_POST_IMAGE_SCRIPT lists in each
+    defconfig. Sourced files (`. image-ids.sh`, /etc/profile.d/*) are not here —
+    they are read, not run, and 0644 is right for them."""
+    scripts: list[str] = []
+    for cfg in sorted((repo / "buildroot-external/configs").glob("*_defconfig")):
+        for ln in cfg.read_text(encoding="utf-8", errors="replace").splitlines():
+            ln = ln.strip()
+            if ln.startswith("#") or "=" not in ln:
+                continue
+            name, _, value = ln.partition("=")
+            if name not in ("BR2_ROOTFS_POST_BUILD_SCRIPT", "BR2_ROOTFS_POST_IMAGE_SCRIPT"):
+                continue
+            value = value.strip().strip('"')
+            for part in value.split():
+                part = part.replace("$(BR2_EXTERNAL_PENGYOS_PATH)", "buildroot-external")
+                if part.startswith("buildroot-external/"):
+                    scripts.append(part)
+    return sorted(set(scripts))
+
+
+def check_board_script_executables(repo: Path) -> list[Check]:
+    """Every post-build / post-image script must be executable *in git*.
+
+    Buildroot runs each one as `<path>` from target-finalize, so the index mode is
+    the failure: measured 2026-10-08, a commit that rewrote
+    `board/desktop/post-build.sh` carried it 100755 -> 100644 and the build host
+    died with `Permission denied` at target-finalize. The mode in the index is what
+    every build host gets; a local `chmod +x` on one host hides it until the next
+    clean clone. This is the third time this file has lost its +x (2026-09-25 the
+    same way), which is why it is a gate check and not a habit.
+    """
+    scripts = _post_scripts(repo)
+    if not scripts:
+        return [Check("board-script-exec", True, "no post-build/post-image scripts declared")]
+    modes = _git_index_modes(repo, scripts)
+    out: list[Check] = []
+    for rel in scripts:
+        mode = modes.get(rel)
+        if mode is None:
+            out.append(Check(f"board-script-exec:{rel}", False, "not in the git index"))
+            continue
+        out.append(Check(f"board-script-exec:{rel}", mode == "100755",
+                         "ok" if mode == "100755"
+                         else f"git mode {mode}; Buildroot executes it and gets Permission denied"))
+    return out
+
+
 def check_script_executables(repo: Path) -> list[Check]:
     """A shell script under `scripts/` with a shebang must be executable *in git*.
 
@@ -530,6 +579,7 @@ def main(argv: list[str] | None = None) -> int:
     rep.checks += check_patch_declarations(repo)
     rep.checks += check_overlay_executables(repo)
     rep.checks += check_script_executables(repo)
+    rep.checks += check_board_script_executables(repo)
     rep.checks += check_background_sources(repo)
     if args.mode == "full":
         rep.checks += check_toolkit_suite(repo, changed)
