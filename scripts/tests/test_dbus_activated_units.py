@@ -156,5 +156,44 @@ def test_checker_reports_a_clean_tree_as_clean(tmp_path):
     assert "0 dbus-activated service(s) checked" in r.stdout, r.stdout
 
 
+# --- the dbus-<BusName> alias systemd generates when it assembles the rootfs --
+# Buildroot's SYSTEMD_PRESET_ALL runs while building the rootfs *image*, not in
+# target/, so a post-build script cannot see these aliases. On behoweather 26.10.14
+# all 8 /etc/systemd/system/dbus-org.*.service aliases point at a unit carrying the
+# matching BusName (bluetooth=org.bluez, avahi-daemon=org.freedesktop.Avahi, ...).
+# Flagging those is how a check gets ignored.
+
+def _alias_tree(tmp_path, bus_name, alias):
+    root = tmp_path / "a"
+    d = root / "usr/share/dbus-1/system-services"
+    d.mkdir(parents=True)
+    (d / "org.example.Thing.service").write_text(
+        f"[D-BUS Service]\nName=org.example.Thing\nSystemdService={alias}\n")
+    u = root / "usr/lib/systemd/system"
+    u.mkdir(parents=True)
+    (u / "example-thing.service").write_text(
+        f"[Service]\nBusName={bus_name}\nExecStart=/x\n")
+    return root
+
+
+def test_a_busname_alias_counts_as_a_shipped_unit(tmp_path):
+    r = _run(_alias_tree(tmp_path, "org.example.Thing", "dbus-org.example.Thing.service"))
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_the_alias_spells_underscore_as_hyphen(tmp_path):
+    """systemd renames nm_dispatcher to nm-dispatcher in the alias name."""
+    r = _run(_alias_tree(tmp_path, "org.example.nm_thing", "dbus-org.example.nm-thing.service"))
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_an_alias_with_no_unit_behind_it_still_fails(tmp_path):
+    """The alias rule must not become a blanket excuse: no BusName= anywhere, no unit."""
+    root = _alias_tree(tmp_path, "org.example.Other", "dbus-org.example.Thing.service")
+    r = _run(root)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "dbus-org.example.Thing.service" in r.stderr, r.stderr
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
