@@ -563,10 +563,27 @@ rm -rf "${TARGET_DIR}/etc/systemd/system/cosmic-session.service" \
 # - the network applet's NetworkManager secret agent (Wi-Fi password prompts);
 # - cosmic-greeter-daemon's bus policy: the login screen asks it (as root) for
 #   each user's wallpaper, avatar and theme; without it the screen was grey.
+#
+# The watcher is TWO files and upstream's `_install_status_notifier_watcher`
+# installs both. The dbus-1/services file is only a pointer: it ends with
+# `SystemdService=com.system76.CosmicStatusNotifierWatcher.service`, and the
+# session bus is `dbus-daemon --session --systemd-activation`, so activation is
+# answered by systemd --user, which resolves that name as a *unit* — a file in
+# /usr/share/dbus-1/services is not one. The pointer without the unit fails at
+# runtime: `Unit com.system76.CosmicStatusNotifierWatcher.service not found`, the
+# panel logs "Failed to start status notifier watcher" / "Failed to register
+# status notifier host", no StatusNotifierHost exists, and every tray icon
+# (Discord, Steam, SyncThingy, …) is silently absent. behoweather showed exactly
+# that on 26.10.14 (2026-10-08): the 2026-09-30 "no tray icons" fix had shipped
+# half the pair. check-dbus-units.py (below) now fails the build on any of them.
 CA_SRC="${COSMIC_SRC}/cosmic-applets"
 if [ -d "${CA_SRC}" ]; then
     sed "s|@bindir@|/usr/bin|" "${CA_SRC}/cosmic-applet-status-area/data/dbus-1/com.system76.CosmicStatusNotifierWatcher.service.in" \
         > "${TARGET_DIR}/usr/share/dbus-1/services/com.system76.CosmicStatusNotifierWatcher.service"
+    mkdir -p "${TARGET_DIR}/usr/lib/systemd/user"
+    sed "s|@bindir@|/usr/bin|" "${CA_SRC}/cosmic-applet-status-area/data/com.system76.CosmicStatusNotifierWatcher.service.in" \
+        > "${TARGET_DIR}/usr/lib/systemd/user/com.system76.CosmicStatusNotifierWatcher.service"
+    echo "post-build: COSMIC tray watcher installed as both a dbus service and its systemd user unit"
     install -Dm0644 "${CA_SRC}/cosmic-applet-network/data/dbus-1/system.d/com.system76.CosmicSettings.Applet.NetworkManager.SecretAgent.conf" \
         "${TARGET_DIR}/usr/share/dbus-1/system.d/com.system76.CosmicSettings.Applet.NetworkManager.SecretAgent.conf"
 fi
@@ -663,6 +680,12 @@ echo "post-build: MIME index built (mimeinfo.cache)"
 # (664/775 under a umask-002 account, 644/755 elsewhere), so two hosts built
 # different images. Nothing under /usr is meant to be writable by others.
 find "${TARGET_DIR}/usr" -perm /022 ! -type l -exec chmod go-w {} +
+
+# --- Every dbus-activated service must name a unit the image ships -------------
+# See board/common/check-dbus-units.py: with --systemd-activation on both buses,
+# a SystemdService= that resolves to no unit is a feature that quietly never
+# starts (the COSMIC tray on behoweather 26.10.14).
+python3 "$(dirname "$0")/../common/check-dbus-units.py" "${TARGET_DIR}"
 
 # --- Last: every shared library the image needs is in it ------------------------
 # (the edition's later post-build runs this again over the finished tree)

@@ -17,6 +17,58 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: the COSMIC tray had no app icons (found on behoweather, 26.10.14)
+
+Discord was running, SyncThingy was installed, and the panel's status area showed
+nothing for either — no badge, no click-through menu. The panel said why:
+
+```
+com.system76.CosmicAppletStatusArea: Failed to start status notifier watcher:
+    org.freedesktop.systemd1.NoSuchUnit: Unit com.system76.CosmicStatusNotifierWatcher.service not found.
+com.system76.CosmicAppletStatusArea: Failed to register status notifier host:
+    org.freedesktop.DBus.Error.ServiceUnknown: The name org.kde.StatusNotifierWatcher was not provided by any .service files
+```
+
+The tray is a StatusNotifierItem **host**: apps (Discord, Steam, SyncThingy — both
+flatpaks carry `org.kde.StatusNotifierWatcher=talk`) register an item with a
+watcher on the session bus, and `cosmic-applet-status-area` paints the ones it
+finds. Upstream's `_install_status_notifier_watcher` installs **two** files: the
+dbus activation file under `/usr/share/dbus-1/services/`, and the systemd **user
+unit** that file names in its `SystemdService=` key, under
+`/usr/lib/systemd/user/`. The post-build installed only the first.
+
+That half is not enough here, and the reason is the bus: the session bus is
+`dbus-daemon --session --address=systemd: --systemd-activation`, so activation is
+answered by **systemd --user**, which resolves `SystemdService=` as a *unit* in
+its unit search paths. A file under `/usr/share/dbus-1/services` is a pointer to
+a unit, not a unit. With no unit, activation fails, no watcher process ever
+starts, no host registers, and every tray icon is silently absent — while the
+image looks complete and the build passes.
+
+`post-build.sh` now installs both, from upstream's own `.service.in` templates
+(the unit is `Type=dbus`/`BusName=…`, static: dbus starts it on demand).
+
+**Why the 2026-09-30 fix didn't catch this:** that fix answered the journal
+message of the time — "was not provided by any .service files" — by installing
+the `.service` file. The symptom moved from "no watcher name on the bus" to
+"unit not found", and nothing checked the pair. So the class is now checked, not
+just this instance: `buildroot-external/board/common/check-dbus-units.py` runs at
+the end of the Desktop post-build and fails the build if **any** dbus-activated
+service (session *or* system bus) names a unit the image doesn't ship. Run
+against behoweather's live tree it reports `36 dbus-activated service(s)
+checked` and exactly one finding — this one. 10 tests in
+`scripts/tests/test_dbus_activated_units.py` drive it with a fixture tree,
+including the positive control (a complete pair passes and *says* what it
+checked) and the negative control (the shipped-pointer-only case fails and names
+the unit).
+
+**Verified live on behoweather** (Tier 1, before any rebuild): the unit dropped
+into `~/.config/systemd/user/`, `systemctl --user start` brought the watcher up
+(`Acquired bus name: org.kde.StatusNotifierWatcher`), the panel registered as a
+host (`IsStatusNotifierHostRegistered = true`), SyncThingy appeared in the panel
+tray within seconds of starting. Discord needs one restart to register — it had
+already tried, and failed, before any host existed.
+
 ### Fixed: the live desktop image stopped at a login screen (found on 26.10.15)
 
 Found on behotv booting the 26.10.15 validation image: `pengyos-desktop-x86_64.img`
