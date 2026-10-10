@@ -197,6 +197,24 @@ def shim_path(shim_dir: Path | str, existing_path: str) -> str:
     return shim
 
 
+def clean_ld_library_path(env: dict[str, str]) -> None:
+    """Drop the entries of ``LD_LIBRARY_PATH`` that Buildroot refuses, in place.
+
+    Buildroot's dependency check aborts on an empty or ``.`` entry, both of
+    which mean the current directory to the dynamic loader. A trailing colon
+    (``/usr/local/cuda/lib64:``) is the usual way a host gets one. Real
+    directories are kept; the variable is removed when none are left.
+    """
+    value = env.get("LD_LIBRARY_PATH")
+    if value is None:
+        return
+    kept = [entry for entry in value.split(":") if entry not in ("", ".")]
+    if kept:
+        env["LD_LIBRARY_PATH"] = ":".join(kept)
+    else:
+        del env["LD_LIBRARY_PATH"]
+
+
 def run_build_with_host_shim(
     argv: Sequence[str],
     shim_dir: Path | str,
@@ -209,11 +227,13 @@ def run_build_with_host_shim(
 
     Builds the host shim into ``shim_dir`` (no-op when nothing is uutils),
     prepends it to ``env['PATH']`` (a copy — the caller's dict is not
-    mutated), and runs ``argv``.  ``runner`` defaults to
+    mutated), strips the ``LD_LIBRARY_PATH`` entries Buildroot rejects
+    (:func:`clean_ld_library_path`), and runs ``argv``.  ``runner`` defaults to
     :func:`subprocess.run` with ``check=False``; it is injectable so the
     child environment can be unit-tested without spawning a process.
     """
     base_env = dict(os.environ if env is None else env)
+    clean_ld_library_path(base_env)
     _, _, created = build_host_shims(shim_dir, gnu_dir, resolver)
     if created:
         base_env["PATH"] = shim_path(shim_dir, base_env.get("PATH", ""))

@@ -132,7 +132,10 @@ already been configured:
   `pengyos-build acquire <target>`; a target with no output dir (not yet
   configured) is a `BuildError` suggesting `pengyos-build configure <target>`;
   a non-zero make exit names the exit code and the log. The GNU-over-uutils
-  host shim (`run_build_with_host_shim`) is applied exactly as in configure.
+  host shim (`run_build_with_host_shim`) is applied exactly as in configure,
+  and it drops the empty and `.` entries of `LD_LIBRARY_PATH` that Buildroot's
+  dependency check rejects (a trailing colon is the usual one), keeping real
+  directories and unsetting the variable when none are left.
 
 ## clean step
 
@@ -221,6 +224,7 @@ touches the network, and writes only the manifest file itself.
   escaping via `..`, relative external_tree resolution).
 - command construction (configure/build/clean) as golden argv with a fake `make`/BR tree.
 - host-shim builder picks GNU over uutils given a fixture PATH layout.
+- the build environment's `LD_LIBRARY_PATH` loses empty and `.` entries only.
 - Buildroot acquisition: golden argv for clone/checkout/fetch, idempotent
   re-entry, tag-not-local fetch path, non-git-dest and git-failure errors
   (fake git runner; real git opt-in via `PENGYOS_IT=1`).

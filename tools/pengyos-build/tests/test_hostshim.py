@@ -20,6 +20,7 @@ from pengyos_build.hostshim import (
     ShimPlan,
     apply_host_shims,
     build_host_shims,
+    clean_ld_library_path,
     default_resolver,
     discover_gnu_binaries,
     is_uutils,
@@ -358,3 +359,44 @@ class TestRunBuildWithHostShim:
             runner=fake_runner,
         )
         assert seen["env"]["PATH"] == "/usr/bin:/bin"
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("/usr/local/cuda/lib64:", "/usr/local/cuda/lib64"),
+            (":/opt/a::.:/opt/b", "/opt/a:/opt/b"),
+            ("/opt/a", "/opt/a"),
+            (":", None),
+            (".", None),
+            ("", None),
+        ],
+    )
+    def test_ld_library_path_entries_buildroot_rejects_are_dropped(
+        self, host_tree, tmp_path, value, expected
+    ):
+        # Buildroot aborts on an empty or "." LD_LIBRARY_PATH entry; a host with
+        # LD_LIBRARY_PATH=/usr/local/cuda/lib64: could not build at all.
+        resolver = _resolver_from({"install": str(host_tree["gnu_install"])})
+        seen = {}
+
+        def fake_runner(argv, env):
+            seen["env"] = env
+            return None
+
+        base_env = {"PATH": "/usr/bin:/bin", "LD_LIBRARY_PATH": value}
+        run_build_with_host_shim(
+            ["make"],
+            tmp_path / "hostbin",
+            gnu_dir=host_tree["bin"],
+            resolver=resolver,
+            env=base_env,
+            runner=fake_runner,
+        )
+        assert seen["env"].get("LD_LIBRARY_PATH") == expected
+        assert base_env["LD_LIBRARY_PATH"] == value  # caller's dict untouched
+
+
+def test_clean_ld_library_path_without_the_variable_is_a_no_op():
+    env = {"PATH": "/usr/bin"}
+    clean_ld_library_path(env)
+    assert env == {"PATH": "/usr/bin"}

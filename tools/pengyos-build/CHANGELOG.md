@@ -6,6 +6,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- `build` passed `LD_LIBRARY_PATH` to make unchanged, so a host with an empty
+  entry in it (`/usr/local/cuda/lib64:`, a trailing colon) failed Buildroot's
+  "current working directory in your LD_LIBRARY_PATH" check before building
+  anything. Only `configure`'s `make show-info` call dropped the variable. The
+  build environment now goes through `hostshim.clean_ld_library_path`, which
+  drops empty and `.` entries, keeps real directories, and unsets the variable
+  when none are left.
+
 ### Removed
 - The tool-local `targets.toml` sample (it still named the retired M1
   target and shadowed the repo-root file when run from this directory).

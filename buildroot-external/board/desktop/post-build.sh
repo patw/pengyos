@@ -278,12 +278,6 @@ if [ -f "${COSMIC_COMP_SRC}/keybindings.ron" ] && [ -f "${COSMIC_SCD_SRC}/system
         "${TARGET_DIR}/usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/system_actions"
     install -Dm0644 "${COSMIC_SCD_SRC}/polkit-1/rules.d/cosmic-settings-daemon.rules" \
         "${TARGET_DIR}/usr/share/polkit-1/rules.d/cosmic-settings-daemon.rules"
-    # pengyos-force-ssd-apps: shipped allowlist for the per-app force-SSD patch
-    # (cosmic-comp divergence). Apps listed here are decorated server-side no
-    # matter what they request; user override goes in
-    # ~/.config/cosmic/com.system76.CosmicComp/v1/force_ssd_app_ids.
-    install -Dm0644 "${BOARD_DIR}/cosmic-settings-defaults/force_ssd_app_ids" \
-        "${TARGET_DIR}/usr/share/cosmic/com.system76.CosmicComp/v1/force_ssd_app_ids"
     echo "post-build: installed COSMIC keybindings + system actions + tiling exceptions"
 else
     echo "post-build: cosmic-comp / cosmic-settings-daemon data absent — keyboard shortcuts will NOT work"

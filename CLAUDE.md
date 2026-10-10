@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Warning
+
+Never auto commit to this repo, the user will always do that themselves.
+
 ## What this is
 
 PengyOS is a from-source Linux distribution built with **Buildroot 2026.08**, in three nested editions: **Core ⊆ Server ⊆ Desktop** (plus opt-in Server NVIDIA and Desktop NVIDIA variants). The Desktop runs COSMIC behind greetd. Installed machines use an A/B layout (two read-only ext4 root slots chosen by GRUB, plus a btrfs `data` partition) and update from a signed feed. `README.md` is the user-facing front page (editions, install, what isn't ready); `docs/principles.md` holds the *why* (principles, the maintenance loop, the component rubric, the failure modes); `SPEC.md` the *what* (component decisions and rejected alternatives); `USE-CASES.md` the user stories. When `USE-CASES.md` and the spec disagree, `USE-CASES.md` wins.
@@ -34,7 +38,7 @@ python3 -m pengyos_qemu_verify boot ~/build/pengyos/output/<target>/images/<img>
 
 Targets: `pengyos-core` (Core), `pengyos-server`, `pengyos-server-nvidia`, `pengyos-desktop` (the main Desktop), `pengyos-desktop-nvidia`.
 
-Host gotcha: a trailing colon in `LD_LIBRARY_PATH` breaks Buildroot. `pengyos-build` strips it, but run raw `make` or other host tools with `env -u LD_LIBRARY_PATH`.
+Host gotcha: a trailing colon in `LD_LIBRARY_PATH` breaks Buildroot. `pengyos-build build` drops the empty and `.` entries Buildroot rejects, but run raw `make` or other host tools with `env -u LD_LIBRARY_PATH`.
 
 `docs/qemu-testing.md` is the runbook for booting, SSH (`PENGYOS_AUTHORIZED_KEYS_FILE` at build time, then `--hostfwd tcp::2222-:22`), serial console, testing the installer, and screenshotting the Desktop via Xvfb + virgl. If you change an image or a board, build it and boot it; the unit tests alone are not enough.
 

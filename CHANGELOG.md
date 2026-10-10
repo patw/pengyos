@@ -17,44 +17,29 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Fixed (26.10.18) — Firefox had no minimize and no maximize (found on behoweather, 26.10.17)
+### Fixed: Firefox, Chrome and VS Code had a close button only (found on behoweather, 26.10.17)
 
-Firefox opened with a titlebar that had **one** button. Discord and cosmic-files on the
-same session showed all three, so this looked like a Firefox bug and was not: Firefox is
-GTK3 with client-side decorations, it asks the compositor for `ClientSide`, and COSMIC
-grants it — the client's request wins. A CSD frame is whatever the app draws, and
-Firefox's draws a close button only. `decoration_preference` is one global setting, so
-there was no way to say "server-side, for this app".
+The three are Flatpaks that draw their own titlebar, and a sandboxed GTK app reads
+which buttons to draw from `org.gnome.desktop.wm.preferences button-layout`, through
+the **Settings portal**. `cosmic-settings-daemon` writes that key
+(`:minimize,maximize,close`) and it was set on the host, but no portal served it:
+COSMIC's backend answers only `org.freedesktop.appearance`, and we built
+`xdg-desktop-portal-gtk` with `-Dsettings=disabled`. GTK then falls back to its
+built-in `menu:close`, the close-only frame. Pop!_OS, and Ubuntu through
+`xdg-desktop-portal-gnome`, ship a backend that serves the `org.gnome.*` keys.
 
-`cosmic-comp` now carries a **`force_ssd_app_ids`** allowlist (PengyOS divergence
-`cosmic-comp-force-ssd-app-ids`, declared in [`divergence.toml`](divergence.toml)). An
-app-id on it is decorated server-side whatever it requests, checked at every negotiation
-point — xdg `new_decoration`, `request_mode`, `unset_mode`, the KDE server-decoration
-handler, and `update_decorations` — so the allowlist is authoritative over the client and
-survives a live config change. Match is an exact app-id (case-insensitive) or a
-case-insensitive substring of the window title, the fallback for Electron apps that never
-set `xdg_toplevel app_id`. Shipped default:
-`/usr/share/cosmic/com.system76.CosmicComp/v1/force_ssd_app_ids` =
-`["org.mozilla.firefox", "firefox"]`, installed by `board/desktop/post-build.sh`; the
-user override is the same key under `~/.config/cosmic/`. COSMIC ships no minimize binding
-at all, so the patch adds **Super+D → Minimize** to `keybindings.ron` (Super+Q was
-already Close).
+`xdg-desktop-portal-gtk` is now built with Settings enabled, as Pop!_OS ships it
+(it selects fontconfig and gsettings-desktop-schemas, both already in the image).
+The 26.10.18 workaround is reverted: the `force_ssd_app_ids` cosmic-comp patch, its
+shipped allowlist, its test, and the `cosmic-comp-force-ssd-app-ids` divergence. It
+fixed Firefox only, by drawing a second, COSMIC titlebar above Firefox's own, and it
+could not reach Chrome or VS Code. The Super+D → Minimize binding it added goes with it.
 
-**The trap, measured on the first build:** forcing SSD by echoing the client's mode back
-in KDE `request_mode` is a hot loop. GTK3 answers every `Server` configure with a fresh
-`request_mode(Client)`, the compositor answers again, and Firefox ran **84% CPU** with
-cosmic-comp at 20% and a `WAYLAND_DEBUG` log of ~100 MB/min. The shipped handler re-asserts
-`Server` **once and then says nothing** — silence is what breaks the loop, so any rework of
-this patch has to keep it.
-
-**Proven before publishing** (see BotTalk `f61cf4047a8b5c5ff5020000`): on behoweather
-1920x1080 with the Firefox flatpak, the COSMIC bar with working minimize/maximize/close in
-floating, maximized, tiled and stacked states, and on two windows at once; a minimize
-button click minimizes; Super+D minimizes Firefox and Chrome. `WAYLAND_DEBUG` shows
-`request mode(1)` answered by `mode(2)` and then silence — 2 requests, 1 mode event per
-window. Chrome needs its own frame suppressed (`custom_chrome_frame=true`, Tier 1) and VS
-Code is not fixed by this: Electron ignores `titleBarStyle: "native"` on Wayland and sets
-no app-id, so its allowlist entry is inert today.
+**Proven on behoweather** with the rebuilt portal bind-mounted over the 26.10.18 one:
+the portal's `Read org.gnome.desktop.wm.preferences button-layout` returns
+`:minimize,maximize,close`, and Firefox, Chrome and VS Code each draw minimize,
+maximize and close in their own titlebar (Firefox's tab list stays to their left),
+with a single titlebar each.
 
 ### Fixed: the COSMIC tray had no app icons (found on behoweather, 26.10.14)
 
