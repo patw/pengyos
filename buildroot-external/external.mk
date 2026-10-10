@@ -154,6 +154,18 @@ PIPEWIRE_CONF_OPTS += -Dbluez5-codec-ldac=enabled -Dbluez5-codec-ldac-dec=disabl
 $(PIPEWIRE_TARGET_CONFIGURE): $(LDACBT_TARGET_INSTALL_STAGING)
 endif
 
+# PipeWire: Buildroot hardcodes -Dflatpak=disabled, which compiles out the
+# /proc/PID/root/.flatpak-info parser (it returns -ENOTSUP: "flatpak-info parsing
+# failed: Operation not supported"). Sandboxed clients were still detected and
+# restricted, but without their app id and instance id (per-app stream names,
+# WirePlumber's mpris-pause matching), and pipewire-pulse never saw
+# devices=all, so apps granted every device (OBS, voice chat) did not get the
+# Manager role. meson takes the last -D; libglib2 is the parser's only dependency.
+ifeq ($(BR2_PACKAGE_PIPEWIRE)$(BR2_PACKAGE_FLATPAK),yy)
+PIPEWIRE_CONF_OPTS += -Dflatpak=enabled
+$(PIPEWIRE_TARGET_CONFIGURE): $(LIBGLIB2_TARGET_INSTALL_STAGING)
+endif
+
 # --- Reproducible builds: inputs Buildroot takes from the build host ----------
 # Two builds of one commit on different hosts must give the same image
 # (BR2_REPRODUCIBLE). Comparing behoserver's against a build in a distrobox on

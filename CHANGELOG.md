@@ -17,6 +17,25 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: three silent fallbacks on the Desktop (found on behoweather, 26.10.18)
+
+- **`fwupd-refresh.service` failed every time its timer fired** (`217/USER`): the
+  unit runs as `fwupd-refresh`, which upstream creates through `sysusers.d`, and the
+  image has no `systemd-sysusers`. The user is now in `board/desktop/users.table`.
+- **flatpak-portal rejected `pengyos-background.portal` on every boot** (`Key file
+  does not have key "UseIn"`). xdg-desktop-portal routes Background through
+  `portals.conf` and kept working; the descriptor now says `UseIn=COSMIC`, like
+  `oo7-portal.portal`.
+- **PipeWire could not read `.flatpak-info`** (`parsing failed: Operation not
+  supported`). Buildroot builds it with `-Dflatpak=disabled`, which compiles the
+  parser out. Sandboxed clients were still restricted, but had no app id, and
+  apps granted all devices never got the Manager role. `external.mk` now enables
+  it when flatpak is in the image.
+
+Each fix was checked on behoweather against the stock 26.10.18 files, with bind mounts:
+`fwupdmgr refresh` succeeded as the user, flatpak-portal loaded the descriptor without
+the error, and a Flatpak pulse client gained `pipewire.access.portal.app_id`.
+
 ### Fixed: Firefox, Chrome and VS Code had a close button only (found on behoweather, 26.10.17)
 
 The three are Flatpaks that draw their own titlebar, and a sandboxed GTK app reads

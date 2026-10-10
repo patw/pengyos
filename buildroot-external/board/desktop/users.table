@@ -8,3 +8,8 @@
 # default_session). Locked password; the seat and GPU/input device groups let
 # its cosmic-comp open the display.
 cosmic-greeter -1 cosmic-greeter -1 ! /var/lib/cosmic-greeter /bin/false seat,video,render,input COSMIC login screen
+# fwupd-refresh: fwupd-refresh.service (enabled by its timer) runs
+# `fwupdmgr refresh` as this user. Upstream creates it with a sysusers.d entry;
+# the image has no systemd-sysusers, so without this row the unit died with
+# 217/USER every time the timer fired.
+fwupd-refresh -1 fwupd-refresh -1 * - - - fwupd metadata refresh

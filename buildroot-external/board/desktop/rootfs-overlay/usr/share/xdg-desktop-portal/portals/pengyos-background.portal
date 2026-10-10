@@ -1,3 +1,4 @@
 [portal]
 DBusName=org.freedesktop.impl.portal.desktop.pengyos
 Interfaces=org.freedesktop.impl.portal.Background;
+UseIn=COSMIC
