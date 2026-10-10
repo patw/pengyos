@@ -102,6 +102,9 @@ created, no log file is written, and no host shim is applied.
     reports the build stage by scanning this log.
   - `.hostbin` — the GNU-over-uutils host shim (hostshim); the dir is created
     only when the host actually needs shims.
+  - `.pengyos-files-before.txt` — a copy of `build/packages-file-list.txt`
+    taken before any build dir is removed, kept until a build consumes it (an
+    existing copy is never overwritten: it is the older, fuller record).
 - configure **never touches the network** and never auto-acquires: a missing
   source tree for the target's `br_version`, or a missing external tree, is a
   hard error suggesting `pengyos-build acquire <target>` (or fetching the
@@ -136,6 +139,22 @@ already been configured:
   and it drops the empty and `.` entries of `LD_LIBRARY_PATH` that Buildroot's
   dependency check rejects (a trailing colon is the usual one), keeping real
   directories and unsetting the variable when none are left.
+
+- **Leftovers.** Buildroot never deletes from `target/`: a rebuilt package
+  leaves what it no longer installs, and a package turned off leaves all of its
+  files. After a successful build, a file that still exists in `target/` is a
+  leftover when it is listed in the configure-time snapshot and for no package
+  in the new `build/packages-file-list.txt` (configure first sets the mtime of
+  every file a to-be-rebuilt package listed to 0, because Buildroot lists only
+  what an install changed and meson/cmake skip up-to-date files), or listed now
+  only for packages
+  `.config` marks `# BR2_PACKAGE_<X> is not set`. Files no package ever listed
+  (overlays, post-build scripts) are never reported. Leftovers are recorded in
+  `<output>/.pengyos-leftovers.txt` (`pkg,./path`), re-checked against
+  `target/` whenever read, and printed by `build`, `configure` and `staleness`
+  as `CLEAN BUILD NEEDED: …` with a count per package. Nothing is deleted, and
+  the exit code stays 0. The record clears itself once the files are gone
+  (a clean build or removal by hand) or a package installs them again.
 
 ## clean step
 
@@ -235,6 +254,16 @@ touches the network, and writes only the manifest file itself.
   (`PIPEWIRE_PULSE_CONF_OPTS` is pipewire-pulse, not pipewire). A bare-number diff
   context line is never read as a commit epoch. The cost is asserted as a contract:
   three git invocations, all scoped to the external tree, and no scan of the tree.
+- leftovers (`leftovers.py`): a file a rebuilt package stopped installing and a
+  file of a package `.config` marks not set are reported; a file another enabled
+  package still lists, an overlay file in neither list, and a file already gone
+  from `target/` are not (a dangling symlink counts as present). The snapshot is
+  never overwritten before a build consumes it. `prepare_rebuild` ages only the
+  rebuilt packages' files (`pipewire-1.6.6` is pipewire, not pipewire-pulse) and
+  skips missing files and lists. End to end with fake make: the
+  timesyncd case (sub-option off, package dircleaned and rebuilt) is named after
+  the build, stays named on the next configure and build, and clears once the
+  files are removed.
 - Buildroot acquisition: golden argv for clone/checkout/fetch, idempotent
   re-entry, tag-not-local fetch path, non-git-dest and git-failure errors
   (fake git runner; real git opt-in via `PENGYOS_IT=1`).

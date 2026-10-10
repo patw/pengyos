@@ -7,6 +7,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`build` names files in `target/` that no package installs any more**
+  (`pengyos_build/leftovers.py`). Buildroot never deletes from `target/`, so
+  `configure`'s rebuild of a package whose option was turned off leaves the old
+  files, and the image keeps them. Found on 2026-10-10: after the core layer turned
+  `BR2_PACKAGE_SYSTEMD_TIMESYNCD` off, systemd was rebuilt with
+  `-Dtimesyncd=false`, but the old binary, unit, D-Bus and polkit files stayed in
+  the Desktop `target/` and the preset step enabled timesyncd in the image again.
+  `configure` now keeps a copy of `build/packages-file-list.txt`. After the build,
+  a file still in `target/` that was listed for a package and no longer is, or is
+  listed only for a package `.config` marks not set, is reported as
+  `CLEAN BUILD NEEDED: …` (count per package) by `build`, `configure` and
+  `staleness`, and recorded in `<out>/.pengyos-leftovers.txt`. The record is
+  re-checked against `target/` on every read, so a clean build or removing the
+  files clears it. Report only: nothing is deleted and exit codes are unchanged.
+  Overlay and post-build files are never in Buildroot's list, so they are never
+  reported. Buildroot lists only the files an install *changed*, and meson skips
+  files already up to date, so before removing a build dir `configure` sets the
+  mtime of that package's listed files to 0; the reinstall then rewrites and lists
+  all of them. Without this, the first real run reported 196 systemd files where
+  8 were leftovers.
 - **`configure` rebuilds packages whose *recipe* changed after they were built**
   (`pengyos_build/recipe.py`, plus a report-only `staleness` subcommand). Buildroot's
   stamps are not tied to the `br2-external` tree, so a change that moves no symbol of

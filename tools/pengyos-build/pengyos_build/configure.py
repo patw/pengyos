@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
-from . import hostshim, recipe, stale
+from . import hostshim, leftovers, recipe, stale
 from .acquire import default_build_root, source_dir
 from .targets import Target
 
@@ -250,8 +250,15 @@ def configure_target(
         rebuild = tuple(sorted(set(rebuild) | set(recipes.rebuild)))
         notes = recipes.notes
 
+    # Rebuilding never deletes what a package installed before: keep the file
+    # list as it stands so the next build can name what it left (leftovers.py).
+    leftovers.snapshot(output)
     if rebuild:
+        leftovers.prepare_rebuild(output, rebuild)
         stale.remove_build_dirs(rebuild)
+    left = leftovers.current(output)
+    if left:
+        notes = notes + (str(left),)
 
     return ConfigureResult(
         target=target.name,

@@ -63,6 +63,16 @@ package, so the `.config` diff cannot see it and the stamp stays green — the s
 of every `br2-external` override. `staleness <target>` reports the same finding
 without removing anything, for when you want to know before you launch a build.
 
+Rebuilding a package never deletes what it installed before, and turning a package
+off leaves all of its files in `target/`, so they go into the image
+(`leftovers.py`). On 2026-10-10 the Desktop image kept `systemd-timesyncd` enabled
+after `BR2_PACKAGE_SYSTEMD_TIMESYNCD` was turned off and systemd was rebuilt
+without it. `configure` keeps a copy of Buildroot's `build/packages-file-list.txt`.
+After the build, any file still in `target/` that no enabled package lists any more
+is printed as `CLEAN BUILD NEEDED: …` by `build`, `configure` and `staleness`, and
+recorded in `<out>/.pengyos-leftovers.txt` until a clean build (or removing those
+files) makes it go away.
+
 `build` runs `make -C <src> O=<out> BR2_EXTERNAL=<ext> [BR2_BOARD=<board>]
 -j<N>` (N defaults to `-j$(nproc)`; lower `--jobs` to dodge Buildroot's
 parallel GCC races), streaming make's merged stdout+stderr into

@@ -18,6 +18,7 @@ from .build import BuildError, build_target, status_for
 from .clean import CleanError, clean_target
 from .configure import ConfigureError, configure_target, output_dir
 from .manifest import ManifestError, write_manifest
+from . import leftovers
 from .recipe import recipe_staleness
 from .sbom import SbomError, generate_sbom
 from .targets import TargetsFileError, load_targets, load_target
@@ -173,7 +174,9 @@ def build_parser() -> argparse.ArgumentParser:
     stale_p = sub.add_parser(
         "staleness",
         help="report built packages whose recipe in the external tree changed "
-        "after Buildroot built them (report-only; configure removes them)",
+        "after Buildroot built them (report-only; configure removes them), and "
+        "files in target/ that no package installs any more (a clean build "
+        "removes them)",
     )
     stale_p.add_argument("target", help="target name from the targets file")
     stale_p.add_argument(
@@ -360,7 +363,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"pengyos-build: error: {exc}", file=sys.stderr)
             return 1
         root = Path(args.build_root) if args.build_root else default_build_root(os.environ)
-        print(recipe_staleness(target.external_tree, output_dir(root, target)))
+        output = output_dir(root, target)
+        print(recipe_staleness(target.external_tree, output))
+        left = leftovers.current(output)
+        print(left)
         return 0
 
     if args.command == "manifest":

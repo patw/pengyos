@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
-from . import hostshim
+from . import hostshim, leftovers
 from .acquire import default_build_root, source_dir
 from .configure import HOSTSHIM_DIRNAME, LOGS_SUBDIR, output_dir
 from .targets import Target
@@ -72,9 +72,12 @@ class BuildResult:
     log: Path
     jobs: int
     argv: tuple[str, ...]
+    # Files in target/ that no package installs any more (leftovers.py).
+    leftovers: leftovers.Leftovers = leftovers.Leftovers()
 
     def __str__(self) -> str:  # convenient one-line summary for the CLI
-        return f"built {self.target} ({self.jobs} jobs): log {self.log}"
+        line = f"built {self.target} ({self.jobs} jobs): log {self.log}"
+        return f"{line}\n{self.leftovers}" if self.leftovers else line
 
 
 #: A ``subprocess.run``-like callable: ``runner(argv, env=…, stdout=…,
@@ -222,6 +225,7 @@ def build_target(
         log=log,
         jobs=resolved_jobs,
         argv=argv,
+        leftovers=leftovers.update(output),
     )
 
 

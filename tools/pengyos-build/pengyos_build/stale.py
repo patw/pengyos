@@ -22,8 +22,10 @@ had left them built without network discovery). ``make show-info`` before and
 after the reconfigure gives each package's resolved dependency list; a built
 package whose list changed is rebuilt.
 
-What neither catches: files a newly *disabled* package left in ``target/``
-(reported in :attr:`StaleReport.disabled`; only a clean build removes them).
+What neither catches: files a newly *disabled* package, or a rebuilt package
+that installs less than it did, left in ``target/`` (packages turned off are
+listed in :attr:`StaleReport.disabled`; :mod:`pengyos_build.leftovers` names
+the files after the next build; only a clean build removes them).
 """
 
 from __future__ import annotations
