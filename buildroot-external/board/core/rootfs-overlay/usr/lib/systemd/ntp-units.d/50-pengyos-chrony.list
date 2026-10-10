@@ -1,0 +1,3 @@
+# PengyOS: chrony is the NTP client (timesyncd is not built). systemd-timedated
+# starts/stops the first unit listed here for `timedatectl set-ntp`.
+chrony.service

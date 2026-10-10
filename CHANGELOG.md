@@ -17,6 +17,37 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: two NTP clients, mDNS name conflict, low inotify limit, theme load errors (found on behoweather, 26.10.19)
+
+- **chrony and systemd-timesyncd both ran, on every edition.** Buildroot builds
+  timesyncd by default, and nothing turned it off next to the core layer's chrony.
+  chronyd logged `System clock interference detected` every few minutes. The core
+  layer now drops timesyncd (SPEC already chose chrony). A `ntp-units.d` entry
+  points systemd-timedated at `chrony.service`, so `timedatectl set-ntp` and the
+  automatic-time switch in COSMIC Settings still work.
+- **avahi renamed the Desktop `<host>-2`…`-4` on every boot.** No other device
+  was using the name. systemd is built with `default-mdns=yes`, so resolved also
+  published the hostname on :5353, and avahi conflicted with it. The Desktop now
+  ships `MulticastDNS=resolve`: resolved still looks up `.local` names
+  (nsswitch asks it first), but avahi is the only thing that advertises the
+  hostname.
+- **VS Code opened with "Unable to watch for file changes".** The kernel sizes
+  `fs.inotify.max_user_watches` from RAM (137830 on 14 GB). The Desktop now sets
+  524288 in `/usr/lib/sysctl.d/60-pengyos-inotify.conf`.
+- **xdg-desktop-portal-cosmic logged `error loading system light theme`.** This
+  was not a missing variant. The shipped `CosmicTheme.{Light,Dark}/v2` had no
+  `list_button` or `frosted_maximized_apps`, keys the pinned libcosmic reads (the
+  cosmic-settings default schema doesn't have them either). Without them,
+  `list_button` fell back to stock colours instead of the PengyOS accent. Both
+  keys are now in `theme-defaults/`. `list_button` was computed with the pinned
+  libcosmic from the same builder input, which reproduces the shipped
+  `link_button` and `accent_button` byte for byte.
+
+The NTP, mDNS and sysctl changes were checked on behoweather with `/etc` drop-ins
+(since removed): avahi kept `behoweather.local` with no conflict and `.local`
+lookups still resolved. `set-ntp false/true` stopped and started chrony, which
+synchronised. The watch limit read 524288.
+
 ### Fixed: three silent fallbacks on the Desktop (found on behoweather, 26.10.18)
 
 - **`fwupd-refresh.service` failed every time its timer fired** (`217/USER`): the
