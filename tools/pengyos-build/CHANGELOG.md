@@ -6,6 +6,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`configure` rebuilds packages whose *recipe* changed after they were built**
+  (`pengyos_build/recipe.py`, plus a report-only `staleness` subcommand). Buildroot's
+  stamps are not tied to the `br2-external` tree, so a change that moves no symbol of
+  its own package — `PIPEWIRE_CONF_OPTS += -Dflatpak=enabled` in `external.mk`,
+  `-Dsettings=enabled` in `package/xdg-desktop-portal-gtk/` — leaves the stamp green
+  and `make` with nothing to do. Measured on 2026-10-10 building 26.10.19: the Desktop
+  NVIDIA image was built, boot-checked, signed and published carrying **neither**
+  change, because its stamps for those two packages were from the previous release.
+  The check compares each built package's `.stamp_built` against the newest commit
+  touching the files that define it (`package/<name>/`, `patches/<name>/`, and the
+  `NAME_SUFFIX` identifiers on the *left* of the first `=`/`:` in `external.mk`'s
+  changed lines — a prerequisite on the right names a package without changing it),
+  and removes that build dir so `build` rebuilds it. Cost is three git calls scoped to
+  the external tree plus one stat per candidate package: 90 ms on the live Desktop
+  tree; a commit touching nothing there costs three calls and zero stats. Board files
+  are reported, not rebuilt — they are applied when the image is assembled, so the
+  note fires only when one changed after the rootfs image was last written.
+
 ### Fixed
 - `build` passed `LD_LIBRARY_PATH` to make unchanged, so a host with an empty
   entry in it (`/usr/local/cuda/lib64:`, a trailing colon) failed Buildroot's

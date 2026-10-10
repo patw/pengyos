@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
-from . import hostshim, stale
+from . import hostshim, recipe, stale
 from .acquire import default_build_root, source_dir
 from .targets import Target
 
@@ -71,20 +71,24 @@ class ConfigureResult:
     output: Path
     log: Path
     argv: tuple[str, ...]
-    # Build dirs removed because the new .config changed their options (see
-    # stale.py), and packages the new .config turned off.
+    # Build dirs removed before the build: options changed in ``.config`` (see
+    # stale.py), their resolved dependencies changed (stale.py), or their recipe
+    # in the external tree changed after they were built (recipe.py).
     rebuilt: tuple[str, ...] = ()
     disabled: tuple[str, ...] = ()
+    # Things the check can see but cannot express as a package rebuild.
+    notes: tuple[str, ...] = ()
 
     def __str__(self) -> str:  # convenient one-line summary for the CLI
         lines = [f"configured {self.target}: log {self.log}"]
         if self.rebuilt:
-            lines.append("options changed, will rebuild: " + " ".join(self.rebuilt))
+            lines.append("recipe/options changed, will rebuild: " + " ".join(self.rebuilt))
         if self.disabled:
             lines.append(
                 "disabled (files stay in target/ until a clean build): "
                 + " ".join(self.disabled)
             )
+        lines.extend(self.notes)
         return "\n".join(lines)
 
 
@@ -234,6 +238,19 @@ def configure_target(
             except ValueError:
                 dep_stale = ()
             rebuild = tuple(sorted(set(rebuild) | set(dep_stale)))
+
+    # A recipe change (a .mk, a Config.in select, a patch) moves no symbol of its
+    # own package, so the .config diff above cannot see it and Buildroot's stamps
+    # stay green. Compare each built package's stamp against the newest commit
+    # touching its recipe (recipe.py) — the 26.10.19 NVIDIA image shipped without
+    # two such changes for exactly this reason.
+    notes: tuple[str, ...] = ()
+    if config.is_file():
+        recipes = recipe.recipe_staleness(external, output)
+        rebuild = tuple(sorted(set(rebuild) | set(recipes.rebuild)))
+        notes = recipes.notes
+
+    if rebuild:
         stale.remove_build_dirs(rebuild)
 
     return ConfigureResult(
@@ -244,6 +261,7 @@ def configure_target(
         argv=argv,
         rebuilt=tuple(p.name for p in rebuild),
         disabled=report.disabled,
+        notes=notes,
     )
 
 

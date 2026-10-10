@@ -7,16 +7,18 @@ manifest); each is added by its own implementation task.
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 import sys
 from pathlib import Path
 
 from . import __version__
-from .acquire import AcquireError, BUILDROOT_REMOTE, acquire_target_tree
+from .acquire import AcquireError, BUILDROOT_REMOTE, acquire_target_tree, default_build_root
 from .build import BuildError, build_target, status_for
 from .clean import CleanError, clean_target
-from .configure import ConfigureError, configure_target
+from .configure import ConfigureError, configure_target, output_dir
 from .manifest import ManifestError, write_manifest
+from .recipe import recipe_staleness
 from .sbom import SbomError, generate_sbom
 from .targets import TargetsFileError, load_targets, load_target
 
@@ -163,6 +165,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="path to the targets file (default: ./targets.toml)",
     )
     status_p.add_argument(
+        "--build-root",
+        default=None,
+        help="build root (default: $PENGYOS_BUILD_ROOT or ~/build/pengyos)",
+    )
+
+    stale_p = sub.add_parser(
+        "staleness",
+        help="report built packages whose recipe in the external tree changed "
+        "after Buildroot built them (report-only; configure removes them)",
+    )
+    stale_p.add_argument("target", help="target name from the targets file")
+    stale_p.add_argument(
+        "--targets",
+        default="targets.toml",
+        help="path to the targets file (default: ./targets.toml)",
+    )
+    stale_p.add_argument(
         "--build-root",
         default=None,
         help="build root (default: $PENGYOS_BUILD_ROOT or ~/build/pengyos)",
@@ -332,6 +351,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"pengyos-build: error: {exc}", file=sys.stderr)
             return 1
         print(status_for(target, args.build_root))
+        return 0
+
+    if args.command == "staleness":
+        try:
+            target = load_target(args.targets, args.target)
+        except TargetsFileError as exc:
+            print(f"pengyos-build: error: {exc}", file=sys.stderr)
+            return 1
+        root = Path(args.build_root) if args.build_root else default_build_root(os.environ)
+        print(recipe_staleness(target.external_tree, output_dir(root, target)))
         return 0
 
     if args.command == "manifest":

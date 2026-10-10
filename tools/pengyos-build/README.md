@@ -43,6 +43,7 @@ pengyos-build status <target>                                      (in)
 pengyos-build clean <target> [--dry-run]                           (in)
 pengyos-build manifest <target> --json OUT                         (in)
 pengyos-build sbom <target> [--embed] [--sign-key KEY] [--jobs N]  (in)
+pengyos-build staleness <target>                                     (in)
 ```
 
 `configure`, `build`, and `clean` all accept `--dry-run`: it prints the exact
@@ -55,6 +56,12 @@ Re-running `configure` on an existing output dir compares the old and new
 removed (like `make <pkg>-dirclean`) so `build` rebuilds it — Buildroot itself
 never does. The packages affected are printed; packages the new config turns
 off are listed too (their files stay in `target/` until a clean build).
+
+It also removes a built package whose **recipe** changed after Buildroot built it
+(`recipe.py`). A `.mk`, a `Config.in` select or a patch moves no symbol of its own
+package, so the `.config` diff cannot see it and the stamp stays green — the shape
+of every `br2-external` override. `staleness <target>` reports the same finding
+without removing anything, for when you want to know before you launch a build.
 
 `build` runs `make -C <src> O=<out> BR2_EXTERNAL=<ext> [BR2_BOARD=<board>]
 -j<N>` (N defaults to `-j$(nproc)`; lower `--jobs` to dodge Buildroot's

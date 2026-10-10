@@ -225,6 +225,16 @@ touches the network, and writes only the manifest file itself.
 - command construction (configure/build/clean) as golden argv with a fake `make`/BR tree.
 - host-shim builder picks GNU over uutils given a fixture PATH layout.
 - the build environment's `LD_LIBRARY_PATH` loses empty and `.` entries only.
+- recipe staleness (`recipe.py`): a `.stamp_built` older than the newest commit
+  touching that package's recipe is a rebuild, a newer stamp is fresh, an unbuilt
+  package is skipped, a non-git external tree is a note and not an error, and a
+  commit touching nothing in the external tree rebuilds nothing. Attribution
+  charges only the identifiers on the left of the first `=`/`:` of a changed
+  `external.mk` line — never a prerequisite on the right, which names a package
+  without changing it — and the longest enabled stem wins
+  (`PIPEWIRE_PULSE_CONF_OPTS` is pipewire-pulse, not pipewire). A bare-number diff
+  context line is never read as a commit epoch. The cost is asserted as a contract:
+  three git invocations, all scoped to the external tree, and no scan of the tree.
 - Buildroot acquisition: golden argv for clone/checkout/fetch, idempotent
   re-entry, tag-not-local fetch path, non-git-dest and git-failure errors
   (fake git runner; real git opt-in via `PENGYOS_IT=1`).
