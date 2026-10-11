@@ -1,0 +1,70 @@
+From bb8fb5a9bf15fb845863430281e4bf908aec7090 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Tue, 14 Jul 2026 12:00:34 +0300
+Subject: [PATCH 1/6] avidemux: Make sure enough data is available when parsing
+ FUJIFILM strd
+
+Fixes https://gitlab.freedesktop.org/gstreamer/gstreamer/-/work_items/5213
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/12231>
+---
+ .../gst-plugins-good/gst/avi/gstavidemux.c    | 23 +++++++++++--------
+ 1 file changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/gst/avi/gstavidemux.c b/gst/avi/gstavidemux.c
+index 96788aa6c9b..d998de84113 100644
+--- a/gst/avi/gstavidemux.c
++++ b/gst/avi/gstavidemux.c
+@@ -3834,13 +3834,13 @@ gst_avi_demux_parse_strd (GstAviDemux * avi, GstBuffer * buf)
+ 
+       ptr += 98;
+       left -= 98;
+-      if (!memcmp (ptr, "FUJIFILM", 8)) {
++      if (left >= 10 && !memcmp (ptr, "FUJIFILM", 8)) {
+         GST_MEMDUMP_OBJECT (avi, "fujifim tag", ptr, 48);
+ 
+         ptr += 10;
+         left -= 10;
+         sub_size = 0;
+-        while (ptr[sub_size] && sub_size < left)
++        while (sub_size < left && ptr[sub_size])
+           sub_size++;
+ 
+         if (avi->globaltags == NULL)
+@@ -3851,21 +3851,24 @@ gst_avi_demux_parse_strd (GstAviDemux * avi, GstBuffer * buf)
+         parse_tag_value (avi, avi->globaltags, GST_TAG_DEVICE_MODEL, ptr,
+             sub_size);
+ 
+-        while (ptr[sub_size] == '\0' && sub_size < left)
++        while (sub_size < left && ptr[sub_size] == '\0')
+           sub_size++;
+ 
+         ptr += sub_size;
+         left -= sub_size;
+         sub_size = 0;
+-        while (ptr[sub_size] && sub_size < left)
++        while (sub_size < left && ptr[sub_size])
+           sub_size++;
+-        if (ptr[4] == ':')
+-          ptr[4] = '-';
+-        if (ptr[7] == ':')
+-          ptr[7] = '-';
+ 
+-        parse_tag_value (avi, avi->globaltags, GST_TAG_DATE_TIME, ptr,
+-            sub_size);
++        if (sub_size >= 8) {
++          if (ptr[4] == ':')
++            ptr[4] = '-';
++          if (ptr[7] == ':')
++            ptr[7] = '-';
++
++          parse_tag_value (avi, avi->globaltags, GST_TAG_DATE_TIME, ptr,
++              sub_size);
++        }
+       }
+     }
+   }
+-- 
+GitLab
+
+
