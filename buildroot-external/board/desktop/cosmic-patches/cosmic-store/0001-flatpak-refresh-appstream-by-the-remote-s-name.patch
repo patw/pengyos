@@ -1,0 +1,37 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] flatpak: refresh appstream by the remote's name
+
+The backend's hourly appstream refresh passed source_id to
+update_appstream_sync. For the system installation that is the display
+id "flathub (system)", which is not a remote, so every refresh failed
+("Remote \"flathub (system)\" not found") and the Store's catalogue of a
+system-wide Flathub stayed at whatever the last `flatpak update` left:
+new apps and new descriptions never appeared. Pass the remote's own name,
+as the update path further down already does.
+
+Upstream: still present on cosmic-store master (2026-10-11)
+---
+diff --git a/src/backend/flatpak.rs b/src/backend/flatpak.rs
+index c3dfddc..e88d86a 100644
+--- a/src/backend/flatpak.rs
++++ b/src/backend/flatpak.rs
+@@ -47,8 +47,8 @@ impl Flatpak {
+ 
+         let inst = this.installation()?;
+         for remote in inst.list_remotes(Cancellable::NONE)? {
+-            let source_id = match remote.name() {
+-                Some(name) => this.source_id(&name),
++            let (remote_name, source_id) = match remote.name() {
++                Some(name) => (name.to_string(), this.source_id(&name)),
+                 None => {
+                     log::warn!("remote {:?} missing name", remote);
+                     continue;
+@@ -80,7 +80,7 @@ impl Flatpak {
+ 
+             if update_appstream {
+                 log::info!("updating appstream data for remote {:?}", remote);
+-                match inst.update_appstream_sync(&source_id, None, Cancellable::NONE) {
++                match inst.update_appstream_sync(&remote_name, None, Cancellable::NONE) {
+                     Ok(()) => {}
+                     Err(err) => {
+                         log::warn!(

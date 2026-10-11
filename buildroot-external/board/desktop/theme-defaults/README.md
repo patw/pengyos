@@ -20,3 +20,10 @@ theme" at every session start. They are added here by hand:
 the same builder input (default schema plus these overrides). On a recapture,
 check that `ls v2` has every field of `Theme` in
 `libcosmic/cosmic-theme/src/model/theme.rs`.
+
+`com.system76.CosmicTheme.Dark.Builder/v2/palette` is cosmic-settings' own
+default wrapped in `Dark(…)`. Upstream's file (at least through cosmic-settings
+fff1485) is a bare `CosmicPaletteInner`, but `ThemeBuilder.palette` is the
+`CosmicPalette` enum. Settings logged "1:1: Expected identifier" at every start,
+and the dark builder palette fell back to the built-in default. Drop this file
+once upstream's parses.

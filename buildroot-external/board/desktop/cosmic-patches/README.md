@@ -20,6 +20,7 @@ git apply <repo>/buildroot-external/board/desktop/cosmic-patches/cosmic-notifica
 |---|---|---|
 | `cosmic-notifications` | `0001-applet-wait-longer-for-the-panel-connection.patch` | The daemon gave the panel 1 s to connect; a slow-starting panel lost its notifications applet. |
 | `cosmic-applets` | `0001-battery-no-battery-icon-on-machines-without-a-system-battery.patch` | A desktop with a wireless mouse/keyboard showed a 0% battery icon: the applet took later UPower updates after "no battery". Backport of cosmic-settings a366fc7 (epoch-1.9). |
+| `cosmic-store` | `0001-flatpak-refresh-appstream-by-the-remote-s-name.patch` | The hourly appstream refresh named the system remote by its display id ("flathub (system)"), so a system-wide Flathub's catalogue never refreshed. Unfixed upstream as of 2026-10-11. |
 
 When the COSMIC recipes move into `package/`, these become that package's
 patches.

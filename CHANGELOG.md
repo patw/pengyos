@@ -17,6 +17,26 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: logout killed ssh users' tmux, a Store catalogue that never refreshed, a theme parse error (found on behoweather, 26.10.23)
+
+- **Ending a login session killed everything the user had left running.**
+  Buildroot builds systemd with meson's `default-kill-user-processes=true`, so
+  logind reported `KillUserProcesses=yes`: a tmux, screen or `nohup` job
+  started over ssh died with the connection. That hit Server users the most.
+  A core drop-in (`/usr/lib/systemd/logind.conf.d/50-pengyos-keep-user-processes.conf`)
+  sets `no`, as Fedora, Debian and Arch ship it.
+- **The COSMIC Store never refreshed a system-wide Flathub's catalogue.** Its
+  hourly appstream refresh passed the display id `"flathub (system)"` as the
+  remote name ("Remote … not found"), so new apps and descriptions never
+  appeared until a `flatpak update`. behoweather's copy was 4 days old.
+  cosmic-store now carries a patch
+  (`cosmic-patches/cosmic-store/0001-…`; still unfixed upstream).
+- **Settings logged "1:1: Expected identifier" on every start.**
+  cosmic-settings' own `default_schema` ships `CosmicTheme.Dark.Builder/v2/palette`
+  without its `Dark(…)` variant, so the dark builder palette never loaded and
+  fell back to the built-in default. `theme-defaults/` now carries a corrected
+  copy.
+
 ### Fixed: no CPU microcode, whole classes of hardware without drivers, COSMIC features that did nothing (found on behoweather, 26.10.22)
 
 The 26.10.22 hardware check (`pengyos-oct11-issues.md`) and a sweep of the
