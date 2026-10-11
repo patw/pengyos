@@ -1,0 +1,40 @@
+From 44383c6de72257e98d5c2401cfdd0f74a9cd9d03 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Tue, 14 Jul 2026 13:22:38 +0300
+Subject: [PATCH 6/6] avidemux: Don't read a subindex with too many items
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/12231>
+---
+ subprojects/gst-plugins-good/gst/avi/gstavidemux.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/gst/avi/gstavidemux.c b/gst/avi/gstavidemux.c
+index 6dd55640bd8..0ef19340ce1 100644
+--- a/gst/avi/gstavidemux.c
++++ b/gst/avi/gstavidemux.c
+@@ -1572,6 +1572,10 @@ gst_avi_demux_parse_subindex (GstAviDemux * avi, GstAviStream * stream,
+   if (num == 0)
+     goto empty_index;
+ 
++  /* this can't work out well ... */
++  if (num > G_MAXUINT32 >> 1)
++    goto invalid_params;
++
+   GST_INFO_OBJECT (avi, "Parsing subindex, nr_entries = %6d", num);
+ 
+   for (i = 0; i < num; i++) {
+@@ -1623,6 +1627,11 @@ not_implemented:
+     gst_buffer_unref (buf);
+     return FALSE;
+   }
++invalid_params:
++  {
++    GST_ERROR_OBJECT (avi, "invalid subindex parameters (num = %d)", num);
++    goto done;                  /* continue */
++  }
+ empty_index:
+   {
+     GST_DEBUG_OBJECT (avi, "the index is empty");
+-- 
+GitLab
+

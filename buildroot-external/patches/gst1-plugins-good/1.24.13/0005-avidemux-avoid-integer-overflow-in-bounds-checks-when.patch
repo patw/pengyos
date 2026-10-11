@@ -1,0 +1,47 @@
+From 30966f12aff2eb70e39a2c3013180ed885a3f509 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Tue, 14 Jul 2026 13:22:04 +0300
+Subject: [PATCH 5/6] avidemux: Avoid integer overflow in bounds checks when
+ parsing the index
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/12231>
+---
+ subprojects/gst-plugins-good/gst/avi/gstavidemux.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/gst/avi/gstavidemux.c b/gst/avi/gstavidemux.c
+index 4d8c6e081a9..6dd55640bd8 100644
+--- a/gst/avi/gstavidemux.c
++++ b/gst/avi/gstavidemux.c
+@@ -1283,8 +1283,13 @@ gst_avi_demux_parse_superindex (GstAviDemux * avi,
+ 
+   indexes = g_new (guint64, num + 1);
+   for (i = 0; i < num; i++) {
+-    if (size < 24 + bpe * (i + 1))
++    gsize required_size;
++
++    if (!g_size_checked_mul (&required_size, bpe, i + 1))
++      break;
++    if (size - 24 < required_size)
+       break;
++
+     indexes[i] = GST_READ_UINT64_LE (&data[24 + bpe * i]);
+     GST_DEBUG_OBJECT (avi, "index %d at %" G_GUINT64_FORMAT, i, indexes[i]);
+   }
+@@ -1571,8 +1576,11 @@ gst_avi_demux_parse_subindex (GstAviDemux * avi, GstAviStream * stream,
+ 
+   for (i = 0; i < num; i++) {
+     GstAviIndexEntry entry;
++    gsize required_size;
+ 
+-    if (map.size < 24 + bpe * (i + 1))
++    if (!g_size_checked_mul (&required_size, bpe, i + 1))
++      break;
++    if (map.size - 24 < required_size)
+       break;
+ 
+     /* fill in offset and size. offset contains the keyframe flag in the
+-- 
+GitLab
+
+

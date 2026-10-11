@@ -1,0 +1,31 @@
+From 0bcc6564c7deedc7d6d7373a2ab6479c9bf3889f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Tue, 14 Jul 2026 12:35:12 +0300
+Subject: [PATCH 4/6] avidemux: Use correct divisor for calculating available
+ number of vprp field infos
+
+Fixes https://gitlab.freedesktop.org/gstreamer/gstreamer/-/work_items/5213
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/12231>
+---
+ subprojects/gst-plugins-good/gst/avi/gstavidemux.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/gst/avi/gstavidemux.c b/gst/avi/gstavidemux.c
+index c9d64e0e252..4d8c6e081a9 100644
+--- a/gst/avi/gstavidemux.c
++++ b/gst/avi/gstavidemux.c
+@@ -1814,7 +1814,8 @@ gst_avi_demux_riff_parse_vprp (GstElement * element,
+ 
+   /* size checking */
+   /* calculate fields based on size */
+-  k = (size - G_STRUCT_OFFSET (gst_riff_vprp, field_info)) / vprp->fields;
++  k = (size - G_STRUCT_OFFSET (gst_riff_vprp,
++          field_info)) / sizeof (vprp->field_info[0]);
+   if (vprp->fields > k) {
+     GST_WARNING_OBJECT (element,
+         "vprp header indicated %d fields, only %d available", vprp->fields, k);
+-- 
+GitLab
+
+
