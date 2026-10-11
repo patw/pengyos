@@ -18,7 +18,6 @@ Description=PengyOS Server marker target
 Documentation=man:systemd.special(7) man:pengyos-server.target(8)
 DefaultDependencies=no
 After=multi-user.target
-Before=pengyos-server.target
 
 # An (empty) [Target] section is the spec-recommended shape for a .target unit
 # (freedesktop.org systemd unit file spec); it marks this a genuine target

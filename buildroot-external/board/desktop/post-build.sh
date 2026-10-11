@@ -646,6 +646,10 @@ if [ -f "${TARGET_DIR}/etc/cups/cups-browsed.conf" ]; then
     grep -q '^KeepGeneratedQueuesOnShutdown' "${TARGET_DIR}/etc/cups/cups-browsed.conf" || \
         echo 'KeepGeneratedQueuesOnShutdown Yes' >> "${TARGET_DIR}/etc/cups/cups-browsed.conf"
 fi
+# Its recipe installs the unit 0755; systemd warned "is marked executable"
+# three times per boot (behoweather, 26.10.20).
+[ ! -f "${TARGET_DIR}/usr/lib/systemd/system/cups-browsed.service" ] || \
+    chmod 0644 "${TARGET_DIR}/usr/lib/systemd/system/cups-browsed.service"
 
 # --- One printer launcher --------------------------------------------------------
 # CUPS ships cups.desktop ("Manage Printing", opens localhost:631); it

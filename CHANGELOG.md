@@ -17,6 +17,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: an inert amdgpu power rule and two boot-log warnings (found on behoweather, 26.10.20)
+
+- **The amdgpu runtime-PM udev rule never did anything.** udev rejected it at
+  every boot (`60-pengyos-amdgpu-runtime-pm.rules:15 Invalid key/value pair`)
+  because a value was unquoted. Two other mistakes would have kept it inert
+  after that: it set `device/runtime_power/*`, which doesn't exist (the
+  attributes are `device/power/{autosuspend_delay_ms,control}`), and it matched
+  `DRIVER=="amdgpu"` on the DRM card node, which has no driver. It now matches
+  the PCI parent with `DRIVERS==`, and `udevadm verify` passes.
+- **`pengyos-server.target` named itself in `Before=`.** systemd dropped the
+  dependency and warned three times per boot. The line is gone.
+- **`cups-browsed.service` was installed 0755.** systemd warned that it "is
+  marked executable" three times per boot. The Desktop post-build now sets it
+  to 0644.
+
 ### Fixed: two NTP clients, mDNS name conflict, low inotify limit, theme load errors (found on behoweather, 26.10.19)
 
 - **chrony and systemd-timesyncd both ran, on every edition.** Buildroot builds

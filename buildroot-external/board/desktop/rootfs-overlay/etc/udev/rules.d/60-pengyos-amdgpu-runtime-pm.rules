@@ -10,13 +10,18 @@
 # open amdgpu DRM device (the iGPU that owns the eDP panel).
 # ============================================================================
 
-# amdgpu DRM device (the PCI bus id of the amdgpu PCI device). Idle -> d3cold.
-# RUNTIME_AUTOSUSPEND_DELAY_MS arms the autosuspend timer (idle before trip).
-ACTION=="add", SUBSYSTEM=="drm", DRIVER=="amdgpu", \
-  ATTR{device/runtime_power/autosuspend_delay_ms}=2000, \
-  ATTR{device/runtime_power/state}="auto"
+# amdgpu DRM card. Idle -> d3cold. The card node itself has no driver
+# (DRIVER==""), so match the PCI parent with DRIVERS; the runtime-PM knobs are
+# the parent's power/ attributes (there is no runtime_power/), and udev values
+# must be quoted. Before 26.10.22 all three were wrong: udev rejected the rule
+# ("Invalid key/value pair", behoweather 26.10.20) and the change rule below
+# never matched.
+# autosuspend_delay_ms arms the autosuspend timer (idle before trip).
+ACTION=="add", SUBSYSTEM=="drm", KERNEL=="card[0-9]*", DRIVERS=="amdgpu", \
+  ATTR{device/power/autosuspend_delay_ms}="2000", \
+  ATTR{device/power/control}="auto"
 
 # Re-arm the timer whenever the amdgpu device is re-activated (e.g. after a
 # PRIME offload round-trip) so it trips d3cold again once idle.
-ACTION=="change", SUBSYSTEM=="drm", DRIVER=="amdgpu", \
-  ATTR{device/runtime_power/state}="auto"
+ACTION=="change", SUBSYSTEM=="drm", KERNEL=="card[0-9]*", DRIVERS=="amdgpu", \
+  ATTR{device/power/control}="auto"
