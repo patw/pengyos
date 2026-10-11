@@ -79,7 +79,7 @@ Chosen once, inherited everywhere.
 | **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (`tools/pengyos-recipe-dbus-broker`) | 🟢 / 🔵 broker |
 | **Devices, logs** | systemd-udevd, systemd-journald | LGPL-2.1 | eudev, rsyslog | 🟢 |
 | **Network** | **systemd-networkd + resolved** (Core/Server); **NetworkManager** on Desktop | LGPL-2.1 / GPL-2.0 | — | 🟢 |
-| **Firewall** | **nftables**, default-deny inbound | GPL-2.0 | iptables | 🟢 |
+| **Firewall** | **nftables**, default-deny inbound (Desktop: ports above 1024 open, as Fedora Workstation; rootful podman bridges and published ports allowed) | GPL-2.0 | iptables, firewalld | 🟢 |
 | **Storage** | **A/B ext4 system slots** (read-only) + a **btrfs `data`** partition; `/etc` an overlay on `data` | GPL-2.0 | btrfs root with snapshots (designed, parked) | 🟢 |
 | **Swap** | zram (`zram-generator`) | MIT | swap partition | 🟢 |
 | **Time / trust** | chrony; ca-certificates; OpenSSL | GPL-2.0 / MPL-2.0 / Apache-2.0 | timesyncd | 🟢 |
@@ -201,7 +201,7 @@ podman.
 | Boot | Plymouth splash with the PengyOS theme | |
 | Pengy | the Pengy desktop app | |
 | Writing | mdit, the Markdown editor (Qt6; live preview, HTML/PDF export) | ours, MIT |
-| Languages | ~50 UTF-8 locales (Region & Language lists them); on-screen keyboard (cosmic-osk) | no screen reader yet (Orca) |
+| Languages | ~50 UTF-8 locales (Region & Language lists them); on-screen keyboard (cosmic-osk) | no screen reader yet (Orca); fonts cover Latin, Greek, Cyrillic, Arabic, Hebrew, Georgian and CJK, but **not** Devanagari, Bengali, Tamil, Thai, Ethiopic, Khmer, Myanmar or Sinhala (no glyphs on the host or in the Flatpak runtime, so Firefox shows empty boxes): a Noto set for those scripts, roughly 10–20 MB, is deferred until a user needs it (2026-10-11). No input method framework (ibus/fcitx5) for CJK typing yet |
 | Virtual machines | QEMU's SDL/OpenGL window (`-display sdl,gl=on`) | Server layer's QEMU |
 | PengyOS apps | the graphical installer, PengyOS Updates (app + notifier) | libcosmic |
 

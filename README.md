@@ -15,7 +15,7 @@ small human–AI team can build an operating system and keep it maintained.
 |---|---|
 | Core | The base: systemd, key-only SSH, Python 3, nftables, chrony, storage tools, a broad firmware set. No editors, no containers, no GUI. About 224 MB of RAM at idle. |
 | Server | Core plus tmux, mosh, zsh, git, ripgrep, fd, bat, eza, zoxide and jq; rootless podman; distrobox; a default-deny firewall; backup and metrics timers; the daily update check; and Pengy in a browser (`pengy-web`). |
-| Desktop | Server plus the full COSMIC session (compositor, panel, launcher, files, terminal, editor, store) behind a login screen, PipeWire audio, Bluetooth codecs, CUPS printing, Wi-Fi, Xwayland and Vulkan, a boot splash, Flatpak from Flathub (Firefox lands on first boot), 21 wallpapers, and the Pengy desktop app. |
+| Desktop | Server plus the full COSMIC session (compositor, panel, launcher, files, terminal, editor, store) behind a login screen, PipeWire audio, Bluetooth codecs, CUPS printing, Wi-Fi, Xwayland and Vulkan, a boot splash, Flatpak from Flathub (Firefox lands on first boot), 21 wallpapers, the Pengy desktop app and the mdit Markdown editor. Its firewall opens ports above 1024 (LAN games, Steam Remote Play, LocalSend) like Fedora Workstation. |
 | Server NVIDIA | Server plus CUDA, `nvidia-smi`, persistence mode, and GPUs inside podman containers through CDI. |
 | Desktop NVIDIA | Desktop plus the NVIDIA driver and its Vulkan and GL userspace, for Turing and newer. |
 

@@ -1,7 +1,8 @@
 # PengyOS Desktop — default applications (freedesktop mimeapps.list, the
 # distribution-wide default; a user's ~/.config/mimeapps.list and Settings →
 # Default Applications override it). Without it nothing opened an image.
-# Images: COSMIC Viewer (pop-os/cosmic-viewer). Web: Firefox (a Flatpak,
+# Images: COSMIC Viewer (pop-os/cosmic-viewer). Markdown: mdit (COSMIC Edit as
+# the fallback). Web: Firefox (a Flatpak,
 # installed on first boot by pengyos-browser-setup; its .desktop is exported
 # to /var/lib/flatpak/exports/share, on XDG_DATA_DIRS).
 [Default Applications]
@@ -32,7 +33,7 @@ image/svg+xml=com.system76.CosmicViewer.desktop;
 image/x-icon=com.system76.CosmicViewer.desktop;
 image/x-qoi=com.system76.CosmicViewer.desktop;
 text/plain=com.system76.CosmicEdit.desktop
-text/markdown=com.system76.CosmicEdit.desktop
+text/markdown=mdit.desktop;com.system76.CosmicEdit.desktop;
 text/x-log=com.system76.CosmicEdit.desktop
 application/x-shellscript=com.system76.CosmicEdit.desktop
 application/json=com.system76.CosmicEdit.desktop

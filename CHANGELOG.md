@@ -74,6 +74,37 @@ that apps expect the OS to provide.
   published with `-p` answers from outside through an nftables reload and a
   restart. Rootless podman (pasta) was never affected.
 
+### Changed: a desktop firewall, icon panel buttons, click-to-open notifications, mdit for Markdown
+
+- **The Desktop firewall opens ports above 1024**, as Fedora Workstation's zone
+  does. The Desktop had inherited the Server's default-deny, so Steam Remote
+  Play and LAN games, Minecraft "Open to LAN", LocalSend, KDE Connect and
+  Syncthing's direct connections failed silently. Privileged ports stay closed
+  except ssh. `/etc/nftables.conf` now includes
+  `/usr/lib/pengyos/nftables.d/input-*.nft`; the Desktop ships
+  `input-desktop.nft` and the Server ships none.
+- **Workspaces and Applications on the top panel are icons**, not COSMIC's
+  default text (`/usr/share/cosmic/com.system76.CosmicPanelButton/v1/configs`).
+  This is a deliberate divergence from Pop!_OS.
+- **Clicking a notification opens the app it came from** when the notification
+  offers no action. COSMIC only dismissed it; GNOME (Ubuntu, Fedora) opens the
+  app named in the desktop-entry hint. New cosmic-notifications patch `0002-…`.
+- **Markdown files open in mdit** by default, with COSMIC Edit as the fallback.
+  mdit is not pinned in the dock.
+
+### Fixed: Logitech mice and other level-only batteries showed 0% (found on behoweather, 26.10.23)
+
+- Settings → Power listed a Logitech G305 with 0% and a "missing battery"
+  icon, though the kernel reported `capacity_level=Full`. Buildroot 2026.08
+  pins UPower 0.99.19 against libgudev 238, which already strips the trailing
+  newline from sysfs values. UPower then chopped the last character as well
+  ("Ful"), matched no level, and never updated the device. Every peripheral
+  that reports a level rather than a percentage was affected (most Logitech
+  HID++ mice and keyboards, many game controllers). Carried as upstream commit
+  6bfe66a (in UPower 1.90.1): `patches/upower/0.99.19/`, ledger entry in
+  `divergence.toml`. Verified on behoweather: battery-level full, 100%, shown
+  in Settings.
+
 ### Added: mdit, the Markdown editor
 
 - **mdit** ([patw/mdit](https://github.com/patw/mdit), MIT) ships in the

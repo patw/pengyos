@@ -1,0 +1,9 @@
+# PengyOS Desktop: inbound connections to ports above 1024 are allowed, as in
+# Fedora Workstation's firewall zone. Included into the input chain of
+# /etc/nftables.conf. With Server's default-deny alone, things desktop users
+# expect to just work failed silently: Steam Remote Play and LAN games,
+# Minecraft "Open to LAN", LocalSend, KDE Connect, Syncthing's direct
+# connections, a dev server opened to a phone. Privileged ports (<= 1024) stay
+# closed except ssh; services like CUPS (631) still listen on localhost only.
+tcp dport 1025-65535 ct state new accept
+udp dport 1025-65535 accept

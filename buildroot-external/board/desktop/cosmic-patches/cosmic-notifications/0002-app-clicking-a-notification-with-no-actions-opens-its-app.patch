@@ -1,0 +1,85 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] app: clicking a notification with no actions opens its app
+
+A notification that carries no actions (no "default" either) was simply
+dismissed on click. GNOME Shell instead activates the application named by
+the desktop-entry hint, which is what people expect from Ubuntu/Fedora: click
+the toast, get the app. Do the same: find <desktop-entry>.desktop in the XDG
+data dirs (plus the Flatpak export dirs) and start it with `gio launch`,
+passing the activation token we already request so the compositor lets it
+take focus. Single-instance apps raise their existing window. Notifications
+with actions are unchanged.
+
+Upstream: not offered yet
+---
+diff --git a/src/app.rs b/src/app.rs
+index 99eca8c..4504ebb 100644
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -675,6 +675,11 @@ impl CosmicNotifications {
+             };
+ 
+             let Some(action) = maybe_action else {
++                // No action to invoke: open the app the notification came from
++                // (its desktop-entry hint), as GNOME Shell does, then dismiss.
++                if let Some(entry) = notification.desktop_entry().map(str::to_owned) {
++                    launch_desktop_entry(&entry, &token);
++                }
+                 return self.close(id, CloseReason::Dismissed);
+             };
+             let tx = tx.clone();
+@@ -693,6 +698,54 @@ impl CosmicNotifications {
+     }
+ }
+ 
++/// Launch the application whose desktop file is `entry` (the notification
++/// spec's desktop-entry hint, without ".desktop"), handing it the activation
++/// token so the compositor lets it take focus. Single-instance apps raise their
++/// existing window.
++fn launch_desktop_entry(entry: &str, token: &str) {
++    let name = entry.trim_end_matches(".desktop");
++    if name.is_empty() || name.contains('/') {
++        return;
++    }
++    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
++    let mut dirs: Vec<std::path::PathBuf> = Vec::new();
++    match std::env::var_os("XDG_DATA_HOME") {
++        Some(d) => dirs.push(d.into()),
++        None => dirs.extend(home.as_ref().map(|h| h.join(".local/share"))),
++    }
++    dirs.extend(home.as_ref().map(|h| h.join(".local/share/flatpak/exports/share")));
++    let system = std::env::var("XDG_DATA_DIRS")
++        .unwrap_or_else(|_| String::from("/usr/local/share:/usr/share"));
++    dirs.extend(system.split(':').filter(|d| !d.is_empty()).map(std::path::PathBuf::from));
++    dirs.push("/var/lib/flatpak/exports/share".into());
++
++    let Some(path) = dirs
++        .iter()
++        .map(|d| d.join("applications").join(format!("{name}.desktop")))
++        .find(|p| p.is_file())
++    else {
++        tracing::info!("clicked notification: no desktop file for {name}");
++        return;
++    };
++    match std::process::Command::new("gio")
++        .arg("launch")
++        .arg(&path)
++        .env("XDG_ACTIVATION_TOKEN", token)
++        .env("DESKTOP_STARTUP_ID", token)
++        .stdin(std::process::Stdio::null())
++        .stdout(std::process::Stdio::null())
++        .stderr(std::process::Stdio::null())
++        .spawn()
++    {
++        Ok(mut child) => {
++            std::thread::spawn(move || {
++                let _ = child.wait();
++            });
++        }
++        Err(err) => tracing::warn!("clicked notification: launching {}: {err}", path.display()),
++    }
++}
++
+ impl cosmic::Application for CosmicNotifications {
+     type Message = Message;
+     type Executor = cosmic::executor::single::Executor;

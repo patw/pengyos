@@ -81,3 +81,27 @@ upstream_status = "not-offered"
 # in this ledger is not declared, or declares a CVE the ledger does not close - and
 # pengyos-nightly writes that declaration itself now, from the patches that survived its
 # own pre-flight.
+
+[[divergence]]
+id        = "upower-0.99.19-capacity-level"
+kind      = "patch-set"
+component = "upower"
+pinned_version = "0.99.19"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-11"
+carried_in    = ["26.10.24"]
+patches_dir   = "buildroot-external/patches/upower/0.99.19"
+# Not a CVE: a functional fix. Buildroot 2026.08 pins UPower 0.99.19 (2022)
+# against libgudev 238, which strips the trailing newline from sysfs values
+# itself; 0.99.19 then chopped the last character too ("Ful"), found no
+# percentage, and never updated any device that reports only a battery level.
+# Found on behoweather: a Logitech G305 (HID++ unified battery,
+# capacity_level=Full) showed 0% with a "missing battery" icon in COSMIC
+# Settings → Power. Hits most Logitech HID++ mice/keyboards and other
+# level-only peripherals.
+closes = []
+upstream_fixes = ["6bfe66a390cb"]
+natural_fix = "1.90.1"
+expiry = "Buildroot pins upower >= 1.90.1 (or we author a newer recipe); the patch set is deleted then"
+observe_source = "pkg-stats"
+upstream_status = "merged"
