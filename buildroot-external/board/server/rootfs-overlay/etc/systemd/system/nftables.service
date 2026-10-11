@@ -2,7 +2,7 @@
 # PengyOS Server — nftables.service (firewall)
 # ----------------------------------------------------------------------------
 # Loads the Server firewall ruleset from /etc/nftables.conf (shipped in the
-# overlay) at boot and flushes it on stop. Type=oneshot + RemainAfterExit=yes
+# overlay) at boot and removes it on stop. Type=oneshot + RemainAfterExit=yes
 # so systemd treats "firewall loaded" as a stable, reached state.
 #
 # Runs after network-pre.target / before network-online.target so the firewall
@@ -25,7 +25,10 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/bin/rm -f /run/nftables-active.nft
 ExecStart=/usr/sbin/nft -f /etc/nftables.conf
-ExecStop=/usr/sbin/nft flush ruleset
+ExecReload=/usr/sbin/nft -f /etc/nftables.conf
+# Only our table: `nft flush ruleset` also deleted netavark's (rootful podman's
+# NAT and published ports), cutting running containers off until restarted.
+ExecStop=-/usr/sbin/nft delete table inet pengyos
 
 [Install]
 WantedBy=multi-user.target

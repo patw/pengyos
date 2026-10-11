@@ -1,0 +1,12 @@
+config BR2_PACKAGE_MDIT
+	bool "mdit"
+	depends on BR2_PACKAGE_QT6
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_QT6BASE_GUI
+	select BR2_PACKAGE_QT6BASE_WIDGETS
+	select BR2_PACKAGE_QT6BASE_PRINTSUPPORT # PDF export (QPdfWriter)
+	help
+	  mdit: a calm, native Markdown editor with a live preview
+	  (Qt6 Widgets, no web engine). HTML and PDF export.
+
+	  https://github.com/patw/mdit

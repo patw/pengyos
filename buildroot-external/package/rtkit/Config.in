@@ -1,0 +1,15 @@
+config BR2_PACKAGE_RTKIT
+	bool "rtkit"
+	depends on BR2_PACKAGE_SYSTEMD
+	depends on BR2_PACKAGE_POLKIT
+	select BR2_PACKAGE_DBUS
+	select BR2_PACKAGE_LIBCAP
+	help
+	  RealtimeKit (org.freedesktop.RealtimeKit1): hands bounded
+	  realtime scheduling to unprivileged threads that ask for it.
+	  The Realtime portal Flatpak apps use (audio workstations,
+	  games, voice chat, PipeWire inside a sandbox) forwards to it;
+	  without it every request failed and xdg-desktop-portal logged
+	  "Failed to load RealtimeKit property" at each session start.
+
+	  https://github.com/heftig/rtkit

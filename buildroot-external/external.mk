@@ -198,6 +198,19 @@ endef
 SHARED_MIME_INFO_POST_INSTALL_TARGET_HOOKS += SHARED_MIME_INFO_INSTALL_DB_TARGET
 endif
 
+# gsettings-desktop-schemas: PengyOS's GSettings defaults
+# (board/desktop/gsettings/*.gschema.override; today, location services on).
+# libglib2 compiles the target's schemas from STAGING at target-finalize, so
+# the override has to be in staging's schema dir, not in an overlay (overlays
+# land after that step and would never be compiled).
+ifeq ($(BR2_PACKAGE_GSETTINGS_DESKTOP_SCHEMAS),y)
+define PENGYOS_GSETTINGS_INSTALL_OVERRIDES
+	$(INSTALL) -m 0644 -t $(STAGING_DIR)/usr/share/glib-2.0/schemas \
+		$(BR2_EXTERNAL_PENGYOS_PATH)/board/desktop/gsettings/*.gschema.override
+endef
+GSETTINGS_DESKTOP_SCHEMAS_POST_INSTALL_STAGING_HOOKS += PENGYOS_GSETTINGS_INSTALL_OVERRIDES
+endif
+
 # PipeWire's aptX / aptX HD and LDAC Bluetooth codecs: Buildroot's recipe has
 # no switches for them (meson "auto" would race the libraries' build).
 ifeq ($(BR2_PACKAGE_PIPEWIRE)$(BR2_PACKAGE_BLUEZ5_UTILS)$(BR2_PACKAGE_LIBFREEAPTX),yyy)

@@ -1,0 +1,12 @@
+# PengyOS Desktop: GSettings defaults (compiled into the image by Buildroot's
+# libglib2 schema step; external.mk installs this file into staging).
+
+# Location services on. xdg-desktop-portal-gtk's Lockdown backend maps this
+# GNOME key to the Location portal's "disable-location". GNOME flips it in its
+# Privacy settings; COSMIC has no such switch, so with the schema default
+# (false) the portal answered every app "Location services disabled". Each
+# Flatpak app is still asked once (COSMIC's Access dialog) before it gets a
+# location. A user can turn it off with:
+#   gsettings set org.gnome.system.location enabled false
+[org.gnome.system.location]
+enabled=true

@@ -18,6 +18,16 @@ XDG_DESKTOP_PORTAL_LICENSE_FILES = COPYING
 
 XDG_DESKTOP_PORTAL_DEPENDENCIES = host-pkgconf libglib2 json-glib libfuse3 gdk-pixbuf gstreamer1 gst1-plugins-base pipewire libgudev
 XDG_DESKTOP_PORTAL_CONF_OPTS = -Dtests=disabled -Dinstalled-tests=false
+
+# The Location portal is only compiled in with libgeoclue ('auto' silently left
+# it out: Flatpak apps and COSMIC Settings' sunset-based dark mode found no
+# org.freedesktop.portal.Location).
+ifeq ($(BR2_PACKAGE_GEOCLUE),y)
+XDG_DESKTOP_PORTAL_DEPENDENCIES += geoclue
+XDG_DESKTOP_PORTAL_CONF_OPTS += -Dgeoclue=enabled
+else
+XDG_DESKTOP_PORTAL_CONF_OPTS += -Dgeoclue=disabled
+endif
 # Staging too: portal backends (xdg-desktop-portal-gtk) build against its .pc
 # and the D-Bus interface XML it installs.
 XDG_DESKTOP_PORTAL_INSTALL_STAGING = YES

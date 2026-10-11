@@ -27,6 +27,8 @@ menu "PengyOS (external tree)"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/accountsservice/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/switcheroo-control/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ipp-usb/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/rtkit/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/geoclue/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libfreeaptx/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ldacbt/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ffmpegthumbnailer/Config.in"
@@ -46,6 +48,8 @@ menu "PengyOS (external tree)"
 
 	# Pengy, the built-in agent (CLI: Core, web: Server, Qt6 app: Desktop).
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/pengy/Config.in"
+	# mdit, the Markdown editor (Qt6, ours).
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/mdit/Config.in"
 	# Qt apps (Pengy) themed by COSMIC (dark/light, accent, fonts, icons).
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cutecosmic/Config.in"
 

@@ -1,6 +1,11 @@
 # PengyOS Core — bring up any wired NIC via DHCP (systemd-networkd).
 # US-CORE-1: the node's NIC comes up with no manual configuration.
+# Physical NICs only (Kind=!* = no netdev kind), as systemd's own
+# 89-ethernet.network.example matches. A veth is also Type=ether: rootful
+# podman's host-side veth was taken over by networkd (DHCP, per-link
+# forwarding off), so containers had no network (found 2026-10-11).
 [Match]
+Kind=!*
 Type=ether
 
 [Network]

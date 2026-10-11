@@ -95,7 +95,10 @@ Chosen once, inherited everywhere.
 > and LGPL components above are such programs or dynamically linked libraries, as are
 > the ones the editions add: QEMU (GPL-2.0, Server/Desktop), libqalculate/`qalc`
 > (GPL-2.0+), libnotify and PulseAudio's client library and `pactl` (LGPL-2.1+; no
-> PulseAudio daemon), cosmic-osk (GPL-3.0). Binary blobs: CPU **microcode** (Intel
+> PulseAudio daemon), cosmic-osk (GPL-3.0), RealtimeKit (GPL-3.0+ daemon, MIT client;
+> Desktop), GeoClue (GPL-2.0+ service, LGPL-2.1+ libgeoclue; Desktop), v4l2loopback
+> (GPL-2.0+ kernel module; Desktop), glib-networking (LGPL-2.1+, GIO's TLS module;
+> Desktop). Binary blobs: CPU **microcode** (Intel
 > `intel-microcode`, AMD `amd-ucode`; built into the kernel since 26.10.23) and device
 > **firmware** (`linux-firmware`, `sof-firmware`) in every edition, and the **NVIDIA
 > driver** in the NVIDIA editions only (§2.5). Every
@@ -190,13 +193,14 @@ podman.
 |---|---|---|
 | Session | **COSMIC** (compositor, panel, launcher, settings, files, terminal, editor, store, player, viewer) behind **greetd + cosmic-greeter** | auto-login opt-in |
 | Graphics | Mesa (iris, radeonsi, virgl, llvmpipe; ANV/RADV Vulkan), libglvnd, Xwayland | |
-| Media | PipeWire + WirePlumber, GStreamer + FFmpeg, AAC/aptX/LDAC Bluetooth codecs, SOF firmware | |
-| Hardware | NetworkManager (+ Wi-Fi, OpenVPN, WireGuard, ModemManager), BlueZ, UPower, power-profiles-daemon, thermald, fwupd, bolt, switcheroo-control, udisks | |
+| Media | PipeWire + WirePlumber, GStreamer + FFmpeg, AAC/aptX/LDAC Bluetooth codecs, SOF firmware; RealtimeKit (the Realtime portal); v4l2loopback (OBS's virtual camera, loaded on demand) | |
+| Hardware | NetworkManager (+ Wi-Fi, OpenVPN, WireGuard, ModemManager), BlueZ, UPower, power-profiles-daemon, thermald, fwupd, bolt, switcheroo-control, udisks; GeoClue (the Location portal; Wi-Fi lookups in BeaconDB) | |
 | Printing & scanning | CUPS + cups-filters, Gutenprint, HPLIP, ipp-usb, SANE + airscan, Avahi/mDNS | driverless first |
 | Apps | **Flatpak + Flathub** through COSMIC Store; Firefox installed from Flathub on first boot (once online); app updates announced by the PengyOS Updates notifier | Lane 3 (§2.5) |
 | Toolkits | GTK 3, Qt 6 (with the cutecosmic theme bridge), libcosmic | for third-party apps |
 | Boot | Plymouth splash with the PengyOS theme | |
 | Pengy | the Pengy desktop app | |
+| Writing | mdit, the Markdown editor (Qt6; live preview, HTML/PDF export) | ours, MIT |
 | Languages | ~50 UTF-8 locales (Region & Language lists them); on-screen keyboard (cosmic-osk) | no screen reader yet (Orca) |
 | Virtual machines | QEMU's SDL/OpenGL window (`-display sdl,gl=on`) | Server layer's QEMU |
 | PengyOS apps | the graphical installer, PengyOS Updates (app + notifier) | libcosmic |

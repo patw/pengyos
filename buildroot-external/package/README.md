@@ -39,6 +39,8 @@ in `../configs/layers/*.config`.
 | `gamemode/` | `gamemoded` | Feral's GameMode, behind the GameMode portal Flatpak games use. |
 | `accountsservice/` | `accounts-daemon` | User accounts over D-Bus: COSMIC Settings' Users page. Admin group `wheel`. |
 | `switcheroo-control/` | `switcheroo-control` | GPU list for hybrid machines: COSMIC's "Launch using discrete graphics". |
+| `rtkit/` | `rtkit-daemon` (RealtimeKit) | Not in Buildroot. Bounded realtime scheduling for unprivileged threads; the Realtime portal Flatpak apps use forwards to it. D-Bus-activated; runs as the `rtkit` user (`RTKIT_USERS`). |
+| `geoclue/` | GeoClue 2 + libgeoclue + the demo agent | Not in Buildroot. The location service; `xdg-desktop-portal` compiles its Location portal in only against libgeoclue. Wi-Fi lookups go to BeaconDB (upstream's default); the demo agent (XDG autostart) keeps geoclue from making each client wait 5 s for an agent. |
 | `ipp-usb/` | `ipp-usb` (Go) | Driverless USB printers/scanners appear to CUPS/SANE as network devices on localhost; udev-started. |
 | `libfreeaptx/`, `ldacbt/` | aptX, LDAC | Bluetooth audio codecs; enabled in PipeWire by `external.mk`. |
 | `ffmpegthumbnailer/` | video thumbnails | A freedesktop thumbnailer COSMIC Files runs for videos (PDFs: the overlay's poppler wrapper). |
@@ -55,6 +57,7 @@ in `../configs/layers/*.config`.
 | `cosmic-sound-theme/` | COSMIC's system sounds | Data-only; aliased as `Pop`, the name COSMIC 1.9 looks sounds up under. |
 | `plymouth/` | the boot splash + the PengyOS theme | Not in Buildroot. Pengy on black with a spinner, from early boot until the COSMIC session takes the screen. |
 | `pengy/` | Pengy, the built-in agent: `pengy-cli` (Core), `pengy-web` (Server), the Qt6 desktop app (Desktop) | PengyR v1.10.0: one Rust agent core behind all three; the Qt GUI links it statically. Ships unconfigured. |
+| `mdit/` | `mdit`, the Markdown editor | Ours (patw/mdit, MIT): a Qt6 Widgets editor with a live preview and HTML/PDF export, built from its release tag with its own `cmake --install` (binary, icons, `.desktop`). Needs Qt6 PrintSupport (enabled in the desktop layer). |
 | `cutecosmic/` | Qt platform theme for COSMIC | Qt apps (Pengy) follow COSMIC's dark/light mode, accent, fonts and icons. Patched to build without Qt Quick and with its Rust bindings built offline by cargo instead of a fetched Corrosion. |
 | `nvidia-open/` | the NVIDIA driver (NVIDIA edition only) | NVIDIA's open GPU kernel modules + the matching proprietary userspace (EGL/GBM/Wayland, CUDA, NVENC/NVDEC, GSP firmware) from one `.run`. Buildroot's `nvidia-driver` is the legacy 390 branch: no Turing+, no GBM. |
 

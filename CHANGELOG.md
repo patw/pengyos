@@ -17,6 +17,70 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: realtime scheduling, location, a virtual camera; fixed: rootful containers had no network (persona audit, 26.10.23)
+
+An audit of the Desktop against a mixed household (gamer, developer, audio,
+photo/video, streamer, power user, a grandparent who prints PDFs) for services
+that apps expect the OS to provide.
+
+- **The Realtime portal had nothing behind it.** xdg-desktop-portal offered
+  `org.freedesktop.portal.Realtime` and forwarded every request to RealtimeKit,
+  which the image did not ship ("Failed to load RealtimeKit property" at every
+  session start). Flatpak audio workstations, games, voice chat and PipeWire
+  inside a sandbox ran without realtime threads. New recipe `package/rtkit`
+  (0.13, D-Bus-activated, `rtkit` user).
+- **There was no Location portal at all.** xdg-desktop-portal compiles it in
+  only against libgeoclue, and the meson option was `auto`. Maps, weather apps,
+  browsers and COSMIC Settings' sunset-based dark mode ("A portal frontend
+  implementing org.freedesktop.portal.Location was not found") had no
+  location. New recipe `package/geoclue` (2.8.2), with Wi-Fi lookups in
+  BeaconDB (upstream's default since Mozilla Location Service closed; only
+  when an app asks and the portal has allowed it; no data submission) and
+  ModemManager's GPS/cell sources. `xdg-desktop-portal` is now built with
+  `-Dgeoclue=enabled`. Geoclue's demo agent autostarts with the session so
+  clients don't wait 5 s for one. Two more things stood between an app and a
+  location, both found by booting it:
+  - The portal still answered "Location services disabled". Its Lockdown
+    backend (xdg-desktop-portal-gtk) reads GNOME's
+    `org.gnome.system.location enabled`, which defaults to false; GNOME's
+    Privacy page flips it, but COSMIC has no such switch. A GSettings override
+    (`board/desktop/gsettings/`, installed into staging by `external.mk` so
+    Buildroot's schema compile picks it up) turns it on. Each Flatpak app is
+    still asked once.
+  - **No GIO TLS backend.** Without glib-networking, every libsoup/GIO client
+    failed HTTPS with "TLS support is not available": geoclue's lookups, and
+    gvfs's dav/http backends (COSMIC Files' `davs://`, e.g. Nextcloud). The
+    Desktop now ships glib-networking.
+- **OBS's virtual camera could not start.** It needs the v4l2loopback kernel
+  module, which a Flatpak cannot bring. Desktop now builds it; OBS loads it on
+  demand, with OBS's own options set in
+  `/usr/lib/modprobe.d/60-pengyos-v4l2loopback.conf`.
+- **Rootful podman containers had no network (Server and Desktop).** The
+  firewall's input chain dropped DNS queries to aardvark-dns on the podman
+  bridge, and its forward chain (policy drop) dropped container traffic and
+  ports published with `-p`, whatever netavark's own table accepted. On top of
+  that, `nftables.conf` began with `flush ruleset` and the unit stopped with it,
+  so reloading or restarting the firewall deleted netavark's table and cut off
+  every running container. The ruleset now replaces only `table inet pengyos`.
+  It accepts input from `podman*` bridges, and forwarded traffic that is
+  established, from a podman bridge, or DNATed (a published port). The unit
+  stops by deleting only our table and gained `ExecReload`. On Core/Server a
+  second cause sat underneath: the wired `.network` matched `Type=ether`,
+  which includes podman's host-side veth. networkd took that veth over (DHCP,
+  per-link forwarding off), so containers had no route out even with the
+  firewall open. The match now adds `Kind=!*`, physical NICs only, as
+  systemd's own `89-ethernet.network.example` does. That also keeps it off
+  bonds and VLANs. Verified in QEMU: container egress works, and a port
+  published with `-p` answers from outside through an nftables reload and a
+  restart. Rootless podman (pasta) was never affected.
+
+### Added: mdit, the Markdown editor
+
+- **mdit** ([patw/mdit](https://github.com/patw/mdit), MIT) ships in the
+  Desktop: a Qt6 Widgets Markdown editor with a live preview and HTML/PDF
+  export, themed by cutecosmic. New recipe `package/mdit` (0.1.2, from the
+  release tag). Qt6 PrintSupport is now built for its PDF export.
+
 ### Fixed: logout killed ssh users' tmux, a Store catalogue that never refreshed, a theme parse error (found on behoweather, 26.10.23)
 
 - **Ending a login session killed everything the user had left running.**
