@@ -33,6 +33,8 @@ menu "PengyOS (external tree)"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-noto-cjk/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/plymouth/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cosmic-sound-theme/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libnotify/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libqalculate/Config.in"
 
 	# Flatpak (the Desktop's app lane) and the two libraries it needs that
 	# Buildroot 2026.08 does not ship. Built here instead of copied from the

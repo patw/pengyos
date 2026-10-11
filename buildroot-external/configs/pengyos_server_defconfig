@@ -109,6 +109,11 @@ BR2_PACKAGE_OPENSSH_SERVER=y
 BR2_PACKAGE_OPENSSH_CLIENT=y
 BR2_PACKAGE_OPENSSH_KEY_UTILS=y
 
+# --- Groups systemd expects (board/core/users.table) --------------------------
+# No systemd-sysusers in the image, so groups its sysusers.d would create are
+# made at build time instead. The Desktop layer lists this table with its own.
+BR2_ROOTFS_USERS_TABLES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/users.table"
+
 # --- Hardware firmware (real-hardware support: GPU, wired NIC, WiFi) ---------
 # On the N100 weather station /lib/firmware was empty: i915 (Alder Lake-N GPU)
 # failed to load DMC/GuC firmware and WiFi had no regulatory.db. Ship the small
@@ -134,6 +139,18 @@ BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XXX=y
 BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW89=y
 # regulatory.db — required for any WiFi regulatory domain.
 BR2_PACKAGE_WIRELESS_REGDB=y
+
+# --- CPU microcode (Intel + AMD) ----------------------------------------------
+# No edition shipped any: behoweather's N100 ran its factory revision 0xe
+# ("Running old microcode", "Register File Data Sampling: Vulnerable: No
+# microcode"; Intel's 20260812 release has 0x21). The image has no initramfs, so
+# the files are built INTO the kernel (CONFIG_EXTRA_FIRMWARE, set by external.mk)
+# and the early loader applies them at boot. Riding inside bzImage means every
+# existing install gets them from a normal update - no grub.cfg or updater change.
+# Not installed to /lib/firmware: the kernel copy is the one that is used.
+BR2_PACKAGE_INTEL_MICROCODE=y
+# BR2_PACKAGE_INTEL_MICROCODE_INSTALL_TARGET is not set
+BR2_PACKAGE_LINUX_FIRMWARE_AMD_UCODE=y
 
 # --- Installer / rescue tooling (future: install PengyOS to a target disk) ---
 # The stick doubles as a rescue/installer: partition a target disk (parted /
@@ -344,6 +361,23 @@ BR2_PACKAGE_SYSTEMD_LOGIND=y
 # GRUB: Core's modules + loadenv/test — the installed grub.cfg picks the root
 # slot from grubenv.
 BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux ext2 fat part_msdos part_gpt normal efi_gop gfxterm gfxmenu font all_video videoinfo loadenv test smbios serial"
+
+# --- Virtual machines: QEMU + KVM (2026-10-11) ---------------------------------
+# Server and Desktop run VMs out of the box (`qemu-system-x86_64 -enable-kvm`);
+# KVM itself is in board/server/linux.fragment, and /dev/kvm is 0666 (systemd's
+# default rule). x86_64 guests only: one target keeps the build and the image
+# small. TCG stays as the fallback where KVM is unavailable (nested, VT-x off).
+# The blobs are the guest firmware: SeaBIOS, option ROMs, and QEMU's own edk2
+# builds for UEFI guests. qemu-img for disk images, SLIRP for -nic user.
+BR2_PACKAGE_QEMU=y
+BR2_PACKAGE_QEMU_SYSTEM=y
+BR2_PACKAGE_QEMU_SYSTEM_KVM=y
+BR2_PACKAGE_QEMU_SYSTEM_TCG=y
+BR2_PACKAGE_QEMU_CHOOSE_TARGETS=y
+BR2_PACKAGE_QEMU_TARGET_X86_64=y
+BR2_PACKAGE_QEMU_BLOBS=y
+BR2_PACKAGE_QEMU_SLIRP=y
+BR2_PACKAGE_QEMU_TOOLS=y
 
 # --- Board: server ----------------------------------------------
 # The Server's overlay (sshd config, nftables firewall, monitoring + backup

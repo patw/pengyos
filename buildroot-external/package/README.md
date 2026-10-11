@@ -42,6 +42,8 @@ in `../configs/layers/*.config`.
 | `ipp-usb/` | `ipp-usb` (Go) | Driverless USB printers/scanners appear to CUPS/SANE as network devices on localhost; udev-started. |
 | `libfreeaptx/`, `ldacbt/` | aptX, LDAC | Bluetooth audio codecs; enabled in PipeWire by `external.mk`. |
 | `ffmpegthumbnailer/` | video thumbnails | A freedesktop thumbnailer COSMIC Files runs for videos (PDFs: the overlay's poppler wrapper). |
+| `libnotify/` | `notify-send`, libnotify | The command scripts use to raise a desktop notification; Buildroot has no package. |
+| `libqalculate/` | `qalc` | The launcher's calculator (pop-launcher's calc plugin runs `qalc`); without it `= 2+2` did nothing. |
 | `power-profiles-daemon/` | power profiles over D-Bus | Performance / balanced / power-saver: COSMIC's power menu and Settings → Power. |
 | `bolt/` | `boltd`, `boltctl` | Thunderbolt / USB4 device authorization. |
 | `ddcutil/` | `ddcutil` | Monitor brightness/input over DDC/CI. |

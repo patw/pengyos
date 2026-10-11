@@ -118,7 +118,13 @@ daemon) would never appear. Preinit instead regenerates `passwd`/`group`/`shadow
   `wheel`, `seat`, `video`, …);
 - accounts/groups **only the machine has** are kept if their id is ≥ 1000
   (people) and dropped below that (system accounts an older image had);
-  `shadow`/`gshadow` keep exactly the names `passwd`/`group` kept.
+  `shadow`/`gshadow` keep exactly the names `passwd`/`group` kept;
+- **owner groups added later reach existing owners, once.** The installer puts
+  the user it creates in the groups `/usr/lib/pengyos/owner-groups` lists (the
+  same list as `pengyos-install`'s `USER_GROUPS`). When an image appends a group
+  there (`gamemode`, 26.10.23), every `wheel` member with uid ≥ 1000 is added to
+  it at the next boot, and `pengyos/owner-groups.done` in the upper layer records
+  that, so a person who later leaves the group by hand stays out.
 
 By name, not by id range, because Buildroot gives some system groups automatic
 ids that can land at 1000+.

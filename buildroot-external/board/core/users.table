@@ -1,0 +1,7 @@
+# Buildroot users table (makeusers): groups every edition defines.
+# The image has no systemd-sysusers, so groups that systemd's own sysusers.d
+# (basic.conf) would create and that Buildroot does not are listed here.
+# clock: systemd's 50-udev-default.rules gives /dev/rtc* to it; without the
+# group udev logged "Unknown group 'clock', ignoring" twice per boot and
+# `udevadm verify` failed (behoweather, 26.10.22).
+- -1 clock -1 - - - - -

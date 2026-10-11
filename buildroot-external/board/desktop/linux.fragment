@@ -279,3 +279,98 @@ CONFIG_SND_SOC_INTEL_SOF_NAU8825_MACH=m
 CONFIG_SND_SOC_INTEL_SOF_CS42L42_MACH=m
 CONFIG_SND_SOC_INTEL_SOF_DA7219_MACH=m
 CONFIG_SND_SOC_INTEL_SOF_ES8336_MACH=m
+
+# --- Hardware outside the fleet (2026-10-11) -----------------------------------
+# Everything above was added one fleet machine at a time, which left whole
+# classes of common hardware with no driver at all. Found by checking this config
+# against the hardware a tester is likely to own; all modules, loaded by udev
+# only where the device exists. Firmware: desktop.config / external.mk.
+# GPU: Lunar Lake / Panther Lake iGPUs and Arc B-series (Battlemage) are driven
+# by xe only (i915 does not bind them): without it, no GPU acceleration.
+CONFIG_DRM_XE=m
+# Wi-Fi 7: Intel BE200/BE201/BE211 run the MLD op mode (iwl-drv.c sends Wi-Fi 7
+# parts to iwlmld only when it is built); MediaTek MT7925 (common on 2024+ AMD
+# laptops), Qualcomm WCN7850 (ath12k), and the Realtek rtw89 parts budget
+# laptops ship besides the 8852BE.
+CONFIG_IWLMLD=m
+CONFIG_MT7925E=m
+CONFIG_ATH12K=m
+CONFIG_RTW89_8851BE=m
+CONFIG_RTW89_8852AE=m
+CONFIG_RTW89_8852CE=m
+CONFIG_RTW89_8922AE=m
+# Suspend: without the PMC drivers s2idle never reaches the deep package states
+# on modern AMD and Intel laptops (battery drains in suspend). Intel PMC core
+# sits behind PMT telemetry.
+CONFIG_AMD_PMC=m
+CONFIG_INTEL_PMT_TELEMETRY=m
+CONFIG_INTEL_PMC_CORE=m
+# Power button, hotkeys and tablet mode on many Intel laptops go through these.
+CONFIG_INTEL_HID_EVENT=m
+CONFIG_INTEL_VBTN=m
+# Laptop platform drivers: Fn keys, mic-mute LED, keyboard backlight, battery
+# charge limits, platform profiles.
+CONFIG_THINKPAD_ACPI=m
+CONFIG_IDEAPAD_LAPTOP=m
+CONFIG_ASUS_WMI=m
+CONFIG_ASUS_NB_WMI=m
+CONFIG_X86_PLATFORM_DRIVERS_HP=y
+CONFIG_HP_WMI=m
+CONFIG_X86_PLATFORM_DRIVERS_DELL=y
+CONFIG_DELL_SMBIOS=m
+CONFIG_DELL_LAPTOP=m
+CONFIG_DELL_WMI=m
+CONFIG_ACER_WMI=m
+# Audio: the smart speaker amplifiers behind HDA on many 2022+ ASUS/Lenovo/HP/
+# Dell laptops (silent internal speakers without them), the Cirrus CS8409
+# bridge (Dell, Apple), and the digital mic on Ryzen 7040 and later (ACP 6.3+,
+# the "PS" driver; ACP6x above stops at Rembrandt).
+CONFIG_SND_HDA_SCODEC_CS35L41_I2C=m
+CONFIG_SND_HDA_SCODEC_CS35L41_SPI=m
+CONFIG_SND_HDA_SCODEC_CS35L56_I2C=m
+CONFIG_SND_HDA_SCODEC_TAS2781_I2C=m
+CONFIG_SND_HDA_CODEC_CS8409=m
+CONFIG_SND_SOC_AMD_PS=m
+CONFIG_SND_SOC_AMD_PS_MACH=m
+# Input: Wacom tablets (pen pressure), Microsoft/Lenovo/ASUS keyboards' extra
+# keys, Apple Magic Mouse/Trackpad, Elan and Synaptics (RMI4 over SMBus)
+# touchpads in native mode (gestures; otherwise PS/2 emulation), and battery
+# level of wireless mice/keyboards.
+CONFIG_HID_WACOM=m
+CONFIG_HID_MICROSOFT=m
+CONFIG_HID_LENOVO=m
+CONFIG_HID_ASUS=m
+CONFIG_HID_MAGICMOUSE=m
+CONFIG_HID_ELAN=m
+CONFIG_HID_BATTERY_STRENGTH=y
+CONFIG_RMI4_CORE=m
+CONFIG_RMI4_SMB=m
+CONFIG_MOUSE_PS2_SYNAPTICS_SMBUS=y
+CONFIG_MOUSE_ELAN_I2C=m
+CONFIG_MOUSE_ELAN_I2C_I2C=y
+CONFIG_MOUSE_ELAN_I2C_SMBUS=y
+# Sensor hubs (Intel ISH, AMD SFH): accelerometer and ambient light on 2-in-1s.
+CONFIG_IIO=m
+CONFIG_HID_SENSOR_HUB=m
+CONFIG_INTEL_ISH_HID=m
+CONFIG_AMD_SFH_HID=m
+CONFIG_HID_SENSOR_ACCEL_3D=m
+CONFIG_HID_SENSOR_ALS=m
+# Trying PengyOS in a VM: VirtualBox's default VMSVGA adapter and VMware are
+# vmwgfx; VirtualBox's older VBoxVGA and its guest device; Hyper-V's display,
+# disk, network and input.
+CONFIG_DRM_VMWGFX=m
+CONFIG_DRM_VBOXVIDEO=m
+CONFIG_VIRT_DRIVERS=y
+CONFIG_VBOXGUEST=m
+CONFIG_HYPERV=y
+CONFIG_DRM_HYPERV=m
+CONFIG_HYPERV_STORAGE=m
+CONFIG_HYPERV_NET=m
+CONFIG_HID_HYPERV_MOUSE=m
+CONFIG_HYPERV_KEYBOARD=m
+# Bluetooth PAN (tethering through a phone); bluetoothd's network plugin logged
+# "kernel lacks bnep-protocol support".
+CONFIG_BT_BNEP=m
+# Proton/Wine's NT synchronisation primitives (/dev/ntsync).
+CONFIG_NTSYNC=m

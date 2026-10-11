@@ -84,7 +84,7 @@ Chosen once, inherited everywhere.
 | **Swap** | zram (`zram-generator`) | MIT | swap partition | 🟢 |
 | **Time / trust** | chrony; ca-certificates; OpenSSL | GPL-2.0 / MPL-2.0 / Apache-2.0 | timesyncd | 🟢 |
 | **Remote** | OpenSSH, key-only; host keys generated on first boot | BSD | — | 🟢 |
-| **LSM** | none yet. AppArmor profiles exist (`tools/pengyos-apparmor`) but are not enabled in an image | GPL-2.0 | SELinux | 🟡 |
+| **LSM** | **Yama** (`ptrace_scope=1`) and **Landlock** since 26.10.23; no MAC policy yet: AppArmor profiles exist (`tools/pengyos-apparmor`) but are not enabled in an image | GPL-2.0 | SELinux | 🟡 |
 | **Signing** | **ed25519** detached signatures (`tools/pengyos-sign`) on update manifests | MIT | GPG | 🟢 |
 | **SBOM** | **SPDX + CycloneDX** per image, generated from Buildroot's `legal-info`/`show-info` (`pengyos-build sbom --embed`), signed, and embedded at `/etc/pengyos/` | CC0-1.0 | — | 🟢 |
 | **Measured boot** | not yet (tpm2-tools ship on Desktop) | — | TPM2 via systemd-measure with the UKI design | ⚪ |
@@ -92,9 +92,13 @@ Chosen once, inherited everywhere.
 
 > **Licenses.** Freedom-first (README Principle 1): permissive preferred, weak copyleft
 > fine when dynamically linked, strong copyleft fine for standalone programs. The GPL
-> and LGPL components above are such programs or dynamically linked libraries. Binary
-> blobs: CPU microcode and device **firmware** (`linux-firmware`, `sof-firmware`) in
-> every edition, and the **NVIDIA driver** in the NVIDIA editions only (§2.5). Every
+> and LGPL components above are such programs or dynamically linked libraries, as are
+> the ones the editions add: QEMU (GPL-2.0, Server/Desktop), libqalculate/`qalc`
+> (GPL-2.0+), libnotify and PulseAudio's client library and `pactl` (LGPL-2.1+; no
+> PulseAudio daemon), cosmic-osk (GPL-3.0). Binary blobs: CPU **microcode** (Intel
+> `intel-microcode`, AMD `amd-ucode`; built into the kernel since 26.10.23) and device
+> **firmware** (`linux-firmware`, `sof-firmware`) in every edition, and the **NVIDIA
+> driver** in the NVIDIA editions only (§2.5). Every
 > license cell is checked against the SBOM; `tools/pengyos-license-audit` reports
 > mismatches.
 
@@ -155,7 +159,9 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 - **Storage tools:** e2fsprogs, btrfs-progs, dosfstools, exfatprogs, parted, LVM2,
   cryptsetup, efibootmgr.
 - **Hardware:** a broad firmware set (Intel/Realtek/MediaTek/Qualcomm/Broadcom
-  Wi-Fi, i915, amdgpu) and kernel drivers for the fleet's NICs, storage, sensors.
+  Wi-Fi, i915, amdgpu) and kernel drivers for the fleet's NICs, storage, sensors;
+  Intel and AMD CPU microcode built into the kernel (applied by the early loader, no
+  initramfs); the Intel IOMMU on by default; WireGuard.
 - **Provenance:** `/etc/os-release` carries `IMAGE_ID`, `IMAGE_VERSION` and
   `BUILD_ID` (the git commit); the SBOM is embedded.
 - **Image:** a disk image (`pengyos-core-x86_64.img`) written straight to the target.
@@ -171,6 +177,7 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 | Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo |
 | Containers | **podman**, rootless and daemonless, with the API socket |
 | Ops | default-deny nftables, a backup timer, a metrics timer, the daily update check |
+| Virtual machines | **QEMU** (x86_64 system emulation, KVM-accelerated, TCG fallback; SeaBIOS + edk2 guest firmware; `qemu-img`) and KVM, vhost, VFIO in the kernel |
 | Install & update | the console installer on a USB stick, the A/B layout, `pengyos-update` |
 | Pengy | `pengy-web` (the assistant in a browser) |
 
@@ -186,10 +193,12 @@ podman.
 | Media | PipeWire + WirePlumber, GStreamer + FFmpeg, AAC/aptX/LDAC Bluetooth codecs, SOF firmware | |
 | Hardware | NetworkManager (+ Wi-Fi, OpenVPN, WireGuard, ModemManager), BlueZ, UPower, power-profiles-daemon, thermald, fwupd, bolt, switcheroo-control, udisks | |
 | Printing & scanning | CUPS + cups-filters, Gutenprint, HPLIP, ipp-usb, SANE + airscan, Avahi/mDNS | driverless first |
-| Apps | **Flatpak + Flathub** through COSMIC Store; Firefox installed from Flathub on first boot (once online) | Lane 3 (§2.5) |
+| Apps | **Flatpak + Flathub** through COSMIC Store; Firefox installed from Flathub on first boot (once online); app updates announced by the PengyOS Updates notifier | Lane 3 (§2.5) |
 | Toolkits | GTK 3, Qt 6 (with the cutecosmic theme bridge), libcosmic | for third-party apps |
 | Boot | Plymouth splash with the PengyOS theme | |
 | Pengy | the Pengy desktop app | |
+| Languages | ~50 UTF-8 locales (Region & Language lists them); on-screen keyboard (cosmic-osk) | no screen reader yet (Orca) |
+| Virtual machines | QEMU's SDL/OpenGL window (`-display sdl,gl=on`) | Server layer's QEMU |
 | PengyOS apps | the graphical installer, PengyOS Updates (app + notifier) | libcosmic |
 
 ### 2.4 NVIDIA editions — opt-in

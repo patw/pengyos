@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`gamemode` in `USER_GROUPS`.** GameMode's polkit rule grants its CPU-governor
+  and GPU-clock helpers only to that group (allow_active=no otherwise), so GameMode
+  did nothing for the desktop user. `tests/test_owner_groups.py` keeps
+  `USER_GROUPS` equal to the image's `/usr/lib/pengyos/owner-groups`, which
+  `merge-accounts` uses to add existing owners to a group appended later.
+
 ### Changed
 - **`loglevel=4` with the serial console on real hardware.** Where GRUB finds a
   UART and the SMBIOS vendor is not QEMU, `render_grub_cfg` sets

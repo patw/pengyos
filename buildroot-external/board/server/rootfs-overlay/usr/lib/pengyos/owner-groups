@@ -1,0 +1,15 @@
+# Groups that make a user the machine's owner. pengyos-install puts the user it
+# creates in each one the image defines (USER_GROUPS in
+# tools/pengyos-install/src/pengyos_install/image.py; a gate test keeps the two
+# equal), and merge-accounts adds existing owners once to any group appended
+# here later. Server and Desktop share the list; groups an image lacks are
+# skipped.
+wheel
+sudo
+seat
+video
+audio
+input
+render
+pipewire
+gamemode

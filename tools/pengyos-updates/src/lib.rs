@@ -239,11 +239,23 @@ pub struct Prefs {
     /// What was last announced, and when (one reminder a day at most).
     pub notified: String,
     pub notified_at: i64,
+    /// The app lane: which Flatpak updates were last announced (an
+    /// [`AppUpdates::key`]), and when.
+    pub apps_notified: String,
+    pub apps_notified_at: i64,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { notify: true, snooze_until: 0, snoozed_version: String::new(), notified: String::new(), notified_at: 0 }
+        Prefs {
+            notify: true,
+            snooze_until: 0,
+            snoozed_version: String::new(),
+            notified: String::new(),
+            notified_at: 0,
+            apps_notified: String::new(),
+            apps_notified_at: 0,
+        }
     }
 }
 
@@ -270,6 +282,8 @@ impl Prefs {
             snoozed_version: s(&v, "snoozed_version"),
             notified: s(&v, "notified"),
             notified_at: v.get("notified_at").and_then(Value::as_i64).unwrap_or(0),
+            apps_notified: s(&v, "apps_notified"),
+            apps_notified_at: v.get("apps_notified_at").and_then(Value::as_i64).unwrap_or(0),
         }
     }
 
@@ -280,6 +294,8 @@ impl Prefs {
             "snoozed_version": self.snoozed_version,
             "notified": self.notified,
             "notified_at": self.notified_at,
+            "apps_notified": self.apps_notified,
+            "apps_notified_at": self.apps_notified_at,
         }))
         .unwrap_or_default()
     }
@@ -369,6 +385,89 @@ pub fn decide(state: &SystemState, running: &str, prefs: &Prefs, now: i64) -> Op
         return None;
     }
     Some(notice)
+}
+
+// ---------------------------------------------------------------------------
+// The app lane: Flatpak updates
+// ---------------------------------------------------------------------------
+//
+// OS updates never carry apps (docs/install-update-architecture.md); Flatpak
+// apps update in their own lane, through COSMIC Store. The Store only looks for
+// updates while it is open, and never says so, so nothing told anyone that an
+// app could be updated (behoweather, 26.10.22: Chrome, Firefox and Discord all
+// behind). The notifier asks Flatpak itself and points at the Store.
+
+/// How often the notifier asks Flatpak (it also asks once after login).
+pub const APP_CHECK_EVERY: i64 = 6 * 3600;
+
+/// `flatpak remote-ls --updates --app --columns=application,name`: one
+/// tab-separated line per app, system and user installations both.
+pub const APP_CHECK_ARGS: [&str; 4] = ["remote-ls", "--updates", "--app", "--columns=application,name"];
+
+/// Apps with an update waiting: (application id, display name), sorted by id.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AppUpdates(pub Vec<(String, String)>);
+
+impl AppUpdates {
+    pub fn parse(text: &str) -> AppUpdates {
+        let mut apps: Vec<(String, String)> = text
+            .lines()
+            .filter_map(|line| {
+                let mut cols = line.split('\t');
+                let id = cols.next()?.trim();
+                // An application id has at least two dots and no spaces; this
+                // also drops a header line, should Flatpak print one.
+                if id.matches('.').count() < 2 || id.contains(char::is_whitespace) {
+                    return None;
+                }
+                let name = cols.next().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(id);
+                Some((id.to_string(), name.to_string()))
+            })
+            .collect();
+        apps.sort();
+        apps.dedup();
+        AppUpdates(apps)
+    }
+
+    /// Ask Flatpak. `None` when it cannot be asked (no flatpak, no network).
+    pub fn check() -> Option<AppUpdates> {
+        let out = Command::new("flatpak").args(APP_CHECK_ARGS).output().ok()?;
+        out.status.success().then(|| AppUpdates::parse(&String::from_utf8_lossy(&out.stdout)))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// What `Prefs::apps_notified` records: the ids, so a different set of
+    /// updates is announced and the same set is not repeated every check.
+    pub fn key(&self) -> String {
+        self.0.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>().join(",")
+    }
+
+    pub fn text(&self) -> (String, String) {
+        let names: Vec<&str> = self.0.iter().map(|(_, n)| n.as_str()).collect();
+        let summary = match names.len() {
+            1 => "An app update is available".to_string(),
+            n => format!("{n} app updates are available"),
+        };
+        let list = match names.as_slice() {
+            [one] => one.to_string(),
+            [a, b] => format!("{a} and {b}"),
+            [a, b, c] => format!("{a}, {b} and {c}"),
+            [a, b, rest @ ..] => format!("{a}, {b} and {} more", rest.len()),
+            [] => String::new(),
+        };
+        (summary, format!("{list}. Click to open the Store."))
+    }
+}
+
+/// Whether to announce `apps` now: notifications on, something to say, and not
+/// the same set as announced less than a day ago.
+pub fn decide_apps(apps: &AppUpdates, prefs: &Prefs, now: i64) -> bool {
+    prefs.notify
+        && !apps.is_empty()
+        && !(prefs.apps_notified == apps.key() && now - prefs.apps_notified_at < RENOTIFY)
 }
 
 // ---------------------------------------------------------------------------
@@ -512,11 +611,51 @@ mod tests {
         let mut p = Prefs::default();
         p.notify = false;
         p.snooze("26.09.3", DAY, 10);
+        p.apps_notified = "org.mozilla.firefox".into();
+        p.apps_notified_at = 20;
         p.save_to(&path).unwrap();
         assert_eq!(Prefs::load_from(&path), p);
         assert_eq!(Prefs::load_from(&dir.join("missing.json")), Prefs::default());
         let _ = fs::remove_dir_all(dir);
         assert_eq!(Prefs::parse("{}"), Prefs::default());
+    }
+
+    #[test]
+    fn app_updates_parse() {
+        let out = "com.discordapp.Discord\tDiscord\norg.mozilla.firefox\tFirefox\ncom.google.Chrome\tGoogle Chrome\n";
+        let a = AppUpdates::parse(out);
+        assert_eq!(a.key(), "com.discordapp.Discord,com.google.Chrome,org.mozilla.firefox");
+        assert_eq!(a.0[1].1, "Google Chrome");
+        // A header, blank lines and a duplicate are ignored; a missing name falls back to the id.
+        let a = AppUpdates::parse("Application ID\tName\n\norg.gnome.Maps\norg.gnome.Maps\n");
+        assert_eq!(a.0, vec![("org.gnome.Maps".to_string(), "org.gnome.Maps".to_string())]);
+        assert!(AppUpdates::parse("").is_empty());
+    }
+
+    #[test]
+    fn app_updates_text() {
+        let a = AppUpdates::parse("a.b.One\tOne\n");
+        assert_eq!(a.text().0, "An app update is available");
+        assert_eq!(a.text().1, "One. Click to open the Store.");
+        let a = AppUpdates::parse("a.b.A\tA\na.b.B\tB\na.b.C\tC\na.b.D\tD\n");
+        assert_eq!(a.text().0, "4 app updates are available");
+        assert_eq!(a.text().1, "A, B and 2 more. Click to open the Store.");
+    }
+
+    #[test]
+    fn app_notify_rules() {
+        let a = AppUpdates::parse("org.mozilla.firefox\tFirefox\n");
+        let mut p = Prefs::default();
+        assert!(decide_apps(&a, &p, 1000));
+        assert!(!decide_apps(&AppUpdates::default(), &p, 1000));
+        p.apps_notified = a.key();
+        p.apps_notified_at = 1000;
+        assert!(!decide_apps(&a, &p, 1000 + 3600)); // same set, same day
+        assert!(decide_apps(&a, &p, 1000 + RENOTIFY)); // a day later
+        let b = AppUpdates::parse("org.mozilla.firefox\tFirefox\ncom.google.Chrome\tChrome\n");
+        assert!(decide_apps(&b, &p, 1000 + 60)); // something new
+        p.notify = false;
+        assert!(!decide_apps(&b, &p, 1000 + RENOTIFY));
     }
 
     #[test]

@@ -17,6 +17,81 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: no CPU microcode, whole classes of hardware without drivers, COSMIC features that did nothing (found on behoweather, 26.10.22)
+
+The 26.10.22 hardware check (`pengyos-oct11-issues.md`) and a sweep of the
+families around each finding. Most of these were silent: the machine worked,
+and the feature was simply not there.
+
+- **No edition shipped CPU microcode.** behoweather's N100 ran its factory
+  revision (0xe; Intel's 20260812 release has 0x21): "Running old microcode",
+  "Register File Data Sampling: Vulnerable: No microcode". Intel
+  (`intel-microcode`) and AMD (`amd-ucode`) microcode is now built into the
+  kernel (`CONFIG_EXTRA_FIRMWARE`, set by `external.mk`), and the early loader
+  applies it. It rides inside `bzImage`, so existing installs get it from a normal
+  update. No grub.cfg or updater change.
+- **Hardware outside the fleet had no driver.** The kernel config grew one owned
+  machine at a time. Added (desktop fragment): `xe` (Lunar/Panther Lake, Arc
+  B-series: no GPU acceleration before), Intel Wi-Fi 7's MLD op mode, MediaTek
+  MT7925, Qualcomm ath12k and more rtw89 parts (+ firmware), the AMD/Intel PMC
+  drivers (s2idle never reached deep sleep: battery drain in suspend),
+  intel-hid/vbtn (power button and hotkeys on many Intel laptops), ThinkPad/
+  IdeaPad/ASUS/HP/Dell/Acer platform drivers, the CS35L41/CS35L56/TAS2781 speaker
+  amplifiers (silent speakers) with their tuning firmware, the Ryzen 7040+ digital
+  mic (ACP "PS"), Wacom/Microsoft/Lenovo/ASUS/Apple/Elan HID and RMI4/Elan
+  touchpads, sensor hubs, VirtualBox/VMware/Hyper-V graphics, Bluetooth PAN.
+  Core: the Intel IOMMU on by default (AMD's already was), Yama, Landlock and
+  WireGuard (`wireguard-tools` and NetworkManager's WireGuard shipped without the
+  kernel module).
+- **QEMU + KVM on Server and Desktop.** `qemu-system-x86_64` with KVM, TCG
+  fallback, SeaBIOS/edk2 guest firmware and `qemu-img`; vhost, VFIO and macvtap in
+  the kernel; an SDL/OpenGL window on the Desktop.
+- **Programs COSMIC runs by name were missing.** Every `Command::new("…")` in the
+  pinned COSMIC sources was checked against the image:
+  - `cosmic-osk` was never built, but cosmic-session started it at every login and
+    the panel's OSK applet toggled nothing. Now built (`cosmic-components.tsv`).
+  - no `rfkill`: Bluetooth couldn't come back after airplane mode.
+  - no `pactl`: Mono Audio didn't reach PulseAudio clients (every Flatpak browser,
+    Discord, Spotify), and virtual sinks couldn't be made the default. PulseAudio
+    is now built client-only (no daemon to fight `pipewire-pulse`).
+  - no `qalc`: the launcher's calculator did nothing (new `libqalculate` recipe).
+  - no `locale`, and only `en_US.UTF-8`: Settings → Region & Language listed no
+    languages at all. ~50 UTF-8 locales now, the `locale` binary, and the X11
+    Compose data for all of them.
+  - no `xrdb` (X11 apps' cursor theme and size) and no `notify-send` (new
+    `libnotify` recipe).
+  - Not done: Orca, the screen reader the greeter's accessibility toggle starts.
+    It needs GObject-introspection and a speech stack, which means rebuilding
+    most of the desktop. Tracked as a known gap.
+- **GameMode did nothing.** Its polkit actions are allowed only for group
+  `gamemode`, which no image created (no `systemd-sysusers`). The group exists
+  now and the installer adds the user. `merge-accounts` adds existing owners
+  once to any group later appended to `/usr/lib/pengyos/owner-groups`, which also
+  fixes `pipewire` membership for machines installed before that group existed.
+  Groups `clock` (udev) and `power` (thermald's D-Bus policy) are defined, ending
+  two boot-log warnings, and `udevadm verify` passes again.
+- **App updates were never announced.** COSMIC Store checks for Flatpak updates
+  only while it is open, and never notifies. The PengyOS Updates notifier now
+  asks Flatpak after login and every 6 hours, and announces new app updates with
+  a link to the Store (pengyos-updates 0.3.0).
+- **`vm.max_map_count` was 65530**, which crashes Steam/Proton titles and is
+  below Elasticsearch's minimum. Now 1048576 (every edition). The Desktop also
+  allows 8192 inotify instances (the other half of 26.10.20's watcher fix).
+- **Two mDNS stacks.** 26.10.20's `MulticastDNS=resolve` stopped the hostname
+  conflict, but resolved still bound :5353 next to avahi ("Detected another
+  IPv4 mDNS stack"), and nsswitch asked resolved first, so `mdns4_minimal` never
+  ran. resolved's mDNS is off, and `hosts:` asks avahi for `.local` first
+  (Fedora's order).
+- **Config nothing read.** `tools/pengyos-desktop-net` emitted
+  NetworkManager keys that don't exist (`auth-agent=`, `[device] devices=*`), a
+  `wpa_supplicant.conf` with a placeholder network, COSMIC panel/settings TOML
+  that COSMIC never reads, and `/wifi-firmware.txt` at the filesystem root. The
+  tool is retired, and only a valid `NetworkManager.conf` remains.
+- Smaller: `xfs_scrub_all.timer` disabled (no PengyOS partition is XFS),
+  `/etc/bluetooth` gets the 0555 its unit declares (a warning at every boot), and
+  `/etc/pam.d/login` no longer names `pam_selinux`/`pam_console`, which the image
+  doesn't have (an error-level PAM log line at every console login).
+
 ### Fixed: an inert amdgpu power rule and two boot-log warnings (found on behoweather, 26.10.20)
 
 - **The amdgpu runtime-PM udev rule never did anything.** udev rejected it at

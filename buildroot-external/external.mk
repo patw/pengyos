@@ -38,6 +38,13 @@ define PENGYOS_GLIBC_INSTALL_LDD
 endef
 GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_LDD
 GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_GETENT
+# locale likewise. COSMIC Settings' Region & Language page lists the languages
+# `locale -a` prints and the launcher's calculator asks `locale` for the decimal
+# separator; with no binary the language list was empty (behoweather, 26.10.22).
+define PENGYOS_GLIBC_INSTALL_LOCALE
+	$(INSTALL) -D -m 0755 $(@D)/build/locale/locale $(TARGET_DIR)/usr/bin/locale
+endef
+GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_LOCALE
 # ldconfig where the NVIDIA container toolkit is: the CDI spec's update-ldcache
 # hook runs the host's /sbin/ldconfig inside the container (so a container gets
 # the driver libraries in its ld cache), and fails without one.
@@ -109,6 +116,56 @@ endif
 ifeq ($(BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E),y)
 LINUX_FIRMWARE_FILES += intel/iwlwifi/iwlwifi-so-a0-gf4-a0*.{ucode,pnvm}
 endif
+# Intel Wi-Fi 7 beyond the BE200 (IWLWIFI_7 ships only gl-c0-fm-c0): BE201 and
+# the Meteor/Arrow Lake CNVi ("bz") and Lunar Lake ("sc") pairings. Kernel 7.2
+# asks for core API 106 first for these MACs (cfg/bz.c, cfg/sc.c; 102 is the
+# floor) and API 100 for their older-RF pairings, and every pairing has a c106 or
+# a 100 build, so only those are installed (~16 MB, not all 68 MB).
+ifeq ($(BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7),y)
+LINUX_FIRMWARE_FILES += \
+	intel/iwlwifi/iwlwifi-bz-b0-*-c106.ucode \
+	intel/iwlwifi/iwlwifi-bz-b0-*-100.ucode \
+	intel/iwlwifi/iwlwifi-bz-b0-*.pnvm \
+	intel/iwlwifi/iwlwifi-sc-a0-*-c106.ucode \
+	intel/iwlwifi/iwlwifi-sc-a0-*-100.ucode
+endif
+# The Bluetooth half of the Qualcomm WCN7850 (btusb's QCA support).
+ifeq ($(BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_WCN7850),y)
+LINUX_FIRMWARE_FILES += qca/hmtbtfw20.tlv qca/hmtnv20.*
+endif
+# Laptop speaker amplifiers behind HDA (Cirrus CS35L41/CS35L56, TI TAS2781;
+# linux.fragment): the per-model tuning files. Without them the amps run with
+# no DSP protection or stay silent. Wherever there is a desktop audio stack.
+ifeq ($(BR2_PACKAGE_PIPEWIRE),y)
+LINUX_FIRMWARE_DIRS += cirrus ti/audio/tas2781
+endif
+
+# CPU microcode, built into the kernel (core.config says why). The early loader
+# looks built-in firmware up by name (intel-ucode/ff-mm-ss,
+# amd-ucode/microcode_amd_famXXh.bin), so CONFIG_EXTRA_FIRMWARE lists every file
+# both packages provide, from one directory: intel-microcode installs to
+# $(BINARIES_DIR)/intel-ucode, and the AMD files are copied next to it. The
+# list is computed when the kernel config is fixed up, so the order-only rule
+# makes sure both packages are there by then (KCONFIG_DEPENDENCIES is read when
+# linux.mk is evaluated, before this file).
+ifeq ($(BR2_LINUX_KERNEL)$(BR2_PACKAGE_INTEL_MICROCODE)$(BR2_PACKAGE_LINUX_FIRMWARE_AMD_UCODE),yyy)
+$(LINUX_DIR)/.stamp_kconfig_fixup_done: | intel-microcode linux-firmware
+# (The list is built by the shell: make's $(wildcard) caches directory contents
+# and can miss a directory created during the same run. The empty first line
+# keeps `+=`, which joins with a space, from gluing the first command onto the
+# last line of linux.mk's own fixups.)
+define PENGYOS_LINUX_BUILTIN_MICROCODE
+
+	mkdir -p $(BINARIES_DIR)/amd-ucode
+	cp $(LINUX_FIRMWARE_DIR)/amd-ucode/*.bin $(BINARIES_DIR)/amd-ucode/
+	ls $(BINARIES_DIR)/intel-ucode/* >/dev/null
+	$(SED) '/^\(# \)\?CONFIG_EXTRA_FIRMWARE\>/d' $(call KCONFIG_DOT_CONFIG)
+	echo "CONFIG_EXTRA_FIRMWARE=\"$$(cd $(BINARIES_DIR) && echo intel-ucode/* amd-ucode/*.bin)\"" \
+		>> $(call KCONFIG_DOT_CONFIG)
+	$(call KCONFIG_SET_OPT,CONFIG_EXTRA_FIRMWARE_DIR,"$${BR_BINARIES_DIR}")
+endef
+LINUX_KCONFIG_FIXUP_CMDS += $(PENGYOS_LINUX_BUILTIN_MICROCODE)
+endif
 
 # gvfs: Buildroot hardcodes -Dmtp=false. With our libmtp, enable the MTP backend
 # so phones show up in COSMIC Files.
@@ -164,6 +221,15 @@ endif
 ifeq ($(BR2_PACKAGE_PIPEWIRE)$(BR2_PACKAGE_FLATPAK),yy)
 PIPEWIRE_CONF_OPTS += -Dflatpak=enabled
 $(PIPEWIRE_TARGET_CONFIGURE): $(LIBGLIB2_TARGET_INSTALL_STAGING)
+endif
+
+# PulseAudio, client side only, next to PipeWire: the Desktop wants libpulse and
+# pactl (desktop.config says why), never the PulseAudio daemon, whose user
+# socket/service would race pipewire-pulse for $XDG_RUNTIME_DIR/pulse/native.
+# Buildroot always builds the daemon; daemon=false drops it with its units,
+# autostart file and config.
+ifeq ($(BR2_PACKAGE_PULSEAUDIO)$(BR2_PACKAGE_PIPEWIRE),yy)
+PULSEAUDIO_CONF_OPTS += -Ddaemon=false
 endif
 
 # --- Reproducible builds: inputs Buildroot takes from the build host ----------

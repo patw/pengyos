@@ -67,7 +67,6 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-debx`](pengyos-debx/) | Bounded deb / rpm extractor for PengyOS. |
 | [`pengyos-desktop-curation`](pengyos-desktop-curation/) | Curated PengyOS Desktop default-application set as declarative data. |
 | [`pengyos-desktop-drivers`](pengyos-desktop-drivers/) | The generic (no vendor-acceleration) driver set for the PengyOS Desktop live + installed image: a kernel linux.frag… |
-| [`pengyos-desktop-net`](pengyos-desktop-net/) | Declarative NetworkManager + wpa_supplicant + COSMIC panel defaults for the PengyOS Desktop — emitted as build-cons… |
 | [`pengyos-desktop-nvidia`](pengyos-desktop-nvidia/) | Containment lint for the opt-in NVIDIA editions, Server and Desktop (package `nvidia-open`): the proprietary driver stays out of every default image. |
 | [`pengyos-desktop-session`](pengyos-desktop-session/) | The COSMIC session + a VM-testable smoke matrix (US-DSK-1) for PengyOS Desktop. |
 | [`pengyos-flatpak-mirror`](pengyos-flatpak-mirror/) | Self-hosted Flatpak (OSTree) repo manager for PengyOS. |

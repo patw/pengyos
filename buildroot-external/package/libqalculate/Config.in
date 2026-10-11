@@ -1,0 +1,14 @@
+config BR2_PACKAGE_LIBQALCULATE
+	bool "libqalculate"
+	depends on BR2_INSTALL_LIBSTDCPP
+	depends on BR2_USE_WCHAR
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	select BR2_PACKAGE_GMP
+	select BR2_PACKAGE_MPFR
+	select BR2_PACKAGE_LIBXML2
+	help
+	  The Qalculate! math library and its command-line calculator,
+	  qalc. COSMIC's launcher (pop-launcher's calc plugin) runs qalc
+	  for every "= 2+2" query; without it the calculator did nothing.
+
+	  https://qalculate.github.io/

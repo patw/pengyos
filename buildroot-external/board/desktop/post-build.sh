@@ -46,7 +46,7 @@ if [ -d "${COSMIC_REL}" ]; then
     n=0
     for b in cosmic-comp cosmic-session cosmic-panel cosmic-panel-button \
              cosmic-launcher cosmic-applets cosmic-settings cosmic-settings-daemon \
-             cosmic-notifications cosmic-osd cosmic-idle cosmic-bg \
+             cosmic-notifications cosmic-osd cosmic-osk cosmic-idle cosmic-bg \
              cosmic-randr cosmic-screenshot \
              cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player cosmic-app-library \
              cosmic-workspaces cosmic-viewer cosmic-greeter cosmic-monitor \
@@ -630,12 +630,13 @@ ls "${TARGET_DIR}/etc/alsa/conf.d/99-pipewire-default.conf" >/dev/null
 # dead keys and Compose sequences did nothing ("couldn't find a Compose file").
 # The purge runs before post-build scripts; restore from staging.
 X11_LOCALE="${STAGING_DIR}/usr/share/X11/locale"
+# Every UTF-8 directory, not just en_US: since 26.10.23 the image generates other
+# locales (desktop.config), and el_GR, fi_FI, pt_BR, ru_RU and the CJK locales
+# have Compose files of their own (compose.dir). 16 directories, ~0.8 MB.
 if [ -f "${X11_LOCALE}/compose.dir" ]; then
-    cp -a "${X11_LOCALE}/en_US.UTF-8" "${X11_LOCALE}/compose.dir" \
-        "${X11_LOCALE}/locale.alias" "${TARGET_DIR}/usr/share/X11/locale/"
-    grep -qx 'en_US.UTF-8/XLC_LOCALE: en_US.UTF-8' "${TARGET_DIR}/usr/share/X11/locale/locale.dir" \
-        || echo 'en_US.UTF-8/XLC_LOCALE: en_US.UTF-8' >> "${TARGET_DIR}/usr/share/X11/locale/locale.dir"
-    echo "post-build: restored the X11 Compose data (en_US.UTF-8)"
+    cp -a "${X11_LOCALE}"/*.UTF-8 "${X11_LOCALE}/compose.dir" "${X11_LOCALE}/locale.alias" \
+        "${X11_LOCALE}/locale.dir" "${TARGET_DIR}/usr/share/X11/locale/"
+    echo "post-build: restored the X11 Compose data (UTF-8 locales)"
 fi
 
 # --- cups-browsed: keep its network-printer queues at shutdown ----------------
@@ -650,6 +651,30 @@ fi
 # three times per boot (behoweather, 26.10.20).
 [ ! -f "${TARGET_DIR}/usr/lib/systemd/system/cups-browsed.service" ] || \
     chmod 0644 "${TARGET_DIR}/usr/lib/systemd/system/cups-browsed.service"
+
+# --- Files earlier images shipped -------------------------------------------------
+# Removed from the overlay in 26.10.23 (tools/pengyos-desktop-net, retired: none
+# of them was read by anything). Buildroot never deletes from target/, so an
+# existing build tree would keep shipping them.
+rm -f "${TARGET_DIR}/etc/NetworkManager/conf.d/10-pengyos.conf" \
+      "${TARGET_DIR}/etc/skel/.config/cosmic-settings/network.toml" \
+      "${TARGET_DIR}/etc/skel/.config/cosmic/panel.toml" \
+      "${TARGET_DIR}/etc/wpa_supplicant.conf" \
+      "${TARGET_DIR}/wifi-firmware.txt"
+rmdir "${TARGET_DIR}/etc/skel/.config/cosmic-settings" 2>/dev/null || true
+
+# --- Host names: .local through avahi first (nss-mdns) -------------------------
+# One mDNS stack, avahi (resolved.conf.d sets MulticastDNS=no). systemd's recipe
+# puts "resolve [!UNAVAIL=return]" first in hosts:, and resolved answers every
+# name, so the mdns4_minimal entry nss-mdns adds after it was never reached and
+# resolved had to keep its own mDNS stack running next to avahi's ("Detected
+# another IPv4 mDNS stack", every boot). Fedora's order: files, then .local via
+# avahi, then resolved for DNS.
+if grep -q '^hosts:' "${TARGET_DIR}/etc/nsswitch.conf" && \
+   [ -e "${TARGET_DIR}/usr/lib/libnss_mdns4_minimal.so.2" ]; then
+    sed -i 's/^hosts:.*/hosts:          files myhostname mdns4_minimal [NOTFOUND=return] resolve [!UNAVAIL=return] dns/' \
+        "${TARGET_DIR}/etc/nsswitch.conf"
+fi
 
 # --- One printer launcher --------------------------------------------------------
 # CUPS ships cups.desktop ("Manage Printing", opens localhost:631); it

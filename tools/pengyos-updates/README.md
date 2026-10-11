@@ -18,6 +18,11 @@ The desktop half of PengyOS updates (the root half is
   is available" / "Restart to finish updating"). Clicking it opens the app.
   Each thing is announced at most once a day; a snoozed release stays quiet
   until the snooze ends, but a newer release is announced right away.
+  It also covers **apps** (Flatpak, the lane OS updates never carry): after
+  login and every 6 hours it runs `flatpak remote-ls --updates --app` itself
+  (read-only, no root) and, when there is something new, posts "N app updates
+  are available", which opens COSMIC Store. The Store checks only while it is
+  open and never notifies, so without this nobody heard about app updates.
 
 The machine checks daily either way (`pengyos-update-check.timer`, as root);
 the user's choices (`~/.config/pengyos-updates/settings.json`) only decide what

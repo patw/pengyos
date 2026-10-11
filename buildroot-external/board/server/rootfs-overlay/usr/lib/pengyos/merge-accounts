@@ -75,3 +75,46 @@ merge passwd  ""     0
 merge shadow  "root" 0 "$upper/passwd"
 merge group   ""     4
 merge gshadow ""     4 "$upper/group"
+
+# --- Owner groups added to the image after the machine was installed ----------
+# The installer puts the machine's owner (a wheel member) in the groups listed in
+# owner-groups (pengyos-install USER_GROUPS). A group added to that list later -
+# pipewire, gamemode - only ever reached new installs: the merge above brings the
+# group over with no members. So once per group (owner-groups.done, on the data
+# partition, records which), add every wheel member with uid >= 1000. Once only,
+# so someone who later leaves a group by hand stays out.
+owner_groups=${PENGYOS_OWNER_GROUPS:-/usr/lib/pengyos/owner-groups}
+done_list="$upper/pengyos/owner-groups.done"
+[ -f "$owner_groups" ] && [ -f "$upper/group" ] || exit 0
+# Only groups this image defines (the list is shared by Server and Desktop).
+pending=$(grep -v '^[[:space:]]*\(#\|$\)' "$owner_groups" | while read -r g; do
+    grep -q "^$g:" "$upper/group" || continue
+    grep -qx "$g" "$done_list" 2>/dev/null || echo "$g"
+done)
+[ -n "$pending" ] || exit 0
+owners=$(awk -F: '
+    FNR == 1 { layer++ }
+    layer == 1 { if ($3 + 0 >= 1000) person[$1] = 1; next }
+    $1 == "wheel" { n = split($4, m, ","); for (i = 1; i <= n; i++) if (m[i] in person) print m[i] }
+' "$upper/passwd" "$upper/group")
+[ -n "$owners" ] || exit 0          # no owner yet: try again next boot
+# add_owners FILE: group and gshadow both keep members in field 4.
+add_owners() {
+    [ -f "$upper/$1" ] || return 0
+    awk -F: -v OFS=: -v groups=" $(echo $pending) " -v owners="$(echo $owners)" '
+        index(groups, " " $1 " ") {
+            have = "," $4 ","
+            cnt = split(owners, o, " ")
+            for (i = 1; i <= cnt; i++)
+                if (index(have, "," o[i] ",") == 0) {
+                    $4 = ($4 == "" ? o[i] : $4 "," o[i])
+                    have = have o[i] ","
+                }
+        }
+        { print }
+    ' "$upper/$1" | write "$upper/$1"
+}
+add_owners group
+add_owners gshadow
+mkdir -p "$upper/pengyos"
+echo "$pending" >> "$done_list"

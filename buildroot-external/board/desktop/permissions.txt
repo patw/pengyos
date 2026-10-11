@@ -1,0 +1,9 @@
+# PengyOS Desktop layer — file permissions on top of Buildroot's and the Server
+# layer's tables (makedevs format: <path> <type> <mode> <uid> <gid> <major>
+# <minor> <start> <inc> <count>). Applied under fakeroot when the image is made,
+# so target/ stays writable for the next build.
+#
+# bluetooth.service declares ConfigurationDirectoryMode=0555; the recipe installs
+# /etc/bluetooth 0755 and systemd warned that the mode differs at every boot
+# (behoweather, 26.10.22).
+/etc/bluetooth	d	555	0	0	-	-	-	-	-

@@ -27,6 +27,10 @@ cosmic-settings	https://github.com/pop-os/cosmic-settings	7421ff0ab482c942eef23f
 cosmic-settings-daemon	https://github.com/pop-os/cosmic-settings-daemon	f97bee648c579b5fe2f2000bf3d129f1a7b08f17	build --release
 cosmic-notifications	https://github.com/pop-os/cosmic-notifications	aa4dac2702506395ab76da1f6755e03b2ccb0db8	build --release
 cosmic-osd	https://github.com/pop-os/cosmic-osd	3faadf56bdaea4b088ea8dc5e808b167cec86de3	build --release
+# cosmic-osk: the on-screen keyboard. cosmic-session starts it at every login and
+# the panel's OSK applet toggles it; until 26.10.23 it was not in this list, so the
+# session logged "failed to start cosmic-osk" and the applet drove nothing.
+cosmic-osk	https://github.com/pop-os/cosmic-osk	38e962576f1893e6452d4c273c41149c432191b2	build --release
 cosmic-idle	https://github.com/pop-os/cosmic-idle	c95d066b5b640509a6369634b669ca60dc50e168	build --release
 cosmic-bg	https://github.com/pop-os/cosmic-bg	9d82a34dab4e73d90ba66c9f72d18d0f9b8be208	build --release
 cosmic-randr	https://github.com/pop-os/cosmic-randr	6e8e795970fa06d434af22775e415b517f7552d3	build --release

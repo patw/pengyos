@@ -41,3 +41,20 @@ CONFIG_OVERLAY_FS=y
 # efivarfs built in, so the /sys/firmware/efi/efivars mount works (the
 # installer's efibootmgr, fwupd, bootctl need it; as a module it never mounted).
 CONFIG_EFIVAR_FS=y
+
+# --- Virtualization host: KVM for QEMU (2026-10-11) ----------------------------
+# Server and Desktop ship QEMU (server.config); without KVM it could only
+# emulate. vhost for fast virtio networking/vsock, macvtap for guests on the LAN,
+# VFIO for PCI passthrough. MITIGATION_VMSCAPE (default y with KVM) closes the
+# "VMSCAPE: Vulnerable" boot line.
+CONFIG_VIRTUALIZATION=y
+CONFIG_KVM=m
+CONFIG_KVM_INTEL=m
+CONFIG_KVM_AMD=m
+CONFIG_VHOST_NET=m
+CONFIG_VSOCKETS=m
+CONFIG_VHOST_VSOCK=m
+CONFIG_MACVLAN=m
+CONFIG_MACVTAP=m
+CONFIG_VFIO=m
+CONFIG_VFIO_PCI=m

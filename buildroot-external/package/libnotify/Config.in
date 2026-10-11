@@ -1,0 +1,13 @@
+config BR2_PACKAGE_LIBNOTIFY
+	bool "libnotify"
+	depends on BR2_USE_WCHAR # libglib2
+	depends on BR2_TOOLCHAIN_HAS_THREADS # libglib2
+	depends on BR2_USE_MMU # libglib2
+	select BR2_PACKAGE_LIBGLIB2
+	select BR2_PACKAGE_GDK_PIXBUF
+	help
+	  The freedesktop desktop-notification client library and
+	  notify-send, the command scripts use to raise a notification
+	  (every desktop distro ships it; Buildroot has no package).
+
+	  https://gitlab.gnome.org/GNOME/libnotify

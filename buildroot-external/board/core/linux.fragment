@@ -185,3 +185,15 @@ CONFIG_CRYPTO_ZSTD=y
 # modules, udev loads them in the background and a failing ME delays nothing.
 CONFIG_INTEL_MEI=m
 CONFIG_INTEL_MEI_ME=m
+# --- Security posture (2026-10-11) ---------------------------------------------
+# The Intel IOMMU was built but off by default, so Intel machines had no DMA
+# remapping (no Thunderbolt/USB4 DMA protection; fwupd HSI "IOMMU: Not found")
+# while AMD's was on. Fedora and Ubuntu turn it on.
+CONFIG_INTEL_IOMMU_DEFAULT_ON=y
+# Yama (ptrace limited to a process's own descendants, kernel.yama.ptrace_scope=1
+# as on Ubuntu) and Landlock (unprivileged sandboxing apps use); both are
+# already in CONFIG_LSM's default order.
+CONFIG_SECURITY_YAMA=y
+CONFIG_SECURITY_LANDLOCK=y
+# WireGuard: NetworkManager's and wg-quick's VPNs need the kernel module.
+CONFIG_WIREGUARD=m

@@ -1,9 +1,0 @@
-# Managed by pengyos-desktop-net — Wi-Fi firmware subset reference.
-# The kernel driver lives in pengyos-desktop-drivers; this lists the firmware
-# subset the Wi-Fi backend (wpa_supplicant + mac80211) needs at boot.
-#
-# linux-firmware packages (Debian/Ubuntu):
-#   firmware-linux-nonfree   (broadcom, rtl8xxx, ...)
-#   firmware-realtek
-#   firmware-atheros
-#   firmware-marvell

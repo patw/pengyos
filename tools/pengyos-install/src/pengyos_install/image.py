@@ -77,7 +77,15 @@ LIVE_NM_CONNECTIONS = "/etc/NetworkManager/system-connections"
 #: devices. Only those the image defines are used.
 # pipewire: the realtime-scheduling limits PipeWire's packages grant (@pipewire
 # rtprio/memlock); without them it logged "RTKit error" and ran unprioritised.
-USER_GROUPS = ("wheel", "sudo", "seat", "video", "audio", "input", "render", "pipewire")
+# gamemode: GameMode's polkit rule lets only this group change the CPU governor
+# and GPU clocks (its actions are allow_active=no otherwise), and its @gamemode
+# nice limit; without it GameMode did nothing.
+# The image's /usr/lib/pengyos/owner-groups is the same list (merge-accounts adds
+# existing owners to groups appended later); tests/test_owner_groups.py keeps
+# the two equal.
+USER_GROUPS = (
+    "wheel", "sudo", "seat", "video", "audio", "input", "render", "pipewire", "gamemode",
+)
 
 #: The data partition: btrfs, one subvolume per area (preinit mounts the same way).
 DATA_MOUNT_OPTS = "noatime,compress=zstd:1"

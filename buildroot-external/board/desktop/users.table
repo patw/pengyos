@@ -13,3 +13,12 @@ cosmic-greeter -1 cosmic-greeter -1 ! /var/lib/cosmic-greeter /bin/false seat,vi
 # the image has no systemd-sysusers, so without this row the unit died with
 # 217/USER every time the timer fired.
 fwupd-refresh -1 fwupd-refresh -1 * - - - fwupd metadata refresh
+# gamemode: GameMode's polkit rule grants the governor/GPU-clock helpers to this
+# group only (allow_active=no for everyone else) and limits.d gives it a nice
+# limit. Upstream creates it with sysusers.d, which the image never runs: GameMode
+# changed nothing on any machine. The installer adds the desktop user
+# (USER_GROUPS), merge-accounts adds existing owners once.
+- -1 gamemode -1 - - - - -
+# power: thermald's D-Bus policy names it; dbus-daemon logged 'Unknown group
+# "power"' at every boot.
+- -1 power -1 - - - - -

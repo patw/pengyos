@@ -1,5 +1,17 @@
 # Changelog — pengyos-updates
 
+## [0.3.0] — 2026-10-11
+
+### Added
+- The app lane: the notifier also asks Flatpak for app updates
+  (`flatpak remote-ls --updates --app`, system and user installations, no
+  privileges) after login and every 6 hours, and posts one notification —
+  "3 app updates are available: Discord, Firefox and Google Chrome" — that opens
+  COSMIC Store. The same set is not repeated within a day; a new update is
+  announced at the next check. The notifications switch covers both lanes.
+  Before this nothing told anyone an app could be updated: COSMIC Store checks
+  only while it is open, and never notifies (behoweather, 26.10.22).
+
 ## [0.2.0] — 2026-10-01
 
 ### Added

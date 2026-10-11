@@ -564,7 +564,7 @@ rebuilt in lockstep with every release**; no third-party extensions, no dependen
 between extensions, no install scripts (files + units + sysusers/tmpfiles only). The
 admission test: it must be system-level, optional for a meaningful group, and too big or
 opinionated for the base. Candidates: **NVIDIA** (GPU and compute-only; would replace the
-separate NVIDIA editions, Server NVIDIA and Desktop NVIDIA, which ship meanwhile), **virtualization host** (QEMU/KVM/libvirt), **printing and
+separate NVIDIA editions, Server NVIDIA and Desktop NVIDIA, which ship meanwhile), **virtualization host** (libvirt and its management stack; plain QEMU + KVM has been in the Server and Desktop base since 26.10.23), **printing and
 scanning**, maybe a **web server**. If the catalogue passes about half a dozen, something
 belongs in the base or in user space instead. Kernel modules in an extension need a
 module-index (depmod) step at merge.

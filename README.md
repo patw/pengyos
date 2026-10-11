@@ -77,6 +77,8 @@ boot returns to the old slot by itself. Core can't update in place yet.
   writing a new signed image; apps come through Flatpak. `/etc`, services and your
   data live on a separate partition that updates never touch.
 - x86_64 only. No ARM build.
+- No screen reader yet. COSMIC's accessibility toggles are there, but Orca isn't in the
+  image.
 - Hardware support is driven by the handful of machines we run it on. Common Intel and
   AMD laptops and mini PCs are the safest bet; unusual Wi-Fi cards and HDMI audio
   paths are where trouble shows up, and one HDMI-audio case is worked end to end in

@@ -1,0 +1,7 @@
+# PengyOS (every edition). Presets are read in name order, first match wins, so
+# this comes before Buildroot's and systemd's "enable *".
+#
+# xfsprogs is in the image to mount XFS disks from other systems; no PengyOS
+# partition is XFS. Its weekly xfs_scrub_all.timer found nothing to do on every
+# machine, or scrubbed whatever disk happened to be plugged in.
+disable xfs_scrub_all.timer
