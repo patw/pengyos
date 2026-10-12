@@ -1,5 +1,43 @@
 # Changelog — pengyos-gamepads
 
+## [0.1.2] — 2026-10-12
+
+Tested on behoweather with an 8BitDo Ultimate 3-mode (xpad): the buttons light
+up and rumble works (confirmed by hand); the reworked layout and D-pad cross
+were checked by screenshot, with the triggers reading 0 at rest.
+
+### Fixed
+- **The live panel never moved for a real pad.** The reader thread queued every
+  event, but the panel drained the queue only in a `Drain` message nothing ever
+  sent; the 40 ms tick advanced `--selftest` alone, which is why the self-test
+  animated and a real pad did not. The tick drains the queue now.
+- **15 input codes were wrong** against `<linux/input-event-codes.h>`: the hat
+  axes (`ABS_HAT0X` is 0x10, not 0x22 — so a real D-pad was "Axis" bars and no
+  cross), the joystick buttons (`BTN_TRIGGER`…`BTN_DEAD`), `BTN_TOUCH`,
+  `BTN_TOOL_FINGER`, `ABS_MT_PRESSURE`, `KEY_VOLUMEUP`. The tests had passed
+  because they reused the same constants; a test now pins them to the header.
+  `ABS_STEER` and `ABS_AIRBRAKE` are gone (Linux has neither): a wheel steers
+  on `ABS_WHEEL`, or on `ABS_X` beside pedal axes.
+- **Xbox pads over Bluetooth** (hid-microsoft: right stick on Z/RZ, triggers on
+  BRAKE/GAS) read as two sticks and two triggers, not as pedals; sticks are
+  centred on the device's own range, so an unsigned stick rests in the middle.
+- **Triggers read "127" at rest**: unsigned axes started at a guessed
+  mid-range. They start at 0 and take the device's real current value
+  (`EVIOCGABS`) when the panel opens, without logging it as an event.
+- **The D-pad started lit** ("up" was the initial direction); it starts
+  centred, and only the pressed arm(s) light up.
+
+### Changed
+- **The window lists game controllers only.** Keyboards, mice, power buttons
+  and audio jacks pushed the pad off the screen; `--list` still prints them.
+- **The panel is laid out like an Xbox pad and fits its body**: triggers, then
+  bumpers, left stick and face buttons, Select/Guide/Start between them, D-pad
+  and right stick below. The title over the bumpers, pieces hanging off the
+  body, Select/Start on top of the sticks and captions under the body are
+  gone; a test checks that no two pieces overlap and none leaves the body.
+  Stick clicks light the stick's ring instead of a circle drawn over it, and
+  stick values moved to "Live values" under the picture.
+
 ## [0.1.1] — 2026-10-12
 
 ### Fixed

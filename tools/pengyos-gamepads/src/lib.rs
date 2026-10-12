@@ -36,14 +36,12 @@ pub const ABS_RUDDER: u16 = 0x07;
 pub const ABS_WHEEL: u16 = 0x08;
 pub const ABS_GAS: u16 = 0x09;
 pub const ABS_BRAKE: u16 = 0x0a;
-pub const ABS_AIRBRAKE: u16 = 0x0b;
-pub const ABS_STEER: u16 = 0x28;
-pub const ABS_HAT0X: u16 = 0x22;
-pub const ABS_HAT0Y: u16 = 0x23;
-pub const ABS_HAT1X: u16 = 0x24;
-pub const ABS_HAT1Y: u16 = 0x25;
-pub const ABS_HAT2X: u16 = 0x26;
-pub const ABS_HAT2Y: u16 = 0x27;
+pub const ABS_HAT0X: u16 = 0x10;
+pub const ABS_HAT0Y: u16 = 0x11;
+pub const ABS_HAT1X: u16 = 0x12;
+pub const ABS_HAT1Y: u16 = 0x13;
+pub const ABS_HAT2X: u16 = 0x14;
+pub const ABS_HAT2Y: u16 = 0x15;
 pub const ABS_MT_POSITION_X: u16 = 0x35;
 pub const ABS_MT_POSITION_Y: u16 = 0x36;
 
@@ -51,7 +49,7 @@ pub const REL_X: u16 = 0x00;
 pub const REL_Y: u16 = 0x01;
 pub const REL_WHEEL: u16 = 0x08;
 
-pub const ABS_MT_PRESSURE: u16 = 0x39;
+pub const ABS_MT_PRESSURE: u16 = 0x3a;
 
 pub const BTN_MISC: u16 = 0x100;
 pub const BTN_A: u16 = 0x130;
@@ -69,24 +67,24 @@ pub const BTN_START: u16 = 0x13b;
 pub const BTN_MODE: u16 = 0x13c;
 pub const BTN_THUMBL: u16 = 0x13d;
 pub const BTN_THUMBR: u16 = 0x13e;
-pub const BTN_TRIGGER: u16 = 0x145;
-pub const BTN_THUMB: u16 = 0x146;
-pub const BTN_BASE: u16 = 0x147;
-pub const BTN_DEAD: u16 = 0x148;
+pub const BTN_TRIGGER: u16 = 0x120;
+pub const BTN_THUMB: u16 = 0x121;
+pub const BTN_BASE: u16 = 0x126;
+pub const BTN_DEAD: u16 = 0x12f;
 pub const BTN_MOUSE: u16 = 0x110;
 pub const BTN_RIGHT: u16 = 0x111;
 pub const BTN_MIDDLE: u16 = 0x112;
 pub const BTN_SIDE: u16 = 0x113;
 pub const BTN_EXTRA: u16 = 0x114;
-pub const BTN_TOOL_FINGER: u16 = 0x141;
+pub const BTN_TOOL_FINGER: u16 = 0x145;
 pub const BTN_DIGI: u16 = 0x140;
-pub const BTN_TOUCH: u16 = 0x140;
-pub const BTN_PINKIE: u16 = 0x149;
+pub const BTN_TOUCH: u16 = 0x14a;
+pub const BTN_PINKIE: u16 = 0x125;
 // Keys below BTN_MISC: what a keyboard, a laptop hotkey device and a media
 // remote report. (KEY_MENU shares BTN_START's value, so it is not listed.)
 pub const KEY_A: u16 = 0x1e;
 pub const KEY_ESC: u16 = 0x01;
-pub const KEY_VOLUMEUP: u16 = 0x19;
+pub const KEY_VOLUMEUP: u16 = 0x73;
 pub const KEY_POWER: u16 = 0x74;
 pub const KEY_ENTER: u16 = 0x1c;
 
@@ -97,9 +95,9 @@ pub const GAME_BUTTONS: [u16; 15] = [
 ];
 
 /// Absolute axes a test panel shows, in the order they are drawn.
-pub const GAME_AXES: [u16; 14] = [
+pub const GAME_AXES: [u16; 13] = [
     ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_Z, ABS_RZ, ABS_THROTTLE, ABS_RUDDER, ABS_GAS, ABS_BRAKE,
-    ABS_WHEEL, ABS_STEER, ABS_HAT0X, ABS_HAT0Y,
+    ABS_WHEEL, ABS_HAT0X, ABS_HAT0Y,
 ];
 
 // --- capability set --------------------------------------------------------
@@ -161,7 +159,7 @@ impl Caps {
         if triggers > 0 {
             bits.push(format!("{triggers} trigger/throttle axes"));
         }
-        if self.has_abs(ABS_STEER) {
+        if self.has_abs(ABS_WHEEL) {
             bits.push("steering".into());
         }
         if self.has_rel(REL_X) && self.has_rel(REL_Y) {
@@ -182,14 +180,29 @@ impl Caps {
 
     /// Analog sticks: a pair of X/Y axes that is not a touch screen.
     fn count_sticks(&self) -> usize {
-        let mut n = 0;
-        if self.has_abs(ABS_X) && self.has_abs(ABS_Y) {
-            n += 1;
-        }
+        usize::from(self.has_abs(ABS_X) && self.has_abs(ABS_Y)) + usize::from(self.right_stick().is_some())
+    }
+
+    /// The right stick's axes. USB Xbox-style pads (xpad, hid-playstation)
+    /// report it on RX/RY with the triggers on Z/RZ; Xbox pads over Bluetooth
+    /// (hid-microsoft) report it on Z/RZ with the triggers on BRAKE/GAS.
+    pub fn right_stick(&self) -> Option<(u16, u16)> {
         if self.has_abs(ABS_RX) && self.has_abs(ABS_RY) {
-            n += 1;
+            Some((ABS_RX, ABS_RY))
+        } else if self.has_abs(ABS_Z) && self.has_abs(ABS_RZ) && self.has_abs(ABS_GAS) && self.has_abs(ABS_BRAKE) {
+            Some((ABS_Z, ABS_RZ))
+        } else {
+            None
         }
-        n
+    }
+
+    /// The analog triggers as (left, right), in whichever mapping the driver uses.
+    pub fn triggers(&self) -> (Option<u16>, Option<u16>) {
+        if self.right_stick() == Some((ABS_Z, ABS_RZ)) {
+            (Some(ABS_BRAKE), Some(ABS_GAS))
+        } else {
+            (self.has_abs(ABS_Z).then_some(ABS_Z), self.has_abs(ABS_RZ).then_some(ABS_RZ))
+        }
     }
 
     pub fn game_buttons(&self) -> Vec<u16> {
@@ -257,9 +270,7 @@ pub fn axis_name(code: u16) -> &'static str {
         ABS_RUDDER => "Rudder",
         ABS_GAS => "Accelerator",
         ABS_BRAKE => "Brake",
-        ABS_AIRBRAKE => "Airbrake",
-        ABS_WHEEL => "Wheel",
-        ABS_STEER => "Steering",
+        ABS_WHEEL => "Steering",
         ABS_HAT0X => "D-pad left/right",
         ABS_HAT0Y => "D-pad up/down",
         ABS_HAT1X => "Hat 1 left/right",
@@ -365,8 +376,11 @@ impl Kind {
 }
 
 /// Decide what a device is. Order matters: a mouse answers ABS_X/ABS_Y +
-// REL_X/REL_Y, a touch screen answers multitouch axes, and a wheel answers
-// ABS_STEER, so the specific shapes are matched before the general ones.
+/// REL_X/REL_Y, a touch screen answers multitouch axes, and a wheel steers on
+/// ABS_WHEEL or on ABS_X with pedal axes beside it, so the specific shapes are
+/// matched before the general ones. (Linux has no "steer" axis: a Logitech
+/// G29 steers on ABS_X; an Xbox pad over Bluetooth reports its triggers as
+/// ABS_BRAKE/ABS_GAS, which is why two sticks win over pedal axes.)
 pub fn classify(caps: &Caps) -> Kind {
     let game_buttons = caps.game_buttons().len();
     let sticks = caps.count_sticks();
@@ -381,10 +395,11 @@ pub fn classify(caps: &Caps) -> Kind {
         || caps.has_key(BTN_MODE)
         || caps.has_key(BTN_TRIGGER);
 
-    if caps.has_abs(ABS_STEER) && (caps.has_abs(ABS_GAS) || caps.has_abs(ABS_BRAKE)) {
+    let pedals = caps.has_abs(ABS_GAS) || caps.has_abs(ABS_BRAKE);
+    if caps.has_abs(ABS_WHEEL) || (sticks < 2 && caps.has_abs(ABS_X) && pedals) {
         return Kind::Wheel;
     }
-    if (caps.has_abs(ABS_GAS) || caps.has_abs(ABS_BRAKE)) && !caps.has_abs(ABS_STEER) {
+    if pedals && sticks == 0 && !caps.has_abs(ABS_X) {
         return Kind::Pedals;
     }
     if caps.has_abs(ABS_THROTTLE) || caps.has_abs(ABS_RUDDER) {
@@ -673,7 +688,8 @@ impl PadState {
             s.buttons.push((*code, false));
         }
         for (x, y) in pad.caps.hats() {
-            s.hats.push((x, y, 0));
+            // -1 = centred: 0 is "up", which lit the cross before any press.
+            s.hats.push((x, y, -1));
         }
         for code in &pad.caps.sw {
             s.switches.push((*code, false));
@@ -687,6 +703,20 @@ impl PadState {
     }
 
     /// Apply one event. Returns false when it changed nothing the panel draws.
+    /// Set an axis to the value the device reports right now (EVIOCGABS),
+    /// without counting it as an event or logging it: the panel starts from
+    /// the pad's real state instead of a guess.
+    pub fn seed(&mut self, code: u16, value: i32) {
+        if let Some(slot) = self.axes.iter_mut().find(|(c, _)| *c == code) {
+            slot.1 = value;
+        } else {
+            self.axes.push((code, value));
+        }
+        if (ABS_HAT0X..=ABS_HAT2Y).contains(&code) {
+            self.apply_hat(code, value);
+        }
+    }
+
     pub fn push(&mut self, ev: Ev) -> bool {
         self.events += 1;
         match ev {
@@ -821,6 +851,23 @@ impl PadState {
         }
     }
 
+    /// A stick axis as -1..1 around the centre of the device's own range, so
+    /// an unsigned stick (0..65535, an Xbox pad's right stick over Bluetooth)
+    /// rests in the middle like a signed one does.
+    pub fn norm_centered(&self, code: u16, info: AxisInfo) -> f32 {
+        let (lo, hi) = if info.max > info.min {
+            (info.min, info.max)
+        } else if is_signed_axis(code) {
+            (-32768, 32767)
+        } else {
+            (0, 255)
+        };
+        let mid = (lo as f64 + hi as f64) / 2.0;
+        let half = (hi as f64 - lo as f64) / 2.0;
+        let value = self.axis(code).map(f64::from).unwrap_or(mid);
+        ((value - mid) / half).clamp(-1.0, 1.0) as f32
+    }
+
     /// One line of the event log: `Right stick X 12734  (of -32768..32767)`.
     pub fn describe(&self, ev: Ev) -> String {
         match ev {
@@ -878,14 +925,16 @@ pub fn is_signed_axis(code: u16) -> bool {
     matches!(
         code,
         ABS_X | ABS_Y | ABS_RX | ABS_RY | ABS_HAT0X | ABS_HAT0Y | ABS_HAT1X | ABS_HAT1Y
-            | ABS_HAT2X | ABS_HAT2Y | ABS_STEER | ABS_WHEEL | ABS_MT_POSITION_X | ABS_MT_POSITION_Y
+            | ABS_HAT2X | ABS_HAT2Y | ABS_WHEEL | ABS_MT_POSITION_X | ABS_MT_POSITION_Y
     )
 }
 
 fn axis_mid(_code: u16) -> i32 {
-    // Triggers and pedals rest in the middle of their range on every pad we
-    // test (0..255 -> 127); the panel starts there so it reads "at rest".
-    127
+    // Unsigned axes (triggers, pedals) rest at the bottom of their range; the
+    // panel starts there, and the device's real current value replaces it as
+    // soon as the ranges arrive (`PadState::seed`). 0.1.x started at 127, so
+    // an untouched trigger read "127" with its bar part-filled.
+    0
 }
 
 /// `EVIOCGABS`' answer for one axis.

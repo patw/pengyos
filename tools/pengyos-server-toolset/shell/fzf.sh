@@ -33,18 +33,38 @@ else
 fi
 
 # Defaults: half-height, list mode, border, live preview when a viewer exists.
-export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:--height 40% --layout=reverse --border}"
+export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:---height 40% --layout=reverse --border}"
 
 # fzf ships key-bindings + completion scripts under a few common roots; probe
 # for them so this works across distros/package managers without hard-coding one
 # path. Only source a file that is actually readable (offline-safe).
+#
+# The scripts are per shell (key-bindings.bash / key-bindings.zsh; there is no
+# `.sh` flavour — probing for one meant Ctrl-R/Ctrl-T never loaded). fzf 0.48+
+# prints its own integration for the running shell (`fzf --zsh`, `fzf --bash`),
+# which is version-matched to the binary, so that is tried first.
 if command -v fzf >/dev/null 2>&1; then
-    for base in /usr/share/fzf /usr/local/share/fzf /nix/store/*/share/fzf /opt/fzf/share/fzf; do
-        if [ -r "$base/key-bindings.sh" ]; then
-            . "$base/key-bindings.sh"
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        _fzf_sh=zsh
+    elif [ -n "${BASH_VERSION:-}" ]; then
+        _fzf_sh=bash
+    else
+        _fzf_sh=
+    fi
+    if [ -n "$_fzf_sh" ]; then
+        _fzf_init=$(fzf --"$_fzf_sh" 2>/dev/null) || _fzf_init=
+        if [ -n "$_fzf_init" ]; then
+            eval "$_fzf_init"
+        else
+            for base in /usr/share/fzf /usr/local/share/fzf /opt/fzf/share/fzf; do
+                if [ -r "$base/key-bindings.$_fzf_sh" ]; then
+                    . "$base/key-bindings.$_fzf_sh"
+                    [ -r "$base/completion.$_fzf_sh" ] && . "$base/completion.$_fzf_sh"
+                    break
+                fi
+            done
         fi
-        if [ -r "$base/completion.sh" ]; then
-            . "$base/completion.sh"
-        fi
-    done
+        unset _fzf_init
+    fi
+    unset _fzf_sh
 fi

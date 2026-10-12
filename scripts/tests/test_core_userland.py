@@ -160,7 +160,7 @@ APPLET_OWNER = {
     "LSMOD": "BR2_PACKAGE_KMOD", "RMMOD": "BR2_PACKAGE_KMOD",
     # Server: net-tools / iputils / traceroute / pciutils / usbutils / hdparm
     "NETSTAT": "BR2_PACKAGE_NET_TOOLS", "IFCONFIG": "BR2_PACKAGE_NET_TOOLS",
-    "IFUP": "BR2_PACKAGE_NET_TOOLS", "IFDOWN": "BR2_PACKAGE_NET_TOOLS",
+    
     "ROUTE": "BR2_PACKAGE_NET_TOOLS", "ARP": "BR2_PACKAGE_NET_TOOLS",
     "ARPING": "BR2_PACKAGE_IPUTILS", "PING": "BR2_PACKAGE_IPUTILS",
     "TRACEROUTE": "BR2_PACKAGE_TRACEROUTE", "LSPCI": "BR2_PACKAGE_PCIUTILS",
@@ -301,6 +301,9 @@ DELIBERATELY_DROPPED = {
     "FEATURE_USE_INITTAB", "UDHCPC", "FEATURE_UDHCPC_ARPING", "FEATURE_UDHCP_PORT",
     "SYSLOGD", "KLOGD", "TELNET", "TFTP", "INETD", "DNSD", "SSL_SERVER", "VLOCK",
     "GETTY", "SHA3SUM", "CRC32",
+    # Nothing provides ifup/ifdown (net-tools does not): networkd and
+    # NetworkManager own the interfaces, and ifupdown-scripts is off.
+    "IFUP", "IFDOWN",
 }
 
 
@@ -361,3 +364,17 @@ def test_core_post_build_points_bin_sh_at_bash():
         "/bin/sh must be bash: agents write bash-isms into `sh -c`, and BusyBox ash "
         "accepts some of them and silently misbehaves on the rest"
     )
+
+
+def test_no_unit_is_left_calling_the_dropped_ifup():
+    """ifupdown-scripts' network.service runs `ip addr flush dev lo; ifup -a`.
+    With BusyBox's ifup compiled out it flushed 127.0.0.1 and failed, so the
+    machine had no localhost. Dropping the applet requires dropping the unit."""
+    core = LAYER_CORE.read_text()
+    assert re.search(r"^# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set$", core, re.M), (
+        "core layer must turn ifupdown-scripts off (its network.service needs ifup)"
+    )
+    assert "BR2_PACKAGE_IFUPDOWN=y" not in core
+    for cfg in DEFCONFIGS:
+        text = (EXT / "configs" / cfg).read_text()
+        assert "BR2_PACKAGE_IFUPDOWN_SCRIPTS=y" not in text, cfg

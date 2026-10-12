@@ -25,7 +25,7 @@ use cosmic::widget::{self, button, column, container, icon, row, text};
 use crate::layout::{self, Layout, Piece};
 use crate::raw::{self, Device};
 use crate::{
-    axis_name, button_name, hat_name, Caps, Kind, Pad, PadState, Rumble, APP_ID,
+    axis_name, button_name, hat_name, Caps, Pad, PadState, Rumble, APP_ID,
 };
 
 /// What the window was asked to do at startup.
@@ -47,8 +47,6 @@ pub enum Message {
     Rumble,
     Strength(i32),
     Rumbled(Result<String, String>),
-    /// Hand the events the reader thread collected to the panel.
-    Drain(Vec<crate::Ev>),
     ClearLog,
     Reset,
     Tick,
@@ -94,7 +92,6 @@ fn pad_by_path(pads: &[Pad], path: &str) -> Option<Pad> {
 fn first_controller(pads: &[Pad]) -> Option<String> {
     pads.iter()
         .find(|p| p.kind.is_controller() && p.testable())
-        .or_else(|| pads.iter().find(|p| p.testable()))
         .map(|p| p.path.clone())
 }
 
@@ -408,23 +405,7 @@ impl cosmic::Application for App {
             }
             Message::Pads(Err(e)) => self.error = Some(e),
             Message::Select(path) => return self.select(&path),
-            Message::Drain(_) => {
-                // Hand everything the reader thread collected to the panel.
-                // Drain into a local first: the reader's channel is borrowed
-                // from `self`, and applying an event mutates `self`.
-                let mut events: Vec<crate::Ev> = Vec::new();
-                if let Some(rx) = self.rx.as_mut() {
-                    while let Ok(ev) = rx.try_recv() {
-                        events.push(ev);
-                    }
-                }
-                for ev in events {
-                    if self.state.push(ev) {
-                        self.push_log(ev);
-                    }
-                }
-            }
-            // The reader thread hands events through the channel (Drain);
+            // The reader thread hands events through the channel (drained on Tick);
             // Events only carries the failure that ends a reader.
             Message::Events(Ok(_)) => {}
             Message::Events(Err(e)) => {
@@ -439,7 +420,12 @@ impl cosmic::Application for App {
                     self.error = Some(crate::explain_open_error(&e));
                 }
             }
-            Message::Ranges(Ok(ranges)) => self.ranges = ranges,
+            Message::Ranges(Ok(ranges)) => {
+                for (code, info) in &ranges {
+                    self.state.seed(*code, info.value);
+                }
+                self.ranges = ranges;
+            }
             Message::Ranges(Err(e)) => self.error = Some(e),
             Message::Rumble => return self.rumble(),
             Message::Strength(v) => self.strength = v,
@@ -458,6 +444,23 @@ impl cosmic::Application for App {
                 }
             }
             Message::Tick => {
+                // Hand everything the reader thread collected to the panel.
+                // 0.1.1 drained only in a `Drain` message nothing ever sent,
+                // so a real pad's events piled up in the channel and the panel
+                // never moved (only --selftest, driven from here, animated).
+                // Drain into a local first: the channel is borrowed from
+                // `self`, and applying an event mutates `self`.
+                let mut events: Vec<crate::Ev> = Vec::new();
+                if let Some(rx) = self.rx.as_mut() {
+                    while let Ok(ev) = rx.try_recv() {
+                        events.push(ev);
+                    }
+                }
+                for ev in events {
+                    if self.state.push(ev) {
+                        self.push_log(ev);
+                    }
+                }
                 if self.selftest {
                     self.selftest_step += 1;
                     for ev in selftest_events(self.selftest_step) {
@@ -494,7 +497,8 @@ impl cosmic::Application for App {
 
         let Some(pad) = self.selected_pad() else {
             let msg = if self.loaded {
-                "No game controllers. Plug one in — the list refreshes by itself."
+                "No game controllers. Plug one in over USB, or pair it in Settings → \
+                 Bluetooth: it appears here by itself."
             } else {
                 "Looking for controllers…"
             };
@@ -526,28 +530,19 @@ impl App {
     }
 
     fn view_pads(&self) -> Element<'_, Message> {
-        let spacing = cosmic::theme::spacing();
-        if self.pads.is_empty() {
-            let msg = if self.loaded { "No input devices found." } else { "Looking…" };
-            return container(text::body(msg)).padding(spacing.space_m).into();
-        }
-        let (controllers, other) = crate::split_pads(self.pads.clone());
-        let mut s = section().title("Game controllers");
+        // Controllers only: this is the gamepad/joystick tester, and listing
+        // every keyboard, mouse, power button and audio jack pushed the pad
+        // itself off the screen. `--list` still prints the other devices.
+        let (controllers, _) = crate::split_pads(self.pads.clone());
         if controllers.is_empty() {
-            s = s.add(text::caption("Nothing that answers as a game controller."));
+            // The body below says so (and how to connect one).
+            return column::with_children(Vec::<Element<'_, Message>>::new()).into();
         }
+        let mut s = section().title("Game controllers");
         for p in &controllers {
             s = s.add(self.pad_row(p));
         }
-        let mut out: Vec<Element<'_, Message>> = vec![s.into()];
-        if !other.is_empty() {
-            let mut s = section().title("Other input devices");
-            for p in other.iter().take(12) {
-                s = s.add(self.pad_row(p));
-            }
-            out.push(s.into());
-        }
-        column::with_children(out).spacing(spacing.space_m).into()
+        s.into()
     }
 
     fn pad_row(&self, p: &Pad) -> widget::list::ListButton<'_, Message> {
@@ -585,8 +580,6 @@ impl App {
             layout,
             state: self.state.clone(),
             ranges: self.ranges.clone(),
-            name: pad.name.clone(),
-            kind: pad.kind,
             palette: palette(),
         })
         .width(Length::Fill)
@@ -611,9 +604,8 @@ impl App {
             .filter_map(|e| match e {
                 Piece::Button { code, .. } => Some(*code),
                 Piece::Bar { code, .. } => Some(*code),
-                Piece::Stick { x, y: _, .. } => Some(*x),
-                Piece::Hat { x, y: _, .. } => Some(*x),
-                Piece::Label { .. } => None,
+                Piece::Stick { press, .. } => *press,
+                Piece::Hat { .. } | Piece::Label { .. } => None,
             })
             .collect();
         let mut rows: Vec<Element<'_, Message>> = Vec::new();
@@ -788,8 +780,6 @@ struct PadCanvas {
     layout: Layout,
     state: PadState,
     ranges: Vec<(u16, crate::AxisInfo)>,
-    name: String,
-    kind: Kind,
     palette: Palette,
 }
 
@@ -822,17 +812,15 @@ impl<Message> Program<Message, cosmic::Theme> for PadCanvas {
         // `view_canvas` and carried in.
         let (base, accent, on_bg) = (self.palette.base, self.palette.accent, self.palette.on_bg);
 
-        // The body the controls sit on.
-        let (bx, by) = layout::scale(40.0, 130.0, w, h);
-        let (bw, bh) = (
-            layout::scale_len(920.0, w, h),
-            layout::scale_len(400.0, w, h),
-        );
-        frame.fill_rectangle(
+        // The body the controls sit on: the whole unit space, so every piece
+        // (they are all placed inside it) sits on the body, none above it.
+        let (bx, by) = layout::scale(0.0, 0.0, w, h);
+        let body = Path::rounded_rectangle(
             Point::new(bx, by),
-            Size::new(bw, bh),
-            base,
+            Size::new(layout::scale_len(layout::UNIT_W, w, h), layout::scale_len(layout::UNIT_H, w, h)),
+            layout::scale_len(36.0, w, h).into(),
         );
+        frame.fill(&body, base);
 
         for element in &self.layout.elements {
             match element {
@@ -857,7 +845,8 @@ impl<Message> Program<Message, cosmic::Theme> for PadCanvas {
                         position: Point::new(cx, cy),
                         max_width: rr * 2.4,
                         color: (if pressed { on_bg } else { on_bg }),
-                        size: (rr * 0.7).into(),
+                        // Long labels ("Guide", "Start") shrink to stay inside the circle.
+                        size: (rr * if label.chars().count() > 3 { 0.5 } else { 0.7 }).into(),
                         line_height: Default::default(),
                         font: Default::default(),
                         align_x: Horizontal::Center.into(),
@@ -865,23 +854,21 @@ impl<Message> Program<Message, cosmic::Theme> for PadCanvas {
                         shaping: Default::default(),
                     });
                 }
-                Piece::Stick { x, y, cx, cy, r } => {
+                Piece::Stick { x, y, cx, cy, r, press } => {
                     let (cx, cy) = layout::scale(*cx, *cy, w, h);
                     let rr = layout::scale_len(*r, w, h);
+                    let clicked = press.is_some_and(|code| self.state.pressed(code));
                     let ring = Path::circle(Point::new(cx, cy), rr);
-                    frame.fill(&ring, base);
+                    frame.fill(&ring, if clicked { accent } else { base });
                     frame.stroke(
                         &ring,
-                        canvas::Stroke::default().with_color(on_bg).with_width(1.0),
+                        canvas::Stroke::default().with_color(on_bg).with_width(if clicked { 3.0 } else { 1.0 }),
                     );
-                    let nx = self.state.norm(*x, self.info(*x));
-                    let ny = self.state.norm(*y, self.info(*y));
-                    let moved = nx.abs() > 0.02 || ny.abs() > 0.02;
-                    let knob = Path::circle(Point::new(cx + nx * rr * 0.6, cy + ny * rr * 0.6), rr * 0.42);
-                    frame.fill(
-                        &knob,
-                        if moved { accent } else { on_bg },
-                    );
+                    let nx = self.state.norm_centered(*x, self.info(*x));
+                    let ny = self.state.norm_centered(*y, self.info(*y));
+                    let moved = nx.abs() > 0.05 || ny.abs() > 0.05;
+                    let knob = Path::circle(Point::new(cx + nx * rr * 0.58, cy + ny * rr * 0.58), rr * 0.4);
+                    frame.fill(&knob, if moved { accent } else { on_bg });
                 }
                 Piece::Hat { x, y, cx, cy, arm, len } => {
                     let (cx, cy) = layout::scale(*cx, *cy, w, h);
@@ -894,9 +881,26 @@ impl<Message> Program<Message, cosmic::Theme> for PadCanvas {
                         .find(|(hx, hy, _)| *hx == *x && *hy == *y)
                         .map(|(_, _, d)| *d)
                         .unwrap_or(-1);
-                    let colour = if dir == -1 { base } else { accent };
-                    frame.fill_rectangle(Point::new(cx - a / 2.0, cy - l / 2.0), Size::new(a, l), colour);
-                    frame.fill_rectangle(Point::new(cx - l / 2.0, cy - a / 2.0), Size::new(l, a), colour);
+                    // The cross, then each arm lit when the direction includes it
+                    // (a diagonal lights two). 0 up, 1 right, 2 down, 3 left,
+                    // 4 up-right, 5 down-right, 6 up-left, 7 down-left.
+                    let up = matches!(dir, 0 | 4 | 6);
+                    let right = matches!(dir, 1 | 4 | 5);
+                    let down = matches!(dir, 2 | 5 | 7);
+                    let left = matches!(dir, 3 | 6 | 7);
+                    let half = l / 2.0;
+                    let arms = [
+                        (Point::new(cx - a / 2.0, cy - half), Size::new(a, half), up),
+                        (Point::new(cx - a / 2.0, cy), Size::new(a, half), down),
+                        (Point::new(cx - half, cy - a / 2.0), Size::new(half, a), left),
+                        (Point::new(cx, cy - a / 2.0), Size::new(half, a), right),
+                    ];
+                    for (at, size, lit) in arms {
+                        frame.fill_rectangle(at, size, if lit { accent } else { base });
+                    }
+                    let outline = canvas::Stroke::default().with_color(on_bg).with_width(1.0);
+                    frame.stroke_rectangle(Point::new(cx - a / 2.0, cy - half), Size::new(a, l), outline.clone());
+                    frame.stroke_rectangle(Point::new(cx - half, cy - a / 2.0), Size::new(l, a), outline);
                 }
                 Piece::Bar { code, x, y, w: bw, h: bh, label, label_y } => {
                     let (bx, by) = layout::scale(*x, *y, w, h);
@@ -945,38 +949,6 @@ impl<Message> Program<Message, cosmic::Theme> for PadCanvas {
                 }
             }
         }
-
-        // The stick values, printed where the sticks are.
-        for (code, x, y) in &self.layout.readout {
-            let (x, y) = layout::scale(*x, *y, w, h);
-            frame.fill_text(canvas::Text {
-                content: format!("{} {}", axis_name(*code), self.state.axis(*code).unwrap_or(0)),
-                position: Point::new(x, y),
-                max_width: layout::scale_len(240.0, w, h),
-                color: (on_bg),
-                size: layout::scale_len(19.0, w, h).into(),
-                line_height: Default::default(),
-                font: Default::default(),
-                align_x: Horizontal::Center.into(),
-                align_y: Vertical::Center,
-                shaping: Default::default(),
-            });
-        }
-
-        // The kind, so a screenshot says what the device was.
-        let (x, y) = layout::scale(500.0, 24.0, w, h);
-        frame.fill_text(canvas::Text {
-            content: format!("{} · {}", self.kind.title(), self.name),
-            position: Point::new(x, y),
-            max_width: w,
-            color: (on_bg),
-            size: layout::scale_len(20.0, w, h).into(),
-            line_height: Default::default(),
-            font: Default::default(),
-            align_x: Horizontal::Center.into(),
-            align_y: Vertical::Center,
-            shaping: Default::default(),
-        });
 
         vec![frame.into_geometry()]
     }

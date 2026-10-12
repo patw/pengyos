@@ -575,3 +575,43 @@ def test_child_shell_runs_the_profile_again(shell_dir_env):
     proc = _run_zsh('. $PROF; zsh -f -i -c ". $PROF; alias ls"', env)
     assert proc.returncode == 0, proc.stderr
     assert "eza" in proc.stdout, "the child shell skipped the profile"
+
+
+def test_fzf_default_opts_keep_their_double_dash(shell_dir_env):
+    """`${X:--height …}` expands to `-height …` (the `:-` eats a dash); fzf
+    rejects that, even for `fzf --zsh`, so neither the key bindings nor any
+    later `fzf` run worked."""
+    env = {**shell_dir_env, "SHELL_DIR": str(SHELL_DIR)}
+    proc = _run_sh('set -i; . $SHELL_DIR/fzf.sh; echo "FO=$FZF_DEFAULT_OPTS"', env)
+    assert proc.returncode == 0, proc.stderr
+    fo = next(l for l in proc.stdout.splitlines() if l.startswith("FO="))
+    assert fo.startswith("FO=--height "), f"FZF_DEFAULT_OPTS lost a dash: {fo!r}"
+
+
+def test_fzf_snippet_loads_the_per_shell_integration():
+    """fzf ships key-bindings.bash / key-bindings.zsh (no `.sh`), and fzf 0.48+
+    prints the matching one with `fzf --zsh` / `fzf --bash`."""
+    text = (SHELL_DIR / "fzf.sh").read_text(encoding="utf-8")
+    assert "key-bindings.sh" not in text, "there is no key-bindings.sh"
+    assert 'fzf --"$_fzf_sh"' in text
+    assert 'key-bindings.$_fzf_sh' in text
+
+
+def test_starship_theme_parses_with_a_real_starship():
+    """The shipped theme must load in starship with no warning or parse error:
+    the first version had a malformed `format` ("Error parsing format --> 1:10"
+    on every prompt), a `telemetry` key starship does not have, and a `symbol`
+    on `shell`. Uses $PENGYOS_STARSHIP or a starship on PATH; the Buildroot
+    output's binary works (target/x86_64-unknown-linux-gnu/release/starship)."""
+    import os
+    import shutil
+    exe = os.environ.get("PENGYOS_STARSHIP") or shutil.which("starship")
+    if not exe:
+        pytest.skip("no starship binary (set PENGYOS_STARSHIP)")
+    env = {"PATH": "/usr/bin:/bin", "HOME": "/nonexistent-home",
+           "STARSHIP_CONFIG": str(STARSHIP_TOML), "STARSHIP_SHELL": "zsh"}
+    for args in (["prompt", "--status=0"], ["prompt", "--status=1"]):
+        proc = subprocess.run([exe, *args], capture_output=True, text=True, env=env, timeout=30)
+        assert proc.returncode == 0, proc.stderr
+        assert "WARN" not in proc.stderr and "ERROR" not in proc.stderr, proc.stderr
+        assert "❯" in proc.stdout

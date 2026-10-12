@@ -4,8 +4,9 @@
 A small libcosmic app for the Desktop that answers the two questions a game
 controller raises and nothing in the Desktop answered: **which gamepads and
 joysticks does this machine see**, and **do their buttons, sticks, triggers and
-D-pad actually work**. It lists every input device with its kind, bus, vendor:product
-and capability summary, and drives a live picture of the selected one: buttons
+D-pad actually work**. It lists the game controllers with their kind, bus, vendor:product
+and capability summary (every other input device is classified, and printed by
+`--list`, but kept out of the window), and drives a live picture of the selected one: buttons
 light up, stick knobs follow, trigger and pedal bars fill, the D-pad points, and
 every event is printed as it arrives. A Rumble button sends a real force-feedback
 effect. COSMIC Settings (epoch 1.9) has no page for any of this.

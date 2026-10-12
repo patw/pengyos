@@ -52,6 +52,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shell start), and then overwrote the starship `PROMPT` and the eza aliases
   the profile had just set. The fallback prompt and plain aliases now apply
   only where the profile did not already provide them.
+- **fzf's Ctrl-R / Ctrl-T load.** `fzf.sh` probed for `key-bindings.sh`,
+  which no fzf ships (the scripts are `.bash` / `.zsh`); it now evals the
+  shell's own integration from `fzf --zsh` / `fzf --bash` and falls back to
+  the per-shell files. And `FZF_DEFAULT_OPTS` defaulted to `-height …` (the
+  `${X:-…}` expansion ate a dash), which fzf rejects, so every `fzf` in a
+  session failed. Found building the image: the `fzf` recipe also installed
+  from `$(@D)/fzf`, but the golang infra builds into `$(@D)/bin/`.
+- **The starship theme parses.** Its `format` was malformed (`[$symbol ]`
+  with no style, `$line`, `$$`), so every prompt printed
+  `Error parsing "format": --> 1:10`; it also set a `telemetry` key and a
+  `shell.symbol` that starship does not have. Rewritten with valid keys only
+  and tested against a real starship (`PENGYOS_STARSHIP`). The no-telemetry
+  check now asserts the theme runs no `custom` commands, instead of requiring
+  the nonexistent key.
 - Tests pin all of it: every alias runs a shipped binary with no forced colour
   and shadows no tool with different semantics, no marker is exported, a child
   zsh re-runs the profile, and the real login order (profile, then the skel

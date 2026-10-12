@@ -161,12 +161,16 @@ def test_no_config_enables_telemetry():
         )
 
 
-def test_starship_disables_telemetry_positively():
-    """starship.toml must explicitly opt out: ``telemetry = false`` must be present."""
-    code = strip_config_comments(STARSHIP_TOML.read_text(encoding="utf-8"), is_shell=False)
-    assert "telemetry = false" in code.lower(), (
-        "starship.toml must set telemetry = false (positive opt-out)"
-    )
+def test_starship_theme_runs_no_commands_of_its_own():
+    """Starship has no telemetry and no `telemetry` key (setting one only made
+    it warn on every prompt). What could reach the network from a theme is a
+    `custom` module or an `env_var`-driven command: the theme defines none, so
+    every prompt segment is computed by starship from local state."""
+    import tomllib
+    theme = tomllib.loads(STARSHIP_TOML.read_text(encoding="utf-8"))
+    assert "telemetry" not in theme, "starship has no telemetry key; it warns on it"
+    assert "custom" not in theme, "the theme must not run commands at each prompt"
+    assert "$custom" not in theme.get("format", ""), "no custom modules in the format"
 
 
 # --- the scanner covers the documented token set ---------------------------

@@ -19,15 +19,16 @@ pub const UNIT_H: f32 = 560.0;
 pub enum Piece {
     /// A button, drawn as a rounded square with its label inside.
     Button { code: u16, x: f32, y: f32, r: f32, label: String },
-    /// An analog stick: the ring, and the knob at its current value.
-    Stick { x: u16, y: u16, cx: f32, cy: f32, r: f32 },
-    /// A D-pad drawn as a cross whose arms light up (`(abs_x, abs_y)`).
+    /// An analog stick: the ring, and the knob at its current value. `press`
+    /// is the stick-click button (L3/R3): it lights the ring, so the click
+    /// needs no separate shape on top of the stick.
+    Stick { x: u16, y: u16, cx: f32, cy: f32, r: f32, press: Option<u16> },
+    /// A D-pad drawn as a cross whose pressed arm lights up (`(abs_x, abs_y)`).
     Hat { x: u16, y: u16, cx: f32, cy: f32, arm: f32, len: f32 },
     /// A bar filled from the axis's minimum (triggers, pedals, steering).
-    /// `label_y` is where its caption goes, in unit space: under the trigger
-    /// bars (the bumpers are above them) and under the spare-axis bars.
+    /// `label_y` is where its caption goes, in unit space.
     Bar { code: u16, x: f32, y: f32, w: f32, h: f32, label: String, label_y: f32 },
-    /// Text that is not part of an element (values, captions).
+    /// Text that is not part of an element (captions).
     Label { x: f32, y: f32, text: String, size: f32 },
 }
 
@@ -35,124 +36,131 @@ pub enum Piece {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Layout {
     pub elements: Vec<Piece>,
-    /// Axes whose value is printed as a number, at the given unit position.
-    pub readout: Vec<(u16, f32, f32)>,
 }
 
 /// Place every capability the device reports in the unit space.
+///
+/// The controller shape follows an Xbox pad, and every element stays inside
+/// the 1000×560 body with room around it (`test_layout_pieces_never_overlap`):
+///
+/// ```text
+///   [ LT bar ]                         [ RT bar ]        y  30..55
+///      (LB)                               (RB)           y 105
+///   ( L stick )   Sel Guide Start     Y                  y 200..280
+///                                   X   B
+///                                     A
+///          [D-pad]        ( R stick )                    y 420
+/// ```
+/// Values are not printed in the picture: the "Live values" list under it
+/// carries every axis by name, so the drawing stays uncluttered.
 pub fn layout(caps: &Caps, kind: Kind) -> Layout {
     let mut l = Layout::default();
 
-    // --- top edge: bumpers, extra bumpers, triggers ------------------------
-    for (code, x) in [(crate::BTN_TL, 250.0), (crate::BTN_TR, 750.0)] {
-        if caps.has_key(code) {
-            let label = format!("{}B", crate::button_name(code).chars().next().unwrap_or('L'));
-            l.elements.push(Piece::Button { code, x, y: 44.0, r: 52.0, label });
-        }
-    }
-    for (code, x) in [(crate::BTN_TL2, 120.0), (crate::BTN_TR2, 880.0)] {
-        if caps.has_key(code) {
-            let label = format!("{}2", crate::button_name(code).chars().next().unwrap_or('L'));
-            l.elements.push(Piece::Button { code, x, y: 44.0, r: 44.0, label });
-        }
-    }
-    for (code, x) in [(crate::ABS_Z, 250.0), (crate::ABS_RZ, 750.0)] {
-        if caps.has_abs(code) {
+    // --- top edge: triggers, then bumpers ----------------------------------
+    let (lt, rt) = caps.triggers();
+    for (code, x) in [(lt, 240.0), (rt, 760.0)] {
+        if let Some(code) = code {
             l.elements.push(Piece::Bar {
                 code,
-                x: x - 105.0,
-                y: 112.0,
-                w: 210.0,
-                h: 22.0,
+                x: x - 100.0,
+                y: 30.0,
+                w: 200.0,
+                h: 24.0,
                 label: axis_name(code).into(),
-                label_y: 152.0,
+                label_y: 72.0,
             });
         }
     }
-
-    // --- left cluster: D-pad, then the left stick -------------------------
-    if let Some((x, y)) = caps.hats().first() {
-        l.elements.push(Piece::Hat { x: *x, y: *y, cx: 210.0, cy: 300.0, arm: 56.0, len: 150.0 });
-        // The D-pad's caption goes under the body, where nothing is drawn.
-        l.elements.push(Piece::Label { x: 210.0, y: 548.0, text: "D-pad".into(), size: 19.0 });
+    // Digital triggers (no analog axis): buttons where the bars would be.
+    for (code, x, analog) in [(crate::BTN_TL2, 240.0, lt.is_some()), (crate::BTN_TR2, 760.0, rt.is_some())] {
+        if caps.has_key(code) && !analog {
+            let label = format!("{}T", crate::button_name(code).chars().next().unwrap_or('L'));
+            l.elements.push(Piece::Button { code, x, y: 42.0, r: 26.0, label });
+        }
     }
+    for (code, x, label) in [(crate::BTN_TL, 240.0, "LB"), (crate::BTN_TR, 760.0, "RB")] {
+        if caps.has_key(code) {
+            l.elements.push(Piece::Button { code, x, y: 118.0, r: 30.0, label: label.into() });
+        }
+    }
+
+    // --- sticks -----------------------------------------------------------
+    let thumb = |code: u16| caps.has_key(code).then_some(code);
     if caps.has_abs(crate::ABS_X) && caps.has_abs(crate::ABS_Y) {
-        l.elements.push(Piece::Stick { x: crate::ABS_X, y: crate::ABS_Y, cx: 392.0, cy: 386.0, r: 84.0 });
-        l.readout.push((crate::ABS_X, 392.0, 508.0));
-        l.readout.push((crate::ABS_Y, 392.0, 538.0));
+        l.elements.push(Piece::Stick {
+            x: crate::ABS_X,
+            y: crate::ABS_Y,
+            cx: 240.0,
+            cy: 260.0,
+            r: 72.0,
+            press: thumb(crate::BTN_THUMBL),
+        });
+    }
+    if let Some((rx, ry)) = caps.right_stick() {
+        l.elements.push(Piece::Stick { x: rx, y: ry, cx: 620.0, cy: 440.0, r: 72.0, press: thumb(crate::BTN_THUMBR) });
     }
 
-    // --- right cluster: the face buttons, then the right stick ------------
+    // --- D-pad ------------------------------------------------------------
+    if let Some((x, y)) = caps.hats().first() {
+        l.elements.push(Piece::Hat { x: *x, y: *y, cx: 380.0, cy: 440.0, arm: 40.0, len: 120.0 });
+    }
+
+    // --- face buttons -----------------------------------------------------
     for (code, x, y) in [
-        (crate::BTN_Y, 790.0, 216.0),
-        (crate::BTN_X, 722.0, 284.0),
-        (crate::BTN_B, 858.0, 284.0),
-        (crate::BTN_A, 790.0, 352.0),
-        (crate::BTN_C, 654.0, 216.0),
-        (crate::BTN_Z, 926.0, 352.0),
+        (crate::BTN_Y, 760.0, 200.0),
+        (crate::BTN_X, 690.0, 270.0),
+        (crate::BTN_B, 830.0, 270.0),
+        (crate::BTN_A, 760.0, 340.0),
+        (crate::BTN_C, 830.0, 190.0),
+        (crate::BTN_Z, 690.0, 350.0),
     ] {
         if caps.has_key(code) {
             let label = crate::button_name(code).chars().next_back().unwrap_or('?').to_string();
-            l.elements.push(Piece::Button { code, x, y, r: 34.0, label });
+            l.elements.push(Piece::Button { code, x, y, r: 30.0, label });
         }
-    }
-    if caps.has_abs(crate::ABS_RX) && caps.has_abs(crate::ABS_RY) {
-        l.elements.push(Piece::Stick { x: crate::ABS_RX, y: crate::ABS_RY, cx: 608.0, cy: 386.0, r: 84.0 });
-        l.readout.push((crate::ABS_RX, 608.0, 508.0));
-        l.readout.push((crate::ABS_RY, 608.0, 538.0));
     }
 
-    // --- centre: stick-in buttons, then Select / Guide / Start ------------
-    for (code, x) in [(crate::BTN_THUMBL, 392.0), (crate::BTN_THUMBR, 608.0)] {
-        if caps.has_key(code) {
-            l.elements.push(Piece::Button {
-                code,
-                x,
-                y: 470.0,
-                r: 26.0,
-                label: crate::button_name(code).chars().next().unwrap_or('?').to_string(),
-            });
-        }
-    }
-    for (code, x) in [
-        (crate::BTN_SELECT, 440.0),
-        (crate::BTN_MODE, 500.0),
-        (crate::BTN_START, 560.0),
+    // --- centre: Select / Guide / Start -----------------------------------
+    for (code, x, label) in [
+        (crate::BTN_SELECT, 430.0, "Sel"),
+        (crate::BTN_MODE, 500.0, "Guide"),
+        (crate::BTN_START, 570.0, "Start"),
     ] {
         if caps.has_key(code) {
-            let label = match code {
-                crate::BTN_SELECT => "Sel",
-                crate::BTN_MODE => "Guide",
-                _ => "Start",
-            };
-            l.elements.push(Piece::Button { code, x, y: 300.0, r: 28.0, label: label.into() });
+            l.elements.push(Piece::Button { code, x, y: 220.0, r: 28.0, label: label.into() });
         }
     }
 
-    // --- the axes the gamepad shape has no room for ------------------------
-    // Steering, pedals, throttles, extra hats and any axis the device reports
-    // that the shape above does not place: stacked bars in the middle.
-    let mut extra: Vec<u16> = Vec::new();
+    // --- the axes the shape has no room for --------------------------------
+    // Steering, pedals, throttles, a joystick's extra axes: a stacked column
+    // of bars on the right edge, clear of the face buttons and right stick.
+    let placed: Vec<u16> = l
+        .elements
+        .iter()
+        .flat_map(|e| match e {
+            Piece::Bar { code, .. } => vec![*code],
+            Piece::Stick { x, y, .. } | Piece::Hat { x, y, .. } => vec![*x, *y],
+            _ => vec![],
+        })
+        .collect();
+    let mut y = 410.0f32;
     for code in caps.shown_axes() {
-        let used = caps.hats().iter().any(|(x, _)| *x == code)
-            || matches!(code, crate::ABS_X | crate::ABS_Y | crate::ABS_RX | crate::ABS_RY
-                | crate::ABS_Z | crate::ABS_RZ);
-        if !used {
-            extra.push(code);
+        if placed.contains(&code) || caps.hats().iter().any(|(hx, hy)| *hx == code || *hy == code) {
+            continue;
         }
-    }
-    let mut y = 150.0f32;
-    for code in extra {
+        if y > 520.0 {
+            break; // the rest are listed by name under the picture
+        }
         l.elements.push(Piece::Bar {
             code,
-            x: 430.0,
+            x: 760.0,
             y,
-            w: 140.0,
-            h: 20.0,
+            w: 200.0,
+            h: 18.0,
             label: axis_name(code).into(),
-            label_y: y + 34.0,
+            label_y: y + 30.0,
         });
-        y += 42.0;
+        y += 56.0;
     }
 
     // --- a remote / keypad / mouse: draw the keys it has ------------------

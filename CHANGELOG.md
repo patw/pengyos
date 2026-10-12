@@ -31,9 +31,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   bitmaps were read as 32-bit words, so a mouse listed as a keyboard. The
   kernel fragment's `CONFIG_INPUT_FF_MEMSET` named a symbol that does not
   exist. Details in `tools/pengyos-gamepads/CHANGELOG.md` (0.1.1).
+- **Gamepads, tested with a real pad (8BitDo, xpad):** the live panel never
+  moved (events were queued and never drained), 15 input codes were wrong
+  against the kernel header (the D-pad showed as stray bars), and the window
+  listed every keyboard and audio jack above the pad. 0.1.2 fixes all three
+  and lays the panel out like an Xbox pad, with a no-overlap test; buttons,
+  buttons and rumble confirmed by hand on behoweather.
 - **Seeding the Pengy config left `~/.config` owned by root** on Server and
   Core, whose skeletons have no `~/.config`.
 - `board/desktop/post-build.sh` had lost its execute bit in the working tree.
+- **The comfort shell's fzf never loaded, and the `fzf` recipe never built.**
+  The recipe installed `$(@D)/fzf` (the golang infra builds `$(@D)/bin/fzf`),
+  the profile's fzf snippet probed for a `key-bindings.sh` no fzf ships, and
+  `FZF_DEFAULT_OPTS` defaulted to `-height …`, which fzf rejects.
+- **The starship theme did not parse**: every prompt printed
+  `Error parsing "format"` (seen on the first QEMU boot of the review build).
 
 ### Changed: the userland agents keep tripping over is the real one — Rust coreutils, and no more cut-down applets
 

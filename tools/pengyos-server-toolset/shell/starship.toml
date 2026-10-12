@@ -1,66 +1,48 @@
 # starship.toml — Starship prompt theme for the PengyOS server comfort set (US-SRV-1)
 #
-# Minimal, dependency-free prompt. NO telemetry: `telemetry = false` and there
-# are no remote/URL modules, so the prompt never phone-homes.
+# A compact one-line prompt: user@host (shown over SSH or as root), the
+# directory, git state, the language toolchains in use, and a ❯ that turns red
+# when the last command failed. No module here reaches the network, and
+# starship itself has no telemetry (there is no `telemetry` key to set — an
+# earlier version set one, and starship warned about it on every prompt).
+#
+# Every key is checked against the shipped starship: tests run
+# `starship print-config` / `starship prompt` on this file and fail on any
+# warning or parse error (tools/pengyos-server-toolset/tests/test_shell.py).
 #
 # Load it from your profile:
 #     eval "$(starship init bash)"   # or zsh
 # or source the profile, which does this when `starship` is on PATH.
 
-# Starship's built-in telemetry opt-out (default is false; state it explicitly).
-telemetry = false
-
-# A compact, single-line prompt. The only dynamic bits are the module markers.
+add_newline = false
 format = """
-[$symbol ]$shell$directory$git_branch$git_status$nodejs$golang$python$ruby$aws$terraform
-$line$$"""
+$username$hostname$directory$git_branch$git_status$python$nodejs$golang$rust$cmd_duration$character"""
+
+[username]
+style_user = "green bold"
+style_root = "red bold"
+format = "[$user]($style)"
+
+[hostname]
+ssh_only = true
+format = "[@$hostname]($style) "
+style = "green"
 
 [directory]
 style = "cyan bold"
-format = "[ $path ]($style)"
 truncation_length = 3
 truncation_symbol = "…/"
 
-[shell]
-symbol = "❯"
-
-[shell.zsh]
-symbol = "❯"
-
-[shell.bash]
-symbol = "❯"
+[git_branch]
+format = "[$symbol$branch]($style) "
 
 [git_status]
 ahead = "⇡${count}"
 behind = "⇣${count}"
-dirty = "🔥"
 
-[nodejs]
-symbol = "⬇ "
-format = "via [$symbol]($style)"
-style = "green bold"
+[cmd_duration]
+min_time = 5_000
 
-[golang]
-symbol = "🐹 "
-format = "via [$symbol]($style)"
-style = "cyan bold"
-
-[python]
-symbol = "🐍 "
-format = "via [$symbol]($style)"
-style = "yellow bold"
-
-[ruby]
-symbol = "💎 "
-format = "via [$symbol]($style)"
-style = "red bold"
-
-[aws]
-symbol = "☁️  "
-format = "via [$symbol($style )]($style)"
-style = "bold yellow"
-
-[terraform]
-symbol = "🏪 "
-format = "via [$symbol($style )]($style)"
-style = "bold 6bold"
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"

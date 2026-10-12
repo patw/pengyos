@@ -72,7 +72,7 @@ fn test_classify_shapes() {
     let wheel = Caps {
         ev: set(&[EV_KEY, EV_ABS]),
         keys: set(&[BTN_A, BTN_B, BTN_TL, BTN_TR, BTN_THUMBL]),
-        abs: set(&[ABS_STEER, ABS_GAS, ABS_BRAKE, ABS_X, ABS_Y, ABS_Z, ABS_RZ]),
+        abs: set(&[ABS_WHEEL, ABS_GAS, ABS_BRAKE, ABS_X, ABS_Y, ABS_Z, ABS_RZ]),
         ..Default::default()
     };
     assert_eq!(classify(&wheel), Kind::Wheel);
@@ -210,7 +210,7 @@ fn test_pad_state_tracks_the_device() {
     .pad();
     let mut state = PadState::new(&pad);
     assert_eq!(state.axis(ABS_X), Some(0));
-    assert_eq!(state.axis(ABS_Z), Some(127));
+    assert_eq!(state.axis(ABS_Z), Some(0), "a trigger starts released");
     assert!(!state.pressed(BTN_A));
 
     state.push(Ev::Key { code: BTN_A, pressed: true });
@@ -381,7 +381,7 @@ fn test_layout_places_what_the_device_has() {
             _ => None,
         })
         .collect();
-    for code in [BTN_A, BTN_B, BTN_X, BTN_Y, BTN_TL, BTN_TR, BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR] {
+    for code in [BTN_A, BTN_B, BTN_X, BTN_Y, BTN_TL, BTN_TR, BTN_SELECT, BTN_START, BTN_MODE] {
         assert!(buttons.contains(&code), "missing button {code}");
     }
     let bars: Vec<u16> = l
@@ -407,7 +407,16 @@ fn test_layout_places_what_the_device_has() {
             .count(),
         1
     );
-    assert_eq!(l.readout.len(), 4);
+    // The stick clicks light their stick instead of drawing a shape on it.
+    let presses: Vec<Option<u16>> = l
+        .elements
+        .iter()
+        .filter_map(|e| match e {
+            layout::Piece::Stick { press, .. } => Some(*press),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(presses, vec![Some(BTN_THUMBL), Some(BTN_THUMBR)]);
 }
 
 #[test]
@@ -427,7 +436,7 @@ fn test_layout_has_nothing_the_device_lacks() {
     // The axis the shape has no room for (here: none) is never dropped: a
     // steering axis shows up as a bar.
     let mut wheel = gamepad_caps();
-    wheel.abs.insert(ABS_STEER);
+    wheel.abs.insert(ABS_WHEEL);
     wheel.abs.insert(ABS_GAS);
     let l = layout::layout(&wheel, Kind::Wheel);
     let bars: Vec<u16> = l
@@ -438,7 +447,7 @@ fn test_layout_has_nothing_the_device_lacks() {
             _ => None,
         })
         .collect();
-    assert!(bars.contains(&ABS_STEER), "{bars:?}");
+    assert!(bars.contains(&ABS_WHEEL), "{bars:?}");
     assert!(bars.contains(&ABS_GAS), "{bars:?}");
 }
 
@@ -480,7 +489,7 @@ fn test_testable_is_a_capability_question() {
 fn test_names_are_stable() {    assert_eq!(button_name(BTN_A), "A");
     assert_eq!(button_name(BTN_MODE), "Guide");
     assert_eq!(axis_name(ABS_RZ), "Right trigger");
-    assert_eq!(axis_name(ABS_STEER), "Steering");
+    assert_eq!(axis_name(ABS_WHEEL), "Steering");
     assert_eq!(Kind::Gamepad.title(), "Gamepad");
     // An unknown code is named, never blank.
     assert_eq!(axis_name(0x2ff), "Axis");
@@ -539,4 +548,123 @@ fn test_ff_play_event_is_an_ev_ff_input_event() {
 fn test_gone_message() {
     assert!(Pad::is_gone_message("/dev/input/js0: No such device"));
     assert!(!Pad::is_gone_message("/dev/input/js0: Permission denied"));
+}
+
+/// The input codes, against <linux/input-event-codes.h>. 0.1.x had the hat
+/// axes at 0x22.. (they are 0x10..), the joystick buttons, BTN_TOUCH and
+/// KEY_VOLUMEUP wrong, so a real D-pad was "Axis" and never drew a cross; the
+/// other tests passed because they reused the same wrong constants.
+#[test]
+fn test_input_codes_match_the_kernel_header() {
+    assert_eq!((ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT2Y), (0x10, 0x11, 0x12, 0x15));
+    assert_eq!((ABS_X, ABS_RZ, ABS_THROTTLE, ABS_WHEEL, ABS_GAS, ABS_BRAKE), (0x00, 0x05, 0x06, 0x08, 0x09, 0x0a));
+    assert_eq!((BTN_TRIGGER, BTN_THUMB, BTN_PINKIE, BTN_BASE, BTN_DEAD), (0x120, 0x121, 0x125, 0x126, 0x12f));
+    assert_eq!((BTN_A, BTN_B, BTN_X, BTN_Y, BTN_TL, BTN_MODE, BTN_THUMBR), (0x130, 0x131, 0x133, 0x134, 0x136, 0x13c, 0x13e));
+    assert_eq!((BTN_TOOL_FINGER, BTN_TOUCH, ABS_MT_PRESSURE, KEY_VOLUMEUP), (0x145, 0x14a, 0x3a, 0x73));
+}
+
+/// The real sysfs text of an 8BitDo Ultimate 3-mode in Xbox mode (xpad), as
+/// read on behoweather 2026-10-12.
+fn eightbitdo_caps() -> Caps {
+    Caps {
+        ev: parse_caps_words("120001b"),
+        keys: parse_caps_words("7cdb000000000000 0 8000000000 0 0"),
+        abs: parse_caps_words("3003f"),
+        ff: set(&[0x50]),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn test_real_8bitdo_is_a_gamepad_with_a_dpad() {
+    let caps = eightbitdo_caps();
+    assert_eq!(classify(&caps), Kind::Gamepad);
+    assert_eq!(caps.hats(), vec![(ABS_HAT0X, ABS_HAT0Y)]);
+    assert_eq!(caps.right_stick(), Some((ABS_RX, ABS_RY)));
+    assert_eq!(caps.triggers(), (Some(ABS_Z), Some(ABS_RZ)));
+    let l = layout::layout(&caps, Kind::Gamepad);
+    assert_eq!(l.elements.iter().filter(|e| matches!(e, layout::Piece::Hat { .. })).count(), 1);
+    // No D-pad axis is drawn as a stray bar.
+    assert!(!l.elements.iter().any(|e| matches!(e, layout::Piece::Bar { code, .. } if *code == ABS_HAT0X || *code == ABS_HAT0Y)));
+}
+
+#[test]
+fn test_xbox_over_bluetooth_mapping() {
+    // hid-microsoft: right stick on Z/RZ, triggers on BRAKE/GAS.
+    let caps = Caps {
+        ev: set(&[EV_KEY, EV_ABS]),
+        keys: set(&[BTN_A, BTN_B, BTN_X, BTN_Y, BTN_TL, BTN_TR, BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR]),
+        abs: set(&[ABS_X, ABS_Y, ABS_Z, ABS_RZ, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y]),
+        ..Default::default()
+    };
+    assert_eq!(classify(&caps), Kind::Gamepad, "two sticks win over pedal axes");
+    assert_eq!(caps.right_stick(), Some((ABS_Z, ABS_RZ)));
+    assert_eq!(caps.triggers(), (Some(ABS_BRAKE), Some(ABS_GAS)));
+}
+
+#[test]
+fn test_unsigned_stick_rests_centred() {
+    let caps = Caps { ev: set(&[EV_ABS]), abs: set(&[ABS_Z]), ..Default::default() };
+    let pad = DeviceInfo { caps, ..Default::default() }.pad();
+    let mut s = PadState::new(&pad);
+    let info = AxisInfo { value: 32768, min: 0, max: 65535, flat: 0, fuzz: 0 };
+    s.push(Ev::Abs { code: ABS_Z, value: 32768 });
+    assert!(s.norm_centered(ABS_Z, info).abs() < 0.01, "mid-range rests centred");
+    s.push(Ev::Abs { code: ABS_Z, value: 65535 });
+    assert!((s.norm_centered(ABS_Z, info) - 1.0).abs() < 0.01);
+    s.push(Ev::Abs { code: ABS_Z, value: 0 });
+    assert!((s.norm_centered(ABS_Z, info) + 1.0).abs() < 0.01);
+}
+
+/// Every piece's box in unit space, captions included.
+fn piece_boxes(l: &layout::Layout) -> Vec<(String, f32, f32, f32, f32)> {
+    l.elements
+        .iter()
+        .map(|e| match e {
+            layout::Piece::Button { label, x, y, r, .. } => (label.clone(), x - r, y - r, x + r, y + r),
+            layout::Piece::Stick { cx, cy, r, .. } => ("stick".into(), cx - r, cy - r, cx + r, cy + r),
+            layout::Piece::Hat { cx, cy, len, .. } => ("dpad".into(), cx - len / 2.0, cy - len / 2.0, cx + len / 2.0, cy + len / 2.0),
+            // A caption is ~24 units tall, centred on label_y, as wide as the bar.
+            layout::Piece::Bar { label, x, y, w, label_y, .. } => (label.clone(), *x, *y, x + w, label_y + 12.0),
+            layout::Piece::Label { text, x, y, .. } => (text.clone(), x - 40.0, y - 12.0, x + 40.0, y + 12.0),
+        })
+        .collect()
+}
+
+/// The panel the user saw had the title over the bumpers, the bumpers off the
+/// body, Sel/Guide/Start on top of the sticks and captions under the body.
+/// Every piece must sit inside the body, with no two overlapping.
+#[test]
+fn test_layout_pieces_never_overlap() {
+    for (name, caps) in [
+        ("8bitdo", eightbitdo_caps()),
+        ("synthetic", gamepad_caps()),
+    ] {
+        let boxes = piece_boxes(&layout::layout(&caps, Kind::Gamepad));
+        for (label, x0, y0, x1, y1) in &boxes {
+            assert!(
+                *x0 >= 0.0 && *y0 >= 0.0 && *x1 <= layout::UNIT_W && *y1 <= layout::UNIT_H,
+                "{name}: {label} leaves the body: ({x0},{y0})-({x1},{y1})"
+            );
+        }
+        for (i, a) in boxes.iter().enumerate() {
+            for b in &boxes[i + 1..] {
+                let apart = a.3 <= b.1 || b.3 <= a.1 || a.4 <= b.2 || b.4 <= a.2;
+                assert!(apart, "{name}: {} overlaps {}", a.0, b.0);
+            }
+        }
+    }
+}
+
+
+#[test]
+fn test_seed_sets_the_real_resting_value_without_logging() {
+    let pad = DeviceInfo { caps: eightbitdo_caps(), ..Default::default() }.pad();
+    let mut s = PadState::new(&pad);
+    assert_eq!(s.axis(ABS_Z), Some(0), "a trigger starts released, not at 127");
+    s.seed(ABS_Z, 3);
+    s.seed(ABS_HAT0Y, -1);
+    assert_eq!(s.axis(ABS_Z), Some(3));
+    assert_eq!(s.hats[0].2, 0, "a held D-pad up at open is shown as up");
+    assert_eq!(s.events, 0, "seeding is not an event");
 }

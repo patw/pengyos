@@ -106,6 +106,13 @@ BR2_PACKAGE_PSMISC=y
 # fragment compiles out every applet another package owns (and the early-boot /
 # embedded ones, since the image has no initramfs and no sysvinit).
 # BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES: set by the server layer
+# Buildroot's ifupdown-scripts (default y with the default skeleton) installs
+# network.service, which runs `ip addr flush dev lo` and then `ifup -a`. systemd
+# already configures loopback at boot and networkd/NetworkManager own every
+# other interface, so the unit had nothing to do; once the Server fragment
+# compiled BusyBox's ifup out it flushed 127.0.0.1 off `lo` and then failed,
+# leaving the machine with no localhost (found on behoweather, 2026-10-12).
+# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set
 # util-linux: the 2026.08 top-level BR2_PACKAGE_UTIL_LINUX package no longer
 # exists; the binaries are split into per-tool subpackages. systemd needs
 # mount/umount/losetup/fsck/swap, which BR2_PACKAGE_UTIL_LINUX_MOUNT ships.

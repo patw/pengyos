@@ -5,12 +5,12 @@ controls. COSMIC Settings (epoch 1.9) has no page for controllers: until now a
 pad was invisible until a game opened it, and checking a stick, a dead button
 or a stuck trigger meant launching Steam and finding a pad setup screen.
 
-- **The list**: every `/dev/input` device with its kind (gamepad, joystick,
-  flight stick, throttle quadrant, steering wheel, pedals, touch screen, mouse,
-  keyboard, remote, keypad, audio jack), how it is attached (USB, Bluetooth,
-  ACPI…), its `vendor:product`, and a capability summary
-  (`2 sticks, 12 buttons, D-pad, 2 trigger axes, rumble`). Controllers headline
-  the list; everything else is listed under it.
+- **The list**: the game controllers only (gamepad, joystick, flight stick,
+  throttle quadrant, steering wheel, pedals), how each is attached (USB,
+  Bluetooth…), its `vendor:product`, and a capability summary
+  (`2 sticks, 11 buttons, 1 D-pad, 2 trigger axes, rumble`). Keyboards, mice,
+  power buttons and audio jacks are classified too, but only `--list` prints
+  them: in the window they pushed the pad off the screen.
 - **The test panel**: a picture drawn from the device's own capabilities —
   buttons light up, stick knobs follow the stick, trigger and pedal bars fill,
   the D-pad points. Each axis prints its raw value and the extremes seen since
