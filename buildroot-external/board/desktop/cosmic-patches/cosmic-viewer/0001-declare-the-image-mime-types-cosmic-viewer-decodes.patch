@@ -1,0 +1,13 @@
+diff --git a/res/com.system76.CosmicViewer.desktop b/res/com.system76.CosmicViewer.desktop
+index 4da3afe..8c69633 100644
+--- a/res/com.system76.CosmicViewer.desktop
++++ b/res/com.system76.CosmicViewer.desktop
+@@ -8,7 +8,7 @@ Terminal=false
+ Type=Application
+ Categories=Graphics;Image;Media;
+ StartupNotify=true
+-MimeType=image/jpeg;image/png;image/gif;image/webp;image/bmp;image/tiff;image/x-icon;image/avif;image/heif;image/heic;image/jxl;image/svg+xml;image/x-portable-pixmap;image/x-portable-graymap;image/x-portable-bitmap;image/x-portable-anymap;image/x-qoi;image/vnd.radiance;
++MimeType=image/jpeg;image/png;image/gif;image/webp;image/bmp;image/tiff;image/x-icon;image/avif;image/heif;image/heic;image/jxl;image/svg+xml;image/x-portable-pixmap;image/x-portable-graymap;image/x-portable-bitmap;image/x-portable-anymap;image/x-qoi;image/vnd.radiance;image/vnd.microsoft.icon;image/x-exr;image/x-tga;image/x-dds;
+ Keywords=image;photo;picture;viewer;annotate;markup;
+ 
+ [Desktop Action Gallery]

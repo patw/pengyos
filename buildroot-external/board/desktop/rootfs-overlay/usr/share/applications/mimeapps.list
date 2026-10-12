@@ -72,3 +72,70 @@ application/x-bzip-compressed-tar=com.system76.CosmicFiles.desktop
 application/x-bzip2=com.system76.CosmicFiles.desktop
 application/x-xz=com.system76.CosmicFiles.desktop
 application/x-xz-compressed-tar=com.system76.CosmicFiles.desktop
+
+# --- The text/plain family ---------------------------------------------------
+# COSMIC Edit is the default for text/plain, and every type below is a
+# text/plain descendant in shared-mime-info. That is enough for gio (COSMIC
+# Files' *Open with*), which walks the inheritance tree and finds Edit - but
+# xdg-mime/xdg-open match the type string exactly and have no ancestor
+# fallback, so `open data.csv` answered "no method available for opening".
+# These are the everyday members of the family; the image ships no app that
+# handles any of them better than a text editor does.
+text/csv=com.system76.CosmicEdit.desktop
+text/tab-separated-values=com.system76.CosmicEdit.desktop
+text/css=com.system76.CosmicEdit.desktop
+text/x-patch=com.system76.CosmicEdit.desktop
+text/x-python=com.system76.CosmicEdit.desktop
+text/x-csrc=com.system76.CosmicEdit.desktop
+text/x-c++src=com.system76.CosmicEdit.desktop
+text/x-chdr=com.system76.CosmicEdit.desktop
+text/rust=com.system76.CosmicEdit.desktop
+application/javascript=com.system76.CosmicEdit.desktop
+application/x-yaml=com.system76.CosmicEdit.desktop
+application/x-desktop=com.system76.CosmicEdit.desktop
+application/rtf=com.system76.CosmicEdit.desktop
+text/vtt=com.system76.CosmicEdit.desktop
+text/x-ssa=com.system76.CosmicEdit.desktop
+application/x-subrip=com.system76.CosmicEdit.desktop
+text/vcard=com.system76.CosmicEdit.desktop
+text/calendar=com.system76.CosmicEdit.desktop
+application/vnd.google-earth.kml+xml=com.system76.CosmicEdit.desktop
+application/gpx+xml=com.system76.CosmicEdit.desktop
+message/rfc822=com.system76.CosmicEdit.desktop
+application/mbox=com.system76.CosmicEdit.desktop
+application/x-cue=com.system76.CosmicEdit.desktop
+
+# --- Disk images: the Disks utility ------------------------------------------
+# io.catbee.pengyos.Disks already declares exactly these three on its .desktop
+# (it writes an .iso/.img, or a published .img.xz, to a USB stick), but nothing
+# made it the default, so a downloaded installer image had no handler.
+application/x-cd-image=io.catbee.pengyos.Disks.desktop
+application/x-raw-disk-image=io.catbee.pengyos.Disks.desktop
+application/x-raw-disk-image-xz-compressed=io.catbee.pengyos.Disks.desktop
+
+# --- Images COSMIC Viewer decodes but did not claim --------------------------
+# image/vnd.microsoft.icon is the canonical type for .ico; the row above is the
+# legacy alias image/x-icon, which xdg-mime cannot match. dds, exr and tga are
+# decoders the Rust `image` crate enables through its default-formats feature
+# (cosmic-viewer depends on image 0.25 with default features on, so it decodes
+# them) and Viewer's .desktop omits - see the cosmic-patches entry.
+image/vnd.microsoft.icon=com.system76.CosmicViewer.desktop
+image/vnd.radiance=com.system76.CosmicViewer.desktop
+image/x-exr=com.system76.CosmicViewer.desktop
+image/x-tga=com.system76.CosmicViewer.desktop
+image/x-dds=com.system76.CosmicViewer.desktop
+
+# --- Audio COSMIC Player decodes ---------------------------------------------
+# Player's .desktop declares video only (its Categories say AudioVideo), so
+# outside the hand-maintained rows above an audio file had no handler at all.
+# These are the formats the image's GStreamer plugins demux/decode: ogg + opus
+# + vorbis (plugins-base/ogg,opus,vorbis), isomp4 for .m4a/.m4b, flac, wavparse,
+# mpg123 + audioparsers, and plugins-bad's aiff. No MIDI synth and no module
+# player is shipped, so .mid/.mod stay uncovered.
+audio/x-vorbis+ogg=com.system76.CosmicPlayer.desktop
+audio/x-opus+ogg=com.system76.CosmicPlayer.desktop
+audio/x-m4a=com.system76.CosmicPlayer.desktop
+audio/x-m4b=com.system76.CosmicPlayer.desktop
+audio/mp4a-latm=com.system76.CosmicPlayer.desktop
+audio/x-aac=com.system76.CosmicPlayer.desktop
+audio/x-aiff=com.system76.CosmicPlayer.desktop

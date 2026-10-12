@@ -17,6 +17,59 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: The rest of the everyday file types get their default apps
+
+- **The archive fix was one instance of a class, so the whole overlay was
+  audited.** Measured on behoweather (26.10.24) with the image's *own* resolvers
+  (`xdg-mime`, `gio`) over ~150 everyday extensions, mapped to canonical types
+  through the image's `shared-mime-info` `globs2`, and scored against the app set
+  the Desktop image actually ships (COSMIC Files/Edit/Viewer/Player/Store, mdit,
+  Pengy, Disks, Firefox — user-installed Flatpaks like VLC excluded, because they
+  mask gaps a fresh image has). Four distinct causes turned up, all of them
+  registration, not missing capability:
+  - **`xdg-mime`/`xdg-open` match the type string exactly; `gio` does not.** gio
+    walks shared-mime-info's inheritance tree, so a type with no row of its own
+    still resolves through its super type — COSMIC Files' *Open with* found
+    CosmicEdit for `.csv`, `.py`, `.css`, `.srt`, while `open data.csv` answered
+    "no method available for opening". Every `text/plain` descendant is in this
+    class, which is why the overlay's single `text/plain` row looked complete.
+  - **COSMIC Player's `.desktop` declares video only** (its `Categories` say
+    `AudioVideo`), so audio files had a handler only where the hand-maintained
+    overlay happened to list one — and *Open with* never listed Player for audio.
+    Same shape as the cosmic-files archive gap.
+  - **Legacy vs canonical type names.** The overlay's icon row is `image/x-icon`;
+    `shared-mime-info` maps `.ico` to `image/vnd.microsoft.icon`, which xdg-mime
+    cannot match.
+  - **Disks declares three types and nothing made it the default** — a downloaded
+    `.iso`/`.img` had no handler, one commit after the app that writes them landed.
+- **Landed:** 39 rows in the overlay's `mimeapps.list` (the `text/plain` family,
+  disk images → Disks, the images Viewer decodes, the audio Player decodes) plus
+  two `.desktop` patches in `cosmic-patches/`:
+  `cosmic-player/0001-…-declare-the-audio-mime-types-cosmic-player-decodes.patch`
+  (19 audio types the image's GStreamer plugins demux: ogg/vorbis/opus, isomp4,
+  flac, wavparse, mpg123 + audioparsers, plugins-bad's aiff) and
+  `cosmic-viewer/0001-…-declare-the-image-mime-types-cosmic-viewer-decodes.patch`
+  (`dds`, `x-exr`, `x-tga`, `vnd.microsoft.icon` — decoders the Rust `image`
+  crate enables through `default-formats`, which cosmic-viewer does not disable).
+- **Measured, not asserted:** applying the overlay + both patches and rebuilding
+  `mimeinfo.cache` resolves **38 previously unopenable extensions, with 0
+  regressions** (the 6 archive rows in that count are the entry below). Every new
+  row was checked with `xdg-mime query default` under the session's
+  `XDG_DATA_DIRS`. `desktop-file-validate` reports the *same* findings on the
+  patched `.desktop` files as on the pristine upstream ones — the two patches
+  introduce none.
+- **Deliberately left uncovered, with the reason.** `.docx/.xlsx/.pptx/.odt/
+  .epub/.cbz/.jar` resolve today only because they are zip containers, so the
+  only app available to point at is the file manager — extracting a document
+  instead of reading it is worse than no default, and the real answer (LibreOffice
+  / Evince) is the curated set, i.e. an operator ratification (spec Principle 8),
+  not an agent's call. `.7z`, `.rar`, `.zst`, `.lz4`, `.lzip` have no decoder in
+  the image; `.psd` and `.xcf` are not decodable by cosmic-viewer (the `image`
+  crate's `psd` feature is not enabled); `.mid`/`.mod` need a synth and a module
+  player, neither shipped; fonts, `.djvu`, `.torrent`, `.exe`/`.msi`/`.apk` have
+  no app in the image at all. A row naming an app that cannot open the file is a
+  worse bug than the gap it closes.
+
 ### Added: Archives open — zip / tar / gzip / bzip2 / xz now have a default app
 
 - **A downloaded `.zip`, `.tar.gz`, `.tar.bz2` or `.tar.xz` had nothing to open
