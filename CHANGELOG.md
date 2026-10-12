@@ -17,7 +17,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Fixed: blank buttons across COSMIC — the icons it leaves to the Pop theme were never installed (found on behoweather, 26.10.25)
+### Fixed (26.10.26) — blank buttons across COSMIC: the icons it leaves to the Pop theme were never installed (found on behoweather running 26.10.25)
 - **The COSMIC Store's Updates page showed an empty square next to every
   Update button** (the release-notes button, `help-info-symbolic`). COSMIC's
   icon theme draws most icons itself and inherits **Pop** for the rest; the
@@ -40,7 +40,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   Desktop post-build fails if any of the 11 is in no theme again
   (`scripts/tests/test_cosmic_icon_theme.py` pins the recipe and the check).
 
-### Fixed: what the review of the 2026-10-12 batch found before it shipped
+### Fixed (26.10.25) — what the review of the 2026-10-12 batch found before it shipped
 
 - **The comfort shell broke the commands it aliased:** `grep`/`fg` ran a
   nonexistent `ripgrep`, `fg` lost job control, `diff` ran an unshipped
@@ -70,7 +70,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 - **The starship theme did not parse**: every prompt printed
   `Error parsing "format"` (seen on the first QEMU boot of the review build).
 
-### Added: Printers — add a printer, manage the queue and print a test page without a browser
+### Added (26.10.25) — Printers: add a printer, manage the queue and print a test page without a browser
 - **Managing printers meant CUPS' web pages.** COSMIC Settings (epoch 1.9) has
   no printer page, so the "Printers" launcher opened `localhost:631` in a
   browser: a password prompt, CUPS' vocabulary, and no way to see the queue
@@ -96,7 +96,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   is cups-filters' PDF banner, and declaring it as CUPS' own banner format is
   refused ("Unsupported format"), so the format is read from the file.
 
-### Changed: the userland agents keep tripping over is the real one — Rust coreutils, and no more cut-down applets
+### Changed (26.10.25) — the userland agents keep tripping over is the real one: Rust coreutils, and no more cut-down applets
 
 Agents on PengyOS kept behaving as if the box were an initramfs: `find -printf`
 rejected, `grep -P`/`--include` unknown, `sed` with no `\b`, `awk` with no
@@ -142,7 +142,7 @@ at all, that is pure embedded-systems inheritance.
   `tools/pengyos-recipe-uutils` now pins the `feat_os_unix` fixture (106 names)
   and fails if the tree's copy of the recipe drifts from the authored one.
 
-### Added: the Server's shell stops feeling stock — the comfort profile is wired in, and zsh gets the oh-my-zsh feel
+### Added (26.10.25) — the Server's shell stops feeling stock: the comfort profile is wired in, and zsh gets the oh-my-zsh feel
 
 `zsh` was the installed user's shell with a bare starter `~/.zshrc`, while the
 comfort set the Server promises (starship prompt, fzf, zoxide, the modern
@@ -183,7 +183,7 @@ place in a reproducible distro); the curated equivalent is now wired:
   `scripts/tests/test_server_comfort_shell.py` (layer symbols, recipe wiring,
   generated defconfigs, rc wiring, `sh -n`/`zsh -n` on the profile).
 
-### Added: Pengy arrives configured — the installer asks for its endpoint, and the image ships skills
+### Added (26.10.25) — Pengy arrives configured: the installer asks for its endpoint, and the image ships skills
 
 An installed PengyOS has always *had* Pengy and never *known* Pengy: the agent
 shipped with a blank config (local endpoint, no model), and `~/skills/` did not
@@ -213,7 +213,7 @@ exist, so the first chat was a stranger with no tools pointed at anything.
   explicitly so an image built against an older PengyR still introduces the
   agent to its skills on the first chat.
 
-### Added: Gamepads — the Desktop can now see its controllers and test them
+### Added (26.10.25) — Gamepads: the Desktop can now see its controllers and test them
 - **A controller was invisible until a game opened it.** COSMIC Settings
   (epoch 1.9) has no page for gamepads, joysticks or any controller: checking a
   stick calibration, a dead button or a stuck trigger meant launching Steam and
@@ -258,7 +258,7 @@ exist, so the first chat was a stranger with no tools pointed at anything.
   `no game controllers`. A pad attached under QEMU (`virtio-input-host`) is the
   next check; the panel is exercised with no hardware by `--selftest`.
 
-### Added: The rest of the everyday file types get their default apps
+### Added (26.10.25) — The rest of the everyday file types get their default apps
 
 - **The archive fix was one instance of a class, so the whole overlay was
   audited.** Measured on behoweather (26.10.24) with the image's *own* resolvers
@@ -311,7 +311,7 @@ exist, so the first chat was a stranger with no tools pointed at anything.
   no app in the image at all. A row naming an app that cannot open the file is a
   worse bug than the gap it closes.
 
-### Added: Archives open — zip / tar / gzip / bzip2 / xz now have a default app
+### Added (26.10.25) — Archives open: zip / tar / gzip / bzip2 / xz now have a default app
 
 - **A downloaded `.zip`, `.tar.gz`, `.tar.bz2` or `.tar.xz` had nothing to open
   it.** Opening one from a browser's download row, from `open foo.zip`, or from
@@ -348,7 +348,7 @@ exist, so the first chat was a stranger with no tools pointed at anything.
   and no archive rows. Ratifying the curated set against the shipped app set is
   an operator decision (spec Principle 8), not an agent one.
 
-### Added: Disks — format USB sticks and memory cards, and write disk images to them
+### Added (26.10.25) — Disks: format USB sticks and memory cards, and write disk images to them
 
 - **Nothing graphical could format a drive.** The Desktop had UDisks2,
   polkit and every mkfs tool (FAT, exFAT, NTFS, ext4), but COSMIC Files only
