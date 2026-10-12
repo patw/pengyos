@@ -8,8 +8,10 @@ offline-testable wizard — and into a machine-driven `--auto` run over
 `install.toml` — without a GUI, so it works over console, serial, or SSH.
 
 The wizard logic is a **pure state machine** (disk/target, edition, layout,
-user, network, confirm) that produces the exact answer set `pengyos-install`
-consumes. It never touches a disk or runs an install itself — it only decides
+user, network, pengy, confirm) that produces the exact answer set
+`pengyos-install` consumes. The `pengy` step — the assistant's endpoint — is the
+one optional step: skipping it is a valid answer, and a plan that skips it
+carries no `pengy` key at all. It never touches a disk or runs an install itself — it only decides
 *what* to install and *where*.
 
 ## Status
@@ -17,7 +19,8 @@ consumes. It never touches a disk or runs an install itself — it only decides
 **`install` is the console installer that actually installs.** It runs on the
 live medium (console, serial or SSH): pick a disk from a numbered list (the
 disk the live system runs from is shown but not selectable), a computer name,
-a user and password (asked twice, hidden), type `erase` to confirm, and it
+a user and password (asked twice, hidden), an optional Pengy endpoint (base URL,
+API key, model — Enter skips the whole page), type `erase` to confirm, and it
 installs the medium's image through the same engine as the GUI
 (`pengyos-install image`, see `tools/pengyos-install`) with a progress bar.
 Bad input re-prompts with the reason; Ctrl-C or EOF before `erase` changes
@@ -82,7 +85,9 @@ is testable offline:
 3. **layout** — disk layout options (GPT + ESP + single ext4 root, the default).
 4. **user** — the initial admin user (+ password handling).
 5. **network** — network configuration.
-6. **confirm** — a final review of the derived plan before it is emitted.
+6. **pengy** — the assistant's endpoint (base URL, API key, model). **Optional**:
+   an empty answer is valid, so the step can always be skipped.
+7. **confirm** — a final review of the derived plan before it is emitted.
 
 Every step validates its input (an invalid answer is rejected with a message,
 not a crash), the wizard supports **back-navigation** (return to the prior

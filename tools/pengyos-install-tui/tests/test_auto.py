@@ -21,6 +21,7 @@ from pengyos_install_tui.auto import (
     parse_config,
     plan_to_json,
     read_config,
+    REQUIRED,
     STEPS,
 )
 from pengyos_install_tui.cli import ExitCode, main
@@ -114,11 +115,33 @@ def test_auto_ignores_unknown_keys():
 
 
 def test_auto_requires_every_field():
-    for missing in STEPS:
+    # REQUIRED, not STEPS: the pengy field is optional by design.
+    for missing in REQUIRED:
         cfg = {k: v for k, v in HAPPY.items() if k != missing}
         with pytest.raises(ConfigError) as e:
             build_plan(cfg)
         assert missing in e.value.message  # the error names the missing field
+
+
+def test_auto_pengy_field_is_optional():
+    """No pengy key at all is a complete document; the plan carries no pengy."""
+    cfg = {k: v for k, v in HAPPY.items() if k != "pengy"}
+    plan = build_plan(cfg)
+    assert "pengy" not in plan.to_dict()
+
+
+def test_auto_pengy_field_lands_in_the_plan():
+    plan = build_plan({**HAPPY, "pengy": {"base_url": "http://127.0.0.1:8080/v1",
+                                          "api_key": "local", "model": "qwen3:8b"}})
+    assert plan.to_dict()["pengy"] == {
+        "base_url": "http://127.0.0.1:8080/v1", "api_key": "local", "model": "qwen3:8b",
+    }
+
+
+def test_auto_pengy_bad_url_is_a_reported_error():
+    from pengyos_install_tui.model import ValidationError
+    with pytest.raises(ValidationError):
+        build_plan({**HAPPY, "pengy": "not-a-url"})
 
 
 def test_auto_invalid_field_raises_validation_error():

@@ -402,3 +402,125 @@ def test_find_payload_mounts_the_stick_partition(tmp_path, monkeypatch):
     calls.clear()
     im.find_payload(run=run)  # already there: no second mount
     assert calls == []
+
+
+# --------------------------------------------------------------------------- #
+# The assistant's endpoint (the installer's Pengy page)
+# --------------------------------------------------------------------------- #
+
+def test_pengy_answers_are_optional():
+    """No Pengy answers at all is valid — the page is skippable by design."""
+    ProvisionAnswers("ok", "pat", "hunter22").validate()
+    assert not ProvisionAnswers("ok", "pat", "hunter22").pengy_configured
+    filled = ProvisionAnswers("ok", "pat", "hunter22",
+                              pengy_base_url="http://10.0.23.6:8086/v1",
+                              pengy_api_key="sk-secret", pengy_model="qwen3:8b")
+    filled.validate()
+    assert filled.pengy_configured
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"pengy_base_url": "10.0.23.6:8086/v1"},          # no scheme
+        {"pengy_base_url": "ftp://host/v1"},              # not http(s)
+        {"pengy_base_url": "http://host has a space/v1"},
+        {"pengy_model": "qwen 3"},
+        {"pengy_api_key": "sk bad"},
+        {"pengy_api_key": "sk\nsecond line"},
+    ],
+)
+def test_pengy_answers_rejected(kw):
+    answers = ProvisionAnswers("ok", "pat", "hunter22", **kw)
+    with pytest.raises(ImageInstallError):
+        answers.validate()
+
+
+def test_pengy_key_is_never_echoed_by_a_validation_error():
+    """A rejected key says what is wrong with it, never what it is."""
+    answers = ProvisionAnswers("ok", "pat", "hunter22",
+                               pengy_base_url="http://127.0.0.1:8080/v1",
+                               pengy_api_key="sk-super secret key")
+    with pytest.raises(ImageInstallError) as exc:
+        answers.validate()
+    assert "sk-super" not in str(exc.value)
+
+
+def test_render_pengy_settings_golden():
+    """The seeded config carries exactly the four keys the wizard asks about.
+
+    Writing only these is deliberate: Pengy merges its own defaults over
+    whatever is missing, so the installer never pins a setting nobody chose.
+    """
+    answers = ProvisionAnswers("ok", "pat", "hunter22",
+                               pengy_base_url="https://api.openai.com/v1",
+                               pengy_api_key="sk-secret", pengy_model="gpt-4o")
+    settings = json.loads(im.render_pengy_settings(answers))
+    assert settings == {
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-secret",
+        "model": "gpt-4o",
+        "system_message": im.PENGY_SYSTEM_MESSAGE,
+    }
+    # The system message keeps its placeholders — Pengy fills them per request.
+    for token in ("{date}", "{username}", "{hostname}", "{osinfo}"):
+        assert token in settings["system_message"]
+    assert "skill_index.md" in settings["system_message"]
+
+
+def _pengy_target(tmp_path):
+    """A minimal fake target root + payload for a provisioning-only install."""
+    payload = _payload(tmp_path, b"R" * 8192, b"E" * 4096)
+    target = tmp_path / "vda"
+    target.touch()
+    for n in (1, 2, 3, 4):
+        (tmp_path / f"vda{n}").touch()
+    esp_dir, root = tmp_path / "esp", tmp_path / "root"
+    (esp_dir / "EFI" / "BOOT").mkdir(parents=True)
+    (root / "etc" / "ssh").mkdir(parents=True)
+    (root / "data").mkdir()
+    (root / "etc" / "group").write_text("root:x:0:\nwheel:x:10:root\n")
+    return payload, target, esp_dir, root
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_install_image_seeds_the_pengy_config(tmp_path, monkeypatch):
+    """The endpoint the wizard was given lands in the user's home, owned by
+    them and readable only by them (it carries their API key)."""
+    payload, target, esp_dir, root = _pengy_target(tmp_path)
+    monkeypatch.setattr(im, "TARGET_ESP", str(esp_dir))
+    monkeypatch.setattr(im, "TARGET_ROOT", str(root))
+    monkeypatch.setattr(im, "EFIVARS", str(tmp_path / "no-efivars"))
+    answers = ProvisionAnswers("box", "pat", "hunter22",
+                               pengy_base_url="http://127.0.0.1:11434/v1",
+                               pengy_api_key="ollama", pengy_model="qwen3:8b")
+    run = FakeRun(root)
+    install_image(str(target), answers, payload_dir=str(payload), confirm=True, run=run,
+                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"))
+
+    settings = root / "home/pat/.config/pengy/settings.json"
+    assert json.loads(settings.read_text())["model"] == "qwen3:8b"
+    assert json.loads(settings.read_text())["base_url"] == "http://127.0.0.1:11434/v1"
+    assert settings.stat().st_mode & 0o777 == 0o600
+    assert ["chroot", str(root), "chown", "-R", "pat:pat", "/home/pat/.config/pengy"] in run.calls
+    # The config is written after the account exists (useradd -m made the home).
+    cmds = [" ".join(c) for c in run.calls]
+    idx = lambda s: next(i for i, c in enumerate(cmds) if c.startswith(s))
+    assert idx("chroot") < idx(f"chroot {root} chown -R pat:pat /home/pat/.config/pengy")
+    # The key never rides on argv.
+    assert "ollama" not in " ".join(cmds)
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_install_image_skips_pengy_when_not_configured(tmp_path, monkeypatch):
+    """Skipping the page leaves Pengy exactly as the image ships it: no config
+    file, so its own defaults (local endpoint, no model) apply."""
+    payload, target, esp_dir, root = _pengy_target(tmp_path)
+    monkeypatch.setattr(im, "TARGET_ESP", str(esp_dir))
+    monkeypatch.setattr(im, "TARGET_ROOT", str(root))
+    monkeypatch.setattr(im, "EFIVARS", str(tmp_path / "no-efivars"))
+    run = FakeRun(root)
+    install_image(str(target), ANSWERS, payload_dir=str(payload), confirm=True, run=run,
+                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"))
+    assert not (root / "home/pat/.config").exists()
+    assert not any(".config/pengy" in " ".join(c) for c in run.calls)

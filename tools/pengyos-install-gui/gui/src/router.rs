@@ -52,6 +52,12 @@ pub enum Message {
     SetPassword(String),
     /// The network SSID field changed.
     SetSsid(String),
+    /// The assistant's base URL field changed (Pengy step).
+    SetPengyBaseUrl(String),
+    /// The assistant's API key field changed (Pengy step).
+    SetPengyApiKey(String),
+    /// The assistant's model field changed (Pengy step).
+    SetPengyModel(String),
     /// The background install finished (carrying the error, if any).
     InstallFinished(Result<(), String>),
 }
@@ -105,6 +111,18 @@ pub fn route(model: &mut Model, msg: Message) -> bool {
         }
         Message::SetSsid(s) => {
             model.set_network_ssid(s);
+            false
+        }
+        Message::SetPengyBaseUrl(url) => {
+            model.set_pengy_base_url(url);
+            false
+        }
+        Message::SetPengyApiKey(key) => {
+            model.set_pengy_api_key(key);
+            false
+        }
+        Message::SetPengyModel(m) => {
+            model.set_pengy_model(m);
             false
         }
         Message::InstallFinished(_) => false,
@@ -204,6 +222,9 @@ mod tests {
             Message::SetUsername("bob".to_string()),
             Message::SetPassword("s3cret".to_string()),
             Message::SetSsid("wifi".to_string()),
+            Message::SetPengyBaseUrl("http://127.0.0.1:8080/v1".to_string()),
+            Message::SetPengyApiKey("sk-x".to_string()),
+            Message::SetPengyModel("qwen3:8b".to_string()),
             Message::InstallFinished(Ok(())),
         ] {
             assert!(!route(&mut m, msg.clone()), "{msg:?} must not advance");
@@ -238,6 +259,31 @@ mod tests {
         m.next().unwrap();
         route(&mut m, Message::SetPassword("correct horse".to_string()));
         assert_eq!(m.password(), Some("correct horse"));
+    }
+
+    #[test]
+    fn pengy_edits_store_the_endpoint() {
+        let mut m = ready_at(Step::Pengy);
+        route(&mut m, Message::SetPengyBaseUrl("http://127.0.0.1:8080/v1".to_string()));
+        route(&mut m, Message::SetPengyApiKey("sk-secret".to_string()));
+        route(&mut m, Message::SetPengyModel("qwen3:8b".to_string()));
+        assert_eq!(m.pengy_base_url(), Some("http://127.0.0.1:8080/v1"));
+        assert_eq!(m.pengy_api_key(), Some("sk-secret"));
+        assert_eq!(m.pengy_model(), Some("qwen3:8b"));
+        assert!(m.pengy_configured());
+    }
+
+    #[test]
+    fn clearing_the_pengy_base_url_skips_the_step() {
+        // The page is skippable: an empty base URL is the skip answer, and the
+        // plan then omits [pengy] entirely.
+        let mut m = ready_at(Step::Pengy);
+        route(&mut m, Message::SetPengyBaseUrl("http://127.0.0.1:8080/v1".to_string()));
+        route(&mut m, Message::SetPengyBaseUrl(String::new()));
+        assert!(!m.pengy_configured());
+        assert!(route(&mut m, Message::Continue));
+        assert_eq!(m.step(), Step::Summary);
+        assert!(!m.install_toml().unwrap().contains("[pengy]"));
     }
 
     #[test]

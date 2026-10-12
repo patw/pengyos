@@ -138,6 +138,18 @@ else
     echo "post-build: ${DISKS_GUI} not built — no Disks app (formatting needs a terminal)"
 fi
 
+# --- Gamepads (list the controllers and test their controls) ----------------
+# tools/pengyos-gamepads, host-built the same way. It reads /dev/input through
+# sysfs (enumeration) and evdev (the live panel); the .desktop file is in the
+# overlay and the `input` group is in board/desktop/users.table.
+GAMEPADS_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-gamepads"
+if [ -x "${GAMEPADS_GUI}" ]; then
+    install -Dm0755 "${GAMEPADS_GUI}" "${TARGET_DIR}/usr/bin/pengyos-gamepads"
+    echo "post-build: installed pengyos-gamepads"
+else
+    echo "post-build: ${GAMEPADS_GUI} not built — no Gamepads app (controllers are invisible)"
+fi
+
 # --- Strip the host-built binaries ---------------------------------------------
 # Buildroot strips target binaries before post-build runs, so everything copied in
 # above (COSMIC, pop-launcher, the installer GUI) arrived with its symbol tables.
@@ -145,7 +157,7 @@ STRIP_BIN="$(ls "${HOST_DIR}"/bin/*-buildroot-linux-gnu-strip 2>/dev/null | head
 if [ -n "${STRIP_BIN}" ]; then
     for f in "${TARGET_DIR}"/usr/bin/cosmic-* "${TARGET_DIR}"/usr/bin/pop-launcher \
              "${TARGET_DIR}"/usr/bin/pengyos-install-gui "${TARGET_DIR}"/usr/bin/pengyos-updates \
-             "${TARGET_DIR}"/usr/bin/pengyos-disks; do
+             "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-gamepads; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
     echo "post-build: stripped host-built binaries"

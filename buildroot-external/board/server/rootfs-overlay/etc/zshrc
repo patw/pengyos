@@ -1,0 +1,15 @@
+# /etc/zshrc — PengyOS system-wide zsh setup (Server layer overlay).
+#
+# zsh reads this before any ~/.zshrc. Its whole job is to load the curated
+# comfort profile (starship prompt, fzf, zoxide, the modern aliases, and the
+# zsh plugins: autosuggestions + syntax highlighting). The profile is guarded
+# and idempotent, so a user's own ~/.zshrc can source it again harmlessly —
+# and a user who deletes ~/.zshrc still lands on the comfort setup.
+#
+# Paths: Buildroot's zsh uses /etc/zshrc; Debian-patched zsh uses
+# /etc/zsh/zshrc — the overlay ships a symlink to that spelling too, so the
+# same overlay serves a stock and a patched shell.
+
+if [ -r /etc/pengyos/shell/profile ]; then
+    . /etc/pengyos/shell/profile
+fi

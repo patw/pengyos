@@ -11,7 +11,7 @@
 //! ## Wizard flow
 //!
 //! ```text
-//!  Welcome -> Disk -> Layout -> User -> Network -> Summary -> Progress
+//!  Welcome -> Disk -> Layout -> User -> Network -> Pengy -> Summary -> Progress
 //! ```
 //!
 //! * **Welcome** — the user must accept the terms to leave this screen.
@@ -20,6 +20,9 @@
 //! * **User** — a hostname, username (>= 3 chars) and password (>= 6 chars)
 //!   are required.
 //! * **Network** — optional; the wizard may always proceed.
+//! * **Pengy** — the assistant's endpoint (base URL, API key, model). Optional
+//!   by design: not every machine has an endpoint to point at during an
+//!   install, so the step may always be skipped and the plan simply omits it.
 //! * **Summary** — a read-only review of the derived plan.
 //! * **Progress** — terminal; reached once the install has started.
 //!
@@ -43,23 +46,26 @@ pub enum Step {
     Layout,
     User,
     Network,
+    /// The assistant's endpoint — optional, always skippable.
+    Pengy,
     Summary,
     Progress,
 }
 
 impl Step {
     /// All steps in navigation order.
-    pub const ALL: [Step; 7] = [
+    pub const ALL: [Step; 8] = [
         Step::Welcome,
         Step::Disk,
         Step::Layout,
         Step::User,
         Step::Network,
+        Step::Pengy,
         Step::Summary,
         Step::Progress,
     ];
 
-    /// Position in navigation order (Welcome = 0 ... Progress = 6).
+    /// Position in navigation order (Welcome = 0 ... Progress = 7).
     pub const fn index(self) -> usize {
         match self {
             Step::Welcome => 0,
@@ -67,8 +73,9 @@ impl Step {
             Step::Layout => 2,
             Step::User => 3,
             Step::Network => 4,
-            Step::Summary => 5,
-            Step::Progress => 6,
+            Step::Pengy => 5,
+            Step::Summary => 6,
+            Step::Progress => 7,
         }
     }
 
@@ -79,7 +86,8 @@ impl Step {
             Step::Disk => Some(Step::Layout),
             Step::Layout => Some(Step::User),
             Step::User => Some(Step::Network),
-            Step::Network => Some(Step::Summary),
+            Step::Network => Some(Step::Pengy),
+            Step::Pengy => Some(Step::Summary),
             Step::Summary => Some(Step::Progress),
             Step::Progress => None,
         }
@@ -93,7 +101,8 @@ impl Step {
             Step::Layout => Some(Step::Disk),
             Step::User => Some(Step::Layout),
             Step::Network => Some(Step::User),
-            Step::Summary => Some(Step::Network),
+            Step::Pengy => Some(Step::Network),
+            Step::Summary => Some(Step::Pengy),
             Step::Progress => Some(Step::Summary),
         }
     }
@@ -106,6 +115,7 @@ impl Step {
             Step::Layout => "Layout",
             Step::User => "Your account",
             Step::Network => "Network",
+            Step::Pengy => "Pengy",
             Step::Summary => "Summary",
             Step::Progress => "Installing",
         }
@@ -220,6 +230,37 @@ impl fmt::Display for Blocker {
 
 impl std::error::Error for Blocker {}
 
+/// Why a filled Pengy answer is unusable, if it is.
+///
+/// The step is optional, so an absent answer is never a problem. A present one
+/// must be a shape Pengy can actually talk to: an http(s) base URL, and model /
+/// key as single tokens (a pasted "qwen3:8b, llama3" is a classic paste error).
+fn pengy_problem_for(
+    base_url: Option<&str>,
+    api_key: Option<&str>,
+    model: Option<&str>,
+) -> Option<String> {
+    let url = base_url?;
+    let scheme_ok = url.starts_with("http://") || url.starts_with("https://");
+    if !scheme_ok || url.chars().any(|c| c.is_whitespace() || (c as u32) < 0x20) {
+        return Some(format!(
+            "base URL {url:?} must be an http:// or https:// URL with no spaces"
+        ));
+    }
+    if let Some(v) = model {
+        if v.chars().any(|c| c.is_whitespace() || (c as u32) < 0x20) {
+            return Some(format!("Pengy model {v:?} must not contain spaces"));
+        }
+    }
+    if let Some(v) = api_key {
+        // The key is a secret: say what is wrong with it, never what it is.
+        if v.chars().any(|c| c.is_whitespace() || (c as u32) < 0x20) {
+            return Some("Pengy API key must not contain spaces".into());
+        }
+    }
+    None
+}
+
 /// The whole wizard as a view-model.
 ///
 /// Construct a fresh wizard with [`Model::new`], drive it with [`Model::next`]
@@ -234,6 +275,9 @@ pub struct Model {
     username: Option<String>,
     password: Option<String>,
     network_ssid: Option<String>,
+    pengy_base_url: Option<String>,
+    pengy_api_key: Option<String>,
+    pengy_model: Option<String>,
 }
 
 /// A fresh wizard positioned at [`Step::Welcome`].
@@ -249,6 +293,9 @@ impl Model {
             username: None,
             password: None,
             network_ssid: None,
+            pengy_base_url: None,
+            pengy_api_key: None,
+            pengy_model: None,
         }
     }
 
@@ -319,6 +366,37 @@ impl Model {
         };
     }
 
+    /// Set the assistant's endpoint (Pengy step). An empty string clears it,
+    /// which is the same as skipping the step.
+    pub fn set_pengy_base_url(&mut self, url: impl Into<String>) {
+        let url = url.into();
+        self.pengy_base_url = if url.trim().is_empty() {
+            None
+        } else {
+            Some(url.trim().to_string())
+        };
+    }
+
+    /// Set the assistant's API key (Pengy step).
+    pub fn set_pengy_api_key(&mut self, key: impl Into<String>) {
+        let key = key.into();
+        self.pengy_api_key = if key.trim().is_empty() {
+            None
+        } else {
+            Some(key.trim().to_string())
+        };
+    }
+
+    /// Set the assistant's model name (Pengy step).
+    pub fn set_pengy_model(&mut self, model: impl Into<String>) {
+        let model = model.into();
+        self.pengy_model = if model.trim().is_empty() {
+            None
+        } else {
+            Some(model.trim().to_string())
+        };
+    }
+
     // --- Validation -------------------------------------------------------
 
     /// True when the current step's answers are complete enough to advance.
@@ -349,16 +427,31 @@ impl Model {
                     .unwrap_or(false);
                 host && user && pass
             }
-            // Network is optional; the wizard may always proceed.
+            Step::Network => true,
+            // Pengy is optional: an empty answer is a valid one (skip). A
+            // *filled* answer still has to be a shape Pengy can use, so a
+            // half-typed endpoint blocks advance with a reason rather than
+            // seeding a config that fails on the first chat.
+            Step::Pengy => self.pengy_problem().is_none(),
             // Progress is handled by the early return above; the arm keeps the
             // match exhaustive.
-            Step::Network | Step::Summary | Step::Progress => true,
+            Step::Summary | Step::Progress => true,
         };
         if ok {
             None
         } else {
             Some(Blocker::Invalid(self.step, self.reason_for(self.step)))
         }
+    }
+
+    /// Why the Pengy step cannot advance right now (None = fine, including
+    /// the step being skipped entirely).
+    fn pengy_problem(&self) -> Option<String> {
+        pengy_problem_for(
+            self.pengy_base_url.as_deref(),
+            self.pengy_api_key.as_deref(),
+            self.pengy_model.as_deref(),
+        )
     }
 
     fn reason_for(&self, step: Step) -> String {
@@ -382,6 +475,9 @@ impl Model {
                 format!("please provide {}", missing.join(", "))
             }
             Step::Network => "network is optional; continue".into(),
+            Step::Pengy => self
+                .pengy_problem()
+                .unwrap_or_else(|| "Pengy is optional; continue to skip it".into()),
             Step::Summary | Step::Progress => "already complete".into(),
         }
     }
@@ -470,6 +566,26 @@ impl Model {
         self.network_ssid.as_deref()
     }
 
+    /// The configured assistant endpoint, if any.
+    pub fn pengy_base_url(&self) -> Option<&str> {
+        self.pengy_base_url.as_deref()
+    }
+
+    /// The configured assistant API key, if any.
+    pub fn pengy_api_key(&self) -> Option<&str> {
+        self.pengy_api_key.as_deref()
+    }
+
+    /// The configured assistant model, if any.
+    pub fn pengy_model(&self) -> Option<&str> {
+        self.pengy_model.as_deref()
+    }
+
+    /// True when the wizard was given an endpoint to configure Pengy with.
+    pub fn pengy_configured(&self) -> bool {
+        self.pengy_base_url.is_some()
+    }
+
     // --- Derived plan -----------------------------------------------------
 
     /// True when every required answer has been supplied.
@@ -513,6 +629,19 @@ impl Model {
         if let Some(ssid) = self.network_ssid.as_deref() {
             out.push_str(&format!("network_ssid = \"{}\"\n", toml_escape(ssid)));
         }
+        // The assistant's endpoint, only when the page was filled in. Skipping
+        // it writes nothing at all: Pengy then keeps the defaults the image
+        // ships (the local endpoint, no key, no model).
+        if let Some(url) = self.pengy_base_url.as_deref() {
+            out.push_str("\n[pengy]\n");
+            out.push_str(&format!("base_url = \"{}\"\n", toml_escape(url)));
+            if let Some(key) = self.pengy_api_key.as_deref() {
+                out.push_str(&format!("api_key = \"{}\"\n", toml_escape(key)));
+            }
+            if let Some(model) = self.pengy_model.as_deref() {
+                out.push_str(&format!("model = \"{}\"\n", toml_escape(model)));
+            }
+        }
         Some(out)
     }
 
@@ -551,6 +680,9 @@ impl Model {
             "username" => self.set_username(value),
             "password" => self.set_password(value),
             "network_ssid" => self.set_network_ssid(value),
+            "pengy_base_url" => self.set_pengy_base_url(value),
+            "pengy_api_key" => self.set_pengy_api_key(value),
+            "pengy_model" => self.set_pengy_model(value),
             _ => {}
         }
     }
@@ -610,7 +742,8 @@ mod tests {
     #[test]
     fn step_order_is_stable() {
         assert_eq!(Step::Welcome.index(), 0);
-        assert_eq!(Step::Progress.index(), 6);
+        assert_eq!(Step::Pengy.index(), 5);
+        assert_eq!(Step::Progress.index(), 7);
         assert_eq!(Step::Disk.next(), Some(Step::Layout));
         assert_eq!(Step::Layout.prev(), Some(Step::Disk));
         assert_eq!(Step::Welcome.prev(), None);
@@ -651,6 +784,7 @@ mod tests {
         assert_eq!(m.next().unwrap(), Step::Layout);
         assert_eq!(m.next().unwrap(), Step::User);
         assert_eq!(m.next().unwrap(), Step::Network);
+        assert_eq!(m.next().unwrap(), Step::Pengy);
         assert_eq!(m.next().unwrap(), Step::Summary);
         assert!(m.is_complete_plan());
         assert_eq!(m.next().unwrap(), Step::Progress);
@@ -723,6 +857,7 @@ mod tests {
         m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
+        m.next().unwrap();
         let plan = m.layout_plan().expect("plan");
         assert!(plan.contains("target = /dev/sda"));
         assert!(plan.contains("layout = wipe"));
@@ -741,6 +876,7 @@ mod tests {
         m.set_password("hunter2");
         m.set_network_ssid("home");
         // Walk Welcome -> Disk -> Layout -> User -> Network -> Summary.
+        m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
@@ -777,6 +913,7 @@ network_ssid = \"home\"
         m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
+        m.next().unwrap();
         let toml = m.install_toml().unwrap();
         assert!(!toml.contains("network_ssid"));
         assert!(toml.contains("target = \"/dev/nvme0n1\""));
@@ -795,6 +932,7 @@ network_ssid = \"home\"
         m.set_username("alice");
         m.set_password("hunter2");
         m.set_network_ssid("ho\"me\nx");
+        m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
@@ -889,6 +1027,7 @@ network_ssid = \"ho\\\"me\\nx\"
         m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
+        m.next().unwrap();
         let plan = m.layout_plan().expect("plan");
         let expected = "\
 Layout plan
@@ -960,9 +1099,11 @@ Layout plan
         assert_eq!(m.next().unwrap(), Step::Layout);
         assert_eq!(m.next().unwrap(), Step::User);
         assert_eq!(m.next().unwrap(), Step::Network);
+        assert_eq!(m.next().unwrap(), Step::Pengy);
         assert_eq!(m.next().unwrap(), Step::Summary);
 
         // Walk back one at a time and confirm each landing step.
+        assert_eq!(m.back(), Some(Step::Pengy));
         assert_eq!(m.back(), Some(Step::Network));
         assert_eq!(m.back(), Some(Step::User));
         assert_eq!(m.back(), Some(Step::Layout));
@@ -1049,7 +1190,7 @@ Layout plan
         m.set_hostname("host");
         m.set_username("alice");
         m.set_password("hunter2");
-        for _ in 0..6 {
+        for _ in 0..7 {
             m.next().unwrap();
         }
         assert_eq!(m.step(), Step::Progress);
@@ -1089,5 +1230,144 @@ Layout plan
         assert_eq!(m.step(), Step::Progress);
         // No network ssid supplied -> install.toml omits it.
         assert!(!m.install_toml().unwrap().contains("network_ssid"));
+        // No Pengy answers supplied -> the plan omits the whole [pengy] section.
+        assert!(!m.install_toml().unwrap().contains("[pengy]"));
+    }
+
+    // --- the Pengy page (optional by design) --------------------------------
+
+    #[test]
+    fn pengy_step_is_always_skippable() {
+        let mut m = Model::new();
+        m.set_accepted_terms(true);
+        m.set_selected_disk("/dev/sda");
+        m.set_layout(Layout::Wipe);
+        m.set_hostname("host");
+        m.set_username("alice");
+        m.set_password("hunter2");
+        while m.step() != Step::Pengy {
+            m.next().expect("walk to Pengy");
+        }
+        // Nothing typed: Continue works, and the plan carries no Pengy section.
+        assert!(m.can_advance());
+        assert_eq!(m.next().unwrap(), Step::Summary);
+        let toml = m.install_toml().unwrap();
+        assert!(!toml.contains("[pengy]"));
+        assert!(!toml.contains("base_url"));
+    }
+
+    #[test]
+    fn pengy_answers_land_in_the_plan() {
+        let mut m = Model::new();
+        m.set_accepted_terms(true);
+        m.set_selected_disk("/dev/sda");
+        m.set_layout(Layout::Wipe);
+        m.set_hostname("host");
+        m.set_username("alice");
+        m.set_password("hunter2");
+        m.set_pengy_base_url("https://api.openai.com/v1");
+        m.set_pengy_api_key("sk-secret");
+        m.set_pengy_model("gpt-4o");
+        while m.step() != Step::Summary {
+            m.next().unwrap();
+        }
+        let toml = m.install_toml().unwrap();
+        let expected = "\
+# PengyOS Desktop install plan
+# Generated by pengyos-install-model
+
+[install]
+target = \"/dev/sda\"
+layout = \"wipe\"
+hostname = \"host\"
+user = \"alice\"
+
+[pengy]
+base_url = \"https://api.openai.com/v1\"
+api_key = \"sk-secret\"
+model = \"gpt-4o\"
+";
+        assert_eq!(toml, expected);
+    }
+
+    #[test]
+    fn pengy_partial_answers_omit_the_unset_keys() {
+        // A local endpoint needs no key and may have no model chosen yet; the
+        // plan writes only what was answered.
+        let m = Model::run_answers(&[
+            ("accepted_terms", "true"),
+            ("selected_disk", "/dev/sda"),
+            ("layout", "wipe"),
+            ("hostname", "host"),
+            ("username", "alice"),
+            ("password", "hunter2"),
+            ("pengy_base_url", "http://127.0.0.1:11434/v1"),
+        ])
+        .expect("a base URL alone is a valid Pengy answer");
+        assert_eq!(m.step(), Step::Progress);
+        let toml = m.install_toml().unwrap();
+        assert!(toml.contains("base_url = \"http://127.0.0.1:11434/v1\""));
+        // Only the answered keys are written (matched as key = value lines, so
+        // the "pengyos-install-model" header cannot satisfy them).
+        assert!(!toml.contains("api_key = "));
+        assert!(!toml.contains("model = "));
+    }
+
+    #[test]
+    fn pengy_step_blocks_a_base_url_that_is_not_http() {
+        let mut m = Model::new();
+        m.set_accepted_terms(true);
+        m.set_selected_disk("/dev/sda");
+        m.set_layout(Layout::Wipe);
+        m.set_hostname("host");
+        m.set_username("alice");
+        m.set_password("hunter2");
+        while m.step() != Step::Pengy {
+            m.next().unwrap();
+        }
+        m.set_pengy_base_url("10.0.23.6:8086/v1");
+        assert!(!m.can_advance());
+        let blocker = format!("{}", m.advance_error().unwrap());
+        assert!(blocker.contains("http://"), "{blocker}");
+        // Clearing it makes the step skippable again.
+        m.set_pengy_base_url("");
+        assert!(m.can_advance());
+    }
+
+    #[test]
+    fn pengy_step_blocks_a_model_with_spaces() {
+        let blocker = Model::run_answers(&[
+            ("accepted_terms", "true"),
+            ("selected_disk", "/dev/sda"),
+            ("layout", "wipe"),
+            ("hostname", "host"),
+            ("username", "alice"),
+            ("password", "hunter2"),
+            ("pengy_base_url", "http://127.0.0.1:8080/v1"),
+            ("pengy_model", "qwen3:8b, llama3"),
+        ])
+        .expect_err("a model name with a space is not a model name");
+        assert!(matches!(blocker, Blocker::Invalid(Step::Pengy, _)));
+        assert!(format!("{blocker}").contains("spaces"));
+    }
+
+    #[test]
+    fn pengy_answers_survive_back_navigation() {
+        let mut m = Model::new();
+        m.set_accepted_terms(true);
+        m.set_selected_disk("/dev/sda");
+        m.set_layout(Layout::Wipe);
+        m.set_hostname("host");
+        m.set_username("alice");
+        m.set_password("hunter2");
+        m.set_pengy_base_url("http://127.0.0.1:8080/v1");
+        m.set_pengy_model("qwen3:8b");
+        while m.step() != Step::Summary {
+            m.next().unwrap();
+        }
+        assert_eq!(m.back(), Some(Step::Pengy));
+        assert_eq!(m.pengy_base_url(), Some("http://127.0.0.1:8080/v1"));
+        assert_eq!(m.pengy_model(), Some("qwen3:8b"));
+        assert!(m.pengy_configured());
     }
 }

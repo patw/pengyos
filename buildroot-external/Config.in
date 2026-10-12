@@ -16,6 +16,14 @@ menu "PengyOS (external tree)"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ddcutil/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/bolt/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/distrobox/Config.in"
+	# Server comfort shell (US-SRV-1): the interactive pieces the comfort
+	# profile wires — fzf (Ctrl-R), the starship prompt, and the two zsh
+	# plugins that give a plain zsh the oh-my-zsh feel. Buildroot 2026.08
+	# ships none of them.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/fzf/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/starship/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/zsh-autosuggestions/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/zsh-syntax-highlighting/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-utils/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-user-dirs/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/oo7/Config.in"
@@ -37,6 +45,10 @@ menu "PengyOS (external tree)"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cosmic-sound-theme/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libnotify/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libqalculate/Config.in"
+	# Core userland: our own recipe for uutils/coreutils, the Rust coreutils
+	# (SPEC §2.1). Buildroot 2026.08 ships no uutils recipe at all, so the
+	# Core layer's coreutils is ours: package/uutils-coreutils.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/uutils-coreutils/Config.in"
 
 	# Flatpak (the Desktop's app lane) and the two libraries it needs that
 	# Buildroot 2026.08 does not ship. Built here instead of copied from the

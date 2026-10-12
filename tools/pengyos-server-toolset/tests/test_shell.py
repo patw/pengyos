@@ -342,3 +342,148 @@ def test_fzf_snippet_is_idempotent_when_sourced_twice(shell_dir_env):
     assert proc.stdout.count("DONE") == 1, (
         f"fzf.sh second source was not a no-op: {proc.stdout!r}"
     )
+
+# --- the image wiring the profile promises ---------------------------------
+#
+# The profile is only worth shipping because the image wires it: the Server
+# board installs it at /etc/pengyos/shell and sources it from the system rc
+# files. These tests read the buildroot-external tree (repo-root relative) and
+# fail when the wiring drifts away from the profile's documented paths.
+
+EXT = REPO_ROOT.parents[1] / "buildroot-external"
+SERVER_BOARD = EXT / "board" / "server"
+SERVER_OVERLAY = SERVER_BOARD / "rootfs-overlay"
+SERVER_SKEL = SERVER_OVERLAY / "etc" / "skel"
+
+
+def test_server_post_build_installs_the_profile():
+    # The Server post-build copies the authored shell/ files to their canonical
+    # system path (/etc/pengyos/shell) and the tmux defaults to /etc/tmux.conf.
+    text = (SERVER_BOARD / "post-build.sh").read_text(encoding="utf-8")
+    assert "pengyos-server-toolset/shell" in text, (
+        "server post-build must install the toolset's shell/ files"
+    )
+    assert "etc/pengyos/shell" in text, (
+        "server post-build must install the profile at /etc/pengyos/shell"
+    )
+    assert "etc/tmux.conf" in text, "server post-build must install /etc/tmux.conf"
+    for name in ("profile", "fzf.sh", "zoxide.sh", "starship.toml"):
+        assert f"shell/{name}" in text, f"post-build must install shell/{name}"
+
+
+def test_system_rc_files_source_the_profile():
+    # zsh: /etc/zshrc (Buildroot's path) and the /etc/zsh/zshrc symlink
+    # (Debian-patched zsh's path); bash: /etc/profile.d. All guarded on the
+    # profile being readable.
+    zshrc = (SERVER_OVERLAY / "etc" / "zshrc").read_text(encoding="utf-8")
+    assert "/etc/pengyos/shell/profile" in zshrc, "/etc/zshrc must source the profile"
+    bash_sh = (SERVER_OVERLAY / "etc" / "profile.d" / "pengyos-shell.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "/etc/pengyos/shell/profile" in bash_sh, (
+        "/etc/profile.d/pengyos-shell.sh must source the profile"
+    )
+    link = SERVER_OVERLAY / "etc" / "zsh" / "zshrc"
+    assert link.is_symlink() and link.resolve().name == "zshrc", (
+        "the overlay must carry /etc/zsh/zshrc -> /etc/zshrc for patched zsh"
+    )
+
+
+def test_skel_rcs_source_the_profile():
+    # A new account's ~/.zshrc and ~/.bashrc source the profile (guarded, with
+    # a per-user ~/.config override path first).
+    for name in (".zshrc", ".bashrc"):
+        text = (SERVER_SKEL / name).read_text(encoding="utf-8")
+        assert "/etc/pengyos/shell/profile" in text, f"skel {name} must source the profile"
+
+
+def test_skel_zshrc_keeps_the_omz_feel():
+    # The plugin-free oh-my-zsh bits the starter file promises, plus the
+    # prompt fix that made zsh show '%' for a wheel user (CAP_WAKE_ALARM).
+    text = (SERVER_SKEL / ".zshrc").read_text(encoding="utf-8")
+    assert "hist_substring_search" in text, "Ctrl-R substring history search"
+    assert "compinit" in text and "menu select" in text
+    assert "_pengyos_mark='%%'" in text, "prompt must use '%', not zsh's '%#'"
+
+
+# --- starship init is shell-specific (there is no POSIX-sh emitter) ---------
+
+
+def test_profile_picks_the_starship_shell():
+    # `starship init sh` emits nothing: the profile must pick zsh/bash from the
+    # sourcing shell and only fall back to sh for other POSIX shells.
+    text = PROFILE.read_text(encoding="utf-8")
+    assert "_starship_shell=zsh" in text and "_starship_shell=bash" in text, (
+        "profile must detect zsh/bash for `starship init`"
+    )
+    assert 'starship init "$_starship_shell"' in text, (
+        "profile must pass the detected shell to `starship init`"
+    )
+
+
+def test_profile_points_starship_at_the_system_theme():
+    # The curated starship.toml is only used if STARSHIP_CONFIG points at it
+    # (guarded: an env override and a user's own config keep working).
+    text = PROFILE.read_text(encoding="utf-8")
+    assert "STARSHIP_CONFIG" in text, "profile must wire STARSHIP_CONFIG"
+    assert "$PENGYOS_SHELL_DIR/starship.toml" in text, (
+        "STARSHIP_CONFIG must point at the sibling starship.toml"
+    )
+
+
+def test_profile_sources_the_zsh_plugins():
+    # The oh-my-zsh feel: autosuggestions first, syntax highlighting last
+    # (it wraps the ZLE widgets); both guarded and zsh-only.
+    text = PROFILE.read_text(encoding="utf-8")
+    assert "/usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" in text
+    assert "/usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" in text
+    a = text.index("zsh-autosuggestions.zsh")
+    s = text.index("zsh-syntax-highlighting.zsh")
+    assert a < s, "autosuggestions must be sourced before syntax highlighting"
+
+
+# --- functional: the profile works under zsh (the Server's user shell) ------
+
+
+def _run_zsh(script: str, extra_env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["zsh", "-f", "-i", "-c", script],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent-home", **extra_env},
+        timeout=30,
+    )
+
+
+def test_profile_sources_cleanly_under_zsh(shell_dir_env):
+    """Sourcing the profile under zsh works and lands the comfort aliases."""
+    if subprocess.run(["which", "zsh"], capture_output=True).returncode != 0:
+        pytest.skip("zsh not installed on the test host")
+    env = {**shell_dir_env, "PROF": str(PROFILE)}
+    script = (
+        ". $PROF; "
+        ". $PROF; "
+        "alias ls cat; "
+        "echo \"GUARD=$PENGYOS_TOOLSET_PROFILE_RC\"; "
+    )
+    proc = _run_zsh(script, env)
+    assert proc.returncode == 0, f"zsh exited non-zero: {proc.stderr}"
+    out = proc.stdout
+    assert "eza" in out, "profile must alias ls to eza under zsh"
+    assert "bat" in out, "profile must alias cat to bat under zsh"
+    assert "GUARD=1" in out, "profile guard marker must be set under zsh"
+
+
+def test_profile_double_source_is_a_no_op_under_zsh(shell_dir_env):
+    """The idempotency guard fires under zsh too (/etc/zshrc + ~/.zshrc source
+    the profile in the same interactive shell)."""
+    if subprocess.run(["which", "zsh"], capture_output=True).returncode != 0:
+        pytest.skip("zsh not installed on the test host")
+    env = {**shell_dir_env, "PROF": str(PROFILE)}
+    script = ". $PROF; . $PROF; echo DONE; "
+    proc = _run_zsh(script, env)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.count("DONE") == 1, (
+        f"second source was not a no-op under zsh: {proc.stdout!r}"
+    )
+

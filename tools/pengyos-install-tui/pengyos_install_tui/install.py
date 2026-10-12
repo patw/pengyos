@@ -4,6 +4,7 @@ Runs on the live medium's console (or over serial / SSH) and installs through
 the same engine as the GUI, :mod:`pengyos_install.image`:
 
     disk  ->  computer name  ->  user  ->  password  ->  SSH key
+          ->  Pengy endpoint (optional; Enter skips it)
           ->  automatic login (Desktop only; default no)  ->  confirm ("erase")  ->  install
 
 Unlike ``run`` / ``auto`` (which only produce an answer set), this erases the
@@ -139,6 +140,27 @@ def run_install(
         # a key this user can log in at the console but not over SSH.
         key = _ask(f"SSH public key for {username} (paste one line; Enter to skip)", inp, out,
                    check=lambda v: _answers_problem(authorized_keys=v), optional=True)
+        # The assistant ships unconfigured (its defaults are the local endpoint,
+        # no key, no model). This page is optional on purpose: plenty of people
+        # have no endpoint to point at during an install, and an empty base URL
+        # means "leave Pengy exactly as the image ships it".
+        base_url = _ask(
+            "Pengy base URL (OpenAI-compatible, e.g. http://127.0.0.1:11434/v1; Enter to skip)",
+            inp, out, check=lambda v: _answers_problem(pengy_base_url=v), optional=True,
+        )
+        api_key = model = ""
+        if base_url:
+            api_key = _ask(
+                "Pengy API key (Enter for none — local endpoints need none)",
+                secret, out, check=lambda v: _answers_problem(
+                    pengy_base_url=base_url, pengy_api_key=v), optional=True,
+            )
+            model = _ask(
+                "Pengy model name (Enter to choose later)", inp, out,
+                check=lambda v: _answers_problem(
+                    pengy_base_url=base_url, pengy_api_key=api_key, pengy_model=v),
+                optional=True,
+            )
         # A Desktop starts at its login screen; skipping it is opt-in (Ubuntu's
         # "Log in automatically").
         autologin = False
@@ -150,6 +172,7 @@ def run_install(
             f"\n  disk:      {disk.path}  {disk.size_label}  {disk.model or ''}\n"
             f"  computer:  {hostname}\n  user:      {username}\n"
             f"  ssh key:   {key.split()[0] + ' ...' + key[-24:] if key else 'none (console login only)'}\n"
+            f"  pengy:     {base_url + ('  model ' + model if model else '') if base_url else 'not configured (Pengy keeps its defaults)'}\n"
             + (f"  login:     {'automatic' if autologin else 'password required'}\n"
                if manifest.edition == "desktop" else "")
             + "\n"
@@ -163,7 +186,9 @@ def run_install(
         return 1
 
     answers = engine.ProvisionAnswers(hostname=hostname, username=username, password=password,
-                                      authorized_keys=key, autologin=autologin)
+                                      authorized_keys=key, autologin=autologin,
+                                      pengy_base_url=base_url, pengy_api_key=api_key,
+                                      pengy_model=model)
     try:
         install(disk.path, answers, payload_dir=payload, confirm=True, report=_progress(out))
     except engine.ImageInstallError as exc:

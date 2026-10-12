@@ -2,9 +2,9 @@
 
 This module is the *only* place the installer's decisions live. It models the
 guided Core/Server installer (spec.md) as a small, ordered state machine with
-six steps:
+seven steps:
 
-    target -> edition -> layout -> user -> network -> confirm
+    target -> edition -> layout -> user -> network -> pengy -> confirm
 
 Every step validates its input (an invalid answer is rejected with a message,
 never a crash), the wizard supports **back-navigation** (return to the prior
@@ -17,7 +17,7 @@ the entire wizard is golden-testable without a terminal, a disk, or root.
 
 Public surface
 --------------
-* :class:`StepKey` — the six canonical step identifiers.
+* :class:`StepKey` — the seven canonical step identifiers.
 * :data:`WIZARD_ORDER` — the ordered tuple of every step.
 * :class:`Edition`, :class:`Layout`, :class:`NetworkMode` — the closed value
   sets each step accepts.
@@ -49,6 +49,9 @@ __all__ = [
     "validate_layout",
     "validate_user",
     "validate_network",
+    "validate_pengy",
+    "PengyAnswer",
+    "REQUIRED_STEPS",
 ]
 
 # ---------------------------------------------------------------------------
@@ -57,7 +60,7 @@ __all__ = [
 
 
 class StepKey:
-    """The six canonical wizard steps, in order.
+    """The seven canonical wizard steps, in order.
 
     These strings are the stable key both the interactive path and ``--auto``
     use for an answer, so the two front-ends (this Python wizard and the Rust
@@ -69,6 +72,10 @@ class StepKey:
     LAYOUT = "layout"
     USER = "user"
     NETWORK = "network"
+    #: The assistant's endpoint. **Optional**: an empty answer is a valid one, so
+    #: this step can always be skipped — not every machine has an endpoint and a
+    #: key to hand out at install time.
+    PENGY = "pengy"
     CONFIRM = "confirm"
 
 
@@ -81,7 +88,18 @@ WIZARD_ORDER: Tuple[str, ...] = (
     StepKey.LAYOUT,
     StepKey.USER,
     StepKey.NETWORK,
+    StepKey.PENGY,
     StepKey.CONFIRM,
+)
+
+#: The steps a plan cannot be built without. :attr:`StepKey.PENGY` is absent on
+#: purpose — the assistant's endpoint is the one step that is always skippable.
+REQUIRED_STEPS: Tuple[str, ...] = (
+    StepKey.TARGET,
+    StepKey.EDITION,
+    StepKey.LAYOUT,
+    StepKey.USER,
+    StepKey.NETWORK,
 )
 
 # ---------------------------------------------------------------------------
@@ -228,6 +246,12 @@ def validate_layout(raw: object) -> Tuple[object, Optional[str]]:
 # A username: letters, digits, '_' or '-'. Documented so the validator's
 # threshold is a named constant rather than a magic number.
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+#: The assistant talks to an OpenAI-compatible endpoint, so its base URL must be
+#: an http(s) URL with no whitespace; a model name and an API key are single
+#: tokens (``qwen3:8b``, ``sk-…``).
+_PENGY_URL_RE = re.compile(r"^https?://[^\s\x00-\x1f]+$")
+_PENGY_TOKEN_RE = re.compile(r"^[^\s\x00-\x1f]+$")
 MAX_USERNAME_LEN = 32
 
 
@@ -308,6 +332,51 @@ def validate_network(raw: object) -> Tuple[object, Optional[str]]:
     )
 
 
+def validate_pengy(raw: object) -> Tuple[object, Optional[str]]:
+    """Validate the assistant-endpoint answer.
+
+    The whole step is **optional**: an empty answer (``""``, ``None``, ``{}``)
+    is valid and means "leave Pengy as the image ships it" — its own defaults
+    (the local endpoint, no key, no model). A non-empty base URL must be an
+    http(s) URL; a model name and an API key are single tokens.
+
+    Accepts a bare base-URL string or a mapping with ``base_url`` / ``api_key``
+    / ``model``.
+    """
+    base_url = api_key = model = ""
+    if isinstance(raw, str):
+        base_url = raw.strip()
+    elif isinstance(raw, dict):
+        for key, value in raw.items():
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                return None, f"pengy '{key}' must be a string"
+            if key == "base_url":
+                base_url = value.strip()
+            elif key == "api_key":
+                api_key = value.strip()
+            elif key == "model":
+                model = value.strip()
+            else:
+                return None, f"unknown pengy field '{key}'"
+    elif raw is None:
+        pass
+    else:
+        return None, "pengy must be a base URL string or a table of pengy fields"
+
+    if base_url and not _PENGY_URL_RE.match(base_url):
+        return None, (
+            f"base URL '{base_url}' is not an http:// or https:// URL (no spaces)"
+        )
+    if model and not _PENGY_TOKEN_RE.match(model):
+        return None, f"pengy model '{model}' must not contain spaces"
+    if api_key and not _PENGY_TOKEN_RE.match(api_key):
+        # The key is a secret: say what is wrong with it, never what it is.
+        return None, "pengy api_key must not contain spaces"
+    return PengyAnswer(base_url=base_url, api_key=api_key, model=model), None
+
+
 # ---------------------------------------------------------------------------
 # Normalised answer values
 # ---------------------------------------------------------------------------
@@ -344,6 +413,30 @@ class NetworkAnswer:
         return data
 
 
+@dataclass(frozen=True)
+class PengyAnswer:
+    """The normalised assistant-endpoint answer (all fields optional)."""
+
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
+
+    @property
+    def configured(self) -> bool:
+        """True when the wizard was given an endpoint to seed Pengy with."""
+        return bool(self.base_url)
+
+    def to_dict(self) -> dict:
+        data: dict = {}
+        if self.base_url:
+            data["base_url"] = self.base_url
+        if self.api_key:
+            data["api_key"] = self.api_key
+        if self.model:
+            data["model"] = self.model
+        return data
+
+
 # ---------------------------------------------------------------------------
 # The derived plan (the answer set the interactive path produces)
 # ---------------------------------------------------------------------------
@@ -363,16 +456,22 @@ class Plan:
     layout: str
     user: UserAnswer
     network: NetworkAnswer
+    #: The assistant's endpoint. Skipped (the default) keeps the key out of the
+    #: plan entirely, so a plan that skipped Pengy looks exactly as it did.
+    pengy: PengyAnswer = PengyAnswer()
 
     def to_dict(self) -> dict:
         """The plain-dict form (what ``run --json`` / ``auto --json`` emit)."""
-        return {
+        data = {
             "target": {"path": self.target},
             "edition": self.edition,
             "layout": self.layout,
             "user": self.user.to_dict(),
             "network": self.network.to_dict(),
         }
+        if self.pengy.configured:
+            data["pengy"] = self.pengy.to_dict()
+        return data
 
     def as_lines(self) -> Sequence[str]:
         """A stable, human-readable rendering of the plan (for ``run``)."""
@@ -383,6 +482,14 @@ class Plan:
             f"user:     {self.user.username} (uid {self.user.uid})",
             f"network:  {self.network.mode}"
             + (f" ({self.network.address})" if self.network.address else ""),
+            "pengy:    "
+            + (
+                f"{self.pengy.base_url}"
+                + (f", model {self.pengy.model}" if self.pengy.model else "")
+                + (", api key set" if self.pengy.api_key else "")
+                if self.pengy.configured
+                else "not configured (Pengy keeps its defaults)"
+            ),
         )
 
 
@@ -418,7 +525,7 @@ class Wizard:
 
     @property
     def step_index(self) -> int:
-        """Zero-based index of the current step (0 = target, 5 = confirm)."""
+        """Zero-based index of the current step (0 = target, 6 = confirm)."""
         return self._current_index
 
     @property
@@ -508,7 +615,9 @@ class Wizard:
         answers in order) can confirm directly. On success the wizard is marked
         done and the :class:`Plan` is returned.
         """
-        missing = [s for s in WIZARD_ORDER[:-1] if s not in self._answers]
+        # Pengy is deliberately absent from REQUIRED_STEPS: skipping that step
+        # is a legitimate answer, not an incomplete plan.
+        missing = [s for s in REQUIRED_STEPS if s not in self._answers]
         if missing:
             raise ValidationError(
                 StepKey.CONFIRM, f"incomplete: '{missing[0]}' not answered yet", None
@@ -519,6 +628,7 @@ class Wizard:
             layout=str(self._answers[StepKey.LAYOUT]),
             user=self._answers[StepKey.USER],
             network=self._answers[StepKey.NETWORK],
+            pengy=self._answers.get(StepKey.PENGY, PengyAnswer()),
         )
         self._plan = plan  # type: ignore[attr-defined]
         return plan
@@ -541,7 +651,7 @@ class Wizard:
         return getattr(self, "_plan")  # type: ignore[attr-defined]
 
     def progress(self) -> int:
-        """How many of the six steps have been answered (0-5)."""
+        """How many of the answerable steps have been answered (0-6)."""
         return sum(1 for s in WIZARD_ORDER[:-1] if s in self._answers)
 
 
@@ -564,4 +674,5 @@ _VALIDATORS: dict[str, Validator] = {
     StepKey.LAYOUT: validate_layout,
     StepKey.USER: validate_user,
     StepKey.NETWORK: validate_network,
+    StepKey.PENGY: validate_pengy,
 }

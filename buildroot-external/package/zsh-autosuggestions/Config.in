@@ -1,0 +1,9 @@
+config BR2_PACKAGE_ZSH_AUTOSUGGESTIONS
+	bool "zsh-autosuggestions"
+	depends on BR2_PACKAGE_ZSH
+	help
+	  Suggests the rest of a history command as you type (accept
+	  with Right). Pure shell, pinned upstream tag; sourced by the
+	  PengyOS comfort profile (/etc/pengyos/shell/profile).
+
+	  https://zsh-autosuggestions.zsh.dev

@@ -226,6 +226,12 @@ CONFIG_INPUT_JOYSTICK=y
 CONFIG_JOYSTICK_XPAD=m
 CONFIG_JOYSTICK_XPAD_FF=y
 CONFIG_JOYSTICK_XPAD_LEDS=y
+# ff-memset is the layer that turns EVIOCSFF ioctls on /dev/input/jsN into
+# rumble effects: every FF-capable driver selects it, and with none of them
+# built-in the option was simply absent, so a rumble request answered ENOTTY.
+# The Gamepads app's Rumble button needs it (=y: it is a core input service,
+# not a driver, and it is tiny).
+CONFIG_INPUT_FF_MEMSET=y
 # HID_PLAYSTATION and the Logitech receiver driver need multicolor LEDs, and
 # LOGITECH_DJ sits under HID_LOGITECH: without these the three lines were dropped.
 CONFIG_LEDS_CLASS_MULTICOLOR=m

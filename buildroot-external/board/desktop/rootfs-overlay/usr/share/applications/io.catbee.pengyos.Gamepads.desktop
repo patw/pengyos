@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Gamepads
+GenericName=Game Controller Settings
+Comment=See the attached gamepads and joysticks, and test their buttons, sticks and triggers
+Keywords=gamepad;joystick;controller;pad;test;button;axis;stick;trigger;rumble;vibrate;input;usb;bluetooth;xbox;playstation;
+Icon=input-gaming
+Exec=pengyos-gamepads
+Terminal=false
+Categories=COSMIC;Settings;HardwareSettings;Game;
+StartupNotify=true

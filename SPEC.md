@@ -74,8 +74,8 @@ Chosen once, inherited everywhere.
 | **libc** | **glibc** (systemd requires it) | LGPL-2.1 | musl (only without systemd) | 🟢 |
 | **Toolchain** | Buildroot's internal **GCC 15** + binutils 2.45; Rust for our own components | GPL-3.0 + exception | pure LLVM | 🟢 |
 | **Our code** | **Rust** for shipped apps; **Python** (stdlib) for tooling and on-device scripts | MIT / Apache-2.0 | — | 🟢 |
-| **Coreutils** | **GNU coreutils** | GPL-3.0 | uutils (Rust; no Buildroot recipe yet — `tools/pengyos-recipe-uutils`) | 🟢 / 🔵 uutils |
-| **Shell** | **bash** (Core); **zsh** added on Server | GPL-3.0 / MIT | nushell, fish | 🟢 |
+| **Coreutils** | **uutils/coreutils 0.11.0** (Rust) — our recipe `package/uutils-coreutils`, built `--features unix`, one multicall binary + a symlink per utility | MIT | GNU coreutils (GPL-3.0; Buildroot's recipe — what shipped up to 26.10.24) | 🟢 |
+| **Shell** | **bash** (Core); **zsh** added on Server, wired to the comfort profile (`/etc/pengyos/shell/profile`: starship prompt, fzf, zoxide, aliases) + the zsh plugins (autosuggestions, syntax highlighting) | GPL-3.0 / MIT | nushell, fish, oh-my-zsh (a git-checkout framework with an update ping; the curated profile ships its feel instead) | 🟢 |
 | **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (`tools/pengyos-recipe-dbus-broker`) | 🟢 / 🔵 broker |
 | **Devices, logs** | systemd-udevd, systemd-journald | LGPL-2.1 | eudev, rsyslog | 🟢 |
 | **Network** | **systemd-networkd + resolved** (Core/Server); **NetworkManager** on Desktop | LGPL-2.1 / GPL-2.0 | — | 🟢 |
@@ -156,9 +156,13 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 
 - **Boot:** GRUB 2 EFI → kernel 7.2.5 → systemd. Video console (simpledrm/fbcon) and
   serial console; the GRUB menu is full-screen.
-- **Userspace:** systemd (journald, udevd, logind, networkd, resolved), D-Bus, GNU
-  coreutils, util-linux, kmod, iproute2, procps-ng, bash, Python 3, nftables, chrony,
-  OpenSSH (key-only).
+- **Userspace:** systemd (journald, udevd, logind, networkd, resolved), D-Bus, uutils
+  coreutils (Rust), util-linux, kmod, iproute2, procps-ng, bash, Python 3, nftables,
+  chrony, OpenSSH (key-only). The text/search tools come from the projects that define
+  the behaviour, not from BusyBox: findutils, grep, sed, gawk, GNU time, which,
+  diffutils, patch, gzip, Info-ZIP unzip, tar, tree, lsof, less, attr, psmisc — and the
+  BusyBox applets for all of them are compiled out (`board/core/busybox.fragment`).
+  `/bin/sh` is bash.
 - **Storage tools:** e2fsprogs, btrfs-progs, dosfstools, exfatprogs, parted, LVM2,
   cryptsetup, efibootmgr.
 - **Hardware:** a broad firmware set (Intel/Realtek/MediaTek/Qualcomm/Broadcom
@@ -176,7 +180,7 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 
 | Group | Ships |
 |---|---|
-| Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, zoxide, jq, curl |
+| Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq, curl |
 | Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo |
 | Containers | **podman**, rootless and daemonless, with the API socket |
 | Ops | default-deny nftables, a backup timer, a metrics timer, the daily update check |
@@ -203,7 +207,7 @@ podman.
 | Writing | mdit, the Markdown editor (Qt6; live preview, HTML/PDF export) | ours, MIT |
 | Languages | ~50 UTF-8 locales (Region & Language lists them); on-screen keyboard (cosmic-osk) | character-set conversion: glibc's Unicode gconv modules only (UTF-16, UTF-32, UTF-7, UNICODE; 92 KB, what exFAT labels need). The legacy codepages (CP1251, CP437, ISO-8859-x, the CJK encodings, …; 8.3 MB in all) are left out until something needs them (2026-10-11), so iconv cannot convert old non-Unicode subtitles or ZIP file names. no screen reader yet (Orca); fonts cover Latin, Greek, Cyrillic, Arabic, Hebrew, Georgian and CJK, but **not** Devanagari, Bengali, Tamil, Thai, Ethiopic, Khmer, Myanmar or Sinhala (no glyphs on the host or in the Flatpak runtime, so Firefox shows empty boxes): a Noto set for those scripts, roughly 10–20 MB, is deferred until a user needs it (2026-10-11). No input method framework (ibus/fcitx5) for CJK typing yet |
 | Virtual machines | QEMU's SDL/OpenGL window (`-display sdl,gl=on`) | Server layer's QEMU |
-| PengyOS apps | the graphical installer, PengyOS Updates (app + notifier), Disks (format / write images to / eject removable drives, over UDisks2) | libcosmic; Disks instead of GNOME Disks or GParted (GTK, GPL, far more than a stick needs) |
+| PengyOS apps | the graphical installer, PengyOS Updates (app + notifier), Disks (format / write images to / eject removable drives, over UDisks2), Gamepads (list the attached controllers and test their controls, over evdev) | libcosmic; Disks instead of GNOME Disks or GParted (GTK, GPL, far more than a stick needs); Gamepads because COSMIC Settings (epoch 1.9) has no controller page at all |
 
 ### 2.4 NVIDIA editions — opt-in
 
@@ -293,8 +297,24 @@ most likely to come back.
 See [`docs/principles.md` §Component selection rubric](docs/principles.md#component-selection-rubric).
 
 **Coreutils.** uutils scores best (MIT, memory-safe, the Ubuntu default since 25.10)
-and is the target; GNU coreutils ships today because Buildroot has its recipe and
-ours is not done. *Interfaces stay POSIX either way, so the swap is cheap.*
+and has shipped since 26.10.25: our own Buildroot recipe (`package/uutils-coreutils`,
+pinned 0.11.0, `--no-default-features --features unix`), one multicall binary plus a
+symlink per utility. GNU coreutils was the incumbent only because Buildroot had a
+recipe and we did not. *Interfaces stay POSIX either way, so the swap was cheap.*
+
+The swap surfaced the bigger userland finding: Buildroot resolves BusyBox overlaps by
+**install order** (`BUSYBOX_DEPENDENCIES` lists coreutils, grep, tar, … so they build
+after BusyBox and their files win), and an applet no package claims simply stays —
+cut down. 144 applets were in the Server image, and the tools agents reach for were
+among them: `find` without `-printf`, `grep` without `-P`/`--include`, `sed` without
+`\b`, `awk` without `gensub`, `xargs` without `-d`, `diff` without `-r`, `time -v`,
+`unzip -l`, `killall -q`, `losetup -f`, `last -x`, `su -l`. They read like the real
+tools and behave like an initramfs — in an image with **no initramfs**. PengyOS now
+resolves the overlap in the BusyBox config instead of by luck: every applet another
+package owns is compiled out, the early-boot and embedded applets go with it, and
+`scripts/tests/test_core_userland.py` fails if a fragment names a symbol BusyBox does
+not declare (a typo is a silent no-op) or removes a command no selected package
+provides.
 
 **Init → systemd.** Freedom 🟡 (LGPL-2.1, fine) · maintenance ✅ · security 🟡 (large
 but well audited) · dependencies 🔴 (it drags a lot, and forces glibc) · interface ✅

@@ -22,7 +22,8 @@ Phases (reported as ``(phase, fraction, message)``)::
                same /etc overlay + binds the booted system uses — hostname, the
                first user (admin + seat groups; the desktop auto-logs-in as
                them), passwords (random salts), the live session's network
-               profiles; no SSH host keys
+               profiles, the assistant's endpoint (when the wizard was given
+               one); no SSH host keys
     done       unmount, sync
 
 Only build-output bytes reach the root slot and the ESP, hash-checked on the way:
@@ -51,12 +52,14 @@ __all__ = [
     "ImageInstallError",
     "Manifest",
     "ProvisionAnswers",
+    "PENGY_SYSTEM_MESSAGE",
     "boot_disks",
     "find_payload",
     "install_image",
     "list_disks",
     "partition_path",
     "render_grub_cfg",
+    "render_pengy_settings",
 ]
 
 #: Filesystem label of the payload partition on the install medium.
@@ -92,6 +95,24 @@ DATA_MOUNT_OPTS = "noatime,compress=zstd:1"
 DATA_SUBVOLUMES = ("etc", "var", "home", "root")
 #: The installed user's login shell: the first of these the image has.
 USER_SHELLS = ("/usr/bin/zsh", "/bin/zsh", "/bin/bash", "/bin/sh")
+
+#: The system message written into the seeded Pengy config. PengyR's own default
+#: is the same sentence; writing it here means an image built against an older
+#: PengyR still introduces the agent to its skills on first chat. The
+#: ``{date}``/``{username}``/``{hostname}``/``{osinfo}`` tokens are filled in by
+#: Pengy on every request.
+PENGY_SYSTEM_MESSAGE = (
+    "You are a helpful assistant named Pengy you have tools and skills. "
+    "The current date is {date} and the user is {username} on host {hostname} "
+    "which is {osinfo}. Always check ~/skills/skill_index.md before doing "
+    "anything to see if a skill can help with the task."
+)
+#: Where a user's Pengy settings live (PengyR's ``pengy_config_dir``).
+PENGY_CONFIG_REL = ".config/pengy/settings.json"
+#: Pengy talks to an OpenAI-compatible endpoint: http(s) only, no spaces.
+_PENGY_URL_RE = re.compile(r"^https?://[^\s\x00-\x1f]+$")
+#: Model names and API keys are single tokens (``qwen3:8b``, ``sk-…``).
+_PENGY_TOKEN_RE = re.compile(r"^[^\s\x00-\x1f]+$")
 
 #: The layout (docs/state-layout.md).
 ESP_SIZE = 256 * 1024**2
@@ -351,6 +372,13 @@ class ProvisionAnswers:
     #: Desktop only: start straight into this user's desktop at boot instead of
     #: the login screen (opt-in, like Ubuntu's "Log in automatically").
     autologin: bool = False
+    #: The assistant's endpoint, key and model — every one of them optional.
+    #: An empty ``pengy_base_url`` means "skip": Pengy keeps its own defaults
+    #: (the local Ollama port, no key, no model) and the user configures it
+    #: later. The wizard's Pengy page is skippable for exactly this reason.
+    pengy_base_url: str = ""
+    pengy_api_key: str = ""
+    pengy_model: str = ""
 
     def validate(self) -> None:
         if not _HOSTNAME_RE.match(self.hostname):
@@ -372,6 +400,41 @@ class ProvisionAnswers:
                     f"not an SSH public key: {line.strip()[:40]!r} "
                     "(expected e.g. 'ssh-ed25519 AAAA… you@host')"
                 )
+        if self.pengy_base_url and not _PENGY_URL_RE.match(self.pengy_base_url):
+            raise ImageInstallError(
+                f"invalid Pengy base URL {self.pengy_base_url!r}: an http:// or https:// URL, no spaces"
+            )
+        if self.pengy_model and not _PENGY_TOKEN_RE.match(self.pengy_model):
+            raise ImageInstallError(
+                f"invalid Pengy model {self.pengy_model!r}: no spaces"
+            )
+        if self.pengy_api_key and not _PENGY_TOKEN_RE.match(self.pengy_api_key):
+            # The key is a secret: say what is wrong with it, never what it is.
+            raise ImageInstallError(
+                "invalid Pengy API key: no spaces, and one line only"
+            )
+
+    @property
+    def pengy_configured(self) -> bool:
+        """True when the wizard supplied a Pengy endpoint to seed the config with."""
+        return bool(self.pengy_base_url.strip())
+
+
+def render_pengy_settings(answers: ProvisionAnswers) -> str:
+    """The ``~/.config/pengy/settings.json`` text for *answers*.
+
+    Only the four keys the wizard asks about are written; Pengy merges its own
+    defaults over anything missing, so a future setting is never pinned to
+    today's value by the installer. The system message is written explicitly so
+    the skills line is there even when the image's Pengy predates it.
+    """
+    settings = {
+        "base_url": answers.pengy_base_url.strip(),
+        "api_key": answers.pengy_api_key.strip(),
+        "model": answers.pengy_model.strip(),
+        "system_message": PENGY_SYSTEM_MESSAGE,
+    }
+    return json.dumps(settings, indent=2) + "\n"
 
 
 # --------------------------------------------------------------------------- #
@@ -746,6 +809,21 @@ def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
         os.chmod(ssh / "authorized_keys", 0o600)
         _run(run, ["chroot", str(root), "chown", "-R", f"{answers.username}:{answers.username}",
                    f"/home/{answers.username}/.ssh"], "giving the user their SSH keys")
+
+    # The assistant's endpoint, when the wizard was given one. Pengy ships
+    # unconfigured (its defaults are the local Ollama port and no model), and
+    # the user's home already has the image's /etc/skel skills from useradd -m;
+    # this is the part only the installer knows — the endpoint they pointed at.
+    # 0600 and owned by the user: the file carries their API key.
+    if answers.pengy_configured:
+        pengy_dir = root / "home" / answers.username / Path(PENGY_CONFIG_REL).parent
+        pengy_dir.mkdir(parents=True, exist_ok=True)
+        settings = pengy_dir / Path(PENGY_CONFIG_REL).name
+        settings.write_text(render_pengy_settings(answers))
+        os.chmod(settings, 0o600)
+        _run(run, ["chroot", str(root), "chown", "-R", f"{answers.username}:{answers.username}",
+                   f"/home/{answers.username}/{Path(PENGY_CONFIG_REL).parent}"],
+             "giving the user their Pengy settings")
     # The same password for root: the image ships the build's default root
     # password, which every copy of the image would otherwise share.
     # Hash here with our own random salt per account: the image's shadow

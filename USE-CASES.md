@@ -162,7 +162,9 @@ remotely, capable enough to self-host the services a household actually relies o
 > painful.*
 
 How: `mosh`/`ssh` + `tmux`, a familiar shell, and a modern CLI set (ripgrep, fd, bat,
-eza, fzf, zoxide, starship, jq).
+eza, fzf, zoxide, starship, jq) wired through the comfort profile
+(`/etc/pengyos/shell/profile`, sourced by `/etc/zshrc`, `/etc/profile.d` and the
+`/etc/skel` rc files) plus the zsh plugins (autosuggestions, syntax highlighting).
 **Acceptance:** a fresh login has the expected tools; a session survives disconnection
 (`tmux`); scrollback/search are pleasant by default.
 
@@ -495,6 +497,23 @@ test with ramfb. llvmpipe added; only the slow softpipe was built before.)
 **Acceptance:** with no GPU driver (QEMU `-vga none -device ramfb`), the live session and
 the installer render correctly and are usable, with llvmpipe as the renderer; the same
 holds on a real NVIDIA box booted without the extension.
+
+**US-DSK-16 — The agent arrives configured, and knows it has skills.**
+> *As the person who just installed PengyOS, I want the built-in assistant to be ready to
+> use on first boot, so I am not handed an agent with no endpoint and no documentation.*
+
+How: the installer's **Pengy page** (base URL, API key, model) is part of both front ends
+— a screen in the Desktop installer, a page in the console installer — and the engine seeds
+`~/.config/pengy/settings.json` for the user it creates (0600, owned by them, key on
+stdin). The page is **skippable**: an empty base URL writes nothing and Pengy keeps the
+defaults the image ships (local endpoint, no key, no model). The image's `/etc/skel/skills`
+gives every home the skills index plus the `pengyos` and `pengy` skills, and the system
+message the installer writes names `~/skills/skill_index.md`.
+**Acceptance:** installing with the page filled leaves a working `settings.json` (endpoint,
+key, model, system message) owned by the user and readable only by them; installing with it
+skipped leaves **no** config file and Pengy still starts, pointing at its own defaults; a
+fresh home has `~/skills/skill_index.md` with the two skills; a malformed endpoint is
+re-prompted with a reason, never accepted.
 
 ---
 

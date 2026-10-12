@@ -58,7 +58,9 @@ def _drive(payload, lines, secrets, install=None):
 def test_full_install_with_reprompts(payload):
     rc, out, calls = _drive(
         payload,
-        ["9", "2", "1", "bad host", "", "Pat", "pat", "not-a-key", KEY, "", "erase"],
+        ["9", "2", "1", "bad host", "", "Pat", "pat", "not-a-key", KEY,
+         "",  # Pengy page: Enter skips it
+         "", "erase"],
         ["short", "short", "hunter22", "nomatch", "hunter22", "hunter22"],
     )
     assert rc == 0
@@ -73,20 +75,55 @@ def test_full_install_with_reprompts(payload):
     assert (answers.hostname, answers.username, answers.password) == ("pengyos", "pat", "hunter22")
     assert "not an SSH public key" in out
     assert answers.authorized_keys == KEY
+    # The Pengy page was skipped: nothing is seeded, Pengy keeps its defaults.
+    assert answers.pengy_base_url == "" and answers.pengy_model == ""
+    assert "pengy:     not configured" in out
     # A Desktop starts at its login screen unless automatic login is chosen.
     assert answers.autologin is False and "password required" in out
     assert kw["confirm"] is True and kw["payload_dir"] == payload
 
 
+def test_pengy_page_fills_the_endpoint_answers(payload):
+    """The wizard's Pengy page: base URL, key (hidden) and model reach the
+    engine's answers, and the review shows them."""
+    rc, out, calls = _drive(
+        payload,
+        ["1", "box", "pat", "", "http://10.0.23.6:8086/v1", "qwen3:8b", "n", "erase"],
+        ["hunter22", "hunter22", "sk-secret"],
+    )
+    assert rc == 0
+    ((_, answers, _),) = calls
+    assert answers.pengy_base_url == "http://10.0.23.6:8086/v1"
+    assert answers.pengy_api_key == "sk-secret"
+    assert answers.pengy_model == "qwen3:8b"
+    assert "pengy:     http://10.0.23.6:8086/v1  model qwen3:8b" in out
+
+
+def test_pengy_page_reprompts_a_bad_url(payload):
+    """A malformed endpoint is re-prompted with the reason; skipping after it is
+    still allowed (the page is optional)."""
+    rc, out, calls = _drive(
+        payload,
+        ["1", "box", "pat", "", "not a url", "", "n", "erase"],
+        ["hunter22", "hunter22"],
+    )
+    assert rc == 0
+    assert "invalid Pengy base URL" in out
+    ((_, answers, _),) = calls
+    assert answers.pengy_base_url == ""
+
+
 def test_desktop_autologin_opt_in(payload):
-    rc, out, calls = _drive(payload, ["1", "box", "pat", "", "y", "erase"], ["hunter22", "hunter22"])
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "", "", "y", "erase"],
+                            ["hunter22", "hunter22"])
     assert rc == 0 and "login:     automatic" in out
     ((_, answers, _),) = calls
     assert answers.autologin is True
 
 
 def test_not_confirmed_changes_nothing(payload):
-    rc, out, calls = _drive(payload, ["1", "box", "pat", "", "", "no"], ["hunter22", "hunter22"])
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "", "", "", "no"],
+                            ["hunter22", "hunter22"])
     assert rc == 1 and calls == [] and "Nothing was changed" in out
     assert "console login only" in out  # the key was skipped
 

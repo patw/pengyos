@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- `test_hash_line_format_is_buildroots`: the `.hash` body uses Buildroot's
+  spelling `sha256  <hash>  <filename>`. A bare `sha256sum`-style line is never
+  matched by `support/download/check-hash` (it reads `read -r t h f`), and the
+  download fails with "No hash found for coreutils-0.11.0.tar.gz".
+- The pinned digest is of Buildroot's **post-processed** tarball
+  (`ec311bfd…6302`) — the cargo post-process re-packs the source with the
+  vendored crates and re-verifies, same as greetd/oo7/starship. The raw upstream
+  0.11.0 archive digest (`a4796611…f70a4`, verified against the live tarball) is
+  recorded in the `.hash` comment. `make uutils-coreutils-source` is green.
+
+### Added
+- `test_build_selects_the_unix_feature_set`: the build must use
+  `--no-default-features --features unix` (upstream's `feat_os_unix`), offline and
+  locked. The default feature set has no stat, id, sync, uname, whoami, install,
+  stty, timeout, hostname, groups, nice, nohup, chroot, chgrp, chmod, chown,
+  nproc, mkfifo, mknod, logname, hostid, users, who, uptime, pinky, stdbuf, kill,
+  arch - every one of which PengyOS Core ships today.
+- `tests/fixtures/coreutils-0.11.0-unix-utilities.txt`: the authoritative 106-name
+  `feat_os_unix` set for 0.11.0, generated from the pinned Cargo.toml's feature
+  sets (replaces the 78-name `feat_common_core` fixture).
+- `test_tree_copy_is_identical_to_the_authored_copy`: the recipe the build uses
+  (`buildroot-external/package/uutils-coreutils`) must be byte-identical to the
+  one authored here.
+- `Config.in` gates on `BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS`, MMU and
+  glibc (the utmpx utilities - who/users/uptime/pinky - are stubs on musl) and
+  selects `BR2_PACKAGE_HOST_RUSTC`.
+- The pinned sha256 was verified against the live 0.11.0 tarball on 2026-10-12.
+
+### Added
 - `tests/test_github_ready.py`: the GitHub-ready contract (`test_github_ready`)
   asserting `README.md`, the MIT `LICENSE` carrying
   "Copyright (c) 2026 Pat Wendorf", `CHANGELOG.md`, `.gitignore`, and a green

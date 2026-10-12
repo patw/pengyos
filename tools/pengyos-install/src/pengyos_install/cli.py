@@ -186,6 +186,20 @@ def _read_password(args) -> str:
     return first
 
 
+def _read_pengy_api_key(args) -> str:
+    """The assistant's API key.
+
+    ``--pengy-api-key-stdin`` reads it from the **second** line of stdin (the
+    first is the password, when ``--password-stdin`` is used) so a secret never
+    appears in argv, where any local process could read it from ``/proc``.
+    ``--pengy-api-key`` is the convenience form for a key that is not a secret
+    (a local endpoint that accepts anything).
+    """
+    if args.pengy_api_key_stdin:
+        return sys.stdin.readline().rstrip("\n")
+    return args.pengy_api_key or ""
+
+
 def cmd_image(args, *, out=None, err=None) -> int:
     """Write the install medium's payload image to --target and provision it."""
     out = out if out is not None else sys.stdout
@@ -196,9 +210,13 @@ def cmd_image(args, *, out=None, err=None) -> int:
             keys = Path(args.authorized_keys).read_text()
         except OSError as exc:
             raise CommandError(f"cannot read {args.authorized_keys}: {exc.strerror}") from None
+    # Order matters: the password consumes stdin's first line, the Pengy API key
+    # the second.
     answers = image_install.ProvisionAnswers(
         hostname=args.hostname, username=args.user, password=_read_password(args),
         authorized_keys=keys, autologin=args.autologin,
+        pengy_base_url=args.pengy_base_url, pengy_api_key=_read_pengy_api_key(args),
+        pengy_model=args.pengy_model,
     )
 
     if args.progress == "json":
@@ -326,6 +344,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_image.add_argument("--autologin", action="store_true",
                          help="Desktop: log the user in automatically at boot instead of "
                               "showing the login screen (off by default)")
+    p_image.add_argument("--pengy-base-url", default="", metavar="URL",
+                         help="assistant: the OpenAI-compatible endpoint to seed "
+                              "~/.config/pengy/settings.json with (http/https). "
+                              "Omit it and Pengy keeps its own defaults")
+    p_image.add_argument("--pengy-api-key", default="", metavar="KEY",
+                         help="assistant: the endpoint's API key (for a real secret use "
+                              "--pengy-api-key-stdin so it never appears in argv)")
+    p_image.add_argument("--pengy-api-key-stdin", action="store_true",
+                         help="assistant: read the API key from the second line of stdin "
+                              "(the first line is the password with --password-stdin)")
+    p_image.add_argument("--pengy-model", default="", metavar="NAME",
+                         help="assistant: the model name to start with (e.g. qwen3:8b)")
     p_image.add_argument("--payload", default=None,
                          help=f"payload directory (default: {image_install.PAYLOAD_MOUNT})")
     p_image.add_argument("--yes", action="store_true",

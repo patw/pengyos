@@ -4,6 +4,12 @@
 - -1 seat -1 - - - - -
 # bluetooth: BlueZ's D-Bus policy grants the bluetooth group access to bluetoothd.
 - -1 bluetooth -1 - - - - -
+# input: systemd's 50-udev-default.rules gives every /dev/input device to this
+# group at mode 0660, and the image has no systemd-sysusers to create it — so
+# `input` existed only as the cosmic-greeter's supplementary group, and a
+# desktop user could not read a game controller. The installer adds the owner
+# (USER_GROUPS lists input) and merge-accounts adds existing owners once.
+- -1 input -1 - - - - -
 # cosmic-greeter: the login screen runs as this system user (greetd's
 # default_session). Locked password; the seat and GPU/input device groups let
 # its cosmic-comp open the display.

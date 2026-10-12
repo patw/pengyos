@@ -106,6 +106,30 @@ if [ -f "${TARGET_DIR}/etc/pam.d/login" ]; then
     sed -i '/pam_selinux\.so/d; /pam_console\.so/d' "${TARGET_DIR}/etc/pam.d/login"
 fi
 
+# --- The comfort shell profile (US-SRV-1) --------------------------------------
+# tools/pengyos-server-toolset authors the curated bash/zsh profile (starship
+# prompt, fzf, zoxide, modern aliases, tmux defaults); the image installs it at
+# its canonical system path. The wiring lives in the server overlay:
+#   /etc/zshrc + /etc/zsh/zshrc  -> zsh (the user's shell) sources it
+#   /etc/profile.d/pengyos-shell.sh -> bash login shells source it
+#   /etc/skel/.zshrc (+ .bashrc) -> new accounts source it and own the copy
+# Every piece is guarded on the file existing, so a toolset-less tree is fine.
+SHELL_DIR="${TARGET_DIR}/etc/pengyos/shell"
+if [ -d "${PENGYOS_TOOLS}/pengyos-server-toolset/shell" ]; then
+    install -Dm0644 "${PENGYOS_TOOLS}/pengyos-server-toolset/shell/profile"    "${SHELL_DIR}/profile"
+    install -Dm0644 "${PENGYOS_TOOLS}/pengyos-server-toolset/shell/fzf.sh"     "${SHELL_DIR}/fzf.sh"
+    install -Dm0644 "${PENGYOS_TOOLS}/pengyos-server-toolset/shell/zoxide.sh"  "${SHELL_DIR}/zoxide.sh"
+    install -Dm0644 "${PENGYOS_TOOLS}/pengyos-server-toolset/shell/starship.toml" "${SHELL_DIR}/starship.toml"
+    echo "post-build: installed the comfort shell profile (/etc/pengyos/shell)"
+else
+    echo "post-build: no server-toolset shell/ in the tree — profile NOT installed"
+fi
+# tmux: the toolset's defaults system-wide (a fresh `tmux` on a Server feels
+# the same everywhere: truecolor, mouse, sane key-chords).
+if [ -f "${PENGYOS_TOOLS}/pengyos-server-toolset/shell/tmux.conf" ]; then
+    install -Dm0644 "${PENGYOS_TOOLS}/pengyos-server-toolset/shell/tmux.conf" "${TARGET_DIR}/etc/tmux.conf"
+fi
+
 # --- Last: every shared library the image needs is in it ------------------------
 # (the edition's later post-build runs this again over the finished tree)
 python3 "$(dirname "$0")/../common/check-needed-libs.py" "${TARGET_DIR}"

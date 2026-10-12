@@ -36,8 +36,9 @@ FRAGMENT_PATH = toolset.FRAGMENT_PATH
 # ground truth the tool table must match — if it drifts from here, the suite
 # fails. Kept in lockstep with the README / spec tool list.
 #
-# The 10 tools that ship: the eight core tools have an upstream Buildroot
-# package; `fzf` and `starship` are shipped via this repo's own Buildroot
+# The 12 tools that ship: the eight core tools have an upstream Buildroot
+# package; `fzf`, `starship`, `zsh-autosuggestions` and
+# `zsh-syntax-highlighting` ship via the PengyOS external tree's own Buildroot
 # packages, so they are enabled by the fragment
 # again.
 PROMISED_TOOLS = (
@@ -50,6 +51,8 @@ PROMISED_TOOLS = (
     "fzf",
     "zoxide",
     "starship",
+    "zsh-autosuggestions",
+    "zsh-syntax-highlighting",
     "jq",
 )
 
@@ -64,6 +67,8 @@ EXPECTED_SYMBOLS = {
     "fzf": "BR2_PACKAGE_FZF",
     "zoxide": "BR2_PACKAGE_ZOXIDE",
     "starship": "BR2_PACKAGE_STARSHIP",
+    "zsh-autosuggestions": "BR2_PACKAGE_ZSH_AUTOSUGGESTIONS",
+    "zsh-syntax-highlighting": "BR2_PACKAGE_ZSH_SYNTAX_HIGHLIGHTING",
     "jq": "BR2_PACKAGE_JQ",
 }
 
@@ -116,9 +121,9 @@ def test_mapping_is_bijective_no_duplicate_symbols():
 
 
 def test_mapping_is_bijective_names_and_symbols_same_length():
-    # 10 tools -> 10 distinct symbols.
-    assert len(toolset.TOOL_TABLE) == 10
-    assert len({t.symbol for t in toolset.TOOL_TABLE}) == 10
+    # 12 tools -> 12 distinct symbols.
+    assert len(toolset.TOOL_TABLE) == 12
+    assert len({t.symbol for t in toolset.TOOL_TABLE}) == 12
 
 
 # --- deterministic emission -------------------------------------------------
@@ -217,7 +222,7 @@ def test_cli_stdout_without_args_matches_emitter():
 def test_all_shipped_tools_exist_in_buildroot():
     # Every shipped tool must map to a Buildroot package that exists. This has
     # teeth: if someone marks a shipped tool as not-existing (or re-adds a tool
-    # with a non-existent symbol), the suite fails. All 10 tools ship a package.
+    # with a non-existent symbol), the suite fails. All 12 tools ship a package.
     missing = {t.name for t in toolset.TOOL_TABLE if not t.exists_in_buildroot}
     assert not missing, (
         f"shipped tools with no Buildroot package: {sorted(missing)}"

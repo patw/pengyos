@@ -9,9 +9,12 @@
 #   * makes NO network call at shell start (only `command -v` + local sourcing),
 #   * is POSIX-sh so it survives `sh -n` and is safe under `set -eu`.
 #
-# It works under both bash and zsh. Source it from your rc:
-#   bash -> ~/.bash_profile or ~/.bashrc:  . ~/.config/pengyos/shell/profile
-#   zsh  -> ~/.zshrc:                       . ~/.config/pengyos/shell/profile
+# It works under both bash and zsh. The image installs it at
+# /etc/pengyos/shell/profile and wires it system-wide (/etc/zshrc and
+# /etc/profile.d source it; /etc/skel/.zshrc and .bashrc source it for new
+# accounts). To source it from your own rc:
+#   bash -> ~/.bashrc:    . /etc/pengyos/shell/profile
+#   zsh  -> ~/.zshrc:     . /etc/pengyos/shell/profile
 #
 # The sibling init snippets (fzf.sh / zoxide.sh) are found via $PENGYOS_SHELL_DIR
 # when set, otherwise by auto-detecting this file's own directory (bash:
@@ -82,13 +85,48 @@ alias diff='delta --color=always --diff'
 # single time even if the profile is sourced repeatedly. Only runs when the
 # `starship` binary is on PATH; otherwise the prompt is left to the shell's
 # default (offline-safe, no network call).
+#
+# `starship init` is shell-specific (there is no POSIX-sh emitter), so pick the
+# target from the shell that is sourcing us. The PengyOS prompt theme ships at
+# /etc/pengyos/shell/starship.toml; STARSHIP_CONFIG points at it when it exists
+# and nothing else claimed the config, so the curated prompt is what a fresh
+# login gets. A user's own ~/.config/starship.toml wins when the system theme
+# is absent, and STARSHIP_CONFIG set in the environment always wins.
 if [ -z "${PENGYOS_TOOLSET_STARSHIP_LOADED:-}" ]; then
     PENGYOS_TOOLSET_STARSHIP_LOADED=1
     export PENGYOS_TOOLSET_STARSHIP_LOADED
     if command -v starship >/dev/null 2>&1; then
-        eval "$(starship init sh 2>/dev/null)" 2>/dev/null || true
+        if [ -n "${ZSH_VERSION:-}" ]; then
+            _starship_shell=zsh
+        elif [ -n "${BASH_VERSION:-}" ]; then
+            _starship_shell=bash
+        else
+            _starship_shell=sh
+        fi
+        if [ -z "${STARSHIP_CONFIG:-}" ] && [ -r "$PENGYOS_SHELL_DIR/starship.toml" ]; then
+            STARSHIP_CONFIG="$PENGYOS_SHELL_DIR/starship.toml"
+            export STARSHIP_CONFIG
+        fi
+        eval "$(starship init "$_starship_shell" 2>/dev/null)" 2>/dev/null || true
+        unset _starship_shell
     fi
 fi
+
+# --- zsh plugins -----------------------------------------------------------
+# The two interactive plugins that give a plain zsh the oh-my-zsh feel,
+# installed by the image recipes to /usr/share/zsh/plugins (zsh-only, guarded
+# on the files existing — a Core system without them is unaffected).
+# Autosuggestions first; syntax highlighting wraps the ZLE widgets last.
+case "${ZSH_VERSION:-}" in
+    ?*)
+        if [ -r /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
+            . /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+        fi
+        if [ -r /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]; then
+            . /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+        fi
+        ;;
+esac
 
 # --- fzf -------------------------------------------------------------------
 # fzf keybindings + completion (offline, local only). Sourced via $PENGYOS_SHELL_DIR;

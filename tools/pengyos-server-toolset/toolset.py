@@ -64,6 +64,8 @@ TOOL_TABLE: tuple[Tool, ...] = (
     Tool("fzf", "BR2_PACKAGE_FZF", True),
     Tool("zoxide", "BR2_PACKAGE_ZOXIDE", True),
     Tool("starship", "BR2_PACKAGE_STARSHIP", True),
+    Tool("zsh-autosuggestions", "BR2_PACKAGE_ZSH_AUTOSUGGESTIONS", True),
+    Tool("zsh-syntax-highlighting", "BR2_PACKAGE_ZSH_SYNTAX_HIGHLIGHTING", True),
     Tool("jq", "BR2_PACKAGE_JQ", True),
 )
 

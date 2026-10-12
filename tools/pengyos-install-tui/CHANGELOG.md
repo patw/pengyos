@@ -7,6 +7,16 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **The `pengy` step in the wizard, and the console installer's Pengy page.**
+  `WIZARD_ORDER` is `target → edition → layout → user → network → pengy →
+  confirm`; `pengy` is the one step in `REQUIRED_STEPS`-less territory — an
+  empty answer is valid, so `skip` (or a bare Enter) at the prompt always works
+  and a plan that skips it carries no `pengy` key. `install.toml` /
+  `--answers` accept an optional `pengy` field (a base-URL string, or a table of
+  `base_url` / `api_key` / `model`). `install` now asks for the base URL, the
+  key (hidden) and the model after the SSH key, re-prompts a malformed endpoint
+  with the reason, and shows the result on the review screen.
+### Added
 - Desktop images: "Log in automatically, skipping the login screen? [y/N]"
   (default no), shown in the summary.
 

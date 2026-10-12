@@ -18,9 +18,14 @@ agree on behaviour. The `gui` crate renders that model to COSMIC.
 
 Wizard flow:
 
+
 ```
-Welcome → Disk → Layout → User → Network → Summary → Progress
+Welcome → Disk → Layout → User → Network → Pengy → Summary → Progress
 ```
+
+The **Pengy** screen is optional: base URL, API key and model may all be left
+empty, and the plan then carries no `[pengy]` section at all — Pengy keeps the
+defaults the image ships (the local endpoint, no key, no model).
 
 ## Requirements
 

@@ -1,0 +1,21 @@
+config BR2_PACKAGE_UUTILS_COREUTILS
+	bool "uutils-coreutils (Rust coreutils)"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on BR2_USE_MMU
+	depends on BR2_TOOLCHAIN_USES_GLIBC
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  coreutils ~ GNU coreutils (updated), reimplemented in Rust by
+	  uutils. Built as one multicall binary (`/usr/bin/coreutils`)
+	  with a symlink per utility, so `ls`, `cp`, `stat`, `id`, `sync`,
+	  `uname`, `whoami`, `install`, `stty`, `timeout` are ordinary
+	  commands on PATH.
+
+	  The unix feature set is built: the 78 common-core utilities plus
+	  the unix-only ones GNU coreutils ships on Linux. MIT-licensed, so
+	  the base system's licence stays MIT/Apache-2.0.
+
+	  https://github.com/uutils/coreutils
+
+comment "uutils-coreutils needs a glibc toolchain w/ MMU (utmpx for who/users/uptime)"
+	depends on !BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS || !BR2_USE_MMU || !BR2_TOOLCHAIN_USES_GLIBC

@@ -5,6 +5,48 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-10-12
+
+### Added
+- **The comfort set is now wired into the image (it was authored, never connected).**
+  The Server board's `post-build.sh` installs `shell/{profile,fzf.sh,zoxide.sh,
+  starship.toml}` at `/etc/pengyos/shell/` and `tmux.conf` at `/etc/tmux.conf`;
+  the Server overlay gained `/etc/zshrc` (+ an `/etc/zsh/zshrc` symlink for
+  Debian-patched zsh — Buildroot's zsh reads `/etc/zshrc`),
+  `/etc/profile.d/pengyos-shell.sh` (bash login), and `/etc/skel/.zshrc` +
+  `.bashrc` that source the profile for new accounts.
+- **Two zsh plugins joined the comfort set (12 tools):** `zsh-autosuggestions`
+  0.7.1 and `zsh-syntax-highlighting` 0.8.0, pinned recipes in
+  `buildroot-external/package/` (pure shell, MIT, installed to
+  `/usr/share/zsh/plugins/`); `TOOL_TABLE`/fragment gained
+  `BR2_PACKAGE_ZSH_AUTOSUGGESTIONS` / `BR2_PACKAGE_ZSH_SYNTAX_HIGHLIGHTING`,
+  and the Server layer enables all four new symbols. This is the oh-my-zsh feel
+  (suggest-as-you-type + highlight-as-you-type) without oh-my-zsh itself: no
+  git-checkout framework, no update ping, no zcompile zoo.
+- **Wiring tests with teeth:** `tests/test_shell.py` gained image-wiring tests
+  (post-build installs the files; the overlay rc files source the profile; the
+  skel rcs source it and keep the `%`-prompt fix), static starship tests
+  (shell-specific init, `STARSHIP_CONFIG` → the system theme, plugin order),
+  and runtime tests that source the profile under zsh (aliases land; the
+  idempotency guard fires on a double source). The repo gate gained
+  `scripts/tests/test_server_comfort_shell.py` (layer symbols, recipe wiring,
+  generated defconfigs, rc wiring, `sh -n` + `zsh -n` on the profile).
+
+### Fixed
+- **`starship init sh` emitted nothing** — `starship init` is shell-specific
+  (zsh/bash/fish only), so the profile's prompt never loaded. The profile now
+  detects the sourcing shell (`ZSH_VERSION`/`BASH_VERSION`), passes it to
+  `starship init`, and points `STARSHIP_CONFIG` at the sibling `starship.toml`
+  when nothing else claimed the config (an env override and a user's own
+  `~/.config/starship.toml` keep working).
+- **`$(call github, x, y, z)` spaces**: the copied fzf/starship recipes passed
+  the site with spaces after the commas, and Buildroot puts them verbatim into
+  the download URL (404s). The wired recipes use the no-space form.
+- **starship's digest is of the `-cargo6` repack** in Buildroot 2026.08 (the
+  cargo post-process repacks the github archive); the hash file carried the raw
+  archive digest. Re-pinned from `make starship-source`
+  (`sha256 c2ff3e75…8ed6`); fzf's `-go2` digest verified unchanged.
+
 ## [0.1.0] - 2026-09-19
 
 ### Added

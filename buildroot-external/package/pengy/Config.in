@@ -5,8 +5,12 @@ config BR2_PACKAGE_PENGY
 	help
 	  Pengy (PengyR): a local-first AI agent with tools, talking to
 	  any OpenAI-compatible API. One Rust agent core behind three
-	  front ends; pick the ones this image ships below. Unconfigured
-	  by default: each user sets it up (~/.config/pengy).
+	  front ends; pick the ones this image ships below. The installer's
+	  Pengy page (base URL, API key, model — skippable) seeds
+	  ~/.config/pengy/settings.json; skip it and Pengy keeps its own
+	  defaults (the local endpoint, no key, no model). Skills ship in
+	  /etc/skel/skills, which is what the seeded system message points
+	  at (~/skills/skill_index.md).
 
 	  https://github.com/patw/PengyR
 

@@ -71,6 +71,7 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-desktop-session`](pengyos-desktop-session/) | The COSMIC session + a VM-testable smoke matrix (US-DSK-1) for PengyOS Desktop. |
 | [`pengyos-disks`](pengyos-disks/) | *Disks*: format, write images to and eject USB sticks and memory cards (Rust, libcosmic, over UDisks2). |
 | [`pengyos-flatpak-mirror`](pengyos-flatpak-mirror/) | Self-hosted Flatpak (OSTree) repo manager for PengyOS. |
+| [`pengyos-gamepads`](pengyos-gamepads/) | *Gamepads*: list the attached game controllers and joysticks and test their buttons, sticks, triggers and D-pad live (Rust, libcosmic, over evdev + sysfs). |
 | [`pengyos-fleet-inventory`](pengyos-fleet-inventory/) | Collect hardware facts for a fleet of hosts and emit a declarative, version-controllable per-machine profile for Pe… |
 | [`pengyos-fleet-rollout`](pengyos-fleet-rollout/) | Plan, stage and roll back a PengyOS image/update rollout across a fleet. |
 | [`pengyos-guest`](pengyos-guest/) | Declarative distrobox/podman guests (Lane 4) — the dev box: `pengyos-guest enter dev`. Ships in Server/Desktop images with the `dev` (and on NVIDIA `cuda`) guest. |

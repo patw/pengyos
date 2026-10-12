@@ -18,19 +18,28 @@ default.
 | Path | Purpose |
 |------|---------|
 | `fragments/server-toolset.fragment` | Buildroot `select`/`depends on` enables for the comfort packages. |
-| `shell/profile` | bash/zsh login profile: PATH, aliases, starship prompt, fzf, zoxide. |
+| `shell/profile` | bash/zsh login profile: PATH, aliases, starship prompt (shell-specific init + system theme), fzf, zoxide, zsh plugins. |
 | `shell/tmux.conf` | tmux defaults: 24k/truecolor, sane key-challs, status line, mouse. |
 | `shell/zoxide.sh` | `zoxide` shell init (sourced on shell start). |
 | `shell/fzf.sh` | `fzf` shell init: `FZF_DEFAULT_COMMAND` (rg/find), opts, keybindings. |
 | `shell/starship.toml` | `starship` prompt theme, `telemetry = false` (no phone-home). |
 
 The comfort tool set (the promised tools): **mosh, tmux, ripgrep, fd, bat, eza,
-fzf, zoxide, starship, jq** (and friends).
+fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq**
+(and friends).
 
 > The eight core tools ship an upstream Buildroot package; `fzf` (a Buildroot
-> `golang-package`) and `starship` (a `cargo-package`) are shipped by this repo's
-> own `package/{fzf,starship}/` Buildroot packages, so all ten are enabled by the
-> fragment. See [`spec.md`](spec.md) for the contract.
+> `golang-package`), `starship` (a `cargo-package`) and the two zsh plugins
+> (pure-shell recipes) ship as the PengyOS external tree's own packages under
+> `buildroot-external/package/`, so all twelve are enabled by the fragment and
+> by the Server layer. See [`spec.md`](spec.md) for the contract.
+>
+> **The image wires it.** The Server board's `post-build.sh` installs
+> `shell/` at `/etc/pengyos/shell/` (plus `tmux.conf` → `/etc/tmux.conf`);
+> the Server overlay's `/etc/zshrc` (+ `/etc/zsh/zshrc` symlink) and
+> `/etc/profile.d/pengyos-shell.sh` source it, and `/etc/skel/.zshrc` /
+> `.bashrc` source it for new accounts. The zsh plugins install to
+> `/usr/share/zsh/plugins/` and the profile sources them under zsh.
 
 ## Verification (machine-checked by tests)
 

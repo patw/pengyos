@@ -7,6 +7,17 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- **A Pengy screen in the wizard.** The flow is now
+  `Welcome → Disk → Layout → User → Network → Pengy → Summary → Progress`. The
+  screen asks for the assistant's base URL, API key and model, and the derived
+  `install.toml` gains a `[pengy]` section carrying exactly the keys that were
+  answered. **The screen is skippable**: an empty base URL is a valid answer,
+  the plan omits `[pengy]` entirely, and Pengy keeps the defaults the image
+  ships. A filled answer is validated — a base URL that is not http(s), or a
+  model/key containing a space, blocks Continue with a reason. The API key is
+  masked in the view (a length, like the account password) and reaches the
+  engine on stdin, never on argv.
 ### Fixed
 - After flipping "Log in automatically", Continue had to be clicked twice:
   libcosmic's settings-row `.toggler()` wraps the row in a list button around

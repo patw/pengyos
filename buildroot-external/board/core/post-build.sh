@@ -143,6 +143,19 @@ else
     echo "post-build: no ensurepip source — python3 -m venv will not bootstrap pip"
 fi
 
+# --- /bin/sh: bash, not BusyBox's ash ------------------------------------------
+# `sh -c '...'` is the form an agent writes, and it writes bash-isms into it:
+# `[[ ... ]]`, arrays, `shopt`, `local -a`, process substitution, `**` globbing,
+# `${x,,}`. BusyBox ash accepts a surprising amount of that and silently
+# misbehaves on the rest, so the same script works in a shell session and fails
+# under `sh`. Debian puts dash here and Fedora puts bash; we put bash (it is
+# already the root shell, and the Server's comfort profile assumes bash syntax).
+# BusyBox keeps its ash applet as `ash` for anyone who wants the small one.
+if [ -e "${TARGET_DIR}/usr/bin/bash" ]; then
+    ln -sf bash "${TARGET_DIR}/usr/bin/sh"
+    echo "post-build: /bin/sh -> bash (so sh -c gets bash semantics)"
+fi
+
 # --- Build-host paths in systemd units ----------------------------------------
 # dbus's user dbus.socket (ExecStartPost=... systemctl --user set-environment:
 # Server, Desktop) and systemd-ask-password-plymouth.service (Desktop) carried

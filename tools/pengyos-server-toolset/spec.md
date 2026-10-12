@@ -3,12 +3,20 @@
 ## Summary
 The Server edition's remote-admin comfort set: Buildroot package enables + a curated shell profile for mosh, tmux, ripgrep, fd, bat, eza, zoxide, jq (and friends), with drift-proof tests.
 
-> `fzf` and `starship` have no *upstream* Buildroot package, so this repo ships
-> its own well-formed Buildroot packages for them (`package/fzf/` — a
-> `golang-package`; `package/starship/` — a `cargo-package`). Their symbols (`BR2_PACKAGE_FZF` /
-> `BR2_PACKAGE_STARSHIP`) are therefore defined in the tree and all ten tools are
-> enabled by the Buildroot *fragment* (the deliverable). The eight core tools
-> additionally ship upstream.
+> `fzf`, `starship` and the two zsh plugins (`zsh-autosuggestions`,
+> `zsh-syntax-highlighting`) have no *upstream* Buildroot package, so they ship
+> as well-formed Buildroot packages in the PengyOS external tree
+> (`buildroot-external/package/…`; this repo keeps the `package/{fzf,starship}/`
+> sources). Their symbols are therefore defined in the tree and all twelve tools
+> are enabled by the Buildroot *fragment* (the deliverable) and by the Server
+> layer. The eight core tools additionally ship upstream.
+>
+> The image consumes the tool set: the Server board's post-build installs
+> `shell/` at `/etc/pengyos/shell/`, the overlay's `/etc/zshrc` +
+> `/etc/profile.d` source it, `/etc/skel/.zshrc` + `.bashrc` seed it for new
+> accounts, and the plugins install to `/usr/share/zsh/plugins/`. The wiring is
+> asserted by `tests/test_shell.py` (this repo) and
+> `scripts/tests/test_server_comfort_shell.py` (the repo gate).
 
 ## Purpose
 USE-CASES US-SRV-1: a fresh SSH login has the expected tools; a session survives disconnection (tmux); scrollback/search are pleasant by default.

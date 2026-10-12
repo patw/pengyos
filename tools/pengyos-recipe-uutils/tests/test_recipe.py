@@ -28,7 +28,11 @@ RECIPE_DIR = REPO_ROOT / "package" / "uutils-coreutils"
 
 CONFIG_IN = RECIPE_DIR / "Config.in"
 MK = RECIPE_DIR / "uutils-coreutils.mk"
-FIXTURE_UTILITIES = REPO_ROOT / "tests" / "fixtures" / "coreutils-0.11.0-utilities.txt"
+FIXTURE_UTILITIES = REPO_ROOT / "tests" / "fixtures" / "coreutils-0.11.0-unix-utilities.txt"
+
+# The tree's copy of the recipe: the tool authors it, the external tree builds it.
+# They must not drift (a fix landed in one and not the other is the failure mode).
+TREE_RECIPE_DIR = REPO_ROOT.parent.parent / "buildroot-external" / "package" / "uutils-coreutils"
 
 # A pinned Buildroot version is an upstream release tag, never a moving ref.
 PINNED_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -86,7 +90,27 @@ def test_config_in_declares_package_option(config_in: str) -> None:
 
 def test_config_in_has_dependency_and_help(config_in: str) -> None:
     assert "depends on" in config_in, "Kconfig option needs at least one 'depends on'"
-    assert re.search(r"^help", config_in, re.MULTILINE), "Kconfig option needs a help block"
+    assert re.search(r"^\s*help", config_in, re.MULTILINE), "Kconfig option needs a help block"
+
+
+def test_config_in_gates_on_the_rust_and_glibc_requirements(config_in: str) -> None:
+    """A cargo package needs the rustc arch gate; the utmpx utilities (who, users,
+    uptime, pinky) need glibc — musl ships only stubs — so the option must say so."""
+    assert "BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS" in config_in
+    assert "BR2_TOOLCHAIN_USES_GLIBC" in config_in
+    assert "select BR2_PACKAGE_HOST_RUSTC" in config_in
+
+
+def test_tree_copy_is_identical_to_the_authored_copy() -> None:
+    """The external tree builds this recipe; the tool owns it. Byte-identical, or
+    the fix that landed in one silently is not in the image."""
+    for name in ("uutils-coreutils.mk", "Config.in", "uutils-coreutils.hash"):
+        authored = (RECIPE_DIR / name).read_text(encoding="utf-8")
+        wired = (TREE_RECIPE_DIR / name).read_text(encoding="utf-8")
+        assert authored == wired, (
+            f"{name}: tools/pengyos-recipe-uutils and buildroot-external/package "
+            "have drifted - copy the authored recipe into the tree (or back)"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -157,8 +181,11 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 def hash_lines(recipe_hash: str) -> list[tuple[str, str]]:
     """Return ``(hash, filename)`` pairs from a Buildroot ``.hash`` body.
 
-    Comment lines (``# ...``) are ignored; each remaining line is
-    ``<hash><whitespace><filename>`` as produced by ``sha256sum``.
+    Buildroot's spelling is ``sha256  <hash>  <filename>`` — the algorithm name
+    comes first, because ``support/download/check-hash`` parses the line as
+    ``read -r t h f``. A bare ``sha256sum``-style line (hash then filename) is
+    never matched, and the download fails with "No hash found for ...".
+    Comment lines (``# ...``) are ignored.
     """
     pairs: list[tuple[str, str]] = []
     for raw in recipe_hash.splitlines():
@@ -166,8 +193,11 @@ def hash_lines(recipe_hash: str) -> list[tuple[str, str]]:
         if not line or line.startswith("#"):
             continue
         parts = line.split()
-        assert len(parts) >= 2, f"malicious .hash line (need hash + filename): {raw!r}"
-        pairs.append((parts[0], " ".join(parts[1:])))
+        assert len(parts) >= 3, (
+            f"malformed .hash line (need 'sha256  <hash>  <filename>'): {raw!r}"
+        )
+        assert parts[0] in {"sha256", "sha1", "md5"}, f"unknown hash algorithm: {raw!r}"
+        pairs.append((parts[1], " ".join(parts[2:])))
     return pairs
 
 
@@ -211,6 +241,26 @@ def test_hash_digest_is_sha256_not_sha1(recipe_hash: str) -> None:
         assert len(digest) == 64, f"expected a 64-hex sha256, got a {len(digest)}-hex digest: {digest}"
 
 
+def test_hash_line_format_is_buildroots(recipe_hash: str) -> None:
+    """Buildroot's spelling is `sha256  <hash>  <filename>`, algorithm first.
+
+    `support/download/check-hash` reads each line as `read -r t h f`; a bare
+    `sha256sum`-style line (hash then filename) shifts the filename into `h`,
+    `f` is empty, nothing ever matches, and the build dies with
+    "ERROR: No hash found for coreutils-<version>.tar.gz". Found 2026-10-12 on
+    the first `make uutils-coreutils-source`.
+    """
+    for raw in recipe_hash.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        assert parts and parts[0] == "sha256", (
+            f".hash line must start with the algorithm ('sha256  <hash>  <file>'): {raw!r}"
+        )
+        assert len(parts) == 3, f".hash line must be 'sha256  <hash>  <filename>': {raw!r}"
+
+
 # --------------------------------------------------------------------------- #
 # Build / install / symlink plan
 # --------------------------------------------------------------------------- #
@@ -235,6 +285,24 @@ def test_symlink_plan_present(install_cmds: str) -> None:
     assert re.search(r"ln\s+-sf", install_cmds), "symlink plan must create utility symlinks"
 
 
+def test_build_selects_the_unix_feature_set(recipe: str) -> None:
+    """`--features unix` is the whole point of this recipe: the default feature set
+    (feat_common_core) has no stat, id, sync, uname, whoami, install, stty, timeout,
+    hostname, groups, nice, nohup, chroot, chgrp, chmod, chown, nproc, mkfifo,
+    mknod, logname, hostid, users, who, uptime, pinky, stdbuf, kill, arch - every
+    one of which Core ships today. `--no-default-features` keeps feat_diagnostics
+    (and ariadne) out of every utility."""
+    build = re.search(r"define UUTILS_COREUTILS_BUILD_CMDS\n(.*?)\nendef", recipe, re.DOTALL)
+    assert build is not None, "BUILD_CMDS block not found"
+    body = build.group(1)
+    assert "--features unix" in body, "build must select the unix feature set"
+    assert "--no-default-features" in body, "build must drop the default feature set"
+    assert "--offline" in body and "--locked" in body, (
+        "cargo must build offline against the pinned Cargo.lock (Buildroot vendors)"
+    )
+    assert "$(PKG_CARGO_ENV)" in body, "build must use Buildroot's cargo env (target triple)"
+
+
 def test_every_utility_has_symlink(recipe: str, install_cmds: str) -> None:
     """The symlink plan must cover every shipped utility name."""
     shipped = extract_utilities(recipe)
@@ -249,7 +317,11 @@ def test_every_utility_has_symlink(recipe: str, install_cmds: str) -> None:
 def test_utility_list_matches_authoritative_fixture(recipe: str) -> None:
     assert FIXTURE_UTILITIES.is_file(), "authoritative utilities fixture is missing"
     got = extract_utilities(recipe)
-    want = sorted(FIXTURE_UTILITIES.read_text(encoding="utf-8").split())
+    # The fixture carries a provenance header; comment lines are not utility names.
+    want = sorted(
+        w for line in FIXTURE_UTILITIES.read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith("#") for w in line.split()
+    )
     assert sorted(got) == want, (
         f"utility list drift: missing={set(want) - set(got)}, extra={set(got) - set(want)}"
     )

@@ -1,0 +1,10 @@
+config BR2_PACKAGE_FZF
+	bool "fzf"
+	help
+	  A command-line fuzzy finder: Ctrl-R for interactive history
+	  search, Ctrl-T for a file picker (the Server comfort profile
+	  wires both). Buildroot 2026.08 does not ship it; the recipe
+	  also installs the bash/zsh key bindings and completion under
+	  /usr/share/fzf.
+
+	  https://github.com/junegunn/fzf

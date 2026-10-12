@@ -1,0 +1,37 @@
+From f01f63721a821b468fe94e0d680959c02fec9ce2 Mon Sep 17 00:00:00 2001
+From: Pengy <pengy@catbee.ca>
+Date: Mon, 12 Oct 2026 01:58:15 -0400
+Subject: [PATCH] networking/vpn: show every config file in the Add VPN picker
+
+The picker's filter dropdown defaults to OpenVPN, so a WireGuard
+wg*.conf is invisible in the file list the moment the dialog opens:
+the page reads as 'OpenVPN only' and the WireGuard entry in the
+dropdown is never found. Add an 'All Files' filter and make it the
+default, so .conf files are listed and both VPN filters are visible
+in the dropdown. The WireGuard import path itself is unchanged.
+---
+ cosmic-settings/src/pages/networking/vpn/mod.rs | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/cosmic-settings/src/pages/networking/vpn/mod.rs b/cosmic-settings/src/pages/networking/vpn/mod.rs
+index 7323d84..3c01ec3 100644
+--- a/cosmic-settings/src/pages/networking/vpn/mod.rs
++++ b/cosmic-settings/src/pages/networking/vpn/mod.rs
+@@ -1074,12 +1074,14 @@ fn add_network() -> Task<crate::app::Message> {
+     cosmic::dialog::file_chooser::open::Dialog::new()
+         .directory(dir)
+         .title(fl!("vpn", "select-file"))
++        .filter(FileFilter::new("All Files").glob("*"))
+         .filter(
+             FileFilter::new("OpenVPN")
+                 .mimetype("application/x-openvpn-profile")
+                 .glob("*.ovpn"),
+         )
+         .filter(FileFilter::new("WireGuard").glob("*.conf*"))
++        .current_filter(FileFilter::new("All Files").glob("*"))
+         .open_file()
+         .then(|result| async move {
+             match result {
+-- 
+2.53.0
+

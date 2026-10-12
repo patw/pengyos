@@ -203,31 +203,31 @@ def test_load_answers_reports_path_on_missing_file():
 
 
 def test_render_step_target_has_progress_and_hint():
-    state = model.StepState(key="target", index=0, total=6, answer=None, done=False)
+    state = model.StepState(key="target", index=0, total=7, answer=None, done=False)
     text = render_step(state)
-    assert "Step 1/6" in text
+    assert "Step 1/7" in text
     assert "Target disk" in text
     assert "/dev/sdb" in text  # the hint points at an example device
 
 
 def test_render_step_closed_sets_list_valid_values():
-    state = model.StepState(key="edition", index=1, total=6, answer=None, done=False)
+    state = model.StepState(key="edition", index=1, total=7, answer=None, done=False)
     text = render_step(state)
     assert "valid values: core, server" in text
 
 
 def test_render_step_layout_lists_both_options():
-    state = model.StepState(key="layout", index=2, total=6, answer=None, done=False)
+    state = model.StepState(key="layout", index=2, total=7, answer=None, done=False)
     assert "valid values: single-root, ab-split" in render_step(state)
 
 
 def test_render_step_echoes_current_answer():
-    state = model.StepState(key="edition", index=1, total=6, answer="core", done=True)
+    state = model.StepState(key="edition", index=1, total=7, answer="core", done=True)
     assert "current: core" in render_step(state)
 
 
 def test_render_step_no_current_when_unanswered():
-    state = model.StepState(key="edition", index=1, total=6, answer=None, done=False)
+    state = model.StepState(key="edition", index=1, total=7, answer=None, done=False)
     assert "current:" not in render_step(state)
 
 
@@ -265,18 +265,18 @@ def _interactive(answers_lines):
 
 def test_interactive_happy_path():
     plan, out, err = _interactive(
-        ["/dev/sdb", "core", "single-root", "alice", "dhcp", "yes"]
+        ["/dev/sdb", "core", "single-root", "alice", "dhcp", "skip", "yes"]
     )
     assert plan is not None
     assert plan.to_dict() == HAPPY_PLAN
     # Each step was rendered.
-    assert "Step 1/6" in out
-    assert "Step 6/6" in out
+    assert "Step 1/7" in out
+    assert "Step 7/7" in out
 
 
 def test_interactive_replays_same_plan_as_replay():
     plan, _out, _err = _interactive(
-        ["/dev/sdb", "core", "single-root", "alice", "dhcp", "yes"]
+        ["/dev/sdb", "core", "single-root", "alice", "dhcp", "skip", "yes"]
     )
     assert plan.to_dict() == run_replay(HAPPY).to_dict()
 
@@ -285,11 +285,40 @@ def test_back_command_constant_is_back():
     assert BACK_COMMAND == "back"
 
 
+def test_interactive_pengy_page_accepts_a_real_endpoint():
+    """The optional page is a real page: fill it in and the plan carries it."""
+    plan, out, _err = _interactive(
+        ["/dev/sdb", "core", "single-root", "alice", "dhcp",
+         "http://10.0.23.6:8086/v1", "yes"]
+    )
+    assert plan is not None
+    assert plan.to_dict()["pengy"] == {"base_url": "http://10.0.23.6:8086/v1"}
+    assert "Pengy" in out
+
+
+def test_interactive_pengy_page_reprompts_a_bad_url():
+    """A bad endpoint is reported and re-prompted, not a crash — and skipping
+    after the rejection is still allowed."""
+    plan, _out, err = _interactive(
+        ["/dev/sdb", "core", "single-root", "alice", "dhcp",
+         "not-a-url", "skip", "yes"]
+    )
+    assert plan is not None
+    assert "pengy" not in plan.to_dict()
+    assert "base url" in err.lower()
+
+
+def test_run_replay_omits_the_optional_pengy_field():
+    """An answer set with no pengy key at all is complete (the step is optional)."""
+    answers = {k: v for k, v in HAPPY.items() if k != "pengy"}
+    assert run_replay(answers).to_dict() == HAPPY_PLAN
+
+
 def test_interactive_back_navigation_reanswer():
     # target, edition=core, back (to edition), edition=server, then finish.
     plan, out, err = _interactive(
         ["/dev/sdb", "core", BACK_COMMAND, "server", "single-root",
-         "alice", "dhcp", "yes"]
+         "alice", "dhcp", "skip", "yes"]
     )
     assert plan is not None
     assert plan.edition == "server"
@@ -300,7 +329,7 @@ def test_interactive_back_navigation_reanswer():
 def test_interactive_invalid_answer_reprompted():
     # edition=bogus (rejected, re-prompted) then edition=core again.
     plan, out, err = _interactive(
-        ["/dev/sdb", "bogus", "core", "single-root", "alice", "dhcp", "yes"]
+        ["/dev/sdb", "bogus", "core", "single-root", "alice", "dhcp", "skip", "yes"]
     )
     assert plan is not None
     assert plan.edition == "core"
@@ -310,8 +339,9 @@ def test_interactive_invalid_answer_reprompted():
 
 def test_interactive_blank_input_ignored():
     # A blank line at the target prompt is ignored; the real answer follows.
+    # (Blank means "skip" only at the Pengy page — the one optional step.)
     plan, _out, _err = _interactive(
-        ["", "/dev/sdb", "core", "single-root", "alice", "dhcp", "yes"]
+        ["", "/dev/sdb", "core", "single-root", "alice", "dhcp", "", "yes"]
     )
     assert plan is not None
     assert plan.to_dict() == HAPPY_PLAN
@@ -320,7 +350,7 @@ def test_interactive_blank_input_ignored():
 def test_interactive_confirm_no_reprompts():
     # "no" at the confirm review re-prompts; "yes" confirms.
     plan, out, err = _interactive(
-        ["/dev/sdb", "core", "single-root", "alice", "dhcp", "no", "yes"]
+        ["/dev/sdb", "core", "single-root", "alice", "dhcp", "skip", "no", "yes"]
     )
     assert plan is not None
     assert plan.to_dict() == HAPPY_PLAN

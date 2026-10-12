@@ -1,0 +1,11 @@
+config BR2_PACKAGE_ZSH_SYNTAX_HIGHLIGHTING
+	bool "zsh-syntax-highlighting"
+	depends on BR2_PACKAGE_ZSH
+	depends on BR2_PACKAGE_GIT # the git highlighter runs git
+	help
+	  Highlights the command line as you type (valid commands,
+	  strings, errors), from the zsh community. Pure shell, pinned
+	  upstream tag; sourced last by the PengyOS comfort profile
+	  (/etc/pengyos/shell/profile).
+
+	  https://github.com/zsh-users/zsh-syntax-highlighting

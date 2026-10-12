@@ -53,7 +53,9 @@ pengyos-install install --release rel.json --layout plan.json [--config install.
 pengyos-install provision-plan --config install.toml [--layout layout.json] [--slot a] [--json]
 pengyos-install disks [--json]
 pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
-                      [--password-stdin] [--authorized-keys FILE]
+                      [--password-stdin] [--authorized-keys FILE] [--autologin]
+                      [--pengy-base-url URL [--pengy-api-key KEY | --pengy-api-key-stdin]
+                       [--pengy-model NAME]]
                       [--progress text|json]
 ```
 
@@ -84,11 +86,18 @@ pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
   off by default, so the desktop starts at its login screen) — make the
   desktop log them in at boot (`/etc/pengyos/autologin.conf`, changeable later
   with `pengyos-autologin`), give them the SSH public keys in
-  `--authorized-keys FILE` (the Server's sshd accepts keys only), set the user's and root's password (random salt each), and copy the
-  live session's NetworkManager profiles (e.g. the Wi-Fi joined on the stick). Any SSH host keys in the image are
+  `--authorized-keys FILE` (the Server's sshd accepts keys only), set the user's and root's password (random salt each), copy the
+  live session's NetworkManager profiles (e.g. the Wi-Fi joined on the stick),
+  and — when an endpoint was given — seed the user's
+  `~/.config/pengy/settings.json` with it (`--pengy-base-url`, `--pengy-api-key`
+  / `--pengy-api-key-stdin`, `--pengy-model`; mode 0600, owned by the user, plus
+  the system message that points at `~/skills/skill_index.md`). Every Pengy
+  answer is optional: with no `--pengy-base-url` nothing is written and Pengy
+  keeps its own defaults (the local endpoint, no key, no model). Any SSH host keys in the image are
   dropped; each machine makes its own on first boot. The password is read from
   stdin with `--password-stdin`, or prompted for on a terminal — never taken on
-  the command line. `--payload DIR` overrides the payload location (default
+  the command line; `--pengy-api-key-stdin` reads the key from the next stdin
+  line for the same reason. `--payload DIR` overrides the payload location (default
   `/run/pengyos/payload`). `--progress json` emits one `{"phase", "fraction",
   "message"}` object per line on stdout (phases `verify`, `partition`, `write`,
   `root`, `boot`, `provision`, `done`, or `error`). Refuses without `--yes`, and

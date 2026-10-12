@@ -27,7 +27,8 @@ whole parser is golden-testable without a file, a disk, or root.
 Public surface
 --------------
 * :class:`ConfigError` — a reported structural/parse/missing-field error.
-* :data:`STEPS` / :data:`REQUIRED` — the five answerable steps ``auto`` needs.
+* :data:`STEPS` / :data:`REQUIRED` — the answerable steps ``auto`` knows, and
+  the subset it requires (``pengy`` is optional).
 * :func:`read_config` — read + parse a TOML file into a plain dict.
 * :func:`build_plan` — apply an already-parsed dict to the wizard (pure).
 * :func:`parse_config` — read a file and build the plan (the public entry point).
@@ -74,19 +75,28 @@ class ConfigError(Exception):
         self.path = path
 
 
-#: The five answerable steps ``auto`` applies, in wizard order (excludes
-#: ``confirm`` — there is nothing to parse for the review step).
+#: The answerable steps ``auto`` applies, in wizard order (excludes ``confirm``
+#: — there is nothing to parse for the review step).
 STEPS: tuple[str, ...] = (
     "target",
     "edition",
     "layout",
     "user",
     "network",
+    "pengy",
 )
 
 #: The required fields, in display order. Every one must be present in the
-#: document; a missing one is a :class:`ConfigError` naming it.
-REQUIRED: tuple[str, ...] = STEPS
+#: document; a missing one is a :class:`ConfigError` naming it. ``pengy`` is
+#: absent: the assistant's endpoint is always skippable, so a document without
+#: it is complete and Pengy keeps the defaults the image ships.
+REQUIRED: tuple[str, ...] = (
+    "target",
+    "edition",
+    "layout",
+    "user",
+    "network",
+)
 
 
 def read_config(path: str) -> dict:
@@ -137,7 +147,11 @@ def build_plan(config: dict, probe: Optional[Probe] = None) -> Plan:
     wizard = Wizard(probe=probe)  # type: ignore[arg-type]
     for step in STEPS:
         if step not in config:
-            raise ConfigError(f"missing required field: '{step}'", path=None)
+            if step in REQUIRED:
+                raise ConfigError(f"missing required field: '{step}'", path=None)
+            # The optional step: an absent field is the "skipped" answer.
+            wizard.answer(step, "")
+            continue
         # A bad value propagates as the model's ValidationError (a message,
         # never a crash); a missing key is already handled above.
         wizard.answer(step, config[step])

@@ -34,8 +34,8 @@ pub mod cosmic_app;
 
 pub use router::{Message, MessageRouter, route};
 pub use screen::{
-    DiskView, LayoutView, NetworkView, ProgressView, ScreenView, SummaryView, UserView,
-    WelcomeView, view_of,
+    DiskView, LayoutView, NetworkView, PengyView, ProgressView, ScreenView, SummaryView,
+    UserView, WelcomeView, view_of,
 };
 
 use pengyos_install_model::{Model, Step};
@@ -48,6 +48,7 @@ pub enum Screen {
     Layout,
     User,
     Network,
+    Pengy,
     Summary,
     Progress,
 }
@@ -60,6 +61,7 @@ impl From<Step> for Screen {
             Step::Layout => Screen::Layout,
             Step::User => Screen::User,
             Step::Network => Screen::Network,
+            Step::Pengy => Screen::Pengy,
             Step::Summary => Screen::Summary,
             Step::Progress => Screen::Progress,
         }
@@ -75,6 +77,7 @@ impl Screen {
             Screen::Layout => "Layout",
             Screen::User => "Your account",
             Screen::Network => "Network",
+            Screen::Pengy => "Pengy",
             Screen::Summary => "Summary",
             Screen::Progress => "Installing",
         }
@@ -96,6 +99,7 @@ pub fn render(model: &Model) -> String {
         ScreenView::Layout(v) => render_layout(v),
         ScreenView::User(v) => render_user(v),
         ScreenView::Network(v) => render_network(v),
+        ScreenView::Pengy(v) => render_pengy(v),
         ScreenView::Summary(v) => render_summary(v),
         ScreenView::Progress(_) => render_progress(),
     }
@@ -113,6 +117,7 @@ pub fn render_all(model: &Model) -> String {
             ScreenView::Layout(v) => out.push_str(&render_layout(v)),
             ScreenView::User(v) => out.push_str(&render_user(v)),
             ScreenView::Network(v) => out.push_str(&render_network(v)),
+            ScreenView::Pengy(v) => out.push_str(&render_pengy(v)),
             ScreenView::Summary(v) => out.push_str(&render_summary(v)),
             ScreenView::Progress(_) => out.push_str(&render_progress()),
         }
@@ -184,6 +189,21 @@ fn render_network(v: &NetworkView) -> String {
     out.push_str(&rule());
     out.push('\n');
     out.push_str(&format!("SSID: {}\n", opt(v.ssid.as_deref())));
+    out.push_str(&v.hint);
+    out.push('\n');
+    out.push_str(&button(v.continue_enabled));
+    out
+}
+
+fn render_pengy(v: &PengyView) -> String {
+    let mut out = String::new();
+    out.push_str(&v.heading);
+    out.push('\n');
+    out.push_str(&rule());
+    out.push('\n');
+    out.push_str(&format!("Base URL: {}\n", opt(v.base_url.as_deref())));
+    out.push_str(&format!("API key: {}\n", masked(v.api_key_len)));
+    out.push_str(&format!("Model: {}\n", opt(v.model.as_deref())));
     out.push_str(&v.hint);
     out.push('\n');
     out.push_str(&button(v.continue_enabled));
@@ -365,7 +385,8 @@ mod tests {
         m.set_username("alice");
         m.set_password("hunter2");
         m.set_network_ssid("home");
-        // Walk Welcome -> Disk -> Layout -> User -> Network -> Summary.
+        // Walk Welcome -> Disk -> Layout -> User -> Network -> Pengy -> Summary.
+        m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
         m.next().unwrap();
@@ -436,11 +457,58 @@ mod tests {
             "Layout",
             "Your account",
             "Network",
+            "Pengy",
             "Summary",
             "Installing",
         ] {
             assert!(text.contains(&format!("=== {title} ===")), "missing {title}");
         }
+    }
+
+    #[test]
+    fn pengy_screen_masks_the_api_key() {
+        let mut m = Model::new();
+        m.set_accepted_terms(true);
+        m.next().unwrap(); // Disk
+        m.set_selected_disk("/dev/sda");
+        m.next().unwrap(); // Layout
+        m.set_layout(pengyos_install_model::Layout::Wipe);
+        m.next().unwrap(); // User
+        m.set_hostname("pengyos-box");
+        m.set_username("alice");
+        m.set_password("hunter2");
+        m.next().unwrap(); // Network
+        m.next().unwrap(); // Pengy
+        m.set_pengy_base_url("http://127.0.0.1:8080/v1");
+        m.set_pengy_api_key("sk-topsecret");
+        m.set_pengy_model("qwen3:8b");
+        let text = render(&m);
+        assert!(text.contains("Base URL: http://127.0.0.1:8080/v1"));
+        assert!(text.contains("Model: qwen3:8b"));
+        assert!(!text.contains("sk-topsecret"));
+        assert!(text.contains("API key: ***********"));
+    }
+
+    #[test]
+    fn pengy_screen_is_skippable() {
+        // Nothing typed on the Pengy screen: Continue is enabled and the plan
+        // carries no [pengy] section.
+        let mut m = Model::new();
+        m.set_accepted_terms(true);
+        m.next().unwrap();
+        m.set_selected_disk("/dev/sda");
+        m.next().unwrap();
+        m.set_layout(pengyos_install_model::Layout::Wipe);
+        m.next().unwrap();
+        m.set_hostname("pengyos-box");
+        m.set_username("alice");
+        m.set_password("hunter2");
+        m.next().unwrap();
+        m.next().unwrap(); // -> Pengy
+        assert_eq!(m.step(), pengyos_install_model::Step::Pengy);
+        let text = render(&m);
+        assert!(text.contains("[ Continue ]"));
+        assert!(!text.contains("(disabled)"));
     }
 
     #[test]

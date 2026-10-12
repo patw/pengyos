@@ -105,6 +105,12 @@ pub enum Message {
     SetConfirm(String),
     /// "Log in automatically" switched (off by default).
     SetAutologin(bool),
+    /// The assistant's base URL field changed.
+    SetPengyBaseUrl(String),
+    /// The assistant's API key field changed.
+    SetPengyApiKey(String),
+    /// The assistant's model field changed.
+    SetPengyModel(String),
     /// Re-scan the disks (e.g. after plugging one in).
     RefreshDisks,
     /// A progress line from the engine.
@@ -129,6 +135,13 @@ pub struct AppModel {
     confirm: String,
     /// Start straight into the desktop at boot, skipping the login screen.
     autologin: bool,
+    /// The assistant's endpoint (the Pengy screen). All three are optional: an
+    /// empty base URL means the screen was skipped and Pengy keeps the defaults
+    /// the image ships. The key is held here (like the password) and reaches
+    /// the engine on stdin, never on argv.
+    pengy_base_url: String,
+    pengy_api_key: String,
+    pengy_model: String,
     progress: f32,
     status: String,
     run: Run,
@@ -172,6 +185,20 @@ impl AppModel {
                     Some("The password cannot contain ':'.".into())
                 } else if self.password != self.confirm {
                     Some("The passwords do not match.".into())
+                } else {
+                    None
+                }
+            }
+            Step::Pengy => {
+                let url = self.pengy_base_url.trim();
+                if url.is_empty() {
+                    None // the screen is skippable: an empty answer is the skip answer
+                } else if !(url.starts_with("http://") || url.starts_with("https://"))
+                    || url.chars().any(|c| c.is_whitespace())
+                {
+                    Some("Base URL: an http:// or https:// URL, no spaces.".into())
+                } else if self.pengy_model.chars().any(|c| c.is_whitespace()) {
+                    Some("Model: one name, no spaces.".into())
                 } else {
                     None
                 }
@@ -225,6 +252,22 @@ impl AppModel {
         if self.autologin {
             args.push("--autologin".into());
         }
+        // The assistant's endpoint, only when the screen was filled in. The key
+        // rides on stdin (line 2, after the password), never on argv.
+        let base_url = self.pengy_base_url.trim().to_string();
+        let api_key = self.pengy_api_key.trim().to_string();
+        let pengy_model = self.pengy_model.trim().to_string();
+        if !base_url.is_empty() {
+            args.push("--pengy-base-url".into());
+            args.push(base_url.clone());
+            if !api_key.is_empty() {
+                args.push("--pengy-api-key-stdin".into());
+            }
+            if !pengy_model.is_empty() {
+                args.push("--pengy-model".into());
+                args.push(pengy_model.clone());
+            }
+        }
         let engine = self.flags.engine.clone();
         let password = self.password.clone();
         self.run = Run::Running;
@@ -248,6 +291,10 @@ impl AppModel {
             };
             if let Some(mut stdin) = child.stdin.take() {
                 let _ = writeln!(stdin, "{password}");
+                // Line 2 is the Pengy API key, only when one was typed.
+                if !api_key.is_empty() {
+                    let _ = writeln!(stdin, "{api_key}");
+                }
             }
             let mut last_error = None;
             if let Some(stdout) = child.stdout.take() {
@@ -323,6 +370,9 @@ impl cosmic::Application for AppModel {
             flags,
             disks,
             password: String::new(),
+            pengy_base_url: String::new(),
+            pengy_api_key: String::new(),
+            pengy_model: String::new(),
             confirm: String::new(),
             autologin: false,
             progress: 0.0,
@@ -358,6 +408,21 @@ impl cosmic::Application for AppModel {
             }
             Message::SetConfirm(c) => self.confirm = c,
             Message::SetAutologin(on) => self.autologin = on,
+            // The Pengy screen: keep the text locally (the key is a secret and
+            // the engine reads it from stdin) and mirror it into the model so
+            // the plan and the Summary screen agree with what is on screen.
+            Message::SetPengyBaseUrl(url) => {
+                self.pengy_base_url = url.clone();
+                self.model.route(WizardMessage::SetPengyBaseUrl(url));
+            }
+            Message::SetPengyApiKey(key) => {
+                self.pengy_api_key = key.clone();
+                self.model.route(WizardMessage::SetPengyApiKey(key));
+            }
+            Message::SetPengyModel(model) => {
+                self.pengy_model = model.clone();
+                self.model.route(WizardMessage::SetPengyModel(model));
+            }
             Message::RefreshDisks => self.disks = load_disks(&self.flags.engine),
             Message::Progress(fraction, status) => {
                 self.progress = self.progress.max(fraction);
@@ -391,6 +456,7 @@ impl cosmic::Application for AppModel {
             Step::Welcome => ("Welcome to PengyOS", self.view_welcome()),
             Step::Disk => ("Choose a disk", self.view_disk()),
             Step::User => ("Your computer and account", self.view_user()),
+            Step::Pengy => ("The assistant", self.view_pengy()),
             Step::Summary => ("Ready to install", self.view_summary()),
             Step::Progress => match self.run {
                 Run::Done => ("PengyOS is installed", self.view_progress()),
@@ -399,7 +465,14 @@ impl cosmic::Application for AppModel {
             },
             Step::Layout | Step::Network => ("", column::with_children(Vec::new()).into()),
         };
-        let screens = [Step::Welcome, Step::Disk, Step::User, Step::Summary, Step::Progress];
+        let screens = [
+            Step::Welcome,
+            Step::Disk,
+            Step::User,
+            Step::Pengy,
+            Step::Summary,
+            Step::Progress,
+        ];
         let index = screens.iter().position(|s| *s == self.step()).unwrap_or(0) + 1;
         // The body scrolls so the footer (Back / Continue) is always on screen,
         // whatever size the compositor gives the window.
@@ -568,6 +641,38 @@ impl AppModel {
             .into()
     }
 
+    fn view_pengy(&self) -> Element<'_, Message> {
+        let spacing = cosmic::theme::spacing();
+        column::with_children([
+            section()
+                .add(item::builder("Base URL").description(
+                    "Any OpenAI-compatible endpoint: Ollama (http://127.0.0.1:11434/v1),                      llama.cpp, LM Studio, OpenRouter, OpenAI.",
+                ).control(
+                    widget::text_input("http://127.0.0.1:11434/v1", self.pengy_base_url.as_str())
+                        .on_input(Message::SetPengyBaseUrl),
+                ))
+                .add(item::builder("API key").description(
+                    "Local endpoints need none.",
+                ).control(
+                    widget::secure_input("", self.pengy_api_key.as_str(), None, true)
+                        .on_input(Message::SetPengyApiKey),
+                ))
+                .add(item::builder("Model").description(
+                    "The name the endpoint knows, e.g. qwen3:8b. Leave it empty to                      choose later.",
+                ).control(
+                    widget::text_input("qwen3:8b", self.pengy_model.as_str())
+                        .on_input(Message::SetPengyModel),
+                ))
+                .into(),
+            text::caption(
+                "Skip this screen and Pengy keeps its own defaults: the local                  endpoint, no key, no model. You can set all of it later in Pengy's                  Settings, and your skills live in ~/skills.",
+            )
+            .into(),
+        ])
+        .spacing(spacing.space_m)
+        .into()
+    }
+
     fn view_summary(&self) -> Element<'_, Message> {
         let disk = self
             .selected_disk()
@@ -586,6 +691,15 @@ impl AppModel {
                     "Automatic"
                 } else {
                     "Password required"
+                })))
+                .add(item::builder("Pengy").control(text::body(if self.pengy_base_url.trim().is_empty() {
+                    "Not configured — Pengy keeps its defaults".to_string()
+                } else {
+                    let mut line = self.pengy_base_url.trim().to_string();
+                    if !self.pengy_model.trim().is_empty() {
+                        line.push_str(&format!("  model {}", self.pengy_model.trim()));
+                    }
+                    line
                 })))
                 .into(),
             text::body(

@@ -1,0 +1,4 @@
+# Locally generated: sha256/sha512 of the Buildroot 2026.08 cargo6 repack
+# (`make starship-source` vendoring of the github archive v1.26.0).
+sha256  c2ff3e7501b73b00f07850cef007bdb538b8a093d87a03c39589ba816c878ed6  starship-1.26.0-cargo6.tar.gz
+sha512  2f2551aae76135d8218cb557bc613c5f4240a22db1f40497bfd59b71a0db315d7233c14f6028d1807c24819dde6df9e8084700f04cfa2013c7affb7730c5a276  starship-1.26.0-cargo6.tar.gz

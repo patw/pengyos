@@ -17,6 +17,164 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: the userland agents keep tripping over is the real one — Rust coreutils, and no more cut-down applets
+
+Agents on PengyOS kept behaving as if the box were an initramfs: `find -printf`
+rejected, `grep -P`/`--include` unknown, `sed` with no `\b`, `awk` with no
+`gensub`, `xargs -d`, `diff -r`, `time -v`, `unzip -l`, `killall -q`,
+`losetup -f`, `last -x`, `su -l`. Auditing the built images explains it: the
+Server rootfs carried **144 BusyBox applets**, and Buildroot resolves the
+BusyBox/real-tool overlap by *install order* (`BUSYBOX_DEPENDENCIES` lists
+coreutils, grep, tar, … so they build after BusyBox and their files win). Every
+applet no package claims just stays — cut down. In an image with **no initramfs**
+at all, that is pure embedded-systems inheritance.
+
+- **Coreutils are Rust now:** `package/uutils-coreutils` (our recipe; Buildroot
+  2026.08 ships no uutils recipe at all) is pinned to uutils/coreutils 0.11.0,
+  sha256-verified against the live tarball, and built
+  `--no-default-features --features unix` — the 78 common-core utilities *plus*
+  the unix-only ones GNU coreutils ships on Linux (stat, id, sync, uname, whoami,
+  install, stty, timeout, hostname, groups, nice, nohup, chroot, chgrp, chmod,
+  chown, nproc, mkfifo, mknod, logname, hostid, users, who, uptime, pinky, stdbuf,
+  kill, arch). One multicall `/usr/bin/coreutils` with a symlink per utility, 106
+  names. GNU coreutils (GPL-3) is out; MIT is in, matching Ubuntu 25.10.
+- **BusyBox applets are resolved in the config, not by luck:**
+  `board/core/busybox.fragment` (+ `board/server/busybox.fragment`) compiles out
+  every applet another package owns, plus the early-boot/embedded set
+  (linuxrc, run-init, pivot_root, switch_root, makedevs, mdev, uevent, i2c-*,
+  fdformat, setserial, devmem, ubirename, console plumbing) and the daemons the
+  image does not run (telnet, tftp, inetd, dnsd, ssl_server, udhcpc, syslogd,
+  klogd). Merged config drops from 563 to 369 enabled symbols.
+- **The tools behind those flags are installed where they are cheap:** Core gains
+  findutils, grep, sed, gawk, GNU time, which, diffutils, patch, gzip, Info-ZIP
+  unzip, tar, tree, lsof, less, attr, psmisc and the util-linux losetup, last,
+  eject, su, mesg, hwclock, schedutils, fallocate, mountpoint, logger; Server
+  gains net-tools, iputils, traceroute, pciutils, usbutils, hdparm and zip.
+  BusyBox's `wget` gets `FEATURE_WGET_OPENSSL` so HTTPS verifies.
+- **`/bin/sh` is bash.** Agents write bash-isms into `sh -c` — `[[ ]]`, arrays,
+  `shopt`, `local -a`, process substitution — and BusyBox ash accepts some of
+  them and silently misbehaves on the rest.
+- **Tests with teeth:** `scripts/tests/test_core_userland.py` (10 checks) fails if
+  a fragment names a symbol BusyBox 1.38 does not declare (a typo is a silent
+  no-op), if an applet is removed with no selected package providing the command,
+  if GNU coreutils comes back, if a fragment is dropped from a generated
+  defconfig, if a layer sets a symbol Buildroot 2026.08 does not define, or if the
+  recipe's utility list loses a name Core already shipped.
+  `tools/pengyos-recipe-uutils` now pins the `feat_os_unix` fixture (106 names)
+  and fails if the tree's copy of the recipe drifts from the authored one.
+
+### Added: the Server's shell stops feeling stock — the comfort profile is wired in, and zsh gets the oh-my-zsh feel
+
+`zsh` was the installed user's shell with a bare starter `~/.zshrc`, while the
+comfort set the Server promises (starship prompt, fzf, zoxide, the modern
+aliases, tmux defaults) sat in `tools/pengyos-server-toolset/` **authored but
+never connected to the image** — the layer enabled none of its packages, the
+profile was never installed, and nothing sourced it. Found 2026-10-12 while
+answering "why does our zsh feel stock compared to oh-my-zsh?". The answer is
+not "install oh-my-zsh" (a git-checkout framework with an update ping has no
+place in a reproducible distro); the curated equivalent is now wired:
+
+- **Recipes wired:** `fzf` (Go) and `starship` (Rust) joined
+  `buildroot-external/package/` (Buildroot 2026.08 ships neither), plus two new
+  pure-shell recipes — `zsh-autosuggestions` 0.7.1 and
+  `zsh-syntax-highlighting` 0.8.0 → `/usr/share/zsh/plugins/`. All four are
+  enabled by the Server layer (so Desktop inherits them) and their sources are
+  hash-verified against the tree (`make …-source` green; starship's digest
+  re-pinned to the `-cargo6` repack Buildroot 2026.08 downloads).
+- **The profile installs and is sourced system-wide:** the Server post-build
+  copies the toolset's `shell/` to `/etc/pengyos/shell/` (tmux defaults →
+  `/etc/tmux.conf`); the overlay's `/etc/zshrc` (plus an `/etc/zsh/zshrc`
+  symlink — Buildroot's zsh reads the former, Debian-patched zsh the latter)
+  and `/etc/profile.d/pengyos-shell.sh` source it; `/etc/skel/.zshrc` and a new
+  `/etc/skel/.bashrc` source it for new accounts, and stay useful standalone on
+  Core.
+- **The starter `~/.zshrc` gained the plugin-free oh-my-zsh bits:** Ctrl-R
+  substring history search, complete-in-word, cached/grouped/colored completion,
+  git aliases — and it keeps the `%`-prompt fix (logind's CAP_WAKE_ALARM makes
+  zsh's `%#` show `#` for a wheel user).
+- **Fixed in the profile:** `starship init sh` emits nothing (init is
+  shell-specific), so the prompt never loaded — the profile now detects
+  zsh/bash, passes it to `starship init`, and points `STARSHIP_CONFIG` at the
+  system theme when nothing else claimed it. The copied fzf/starship recipes
+  also carried spaces inside `$(call github, …)`, which Buildroot puts
+  verbatim into the download URL (404s).
+- **Drift-proof:** `tools/pengyos-server-toolset` gained image-wiring,
+  starship-wiring, and under-zsh runtime tests (the profile sources cleanly and
+  its idempotency guard fires on a double source); the gate gained
+  `scripts/tests/test_server_comfort_shell.py` (layer symbols, recipe wiring,
+  generated defconfigs, rc wiring, `sh -n`/`zsh -n` on the profile).
+
+### Added: Pengy arrives configured — the installer asks for its endpoint, and the image ships skills
+
+An installed PengyOS has always *had* Pengy and never *known* Pengy: the agent
+shipped with a blank config (local endpoint, no model), and `~/skills/` did not
+exist, so the first chat was a stranger with no tools pointed at anything.
+
+- **The install wizard has a Pengy page** — base URL, API key, model — in both
+  front ends: a screen in the Desktop installer (`pengyos-install-gui`) and a
+  page in the console installer (`pengyos-install-tui install`). It is
+  **skippable by design**: Enter past it, and Pengy keeps the defaults the image
+  ships. Plenty of people have no endpoint at install time, and an install that
+  demands one is an install that lies.
+- **The engine seeds the config.** `pengyos-install image` takes
+  `--pengy-base-url` / `--pengy-api-key(-stdin)` / `--pengy-model` and writes
+  `~/.config/pengy/settings.json` for the user it creates — mode 0600, owned by
+  them, key on stdin so it never appears in argv. Only the four answered keys
+  are written; Pengy merges its defaults over the rest.
+- **The image ships a skills tree.** `/etc/skel/skills/` now carries
+  `skill_index.md` plus two skills — `pengyos` (how this OS works, where
+  everything lives, the four lanes for installing software) and `pengy` (what
+  the agent is and how to drive it) — so every new user's `~/skills/` starts
+  populated, from `useradd -m` like the rest of the skeleton.
+- **The system message names the skills.** The default reads *"You are a helpful
+  assistant named Pengy you have tools and skills. The current date is {date}
+  and the user is {username} on host {hostname} which is {osinfo}. Always check
+  ~/skills/skill_index.md before doing anything to see if a skill can help with
+  the task."* PengyR's own default is the same sentence; the installer writes it
+  explicitly so an image built against an older PengyR still introduces the
+  agent to its skills on the first chat.
+
+### Added: Gamepads — the Desktop can now see its controllers and test them
+- **A controller was invisible until a game opened it.** COSMIC Settings
+  (epoch 1.9) has no page for gamepads, joysticks or any controller: checking a
+  stick calibration, a dead button or a stuck trigger meant launching Steam and
+  finding a title with a pad setup screen. The kernel drivers, `steam-devices`
+  and GameMode were all in place since 26.10.x — US-DSK-4 accepts that
+  "controllers are correct" — and nothing showed them.
+- **`tools/pengyos-gamepads`** (*Gamepads*, MIT, libcosmic, host-built like
+  Disks, in `scripts/build-cosmic.sh`'s app list): every `/dev/input` device
+  with its kind, bus, `vendor:product` and capability summary, the game
+  controllers headlining the list, and a live panel of the selected one —
+  buttons light up, stick knobs follow, trigger/pedal/steering bars fill, the
+  D-pad points, each axis prints its raw value and the extremes seen since it
+  was selected, and every event is logged. A Rumble button sends a real
+  `FF_RUMBLE` effect. `--list` / `--json` answer with no window (sysfs only, so
+  over ssh too), `--selftest` animates a complete synthetic pad.
+- **The permission gap that made this necessary was real, and is fixed.**
+  udev gives every `/dev/input/event*` to group `input` at mode 0660; the image
+  defined that group only as a side effect of the greeter's supplementary
+  groups, so a desktop user could not read a controller at all (Steam reaches
+  its pads through `steam-devices`' `TAG+="uaccess"` ACLs, which is why Steam
+  never noticed). `input` is now an explicit row in `board/desktop/users.table`,
+  the installer adds the owner (it was already in `USER_GROUPS`), and
+  `merge-accounts` adds existing owners at the next boot.
+- **Rumble needed two things the image did not have**: `CONFIG_INPUT_FF_MEMSET`
+  (the kernel's force-feedback layer — with no FF driver built-in the option was
+  simply absent, so `EVIOCSFF` answered `ENOTTY`), and `joydev` loaded at boot
+  (`usr/lib/modules-load.d/pengyos-joydev.conf`) so `/dev/input/jsN` exists;
+  `90-pengyos-joystick.rules` hands the js node to `input` at 0660, because
+  systemd leaves it root:root at 0664 — readable, never writable.
+- **Measured:** 21 unit tests with no display and no `/dev` (the classification
+  of eleven device shapes — a mouse never reads as a joystick, a wheel is not
+  drawn as a gamepad; the sysfs capability-bitmask round trip and its word
+  order; the event decoder; the live state, axis normalisation over the device's
+  own `EVIOCGABS` range and the D-pad folded from both of its axes; the panel
+  layout; the modalias/bus parsing; the list and JSON formats). Live on
+  behoserver: 18 event nodes, no controller attached, the audio jacks classified
+  as Audio and the power buttons as Other, the headline line reading
+  `no game controllers`. A pad attached under QEMU (`virtio-input-host`) is the
+  next check; the panel is exercised with no hardware by `--selftest`.
+
 ### Added: The rest of the everyday file types get their default apps
 
 - **The archive fix was one instance of a class, so the whole overlay was

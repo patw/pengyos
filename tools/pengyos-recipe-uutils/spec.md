@@ -15,9 +15,13 @@ A repo with `package/uutils-coreutils/{Config.in,uutils-coreutils.mk,uutils-core
 
 ## Verification (tests are first-class)
 - version pinned (no HEAD).
-- hash present & 64 hex.
+- hash present & 64 hex (verified against the live tarball under `PENGYOS_IT=1`).
 - license declared.
-- install/symlink lines present.
+- install/symlink lines present; the build selects
+  `--no-default-features --features unix`.
+- utility list == the pinned `feat_os_unix` fixture (106 names), covering every
+  utility GNU coreutils put in Core.
+- the external tree's copy of the recipe is byte-identical to this one.
 
 **GitHub-ready contract** (assert with a `test_github_ready`):
 README.md, LICENSE (MIT, "Copyright (c) 2026 Pat Wendorf"), CHANGELOG.md,

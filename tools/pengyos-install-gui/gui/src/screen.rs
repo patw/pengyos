@@ -30,6 +30,8 @@ pub enum ScreenView {
     User(UserView),
     /// The optional network screen.
     Network(NetworkView),
+    /// The optional assistant-endpoint screen.
+    Pengy(PengyView),
     /// The read-only review screen.
     Summary(SummaryView),
     /// The terminal "installing" screen.
@@ -45,6 +47,7 @@ impl ScreenView {
             ScreenView::Layout(v) => &v.title,
             ScreenView::User(v) => &v.title,
             ScreenView::Network(v) => &v.title,
+            ScreenView::Pengy(v) => &v.title,
             ScreenView::Summary(v) => &v.title,
             ScreenView::Progress(v) => &v.title,
         }
@@ -58,6 +61,7 @@ impl ScreenView {
             ScreenView::Layout(v) => v.continue_enabled,
             ScreenView::User(v) => v.continue_enabled,
             ScreenView::Network(v) => v.continue_enabled,
+            ScreenView::Pengy(v) => v.continue_enabled,
             ScreenView::Summary(_) | ScreenView::Progress(_) => true,
         }
     }
@@ -70,6 +74,7 @@ impl ScreenView {
             ScreenView::Layout(v) => v.blocker.as_deref(),
             ScreenView::User(v) => v.blocker.as_deref(),
             ScreenView::Network(v) => v.blocker.as_deref(),
+            ScreenView::Pengy(v) => v.blocker.as_deref(),
             ScreenView::Summary(_) | ScreenView::Progress(_) => None,
         }
     }
@@ -87,6 +92,7 @@ pub fn view_of(model: &Model, step: Step) -> ScreenView {
         Step::Layout => ScreenView::Layout(LayoutView::of(model)),
         Step::User => ScreenView::User(UserView::of(model)),
         Step::Network => ScreenView::Network(NetworkView::of(model)),
+        Step::Pengy => ScreenView::Pengy(PengyView::of(model)),
         Step::Summary => ScreenView::Summary(SummaryView::of(model)),
         Step::Progress => ScreenView::Progress(ProgressView::of()),
     }
@@ -262,6 +268,52 @@ impl NetworkView {
             hint: "You may skip this step.".to_string(),
             continue_enabled: model.can_next(),
             blocker: None,
+        }
+    }
+}
+
+/// The optional assistant-endpoint screen.
+///
+/// Every field is optional: an empty answer is the "skip" answer, and Pengy
+/// then keeps the defaults the image ships (the local endpoint, no key, no
+/// model). The API key is carried as a length only, exactly like the account
+/// password, so the secret never reaches the view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PengyView {
+    /// Window-title text.
+    pub title: String,
+    /// The heading shown at the top of the body.
+    pub heading: String,
+    /// The configured base URL, or `None` if unset.
+    pub base_url: Option<String>,
+    /// The number of API-key characters entered (so the UI can mask it), or
+    /// `None` if unset. The plaintext key is never carried here.
+    pub api_key_len: Option<usize>,
+    /// The configured model name, or `None` if unset.
+    pub model: Option<String>,
+    /// A note that this step is optional.
+    pub hint: String,
+    /// Whether "Continue" is enabled.
+    pub continue_enabled: bool,
+    /// The blocker message when disabled (a half-typed endpoint).
+    pub blocker: Option<String>,
+}
+
+impl PengyView {
+    fn of(model: &Model) -> Self {
+        let blocker = model
+            .advance_error()
+            .map(|b| format!("{b}"))
+            .filter(|m| !m.is_empty());
+        PengyView {
+            title: "Pengy".to_string(),
+            heading: "Point Pengy at a model (optional)".to_string(),
+            base_url: model.pengy_base_url().map(|s| s.to_string()),
+            api_key_len: model.pengy_api_key().map(|s| s.len()),
+            model: model.pengy_model().map(|s| s.to_string()),
+            hint: "You may skip this step; Pengy then keeps its own defaults.".to_string(),
+            continue_enabled: model.can_next(),
+            blocker,
         }
     }
 }
@@ -464,6 +516,53 @@ mod tests {
     }
 
     #[test]
+    fn pengy_view_is_optional_and_masks_the_key() {
+        let m = walk_to(Step::Pengy);
+        let v = match view_of(&m, Step::Pengy) {
+            ScreenView::Pengy(v) => v,
+            _ => panic!("expected pengy view"),
+        };
+        assert_eq!(v.title, "Pengy");
+        // The scripted answer set carries no Pengy answers: the step is
+        // skippable, so Continue is enabled with no blocker.
+        assert_eq!(v.base_url, None);
+        assert_eq!(v.api_key_len, None);
+        assert!(v.continue_enabled);
+        assert_eq!(v.blocker, None);
+        assert!(v.hint.contains("skip"));
+    }
+
+    #[test]
+    fn pengy_view_reports_a_filled_endpoint() {
+        let mut m = walk_to(Step::Pengy);
+        m.set_pengy_base_url("https://api.openai.com/v1");
+        m.set_pengy_api_key("sk-supersecret");
+        m.set_pengy_model("gpt-4o");
+        let v = match view_of(&m, Step::Pengy) {
+            ScreenView::Pengy(v) => v,
+            _ => panic!("expected pengy view"),
+        };
+        assert_eq!(v.base_url.as_deref(), Some("https://api.openai.com/v1"));
+        assert_eq!(v.model.as_deref(), Some("gpt-4o"));
+        assert_eq!(v.api_key_len, Some(14));
+        assert!(v.continue_enabled);
+        // The plaintext key never reaches the view.
+        assert!(!format!("{v:?}").contains("sk-supersecret"));
+    }
+
+    #[test]
+    fn pengy_view_blocks_a_half_typed_endpoint() {
+        let mut m = walk_to(Step::Pengy);
+        m.set_pengy_base_url("10.0.23.6:8086/v1");
+        let v = match view_of(&m, Step::Pengy) {
+            ScreenView::Pengy(v) => v,
+            _ => panic!("expected pengy view"),
+        };
+        assert!(!v.continue_enabled);
+        assert!(v.blocker.expect("blocker").contains("http://"));
+    }
+
+    #[test]
     fn summary_view_includes_the_derived_toml() {
         let m = walk_to(Step::Summary);
         let v = match view_of(&m, Step::Summary) {
@@ -515,7 +614,7 @@ mod tests {
     fn blocker_is_some_exactly_when_continue_is_disabled() {
         // For the screens that carry a blocker (Welcome, Disk, User, Layout,
         // Network), `continue_enabled == false` iff a blocker is present.
-        for step in [Step::Welcome, Step::Disk, Step::User] {
+        for step in [Step::Welcome, Step::Disk, Step::User, Step::Pengy] {
             let mut m = Model::new();
             m.set_accepted_terms(true);
             m.set_selected_disk("/dev/sda");

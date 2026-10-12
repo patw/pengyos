@@ -18,6 +18,7 @@ from pengyos_install_tui.model import (
     Edition,
     Layout,
     NetworkMode,
+    PengyAnswer,
     Plan,
     StepKey,
     ValidationError,
@@ -25,18 +26,22 @@ from pengyos_install_tui.model import (
     validate_edition,
     validate_layout,
     validate_network,
+    validate_pengy,
     validate_target,
     validate_user,
 )
 
 # The canonical happy-path answer set (spec.md: target, edition, layout, user,
-# network, confirm). ``auto`` must reproduce this exact shape.
+# network, pengy, confirm). ``auto`` must reproduce this exact shape. The
+# canonical path *skips* Pengy — the endpoint step is optional, and a plan that
+# skips it carries no ``pengy`` key at all.
 HAPPY = {
     "target": "/dev/sdb",
     "edition": "core",
     "layout": "single-root",
     "user": "alice",
     "network": "dhcp",
+    "pengy": "",
 }
 
 
@@ -48,6 +53,7 @@ def _happy_wizard(probe=None) -> Wizard:
     w.answer(StepKey.LAYOUT, HAPPY["layout"])
     w.answer(StepKey.USER, HAPPY["user"])
     w.answer(StepKey.NETWORK, HAPPY["network"])
+    w.answer(StepKey.PENGY, HAPPY["pengy"])
     assert w.current_step == StepKey.CONFIRM
     return w.confirm()
 
@@ -64,9 +70,12 @@ def test_wizard_order_is_target_through_confirm():
         StepKey.LAYOUT,
         StepKey.USER,
         StepKey.NETWORK,
+        StepKey.PENGY,
         StepKey.CONFIRM,
     )
     assert model.WIZARD_ORDER[-1] == StepKey.CONFIRM
+    # The endpoint step is the one step a plan does not require.
+    assert StepKey.PENGY not in model.REQUIRED_STEPS
 
 
 def test_wizard_starts_on_target():
@@ -110,8 +119,26 @@ def test_happy_path_advances_through_every_step():
     w.answer(StepKey.USER, "alice")
     assert w.current_step == StepKey.NETWORK
     w.answer(StepKey.NETWORK, "dhcp")
-    assert w.current_step == StepKey.CONFIRM
+    assert w.current_step == StepKey.PENGY
     assert w.progress() == 5
+    w.answer(StepKey.PENGY, "")  # the optional step: skipped, and that is an answer
+    assert w.current_step == StepKey.CONFIRM
+    assert w.progress() == 6
+
+
+def test_pengy_api_key_is_not_echoed_by_the_validator():
+    value, message = validate_pengy({"base_url": "http://127.0.0.1:8080/v1",
+                                     "api_key": "sk-super secret"})
+    assert value is None and message is not None
+    assert "sk-super" not in message
+
+
+def test_pengy_empty_answer_is_valid():
+    """The whole step is optional: every empty shape means 'leave Pengy alone'."""
+    for raw in ("", "   ", None, {}):
+        value, message = validate_pengy(raw)
+        assert message is None, raw
+        assert value.configured is False
 
 
 def test_happy_path_produces_the_canonical_plan():
@@ -138,6 +165,7 @@ def test_done_flag_after_confirm():
     w.answer(StepKey.LAYOUT, "single-root")
     w.answer(StepKey.USER, "alice")
     w.answer(StepKey.NETWORK, "dhcp")
+    # confirm() needs no Pengy answer: the endpoint step is optional.
     w.confirm()
     assert w.done is True
 
@@ -150,6 +178,9 @@ def test_plan_as_lines_is_stable():
         "layout:   single-root",
         "user:     alice (uid 1000)",
         "network:  dhcp",
+        # The endpoint step always shows on the review, so the operator sees
+        # that Pengy was left unconfigured rather than wondering if it shipped.
+        "pengy:    not configured (Pengy keeps its defaults)",
     )
 
 
@@ -262,7 +293,7 @@ def test_back_retains_prior_answers():
     w.answer(StepKey.LAYOUT, "single-root")
     w.answer(StepKey.USER, "alice")
     w.answer(StepKey.NETWORK, "dhcp")
-    assert w.current_step == StepKey.CONFIRM
+    assert w.current_step == StepKey.PENGY
     w.back()
     assert w.back()
     # Earlier answers survive back-navigation.
@@ -272,8 +303,8 @@ def test_back_retains_prior_answers():
 
 def _finish(w: Wizard) -> Plan:
     """Answer any remaining steps then confirm (helper for re-answer tests)."""
-    order = (StepKey.LAYOUT, StepKey.USER, StepKey.NETWORK)
-    values = {"layout": "single-root", "user": "alice", "network": "dhcp"}
+    order = (StepKey.LAYOUT, StepKey.USER, StepKey.NETWORK, StepKey.PENGY)
+    values = {"layout": "single-root", "user": "alice", "network": "dhcp", "pengy": ""}
     for step in order:
         if not w.is_answered(step):
             w.answer(step, values[step])

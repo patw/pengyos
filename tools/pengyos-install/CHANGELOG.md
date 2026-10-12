@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The installer's Pengy page reaches the engine.** `ProvisionAnswers` carries
+  `pengy_base_url` / `pengy_api_key` / `pengy_model`, and `pengyos-install image`
+  takes `--pengy-base-url`, `--pengy-api-key` (or `--pengy-api-key-stdin`, the
+  second stdin line after the password), and `--pengy-model`. When a base URL is
+  given, provisioning writes `~/.config/pengy/settings.json` for the created
+  user — `base_url`, `api_key`, `model` and the system message that points at
+  `~/skills/skill_index.md` — mode 0600, owned by the user, written after
+  `useradd` so the home exists. Only those four keys are written: Pengy merges
+  its defaults over the rest, so the installer never pins a setting nobody chose.
+  **Every one is optional** — with no base URL nothing is written and Pengy
+  keeps the defaults the image ships (local endpoint, no key, no model). A
+  non-http base URL, a model with a space, or a key with a space is a reported
+  `ImageInstallError`, not a crash.
 - **`gamemode` in `USER_GROUPS`.** GameMode's polkit rule grants its CPU-governor
   and GPU-clock helpers only to that group (allow_active=no otherwise), so GameMode
   did nothing for the desktop user. `tests/test_owner_groups.py` keeps

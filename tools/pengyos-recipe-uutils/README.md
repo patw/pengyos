@@ -19,8 +19,18 @@ package/uutils-coreutils/
 ```
 
 The recipe pins an exact upstream version (never `HEAD`), declares the MIT
-license, builds the multicall `coreutils` binary, and installs the standard set
-of utility symlinks (`ls`, `cat`, `mkdir`, …) alongside it.
+license, builds the multicall `coreutils` binary with
+`--no-default-features --features unix` (upstream's `feat_os_unix`: the 78
+common-core utilities **plus** the unix-only ones GNU coreutils ships on Linux -
+stat, id, sync, uname, whoami, install, stty, timeout, hostname, groups, nice,
+nohup, chroot, chgrp, chmod, chown, nproc, mkfifo, mknod, logname, hostid, users,
+who, uptime, pinky, stdbuf, kill, arch), and installs the 106 utility symlinks
+(`ls`, `cat`, `mkdir`, …) alongside it. Building the *default* feature set would
+silently drop `stat`, `id`, `sync`, `uname`, `whoami`, `install`, `stty` and
+`timeout` from the image.
+
+The copy the build uses lives in `buildroot-external/package/uutils-coreutils/`;
+this tool owns it, and a test fails if the two copies drift.
 
 ## Development
 

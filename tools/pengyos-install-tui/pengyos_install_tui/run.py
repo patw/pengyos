@@ -24,7 +24,9 @@ does. :func:`run` only *applies* answers and *renders* lines.
 
 Public surface
 --------------
-* :data:`REPLAY_ORDER` — the five answerable steps ``run`` applies.
+* :data:`REPLAY_ORDER` — the answerable steps ``run`` applies (``pengy``
+  included, and optional); :data:`REQUIRED_ANSWERS` — the ones an answer set
+  must carry.
 * :data:`BACK_COMMAND` — the stdin token that triggers back-navigation.
 * :data:`STEP_TITLES` / :data:`STEP_HINTS` — the per-step rendering data.
 * :func:`render_step` — the human text for one step (for rendering/tests).
@@ -41,18 +43,23 @@ import sys
 from typing import Callable, Optional, TextIO, Tuple
 
 from pengyos_install_tui.auto import ConfigError
+from pengyos_install_tui.model import StepKey
 from pengyos_install_tui.model import (
     Edition,
     Layout,
     NetworkMode,
+    PengyAnswer,
     Plan,
     StepState,
     ValidationError,
+    WIZARD_ORDER,
     Wizard,
 )
 
 __all__ = [
     "REPLAY_ORDER",
+    "REQUIRED_ANSWERS",
+    "SKIP_COMMAND",
     "BACK_COMMAND",
     "STEP_TITLES",
     "STEP_HINTS",
@@ -65,9 +72,16 @@ __all__ = [
     "InteractiveRunner",
 ]
 
-#: The five answerable steps ``run`` applies, in wizard order (excludes
-#: ``confirm`` — there is nothing to prompt for the review step).
-REPLAY_ORDER: Tuple[str, ...] = ("target", "edition", "layout", "user", "network")
+#: The answerable steps ``run`` applies, in wizard order (excludes ``confirm`` —
+#: there is nothing to prompt for the review step).
+REPLAY_ORDER: Tuple[str, ...] = ("target", "edition", "layout", "user", "network", "pengy")
+
+#: The steps an answer set must carry. ``pengy`` is absent: the assistant's
+#: endpoint is always skippable, so an answer set without it is complete.
+REQUIRED_ANSWERS: Tuple[str, ...] = ("target", "edition", "layout", "user", "network")
+
+#: The stdin token that skips the optional step at its prompt.
+SKIP_COMMAND: str = "skip"
 
 #: The stdin token that triggers back-navigation at any data-step prompt. Kept
 #: as a named constant so the interactive path and tests agree on it.
@@ -80,6 +94,7 @@ STEP_TITLES: dict[str, str] = {
     "layout": "Disk layout",
     "user": "Initial admin user",
     "network": "Network",
+    "pengy": "Pengy (the assistant)",
     "confirm": "Confirm",
 }
 
@@ -91,6 +106,7 @@ STEP_HINTS: dict[str, str] = {
     "layout": "Choose a layout (single-root, ab-split)",
     "user": "Enter the initial admin username",
     "network": "Choose a network mode (dhcp, static) or a mapping",
+    "pengy": "Enter the assistant's base URL, or 'skip' to leave Pengy unconfigured",
     "confirm": "Type 'yes' to install with the choices above",
 }
 
@@ -132,7 +148,7 @@ def render_plan(plan: Plan) -> str:
     body = "\n".join(f"  {line}" for line in plan.as_lines())
     return "\n".join(
         [
-            "Step 6/6: Confirm",
+            f"Step {len(WIZARD_ORDER)}/{len(WIZARD_ORDER)}: Confirm",
             body,
             "  Type 'yes' to install with the choices above",
         ]
@@ -153,6 +169,7 @@ def preview_plan(wizard: Wizard) -> Plan:
         layout=str(wizard.get_answer("layout")),
         user=wizard.get_answer("user"),
         network=wizard.get_answer("network"),
+        pengy=wizard.get_answer("pengy") if wizard.is_answered("pengy") else PengyAnswer(),
     )
 
 
@@ -173,7 +190,11 @@ def run_replay(
     wizard = Wizard(probe=probe)  # type: ignore[arg-type]
     for step in REPLAY_ORDER:
         if step not in answers:
-            raise ConfigError(f"missing required field: '{step}'")
+            if step in REQUIRED_ANSWERS:
+                raise ConfigError(f"missing required field: '{step}'")
+            # The optional step: an absent answer means "skipped".
+            wizard.answer(step, "")
+            continue
         wizard.answer(step, answers[step])
     return wizard.confirm()
 
@@ -271,6 +292,10 @@ class InteractiveRunner:
                 return None
             if answer.strip().lower() == BACK_COMMAND:
                 self._wizard.back()
+                continue
+            if key == StepKey.PENGY and answer.strip().lower() in ("", SKIP_COMMAND):
+                # The one optional step: skipping it is an answer, not a re-prompt.
+                self._wizard.answer(key, "")
                 continue
             if answer.strip() == "":
                 continue  # ignore blank input, re-prompt

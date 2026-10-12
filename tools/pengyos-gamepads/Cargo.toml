@@ -1,0 +1,41 @@
+# Gamepads (pengyos-gamepads): list the game controllers the system sees and
+# test their buttons, axes, hats and triggers live.
+#
+# The decision logic (lib.rs, layout.rs) is std only and fully `cargo test`-able
+# with no display and no /dev access. The evdev scan, ioctls and event reader are
+# behind `evdev` (libc) and the window behind `cosmic` (libcosmic + evdev), both
+# off by default — the same shape as pengyos-disks and pengyos-updates.
+[package]
+name = "pengyos-gamepads"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+description = "Gamepads: see the attached controllers on the COSMIC desktop and test their controls."
+
+[features]
+default = []
+evdev = ["dep:libc"]
+cosmic = ["evdev", "dep:libcosmic"]
+
+[lib]
+name = "pengyos_gamepads"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-gamepads"
+path = "src/main.rs"
+
+[dependencies]
+# libc is already in the shared libcosmic build graph (the pinned rev depends on
+# it), so the `evdev` feature adds no new crate to the build host's cache.
+libc = { version = "0.2", optional = true }
+
+# Same pinned libcosmic and feature set as pengyos-install-gui, pengyos-updates
+# and pengyos-disks, so all four build from one cache
+# (CARGO_TARGET_DIR=~/cosmic-build/install-gui).
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
+features = ["about", "single-instance", "markdown", "qr_code", "wgpu", "xdg-portal"]

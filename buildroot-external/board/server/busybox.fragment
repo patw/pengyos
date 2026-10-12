@@ -1,0 +1,39 @@
+# ============================================================================
+# PengyOS Server - BusyBox configuration fragment
+# ----------------------------------------------------------------------------
+# Stacked on board/core/busybox.fragment (layers/server.config lists both:
+# BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES is a single list, so a later layer
+# replaces it rather than appending - see configs/layers/README.md).
+#
+# The Server toolset replaces the last BusyBox applets an agent would meet on a
+# remote node: the network inspection tools and the cut-down PCI/USB/ATA
+# readers. Each one is compiled out here and provided by the package named in
+# layers/server.config.
+# ============================================================================
+
+# --- net-tools / iputils / traceroute own the network tools -----------------
+# BusyBox's netstat has no -tulpn service column, its ping has no -W, its
+# traceroute has no -n -m -q, and `ifconfig`/`route` are there at all only
+# because iproute2's `ip` is the real interface.
+# CONFIG_NETSTAT is not set
+# CONFIG_IFCONFIG is not set
+# CONFIG_IFUP is not set
+# CONFIG_IFDOWN is not set
+# CONFIG_ROUTE is not set
+# CONFIG_ARP is not set
+# CONFIG_ARPING is not set
+# CONFIG_PING is not set
+# CONFIG_TRACEROUTE is not set
+# CONFIG_IPADDR is not set
+# CONFIG_IPLINK is not set
+# CONFIG_IPROUTE is not set
+# CONFIG_IPRULE is not set
+# CONFIG_IPNEIGH is not set
+# CONFIG_IPTUNNEL is not set
+
+# --- pciutils / usbutils / hdparm own the hardware readers ------------------
+# BusyBox's lspci/lsusb print numbers, not names (no pci.ids/usb.ids), and its
+# hdparm has no -I (the drive-identity dump an agent uses to size a disk).
+# CONFIG_LSPCI is not set
+# CONFIG_LSUSB is not set
+# CONFIG_HDPARM is not set

@@ -187,13 +187,15 @@ def validate_go_package(
             f"{var}_VERSION is {mk_version!r}, expected {version!r}"
         )
     mk_site = _mk_assignment(mk_text, f"{var}_SITE") or ""
-    # SITE is written via the `github` helper: $(call github, owner, repo, tag),
-    # which expands to https://github.com/<owner>/<repo>/archive/<tag>.
-    if f"github.com/{site_owner}/{site_repo}" not in mk_site and (
-        f"$(call github, {site_owner}, {site_repo}," not in mk_site
-    ):
+    # SITE is written via the `github` helper, and Buildroot expands
+    # `$(call github,owner,repo,tag)` VERBATIM — a space after a comma lands in
+    # the download URL and the fetch 404s (found 2026-10-12 wiring fzf: the
+    # spaced form downloaded `https://github.com/%20%20%20fzf-0.74.4-go2...`).
+    # So the no-space form is the only accepted spelling.
+    if f"$(call github,{site_owner},{site_repo}," not in mk_site:
         problems.append(
-            f"{var}_SITE must point at github.com/{site_owner}/{site_repo}"
+            f"{var}_SITE must be $(call github,{site_owner},{site_repo},…) "
+            f"(no spaces: Buildroot puts them in the URL), got {mk_site!r}"
         )
     mk_gomod = _mk_assignment(mk_text, f"{var}_GOMOD")
     if mk_gomod != go_mod:
@@ -286,11 +288,12 @@ def validate_cargo_package(
             f"{var}_VERSION is {mk_version!r}, expected {version!r}"
         )
     mk_site = _mk_assignment(mk_text, f"{var}_SITE") or ""
-    if f"github.com/{site_owner}/{site_repo}" not in mk_site and (
-        f"$(call github, {site_owner}, {site_repo}," not in mk_site
-    ):
+    # Same rule as the Go validator: the `github` helper's arguments must carry
+    # no spaces — Buildroot expands them verbatim into the download URL.
+    if f"$(call github,{site_owner},{site_repo}," not in mk_site:
         problems.append(
-            f"{var}_SITE must point at github.com/{site_owner}/{site_repo}"
+            f"{var}_SITE must be $(call github,{site_owner},{site_repo},…) "
+            f"(no spaces: Buildroot puts them in the URL), got {mk_site!r}"
         )
     if not mk_text.strip():
         problems.append(f"{var}.mk is empty")
@@ -376,7 +379,7 @@ def _write(pkg_dir: Path, config_in: str, mk: str, hashf: str) -> None:
 
 _DEFAULT_MK = (
     "FZF_VERSION = 0.74.4\n"
-    "FZF_SITE = $(call github, junegunn, fzf, v$(FZF_VERSION))\n"
+    "FZF_SITE = $(call github,junegunn,fzf,v$(FZF_VERSION))\n"
     "FZF_GOMOD = github.com/junegunn/fzf\n"
     "FZF_LICENSE = MIT\n"
     "FZF_LICENSE_FILES = LICENSE\n\n"
@@ -436,6 +439,22 @@ def test_flags_missing_golang_package(tmp_path: Path):
     assert any("golang-package" in p for p in problems), problems
 
 
+def test_flags_spaced_github_call(tmp_path: Path):
+    # Buildroot expands `$(call github, owner, repo, tag)` verbatim: the spaces
+    # land in the download URL and the fetch 404s. The validator must reject the
+    # spaced spelling (the exact bug found wiring fzf on 2026-10-12).
+    pkg = tmp_path / "fzf"
+    spaced_mk = _DEFAULT_MK.replace(
+        "$(call github,junegunn,fzf,", "$(call github, junegunn, fzf, "
+    )
+    _write(pkg, _OK_CONFIG_IN, spaced_mk, _DEFAULT_HASH)
+    problems = validate_go_package(
+        pkg, "BR2_PACKAGE_FZF", FZF_VERSION, "github.com/junegunn/fzf",
+        "junegunn", "fzf", FZF_GO2, FZF_SHA256, FZF_SHA512,
+    )
+    assert any("no spaces" in p for p in problems), problems
+
+
 def test_flags_wrong_hash_value(tmp_path: Path):
     pkg = tmp_path / "fzf"
     bad_hash = _DEFAULT_HASH.replace(FZF_SHA256, "0" * 64)
@@ -480,20 +499,21 @@ _OK_CONFIG_IN = (
 #
 # starship is a Rust program (Cargo.toml + Cargo.lock + build.rs, edition 2024),
 # so it is a Buildroot `cargo-package`, NOT a `golang-package` like fzf. The
-# digest below is of the *raw* github archive tarball that `$(call github, ...)`
-# downloads (unlike a Go package, whose digest is of the vendored `go2` repack).
-#
+# digest below is of the `-cargo6` **repack** Buildroot 2026.08 downloads (the
+# cargo post-process vendoring repacks the github archive; BR_FMT_VERSION_cargo
+# = -cargo6), verified with `make starship-source` on 2026-10-12 — the raw
+# archive digest is NOT what the hash file must carry.
 
 STARSHIP = PACKAGE_DIR / "starship"
 STARSHIP_VERSION = "1.26.0"
-STARSHIP_TARBALL = "starship-1.26.0.tar.gz"
-# Computed from the raw github archive
-# https://github.com/starship/starship/archive/refs/tags/v1.26.0.tar.gz
-# (verified: `sha256sum`/`sha512sum` of the downloaded tarball).
-STARSHIP_SHA256 = "8c95e8a6c596b29ac192104eae00dd991e8c8fd66083fd2b34d6b223a5803a59"
+STARSHIP_TARBALL = "starship-1.26.0-cargo6.tar.gz"
+# Computed from the Buildroot 2026.08 cargo6 repack (`make starship-source`
+# vendoring of the github archive v1.26.0), verified 2026-10-12 with
+# `make starship-source` (sha256sum/sha512sum of the repacked tarball).
+STARSHIP_SHA256 = "c2ff3e7501b73b00f07850cef007bdb538b8a093d87a03c39589ba816c878ed6"
 STARSHIP_SHA512 = (
-    "88612fba18e69a0f60505240d45ce0137ce65b8232bc32fb8d6c113401b3dba35"
-    "ea89dd8dc09555303d3b8dabe068395239c861e91e4f22880d29ca41c6cc280"
+    "2f2551aae76135d8218cb557bc613c5f4240a22db1f40497bfd59b71a0db315d"
+    "7233c14f6028d1807c24819dde6df9e8084700f04cfa2013c7affb7730c5a276"
 )
 
 
@@ -537,7 +557,7 @@ def _write_cargo(pkg_dir: Path, config_in: str, mk: str, hashf: str) -> None:
 
 _DEFAULT_CARGO_MK = (
     "STARSHIP_VERSION = 1.26.0\n"
-    "STARSHIP_SITE = $(call github, starship, starship, v$(STARSHIP_VERSION))\n"
+    "STARSHIP_SITE = $(call github,starship,starship,v$(STARSHIP_VERSION))\n"
     "STARSHIP_LICENSE = ISC\n"
     "STARSHIP_LICENSE_FILES = LICENSE\n\n"
     "$(eval $(cargo-package))\n"
