@@ -733,6 +733,28 @@ if [ -f "${TARGET_DIR}/etc/cups/cups-files.conf" ]; then
     echo "post-build: CUPS admin group: wheel"
 fi
 
+# --- Icons COSMIC asks the theme for -------------------------------------------
+# A COSMIC button whose icon is missing from every theme renders as a blank
+# square, with no error anywhere. COSMIC's theme inherits Pop for these (they
+# exist only in Pop's symbolic set, installed by pop-cursor-theme); until
+# 26.10.25 only Pop's cursors were installed, and the Store's release-notes
+# button, Files' grid/list toggle, the VPN icon, Player's repeat/subtitle
+# buttons, About pages' links and two Settings page icons were all blank. The
+# list is every name the pinned COSMIC sources request by literal that no
+# app embeds (audited 2026-10-12); fail the build if one goes missing again.
+for icon in help-info-symbolic link-symbolic view-grid-symbolic view-list-symbolic \
+            network-vpn-symbolic media-playlist-no-repeat-symbolic \
+            media-playlist-repeat-song-symbolic media-view-subtitles-symbolic \
+            preferences-desktop-display-symbolic preferences-system-time-symbolic \
+            touchpad-disabled-symbolic; do
+    if ! find "${TARGET_DIR}/usr/share/icons/Cosmic" "${TARGET_DIR}/usr/share/icons/Pop" \
+              "${TARGET_DIR}/usr/share/icons/hicolor" -name "${icon}.svg" 2>/dev/null | grep -q .; then
+        echo "post-build: ERROR: icon ${icon} is in no installed theme (COSMIC draws a blank button)" >&2
+        exit 1
+    fi
+done
+echo "post-build: COSMIC's theme icons are all present"
+
 # --- The MIME index: which installed app opens which file type ------------------
 # (update-desktop-database -> /usr/share/applications/mimeinfo.cache.) Without
 # it, "Open with" lists stayed empty ("No registered applications"); the

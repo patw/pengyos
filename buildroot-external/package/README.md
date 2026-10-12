@@ -32,7 +32,7 @@ in `../configs/layers/*.config`.
 | `libfyaml/` | YAML 1.2 parser | Not a stock Buildroot package; AppStream reads YAML with it. |
 | `desktop-file-utils-target/` | `update-desktop-database` on the target | Buildroot builds desktop-file-utils for the host only; Flatpak's install trigger needs it. |
 | `oo7/` | `oo7-daemon`, `oo7-portal` | The Secret Service (the keyring apps keep passwords in) and its Flatpak portal; replaces gnome-keyring. D-Bus-activated through `oo7-session`, which unseals the keyring password with `systemd-creds` (the desktop logs in without a password). |
-| `pop-cursor-theme/` | the Pop mouse cursors | COSMIC's cursors, from Pop!_OS's icon theme (cursors only, duplicates as symlinks); the system default cursor theme. |
+| `pop-cursor-theme/` | the Pop mouse cursors and symbolic icons | COSMIC's cursors, from Pop!_OS's icon theme (duplicates as symlinks), the system default cursor theme; and Pop's symbolic icons (`scalable/`, 2.3 MB), which COSMIC's icon theme inherits for icons it does not draw. Pop's fixed-size PNGs are not installed. |
 | `zram-generator/` | swap on zram | systemd's generator (Rust), as Fedora/Pop ship it; our default config (zstd, min(RAM, 8 GiB)) and Pop's VM tuning. Core layer: every edition. |
 | `sof-firmware/` | Intel SOF audio firmware | DSP firmware + topologies for Intel laptops (digital mics, SoundWire) — the files upstream's `install.sh` copies. |
 | `steam-devices/` | Valve's udev rules | Game controllers, VR headsets and `/dev/uinput` for the logged-in user; Steam (a Flatpak) can't install them. |

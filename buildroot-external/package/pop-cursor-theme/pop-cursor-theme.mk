@@ -13,8 +13,14 @@ POP_CURSOR_THEME_LICENSE_FILES = COPYING LICENSE
 # Pop/cursors holds each cursor under every name it answers to (left_ptr,
 # default, arrow, the hash names Qt/GTK ask for) as full copies: 41 MB for 58
 # distinct images. Install each image once and the other names as symlinks
-# (12 MB); skip the Windows .ani/.cur files. index.theme names the theme
-# without Pop's icon directories, which are not installed.
+# (12 MB); skip the Windows .ani/.cur files.
+#
+# Pop/scalable is installed too: 584 symbolic SVGs (+ 18 links), 2.3 MB.
+# COSMIC's icon theme inherits Pop and relies on it for icons it does not draw
+# (help-info-symbolic, view-grid/list-symbolic, network-vpn-symbolic,
+# media-playlist-*-symbolic, link-symbolic, …); without them those buttons
+# rendered blank (the Store's release-notes button on behoweather, 26.10.25).
+# Pop's fixed-size PNG folders (68 MB) are not needed by COSMIC and stay out.
 define POP_CURSOR_THEME_INSTALL_TARGET_CMDS
 	rm -rf $(TARGET_DIR)/usr/share/icons/Pop/cursors
 	mkdir -p $(TARGET_DIR)/usr/share/icons/Pop/cursors
@@ -31,6 +37,8 @@ define POP_CURSOR_THEME_INSTALL_TARGET_CMDS
 		fi; \
 	done
 	rm -f $(@D)/.cursor-sums
+	rm -rf $(TARGET_DIR)/usr/share/icons/Pop/scalable
+	cp -a $(@D)/Pop/scalable $(TARGET_DIR)/usr/share/icons/Pop/scalable
 	$(INSTALL) -D -m 0644 $(POP_CURSOR_THEME_PKGDIR)/Pop-index.theme \
 		$(TARGET_DIR)/usr/share/icons/Pop/index.theme
 	$(INSTALL) -D -m 0644 $(POP_CURSOR_THEME_PKGDIR)/default-index.theme \

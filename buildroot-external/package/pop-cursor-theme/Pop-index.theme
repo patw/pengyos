@@ -1,7 +1,74 @@
-# Pop's cursors only (pop-cursor-theme); Pop's icons are not installed.
-# COSMIC's icon theme names Pop as its parent, so the theme must exist.
+# Pop's cursors and its symbolic icons (pop-cursor-theme); Pop's fixed-size
+# PNG icons (68 MB) are not installed. COSMIC's icon theme names Pop as its
+# parent and leaves icons to it that it does not draw itself (the Store's
+# release-notes button, Files' view toggle, the VPN icon, Player's repeat and
+# subtitle buttons, …): with no Pop icons those buttons were blank.
+# Upstream Pop also inherits Adwaita, which PengyOS does not ship.
 [Icon Theme]
 Name=Pop
-Comment=Pop cursors
+Comment=Pop cursors and symbolic icons
 Inherits=hicolor
-Directories=
+Directories=scalable/actions,scalable/apps,scalable/categories,scalable/devices,scalable/emblems,scalable/emotes,scalable/mimetypes,scalable/places,scalable/status
+
+[scalable/actions]
+Context=Actions
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable
+
+[scalable/apps]
+Context=Applications
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable
+
+[scalable/categories]
+Context=Categories
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable
+
+[scalable/devices]
+Context=Devices
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable
+
+[scalable/emblems]
+Context=Emblems
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable
+
+[scalable/emotes]
+Context=Emotes
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable
+
+[scalable/mimetypes]
+Context=MimeTypes
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable
+
+[scalable/places]
+Context=Places
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable
+
+[scalable/status]
+Context=Status
+Size=16
+MinSize=16
+MaxSize=256
+Type=Scalable

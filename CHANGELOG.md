@@ -17,6 +17,29 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: blank buttons across COSMIC — the icons it leaves to the Pop theme were never installed (found on behoweather, 26.10.25)
+- **The COSMIC Store's Updates page showed an empty square next to every
+  Update button** (the release-notes button, `help-info-symbolic`). COSMIC's
+  icon theme draws most icons itself and inherits **Pop** for the rest; the
+  image installed only Pop's cursors (`pop-cursor-theme`), with a Pop
+  `index.theme` listing no icon directories, so every icon COSMIC expects from
+  Pop was missing and libcosmic drew nothing.
+- **An audit of every icon name the pinned COSMIC sources request** (literals
+  across lines, `match` arms, formatted names; icons the apps embed through
+  their `icon_cache` excluded) found 11 in use and in no installed theme, all
+  in Pop: the Store button above, `link-symbolic` (every app's About page),
+  Files' grid/list toggle, the VPN icon (network applet and Settings), Player's
+  repeat-mode and subtitle buttons, the Displays and Date & Time page icons in
+  Settings, and the "touchpad disabled" OSD. The same audit found nothing
+  missing in the PengyOS apps, launcher icons (besides two GeoClue demo
+  launchers, also fixed by Pop), MIME defaults, D-Bus services, unit
+  `Exec` paths or event sounds.
+- `pop-cursor-theme` now also installs Pop's `scalable/` set (584 symbolic SVGs,
+  2.3 MB; not its 68 MB of fixed-size PNGs) and lists it in Pop's
+  `index.theme`. COSMIC's own icons still win wherever both have one. The
+  Desktop post-build fails if any of the 11 is in no theme again
+  (`scripts/tests/test_cosmic_icon_theme.py` pins the recipe and the check).
+
 ### Fixed: what the review of the 2026-10-12 batch found before it shipped
 
 - **The comfort shell broke the commands it aliased:** `grep`/`fg` ran a
