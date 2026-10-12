@@ -22,6 +22,7 @@ git apply <repo>/buildroot-external/board/desktop/cosmic-patches/cosmic-notifica
 | `cosmic-notifications` | `0002-app-clicking-a-notification-with-no-actions-opens-its-app.patch` | A notification without actions was only dismissed on click; now its app (desktop-entry hint) is launched with the activation token, as GNOME Shell does. Single-instance apps come to the front. |
 | `cosmic-applets` | `0001-battery-no-battery-icon-on-machines-without-a-system-battery.patch` | A desktop with a wireless mouse/keyboard showed a 0% battery icon: the applet took later UPower updates after "no battery". Backport of cosmic-settings a366fc7 (epoch-1.9). |
 | `cosmic-store` | `0001-flatpak-refresh-appstream-by-the-remote-s-name.patch` | The hourly appstream refresh named the system remote by its display id ("flathub (system)"), so a system-wide Flathub's catalogue never refreshed. Unfixed upstream as of 2026-10-11. |
+| `cosmic-files` | `0001-declare-the-archive-mime-types-cosmic-files-opens.patch` | cosmic-files extracts zip/tar/gzip/bzip2/xz itself (`src/archive.rs`) but its `.desktop` declared only `MimeType=inode/directory;`, so it never appeared in *Open with* for an archive and `mimeinfo.cache` had no archive handler at all. Declares the nine types its `SUPPORTED_ARCHIVE_TYPES` covers. |
 
 When the COSMIC recipes move into `package/`, these become that package's
 patches.

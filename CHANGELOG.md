@@ -17,6 +17,43 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: Archives open — zip / tar / gzip / bzip2 / xz now have a default app
+
+- **A downloaded `.zip`, `.tar.gz`, `.tar.bz2` or `.tar.xz` had nothing to open
+  it.** Opening one from a browser's download row, from `open foo.zip`, or from
+  any app outside COSMIC Files warned that no application handles that file type
+  (`xdg-open`: "no method available for opening"). Two independent gaps, both
+  measured on behoweather (26.10.24): the system `mimeapps.list` had **no
+  archive rows at all**, and `mimeinfo.cache` had **no archive handler** —
+  COSMIC Files' `.desktop` declared only `MimeType=inode/directory;`.
+- **The capability was already in the image; only the wiring was missing.**
+  COSMIC Files extracts zip, tar, gzip, bzip2 and xz itself (`src/archive.rs`,
+  `SUPPORTED_ARCHIVE_TYPES`; `bzip2` and `lzma-rust2` are default features, so
+  the shipped binary has them), and a double-click *inside* COSMIC Files already
+  routes a supported archive to *Extract Here / Extract To* — it never asks
+  xdg-open. So the fix is registration, not a new app:
+  `cosmic-patches/cosmic-files/0001-declare-the-archive-mime-types-cosmic-files-opens.patch`
+  declares the nine types it supports (so *Open with* lists it and
+  `update-desktop-database` indexes it), and the overlay's `mimeapps.list` makes
+  it the system default for them. Verified with a user-level `mimeapps.list`:
+  `xdg-mime query default application/zip` (and tar, x-compressed-tar, bzip2,
+  xz) resolves to `com.system76.CosmicFiles.desktop`.
+- **Not covered, deliberately:** `.7z` and `.rar` have no handler — cosmic-files
+  does not read them and the image ships no `p7zip`/`unrar`. A GUI that *browses
+  into* an archive, creates archives of its own, and covers 7z/rar is File Roller
+  (`org.gnome.FileRoller`), which is already the human-ratified `archive` entry
+  in `tools/pengyos-desktop-curation/curated.toml` — see the note below.
+- **The curated default-app set is not wired into any build.**
+  `pengyos-desktop-curation` emits a `mimeapps.list` from `mime-integration.toml`
+  (whose `archive` entry is File Roller with zip/gzip/tar/bzip2), but nothing in
+  `buildroot-external/` consumes it, no Flatpak is installed at first boot
+  (`pengyos-flatpak-setup.sh` only adds the Flathub remote + appstream), and the
+  set's GNOME apps (Files, Text Editor, Evince, File Roller) are not the apps the
+  Desktop image ships (COSMIC Files/Edit/Viewer/Player). The overlay's
+  `mimeapps.list` is hand-maintained, which is why it had image/text/video rows
+  and no archive rows. Ratifying the curated set against the shipped app set is
+  an operator decision (spec Principle 8), not an agent one.
+
 ### Added: Disks — format USB sticks and memory cards, and write disk images to them
 
 - **Nothing graphical could format a drive.** The Desktop had UDisks2,

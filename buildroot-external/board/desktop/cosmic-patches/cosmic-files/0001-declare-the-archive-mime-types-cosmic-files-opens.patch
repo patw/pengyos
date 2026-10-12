@@ -1,0 +1,10 @@
+diff --git a/res/com.system76.CosmicFiles.desktop b/res/com.system76.CosmicFiles.desktop
+index 7f6e076..98c86a8 100644
+--- a/res/com.system76.CosmicFiles.desktop
++++ b/res/com.system76.CosmicFiles.desktop
+@@ -8,4 +8,4 @@ StartupNotify=true
+ Icon=com.system76.CosmicFiles
+ Categories=COSMIC;Utility;FileManager;
+ Keywords=Folder;Manager;
+-MimeType=inode/directory;
++MimeType=inode/directory;application/zip;application/gzip;application/x-tar;application/x-compressed-tar;application/x-bzip;application/x-bzip-compressed-tar;application/x-bzip2;application/x-xz;application/x-xz-compressed-tar;

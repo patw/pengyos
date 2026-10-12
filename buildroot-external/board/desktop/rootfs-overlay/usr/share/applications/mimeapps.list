@@ -56,3 +56,19 @@ audio/mp4=com.system76.CosmicPlayer.desktop
 audio/aac=com.system76.CosmicPlayer.desktop
 audio/opus=com.system76.CosmicPlayer.desktop
 audio/webm=com.system76.CosmicPlayer.desktop
+# Archives: COSMIC Files extracts these itself (src/archive.rs — zip, tar, gzip,
+# bzip2 and xz, with the bzip2 + lzma-rust2 default features), so it is the
+# default for them. Without these rows an archive opened from *outside* COSMIC
+# Files (a browser's download row, `open foo.zip`, another app) had no handler
+# and xdg-open answered "no method available for opening" — the "no app for this
+# file type" warning. Inside COSMIC Files a double-click already routed to
+# Extract Here/Extract To; these rows make the same app the system default.
+application/zip=com.system76.CosmicFiles.desktop
+application/gzip=com.system76.CosmicFiles.desktop
+application/x-tar=com.system76.CosmicFiles.desktop
+application/x-compressed-tar=com.system76.CosmicFiles.desktop
+application/x-bzip=com.system76.CosmicFiles.desktop
+application/x-bzip-compressed-tar=com.system76.CosmicFiles.desktop
+application/x-bzip2=com.system76.CosmicFiles.desktop
+application/x-xz=com.system76.CosmicFiles.desktop
+application/x-xz-compressed-tar=com.system76.CosmicFiles.desktop
