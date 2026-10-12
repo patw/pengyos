@@ -127,13 +127,25 @@ else
     echo "post-build: ${UPDATES_GUI} not built — no update app or notifications"
 fi
 
+# --- Disks (format / write images to / eject removable drives) ---------------
+# tools/pengyos-disks, host-built the same way. It only talks to UDisks2 (in the
+# desktop layer); the .desktop file is in the overlay.
+DISKS_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-disks"
+if [ -x "${DISKS_GUI}" ]; then
+    install -Dm0755 "${DISKS_GUI}" "${TARGET_DIR}/usr/bin/pengyos-disks"
+    echo "post-build: installed pengyos-disks"
+else
+    echo "post-build: ${DISKS_GUI} not built — no Disks app (formatting needs a terminal)"
+fi
+
 # --- Strip the host-built binaries ---------------------------------------------
 # Buildroot strips target binaries before post-build runs, so everything copied in
 # above (COSMIC, pop-launcher, the installer GUI) arrived with its symbol tables.
 STRIP_BIN="$(ls "${HOST_DIR}"/bin/*-buildroot-linux-gnu-strip 2>/dev/null | head -1)"
 if [ -n "${STRIP_BIN}" ]; then
     for f in "${TARGET_DIR}"/usr/bin/cosmic-* "${TARGET_DIR}"/usr/bin/pop-launcher \
-             "${TARGET_DIR}"/usr/bin/pengyos-install-gui "${TARGET_DIR}"/usr/bin/pengyos-updates; do
+             "${TARGET_DIR}"/usr/bin/pengyos-install-gui "${TARGET_DIR}"/usr/bin/pengyos-updates \
+             "${TARGET_DIR}"/usr/bin/pengyos-disks; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
     echo "post-build: stripped host-built binaries"

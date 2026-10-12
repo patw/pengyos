@@ -69,6 +69,7 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-desktop-drivers`](pengyos-desktop-drivers/) | The generic (no vendor-acceleration) driver set for the PengyOS Desktop live + installed image: a kernel linux.frag… |
 | [`pengyos-desktop-nvidia`](pengyos-desktop-nvidia/) | Containment lint for the opt-in NVIDIA editions, Server and Desktop (package `nvidia-open`): the proprietary driver stays out of every default image. |
 | [`pengyos-desktop-session`](pengyos-desktop-session/) | The COSMIC session + a VM-testable smoke matrix (US-DSK-1) for PengyOS Desktop. |
+| [`pengyos-disks`](pengyos-disks/) | *Disks*: format, write images to and eject USB sticks and memory cards (Rust, libcosmic, over UDisks2). |
 | [`pengyos-flatpak-mirror`](pengyos-flatpak-mirror/) | Self-hosted Flatpak (OSTree) repo manager for PengyOS. |
 | [`pengyos-fleet-inventory`](pengyos-fleet-inventory/) | Collect hardware facts for a fleet of hosts and emit a declarative, version-controllable per-machine profile for Pe… |
 | [`pengyos-fleet-rollout`](pengyos-fleet-rollout/) | Plan, stage and roll back a PengyOS image/update rollout across a fleet. |

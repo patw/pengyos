@@ -1,0 +1,7 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`). Rust tool: the std-only decision logic.
+[[check]]
+name = "unit tests"
+run = ["cargo", "test", "-q"]
+cwd = "tools/pengyos-disks"
+expect = "exit0"
+timeout = 900

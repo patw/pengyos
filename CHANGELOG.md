@@ -17,6 +17,29 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: Disks — format USB sticks and memory cards, and write disk images to them
+
+- **Nothing graphical could format a drive.** The Desktop had UDisks2,
+  polkit and every mkfs tool (FAT, exFAT, NTFS, ext4), but COSMIC Files only
+  mounts and ejects, and COSMIC has no Disks app; formatting a stick or making
+  an installer stick from a running PengyOS needed `parted`/`mkfs`/`dd` in a
+  terminal. New app **Disks** (`tools/pengyos-disks`, libcosmic, our own, MIT):
+  Format… (one partition, FAT32 / exFAT / NTFS / ext4, a name), Write image…
+  (`.img`/`.iso`, or the `.img.xz` the download page publishes, unpacked on the
+  fly, with progress and Stop), and Eject. It is in the App Library and is
+  offered by *Open with* for disk images. Only removable drives are listed;
+  drives the system has mounted (such as the live stick), active swap and
+  write-protected cards are locked. All work goes through UDisks2; no polkit
+  rule was added: formatting and ejecting need no password (UDisks' policy for
+  the active user), writing an image asks for the administrator's password.
+- **exFAT labels could not be set at all.** glibc's UTF-16 converter is a gconv
+  module and the Desktop image shipped none, so `iconv_open("UTF-16LE", …)`
+  failed; libblockdev's exFAT label check converts to UTF-16, so UDisks refused
+  every exFAT name ("must be a valid UTF-8 string") — after it had already
+  rewritten the partition table. The desktop layer now copies glibc's Unicode
+  gconv modules (UTF-16, UTF-32, UTF-7, UNICODE; 92 KB; not the 8.3 MB of
+  legacy codepages). Found testing Disks.
+
 ### Added: realtime scheduling, location, a virtual camera; fixed: rootful containers had no network (persona audit, 26.10.23)
 
 An audit of the Desktop against a mixed household (gamer, developer, audio,

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Disks
+GenericName=Disk Utility
+Comment=Format USB sticks and memory cards, and write disk images to them
+Exec=pengyos-disks %f
+Icon=drive-removable-media
+Terminal=false
+Categories=System;Utility;
+Keywords=format;usb;stick;drive;disk;sd;card;partition;image;iso;installer;eject;
+MimeType=application/x-raw-disk-image;application/x-raw-disk-image-xz-compressed;application/x-cd-image;
+StartupNotify=true

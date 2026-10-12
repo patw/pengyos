@@ -65,8 +65,8 @@ The **COSMIC Rust components themselves** (compositor, session, shell, apps)
 have **no recipe here yet**. Today they are built with cargo on the build host
 by `scripts/build-cosmic.sh` (`~/cosmic-src/<component>` → `~/cosmic-build/release`) and copied into the
 image by `../board/desktop/post-build.sh`, with the patches we carry
-in `../board/desktop/cosmic-patches/`; `pengyos-install-gui` and
-`pengyos-updates` are host-built the same way. The `pengyos-cosmic-pkg` /
+in `../board/desktop/cosmic-patches/`; `pengyos-install-gui`,
+`pengyos-updates` and `pengyos-disks` are host-built the same way. The `pengyos-cosmic-pkg` /
 `pengyos-cosmic-recipes` / `pengyos-cosmic-build` tools are the planned
 replacement (cargo recipes with vendored, pinned sources); `Config.in` marks
 where their `source` lines go once that lands. (`cosmic-portal` and

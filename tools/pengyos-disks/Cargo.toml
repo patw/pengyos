@@ -1,0 +1,38 @@
+# Disks (pengyos-disks): format, write images to and eject removable drives,
+# over UDisks2.
+#
+# The decision logic (lib.rs) is std only and fully `cargo test`-able without a
+# display or D-Bus. The UDisks2 client is behind `udisks` (zbus) and the window
+# behind `cosmic` (libcosmic + udisks), both off by default, like pengyos-updates.
+[package]
+name = "pengyos-disks"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+description = "Disks: format, write images to and eject removable drives on the COSMIC desktop."
+
+[features]
+default = []
+udisks = ["dep:zbus"]
+cosmic = ["udisks", "dep:libcosmic"]
+
+[lib]
+name = "pengyos_disks"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-disks"
+path = "src/main.rs"
+
+[dependencies]
+zbus = { version = "5", optional = true }
+
+# Same pinned libcosmic and feature set as pengyos-install-gui and
+# pengyos-updates, so all three build from one cache
+# (CARGO_TARGET_DIR=~/cosmic-build/install-gui).
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
+features = ["about", "single-instance", "markdown", "qr_code", "wgpu", "xdg-portal"]
