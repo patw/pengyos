@@ -131,7 +131,7 @@ def test_full_flow_then_quiet_second_night(tmp_path):
     kinds = {(f["lane"], f["component"]) for f in obs["findings"]}
     assert ("routine", "linux") in kinds and ("major", "cosmic") in kinds and ("major", "nvidia-open") in kinds
     # The pin for the agent itself is reported too: 1.10.0 pinned, 1.11.1 out.
-    pengyr = [f for f in obs["findings"] if f["component"] == "pengyr"]
+    pengyr = [f for f in obs["findings"] if f["component"] == "pengy"]
     assert pengyr and pengyr[0]["available"] == "1.11.1" and pengyr[0]["lane"] == "major"
 
     m = model('{"priority":"P2","reachable":"none","rationale":"not reachable"}')

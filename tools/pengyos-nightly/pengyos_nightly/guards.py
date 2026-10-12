@@ -31,6 +31,12 @@ DENIED = {
                  "edition; that is a scheduled event, not a nightly one",
     "cosmic": "COSMIC is host-built from pinned commits and moves as an epoch, which is a "
               "major decision by design",
+    "pengy": "the image ships the cargo-VENDORED tarball Buildroot generates at download "
+             "time (pkg-cargo.mk: DOWNLOAD_POST_PROCESS, BR_FMT_VERSION_cargo = -cargo6), "
+             "not the SITE archive; its sha256 only exists after `make <pkg>-source` runs "
+             "cargo vendor, so the download-and-hash a recipe_bump does cannot produce it. "
+             "Bump the pin by hand: set PENGY_VERSION, run `make pengy-source` once, and "
+             "record the hash it reports",
 }
 
 

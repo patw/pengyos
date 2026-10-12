@@ -87,13 +87,13 @@ def test_pengyr_minor_bump_is_a_major_finding_from_the_real_tags():
     live repo is exercised by hand (see the note in spec/CHANGELOG)."""
     tags = sources.parse_ls_remote((FIX / "ls-remote-pengyr.txt").read_text())
     f = sources.pengyr_findings(tags, "1.10.0")
-    assert lanes(f) == [("major", "pengyr", "1.11.1")]
+    assert lanes(f) == [("major", "pengy", "1.11.1")]
     assert "1.10 -> 1.11" in f[0]["note"]
 
 
 def test_pengyr_patch_bump_is_routine():
     f = sources.pengyr_findings(["v1.11.0", "v1.11.1", "v1.10.0"], "1.11.0")
-    assert lanes(f) == [("routine", "pengyr", "1.11.1")]
+    assert lanes(f) == [("routine", "pengy", "1.11.1")]
     assert "patch" in f[0]["note"]
 
 
@@ -106,7 +106,7 @@ def test_pengyr_ignores_non_version_tags_and_prereleases():
     tags = ["v1.11.1", "v1.12.0-rc1", "epoch-1.9", "refs/heads/main", "latest"]
     f = sources.pengyr_findings(tags, "1.11.0")
     # The rc is not a release; 1.11.1 is the answer.
-    assert lanes(f) == [("routine", "pengyr", "1.11.1")]
+    assert lanes(f) == [("routine", "pengy", "1.11.1")]
 
 
 def test_pengyr_handles_tags_without_the_v_prefix():

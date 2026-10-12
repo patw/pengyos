@@ -856,3 +856,45 @@ def test_the_real_ffmpeg_shape_19_fixes_8_known_bad_carries_11(tmp_path):
     assert len(a["patches"]) == 11 and len(a["closes"]) == 11
     assert len(a["skipped_known_bad"]) == 8
     assert len(a["still_open"]) == 8, "the dropped CVEs are still open, and still named"
+
+
+# --- the agent the image ships: pengy -----------------------------------------
+
+def _pengy_obs(available="1.11.5"):
+    obs = _obs(pengy=_pkg(current="1.11.2", tree="PENGYOS", pkg_path="package/pengy",
+                          mk_path="package/pengy/pengy.mk",
+                          url="https://github.com/patw/PengyR",
+                          editions=["pengyos-core", "pengyos-desktop", "pengyos-server"]))
+    obs["findings"] = [{"lane": "routine", "component": "pengy", "current": "1.11.2",
+                        "available": available, "note": "PengyR patch release"}]
+    return obs
+
+
+def test_the_pengy_finding_joins_the_package_entry_it_is_about(tmp_path):
+    """The component key is the Buildroot package name, not the upstream repo's name.
+
+    Measured on the live plan of 2026-10-11: the finding said 1.11.2 -> 1.11.5 and the
+    plan refused it as `not_host_only: the package is in no configured edition` plus
+    `nothing_newer: upstream has no newer release than the pin` — both computed from
+    the empty fallback package, because `packages` is keyed `pengy` and the finding
+    was keyed `pengyr`. A finding that joins nothing is refused for invented reasons.
+    """
+    a = _by_id(_plan(tmp_path, _pengy_obs(), _st(), _nvd(tmp_path)), "routine-pengy-1.11.5")
+    assert a["current"] == "1.11.2", "the pin came from the package entry, not the fallback"
+    assert a["editions"] == ["pengyos-core", "pengyos-desktop", "pengyos-server"]
+    assert a["bump_kind"] == "routine", "1.11.2 -> 1.11.5 is a patch inside the pinned minor"
+    refused = [g["guard"] for g in a["guards"] if not g["ok"]]
+    assert refused == ["denied_component"], a["guards"]
+    assert "not_host_only" not in refused and "major_never" not in refused
+
+
+def test_pengy_is_report_only_because_its_hash_is_generated_not_downloaded(tmp_path):
+    """The image ships the cargo-VENDORED tarball Buildroot generates at download time
+    (`pengy-1.11.5-cargo6.tar.gz`), not the SITE archive. A recipe_bump hashes what it
+    can download — the GitHub tarball under the SOURCE name — so its .hash would name
+    a file the build never produces. The refusal must say that, not hide it.
+    """
+    a = _by_id(_plan(tmp_path, _pengy_obs(), _st(), _nvd(tmp_path)), "routine-pengy-1.11.5")
+    reason = next(g["reason"] for g in a["guards"] if not g["ok"])
+    assert "cargo" in reason and "vendor" in reason.lower()
+    assert not a["allowed"] and a["hash"] is None, "no action, so no wrong hash is written"

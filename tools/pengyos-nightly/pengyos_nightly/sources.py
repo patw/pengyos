@@ -141,7 +141,13 @@ def pengyr_findings(tags: Iterable[str], current: str) -> list[dict]:
     note = ("PengyR patch release" if kind == "routine"
             else f"new PengyR minor ({'.'.join(map(str, numeric(current)[:2]))} -> "
                  f"{'.'.join(map(str, numeric(best)[:2]))})")
-    return [{"lane": kind, "component": "pengyr", "current": current,
+    # The component name is the Buildroot package name, `pengy`, not "pengyr":
+    # the planner joins a finding to `obs["packages"]` by that key, and pkg-stats
+    # lists our authored recipe under its package name. A finding named after the
+    # upstream repo finds no package entry, so the candidate is built from the
+    # empty fallback — no editions, no current version — and every guard that
+    # reads the package then refuses it for a reason that is not the real one.
+    return [{"lane": kind, "component": "pengy", "current": current,
              # Report the version you would write into pengy.mk, not the git tag.
              "available": strip_prefix(best),
              "note": note}]

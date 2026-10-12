@@ -774,7 +774,10 @@ def test_status_reads_a_recovered_batch_as_recovered(tmp_path, capsys):
         {"kind": "batch", "date": "2026-10-08", "published": True, "version": "26.10.14",
          "changes": ["security-gst1-plugins-bad-1.24.13"], "dropped": []}]}))
 
-    result = cli.do_status(args, now=time.time())
+    # `today` is pinned to the fixture's batch date: `published_today` counts the
+    # actions logged on `today or dt.date.today()`, so a test that let the clock
+    # decide passed only on 2026-10-08 and has been failing every day since.
+    result = cli.do_status(args, now=time.time(), today=dt.date(2026, 10, 8))
     out = capsys.readouterr().out
     assert not any("last batch published nothing" in p for p in result["problems"]), out
     assert "1 published today" in out, out

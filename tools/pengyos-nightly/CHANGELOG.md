@@ -6,6 +6,28 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **A finding about an authored recipe must be keyed by the package name.** The PengyR
+  source emitted `component: "pengyr"`; `obs["packages"]` is keyed `pengy` (pkg-stats
+  names our authored recipe by its Buildroot package). The planner's join found nothing,
+  built the candidate from the empty fallback, and the guards refused it for reasons that
+  were not true: `not_host_only: the package is in no configured edition` (it is in all
+  five) and `nothing_newer: upstream has no newer release than the pin` (current was `""`).
+  Measured on the live plan of 2026-10-11, where the loop had correctly observed
+  `pengyr 1.11.2 -> 1.11.5` and could not act on it. The component is now `pengy`, so the
+  candidate carries the real pin, the real editions and the real bump kind.
+- **`pengy` is report-only, and now says why.** The image ships the cargo-VENDORED tarball
+  Buildroot generates at download time (`pengy-1.11.5-cargo6.tar.gz`, `BR_FMT_VERSION_cargo`),
+  not the SITE archive. A `recipe_bump` hashes what it can download — the GitHub tarball
+  under the SOURCE name — so its `.hash` would name a file the build never produces and the
+  build would fail on it. `pengy` joins `DENIED` with that reason and the manual recipe
+  (`make pengy-source`, record the hash it reports). Without the first fix the refusal
+  would have been attributed to invented guards.
+- **`test_status_reads_a_recovered_batch_as_recovered` was date-sensitive.** It logged a
+  batch dated 2026-10-08 and asserted `"1 published today"` while letting `do_status` read
+  the wall clock, so it passed only on 2026-10-08 and failed every day since. `today` is
+  now pinned to the fixture's date.
+
 ## [0.12.0] - 2026-10-08
 
 ### Changed
