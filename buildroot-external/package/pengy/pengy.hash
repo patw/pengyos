@@ -1,3 +1,3 @@
 # Locally computed (Buildroot cargo-vendored tarball)
-sha256  e223ed2894cb205202926bebd89c03373ed0e6435f518e03afaebfc39d3f14b8  pengy-1.11.2-cargo6.tar.gz
+sha256  d8430e1db76b4aae01ea0e20cdd6f0eef719a003ee525c37ab2853bf8955436a  pengy-1.11.5-cargo6.tar.gz
 sha256  22cd177a5432c26442f1927fc9142333f2b0c1fd6ba21b6d651c5a222a6736e2  LICENSE
