@@ -502,11 +502,15 @@ def test_install_image_seeds_the_pengy_config(tmp_path, monkeypatch):
     assert json.loads(settings.read_text())["model"] == "qwen3:8b"
     assert json.loads(settings.read_text())["base_url"] == "http://127.0.0.1:11434/v1"
     assert settings.stat().st_mode & 0o777 == 0o600
-    assert ["chroot", str(root), "chown", "-R", "pat:pat", "/home/pat/.config/pengy"] in run.calls
+    # ~/.config itself is handed over too: the Server/Core skeletons have none,
+    # so the installer creates it, and a root-owned ~/.config breaks every app.
+    chown = ["chroot", str(root), "chown", "pat:pat", "/home/pat/.config",
+             "/home/pat/.config/pengy", "/home/pat/.config/pengy/settings.json"]
+    assert chown in run.calls
     # The config is written after the account exists (useradd -m made the home).
     cmds = [" ".join(c) for c in run.calls]
     idx = lambda s: next(i for i, c in enumerate(cmds) if c.startswith(s))
-    assert idx("chroot") < idx(f"chroot {root} chown -R pat:pat /home/pat/.config/pengy")
+    assert idx("chroot") < idx(" ".join(chown))
     # The key never rides on argv.
     assert "ollama" not in " ".join(cmds)
 

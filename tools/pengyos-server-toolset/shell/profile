@@ -2,7 +2,7 @@
 #
 # A curated, idempotent login profile for the comfort CLI/shell pack. It:
 #   * puts the local bin dirs on PATH (deduped, so re-sourcing never bloats it),
-#   * defines friendly aliases (eza/ripgrep/fd/bat),
+#   * defines friendly aliases (eza for ls, bat for cat),
 #   * loads the Starship prompt,
 #   * loads fzf keybindings + completion,
 #   * loads zoxide,
@@ -20,21 +20,25 @@
 # when set, otherwise by auto-detecting this file's own directory (bash:
 # $BASH_SOURCE[0], zsh: $0).
 
-# --- idempotency guard -----------------------------------------------------
-# A sourced file may be read more than once per shell; guard the body so it
-# runs at most once per shell session.
-if [ -n "${PENGYOS_TOOLSET_PROFILE_RC:-}" ]; then
-    return 0 2>/dev/null || true
-fi
-PENGYOS_TOOLSET_PROFILE_RC=1
-export PENGYOS_TOOLSET_PROFILE_RC
-
 # --- interactive only ------------------------------------------------------
-# Aliases and prompt setup only matter for an interactive shell.
+# Aliases and prompt setup only matter for an interactive shell. Checked before
+# the guard, so a non-interactive login (`sh -l`, `ssh host cmd`) sets nothing.
 case "$-" in
     *i*) : ;;
     *) return 0 2>/dev/null || true ;;
 esac
+
+# --- idempotency guard -----------------------------------------------------
+# A sourced file may be read more than once per shell (/etc/zshrc, then
+# ~/.zshrc); guard the body so it runs at most once per shell. The marker is a
+# plain shell variable and deliberately NOT exported: aliases, functions, ZLE
+# widgets and the prompt hooks are not inherited, so every child shell (a tmux
+# pane, `zsh` typed in bash, a terminal opened from a shell) must run the body
+# itself. An exported marker made all of those skip it.
+if [ -n "${PENGYOS_TOOLSET_PROFILE_RC:-}" ]; then
+    return 0 2>/dev/null || true
+fi
+PENGYOS_TOOLSET_PROFILE_RC=1
 
 # --- locate the sibling init snippets --------------------------------------
 # Prefer an explicit override; otherwise auto-detect this file's directory
@@ -69,16 +73,18 @@ add_path "$HOME/.local/bin" "$HOME/bin"
 # --- aliases ---------------------------------------------------------------
 # Friendly aliases for the comfort tools. Aliases are lazy (only resolved when
 # invoked), so a missing binary here does not break shell start.
-alias ls='eza --group-dirs --color=auto'
+#
+# Only names whose behaviour survives the swap are aliased: eza takes ls's
+# common flags, and bat acts exactly like cat when its output is not a terminal
+# (no colour, no decorations), so `cat f | jq` still gets the plain bytes.
+# grep/find/diff are NOT aliased to rg/fd/delta: their flags and semantics
+# differ, and a muscle-memory `grep -r` or `find . -name` must do what it says.
+# rg, fd and bat are on PATH under their own names.
+alias ls='eza --group-directories-first'
 alias la='eza -a'
-alias ll='eza -ala'
+alias ll='eza -al'
 alias lt='eza --tree -L 2'
-alias grep='ripgrep --color=always --smart-case'
-alias grepv='ripgrep --invert-match --color=always'
-alias fg='ripgrep --color=always --fixed-strings'
-alias find='fd --hidden --color=always'
-alias cat='bat --color=always --paging=never'
-alias diff='delta --color=always --diff'
+alias cat='bat --paging=never --style=plain'
 
 # --- prompt (starship) -----------------------------------------------------
 # Load Starship once. Guarded on a marker so `starship init` is only evaluated a
@@ -94,7 +100,6 @@ alias diff='delta --color=always --diff'
 # is absent, and STARSHIP_CONFIG set in the environment always wins.
 if [ -z "${PENGYOS_TOOLSET_STARSHIP_LOADED:-}" ]; then
     PENGYOS_TOOLSET_STARSHIP_LOADED=1
-    export PENGYOS_TOOLSET_STARSHIP_LOADED
     if command -v starship >/dev/null 2>&1; then
         if [ -n "${ZSH_VERSION:-}" ]; then
             _starship_shell=zsh

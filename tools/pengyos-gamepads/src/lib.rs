@@ -913,11 +913,21 @@ impl AxisInfo {
 
 /// Parse one sysfs capability file (`/sys/class/input/<dev>/device/capabilities/<ev>`).
 ///
-/// The kernel prints a bitmask as big-endian hex words, most significant word
-/// first: `"00000000 00000000 00000000 00000000 00000000 00000000 00000000 003e0000"`.
-/// Word 0 of the output is the highest word index, so the bit index is
-/// `(word_index_from_right * 32) + bit_in_word`.
+/// The kernel prints a bitmask as hex `unsigned long` words, most significant
+/// word first, leading zeros dropped: `"3f00733fff 0 0 483ffff17aff32d …"`.
+/// A word is `BITS_PER_LONG` wide — **64 bits on x86_64**, not 32 (reading them
+/// as 32-bit words put every code above bit 31 at the wrong index, which is
+/// how a G305 mouse lost BTN_LEFT and was listed as a keyboard). The bit index
+/// is `(word_index_from_right * 64) + bit_in_word`.
 pub fn parse_caps_words(text: &str) -> BTreeSet<u16> {
+    parse_caps_words_width(text, SYSFS_WORD_BITS)
+}
+
+/// The kernel's `BITS_PER_LONG` on the targets PengyOS ships (x86_64).
+pub const SYSFS_WORD_BITS: u32 = 64;
+
+/// [`parse_caps_words`] for an explicit word width (32 on a 32-bit kernel).
+pub fn parse_caps_words_width(text: &str, word_bits: u32) -> BTreeSet<u16> {
     let words: Vec<&str> = text.split_whitespace().collect();
     let mut out = BTreeSet::new();
     for (i, word) in words.iter().enumerate() {
@@ -925,8 +935,8 @@ pub fn parse_caps_words(text: &str) -> BTreeSet<u16> {
             Ok(v) => v,
             Err(_) => continue,
         };
-        let base = ((words.len() - 1 - i) * 32) as u32;
-        for bit in 0..32u32 {
+        let base = (words.len() - 1 - i) as u32 * word_bits;
+        for bit in 0..word_bits {
             if value & (1u64 << bit) != 0 {
                 let index = base + bit;
                 if index <= u32::from(u16::MAX) {
@@ -985,15 +995,16 @@ pub fn format_caps_sysfs(caps: &Caps) -> String {
             return "0".into();
         }
         let top = *set.iter().next_back().unwrap();
-        let words = (top as usize / 32) + 1;
+        // The kernel's format: 64-bit `unsigned long` words, `%lx` (no padding).
+        let words = (top as usize / 64) + 1;
         let mut values = vec![0u64; words];
         for code in set {
-            values[*code as usize / 32] |= 1u64 << (*code % 32);
+            values[*code as usize / 64] |= 1u64 << (*code % 64);
         }
         values
             .iter()
             .rev()
-            .map(|v| format!("{v:08x}"))
+            .map(|v| format!("{v:x}"))
             .collect::<Vec<_>>()
             .join(" ")
     }
@@ -1108,20 +1119,21 @@ fn json_str(s: &str) -> String {
 
 // --- rumble ---------------------------------------------------------------
 
-/// A rumble request for the joystick device (`/dev/input/jsN`), the evdev
-/// force-feedback effect the kernel's ff-memset layer accepts.
+/// A rumble request, sent through the pad's event node (`raw::rumble`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Rumble {
-    /// 0..32767, low-frequency motor.
-    pub weak: u16,
-    /// 0..32767, high-frequency motor.
+    /// 0..65535, the heavy low-frequency motor (`strong_magnitude`).
     pub strong: u16,
+    /// 0..65535, the light high-frequency motor (`weak_magnitude`).
+    pub weak: u16,
 }
 
-/// Clamp a requested magnitude into the range the kernel accepts.
+/// Clamp a requested magnitude into the kernel's `__u16` range.
 pub fn rumble_level(value: i32) -> u16 {
-    value.clamp(0, 32767) as u16
+    value.clamp(0, i32::from(u16::MAX)) as u16
 }
+
+pub mod ioctl;
 
 #[cfg(feature = "evdev")]
 pub mod raw;

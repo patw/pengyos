@@ -33,6 +33,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generated defconfigs, rc wiring, `sh -n` + `zsh -n` on the profile).
 
 ### Fixed
+- **The profile no longer breaks the commands it aliases** (found in review
+  on behoweather before any image shipped it). `grep`/`grepv`/`fg` were aliased
+  to a `ripgrep` binary that does not exist (it is `rg`), `fg` shadowed the
+  job-control builtin, `diff` ran an unshipped `delta`, `find` became `fd`
+  (different flags), `ls` used an eza flag (`--group-dirs`) eza rejects, and
+  `cat`/`grep` forced `--color=always`, so pipes got escape codes. The profile
+  now aliases only `ls`/`la`/`ll`/`lt` (eza, `--group-directories-first`) and
+  `cat` (bat, which is plain cat when its output is not a terminal); `rg`, `fd`
+  and `bat` are on PATH under their own names.
+- **Child shells get the profile.** The run-once markers (`profile`, `fzf.sh`,
+  `zoxide.sh`) were exported, so a tmux pane or a nested shell inherited them
+  and skipped the body: no aliases, prompt, plugins or key bindings. They are
+  plain shell variables now, set only after the interactive check (a
+  non-interactive login no longer sets them at all).
+- **The starter `~/.zshrc` starts silently and keeps the profile's work.** It
+  set `hist_substring_search`, which is not a zsh option (an error on every
+  shell start), and then overwrote the starship `PROMPT` and the eza aliases
+  the profile had just set. The fallback prompt and plain aliases now apply
+  only where the profile did not already provide them.
+- Tests pin all of it: every alias runs a shipped binary with no forced colour
+  and shadows no tool with different semantics, no marker is exported, a child
+  zsh re-runs the profile, and the real login order (profile, then the skel
+  `.zshrc`, with a stand-in starship) produces no stderr and keeps the prompt
+  and `ls`.
 - **`starship init sh` emitted nothing** — `starship init` is shell-specific
   (zsh/bash/fish only), so the profile's prompt never loaded. The profile now
   detects the sourcing shell (`ZSH_VERSION`/`BASH_VERSION`), passes it to

@@ -130,16 +130,15 @@ fn test_sysfs_bitmask_round_trip() {
 
 #[test]
 fn test_sysfs_bitmask_word_order() {
-    // The kernel prints the highest word first: BTN_A (0x130) is bit 304, i.e.
-    // word 9, bit 16 -> the second word from the right of a 10-word key mask.
+    // The kernel prints the highest word first, as 64-bit words: BTN_A (0x130)
+    // is bit 304, i.e. word 4, bit 48 -> the first of a 5-word key mask.
     let caps = Caps { ev: set(&[EV_KEY]), keys: set(&[BTN_A]), ..Default::default() };
     let text = format_caps_sysfs(&caps);
     let line = text.lines().find(|l| l.starts_with("key ")).unwrap();
     let words: Vec<&str> = line.split_whitespace().skip(1).collect();
-    assert_eq!(words.len(), 10);
-    // Highest word first, so word 9 (the one holding bit 304) is printed first.
-    assert_eq!(words[0], "00010000");
-    assert_eq!(words[9], "00000000");
+    assert_eq!(words.len(), 5);
+    assert_eq!(words[0], "1000000000000");
+    assert_eq!(words[4], "0");
     assert_eq!(caps_from_sysfs(&text).keys, set(&[BTN_A]));
 }
 
@@ -148,7 +147,37 @@ fn test_parse_caps_words_zero() {
     assert!(parse_caps_words("0").is_empty());
     assert!(parse_caps_words("").is_empty());
     assert_eq!(parse_caps_words("00000000 00000001"), set(&[0]));
-    assert_eq!(parse_caps_words("00000001 00000000"), set(&[32]));
+    assert_eq!(parse_caps_words("1 0"), set(&[64]));
+    assert_eq!(parse_caps_words_width("00000001 00000000", 32), set(&[32]));
+}
+
+/// The real sysfs text of a Logitech G305 receiver (behoweather, 2026-10-12):
+/// 64-bit words, leading zeros dropped. It has keyboard keys too (the
+/// receiver doubles as one), but relative X/Y plus BTN_LEFT make it a mouse.
+#[test]
+fn test_real_g305_sysfs_reads_as_a_mouse() {
+    let keys = parse_caps_words(
+        "3f00733fff 0 0 483ffff17aff32d bfd4444600000000 ffff0001 130ff38b17d007 \
+         ffff7bfad9415fff ffbeffdfffefffff fffffffffffffffe",
+    );
+    assert!(keys.contains(&0x110), "BTN_LEFT");
+    assert!(keys.contains(&0x114), "BTN_EXTRA");
+    let caps = Caps {
+        ev: parse_caps_words("12001f"),
+        keys,
+        rel: parse_caps_words("1943"),
+        abs: parse_caps_words("100000000"),
+        ..Caps::default()
+    };
+    assert_eq!(classify(&caps), Kind::Mouse);
+    // A keyboard's mouse interface: five buttons at BTN_LEFT.. and REL_X/Y.
+    let mouse_if = Caps {
+        ev: parse_caps_words("17"),
+        keys: parse_caps_words("1f0000 0 0 0 0"),
+        rel: parse_caps_words("1943"),
+        ..Caps::default()
+    };
+    assert_eq!(classify(&mouse_if), Kind::Mouse);
 }
 
 #[test]
@@ -461,8 +490,49 @@ fn test_names_are_stable() {    assert_eq!(button_name(BTN_A), "A");
 #[test]
 fn test_rumble_level_is_clamped() {
     assert_eq!(rumble_level(-5), 0);
-    assert_eq!(rumble_level(40000), 32767);
+    assert_eq!(rumble_level(70000), 65535);
+    assert_eq!(rumble_level(100 * 655), 65500);
     assert_eq!(rumble_level(1000), 1000);
+}
+
+/// Every ioctl number, against the value <linux/input.h> produces on x86_64
+/// (printed by a C program built against the header, 2026-10-12). The first
+/// version had the direction bits swapped and the wrong bases for EVIOCGABS
+/// and EVIOCSFF/EVIOCRMFF, so no ioctl it sent was the one it meant.
+#[test]
+fn test_ioctl_numbers_match_the_kernel_header() {
+    use crate::ioctl::*;
+    assert_eq!(EVIOCSFF, 0x4030_4580);
+    assert_eq!(EVIOCRMFF, 0x4004_4581);
+    assert_eq!(eviocgabs(0), 0x8018_4540);
+    assert_eq!(eviocgabs(5), 0x8018_4545);
+    assert_eq!(eviocgbit(EV_KEY, KEY_BITS_LEN as u32), 0x8060_4521);
+}
+
+#[test]
+fn test_ff_effect_layout_matches_the_kernel() {
+    use crate::ioctl::FfEffect;
+    // sizeof(struct ff_effect) == 48 and offsetof(u) == 16 on x86_64.
+    assert_eq!(std::mem::size_of::<FfEffect>(), 48);
+    let e = FfEffect::rumble(0xabcd, 0x1234, 400);
+    let base = &e as *const FfEffect as usize;
+    assert_eq!(&e.u as *const _ as usize - base, 16);
+    assert_eq!(e.type_, 0x50);
+    assert_eq!(e.id, -1);
+    assert_eq!(e.replay_length, 400);
+    assert_eq!(e.rumble_magnitudes(), (0xabcd, 0x1234));
+}
+
+#[test]
+fn test_ff_play_event_is_an_ev_ff_input_event() {
+    // struct input_event: 16 bytes of timeval, then type, code, value.
+    let ev = crate::ioctl::ff_play_event(3, true);
+    assert_eq!(ev.len(), 24);
+    assert_eq!(u16::from_ne_bytes([ev[16], ev[17]]), 0x15); // EV_FF
+    assert_eq!(u16::from_ne_bytes([ev[18], ev[19]]), 3); // the effect id
+    assert_eq!(i32::from_ne_bytes([ev[20], ev[21], ev[22], ev[23]]), 1);
+    let stop = crate::ioctl::ff_play_event(3, false);
+    assert_eq!(i32::from_ne_bytes([stop[20], stop[21], stop[22], stop[23]]), 0);
 }
 
 #[test]

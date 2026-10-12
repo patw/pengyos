@@ -211,11 +211,53 @@ def test_profile_loads_starship_when_installed():
     )
 
 
+def _aliases(text: str) -> dict[str, str]:
+    """name -> body for every `alias name='body'` line."""
+    out = {}
+    for line in text.splitlines():
+        m = re.match(r"\s*alias ([\w.-]+)='([^']*)'", line)
+        if m:
+            out[m.group(1)] = m.group(2)
+    return out
+
+
 def test_profile_sets_comfort_aliases():
     # The aliases are the user-visible payoff of the comfort set.
-    text = PROFILE.read_text(encoding="utf-8")
-    for alias in ("eza", "ripgrep", "fd", "bat"):
-        assert alias in text, f"profile should reference the comfort tool {alias}"
+    aliases = _aliases(PROFILE.read_text(encoding="utf-8"))
+    assert aliases["ls"].startswith("eza "), "ls should be eza"
+    assert aliases["cat"].startswith("bat "), "cat should be bat"
+
+
+def test_profile_aliases_never_break_the_command_they_shadow():
+    """Every alias must run a binary the image ships, with flags it accepts, and
+    must not replace a tool whose semantics differ.
+
+    Regressions this pins (26.10.25 review): `grep`/`grepv`/`fg` aliased to a
+    `ripgrep` binary that does not exist (the binary is `rg`), `fg` shadowing
+    the job-control builtin, `diff` aliased to an unshipped `delta`, `ls` to an
+    eza flag (`--group-dirs`) eza rejects, and `cat`/`grep` forcing
+    `--color=always` so every pipe got escape codes.
+    """
+    aliases = _aliases(PROFILE.read_text(encoding="utf-8"))
+    for name in ("grep", "find", "diff", "fg", "bg", "cd", "echo", "test"):
+        assert name not in aliases, f"profile must not alias `{name}`"
+    shipped = {"eza", "bat", "rg", "fd", "zoxide", "fzf", "starship", "ls", "git"}
+    for name, body in aliases.items():
+        prog = body.split()[0]
+        assert prog in shipped, f"alias {name} runs `{prog}`, which the image does not ship"
+        assert "--color=always" not in body, f"alias {name} forces colour into pipes"
+    assert "--group-dirs " not in aliases["ls"] + " ", "eza has no --group-dirs flag"
+
+
+def test_profile_markers_are_not_exported():
+    """A child shell (tmux pane, nested zsh) must run the profile itself:
+    aliases, prompt hooks and ZLE widgets are not inherited, so an exported
+    run-once marker left every child without them."""
+    for path in (PROFILE, SHELL_DIR / "fzf.sh", SHELL_DIR / "zoxide.sh"):
+        text = path.read_text(encoding="utf-8")
+        assert not re.search(r"^\s*export PENGYOS_TOOLSET_", text, re.M), (
+            f"{path.name} exports its run-once marker"
+        )
 
 
 # --- functional: idempotent at runtime (sourced under POSIX sh) -------------
@@ -401,7 +443,7 @@ def test_skel_zshrc_keeps_the_omz_feel():
     # The plugin-free oh-my-zsh bits the starter file promises, plus the
     # prompt fix that made zsh show '%' for a wheel user (CAP_WAKE_ALARM).
     text = (SERVER_SKEL / ".zshrc").read_text(encoding="utf-8")
-    assert "hist_substring_search" in text, "Ctrl-R substring history search"
+    assert "hist_substring_search" not in text, "not a zsh option: errors at every start"
     assert "compinit" in text and "menu select" in text
     assert "_pengyos_mark='%%'" in text, "prompt must use '%', not zsh's '%#'"
 
@@ -487,3 +529,49 @@ def test_profile_double_source_is_a_no_op_under_zsh(shell_dir_env):
         f"second source was not a no-op under zsh: {proc.stdout!r}"
     )
 
+
+
+def _fake_starship(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A `starship` stand-in whose zsh init sets a recognisable PROMPT."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    fake = bindir / "starship"
+    fake.write_text(
+        "#!/bin/sh\n"
+        "[ \"$1 $2\" = 'init zsh' ] && echo \"PROMPT='\\$(starship prompt)'\"\n"
+        "exit 0\n"
+    )
+    fake.chmod(0o755)
+    return bindir
+
+
+def test_skel_zshrc_starts_silently_and_keeps_the_profile(shell_dir_env, tmp_path):
+    """The real login order: /etc/zshrc (the profile) then the starter
+    ~/.zshrc. No stderr at all (a bad setopt printed on every shell start),
+    and the starter file must not undo the profile: the starship prompt and
+    the eza `ls` survive it."""
+    if subprocess.run(["which", "zsh"], capture_output=True).returncode != 0:
+        pytest.skip("zsh not installed on the test host")
+    home = tmp_path / "home"
+    home.mkdir()
+    bindir = _fake_starship(tmp_path)
+    env = {**shell_dir_env, "PROF": str(PROFILE), "HOME": str(home),
+           "SKEL": str(SERVER_SKEL / ".zshrc"), "PATH": f"{bindir}:/usr/bin:/bin"}
+    proc = subprocess.run(
+        ["zsh", "-f", "-i", "-c", '. $PROF; . $SKEL; print -r -- "P=$PROMPT"; alias ls'],
+        capture_output=True, text=True, env=env, timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stderr == "", f"zsh start is not silent: {proc.stderr!r}"
+    assert "P=$(starship prompt)" in proc.stdout, "skel .zshrc clobbered the starship prompt"
+    assert "eza" in proc.stdout, "skel .zshrc clobbered the profile's ls alias"
+
+
+def test_child_shell_runs_the_profile_again(shell_dir_env):
+    """`zsh` started from a shell that already ran the profile still gets it."""
+    if subprocess.run(["which", "zsh"], capture_output=True).returncode != 0:
+        pytest.skip("zsh not installed on the test host")
+    env = {**shell_dir_env, "PROF": str(PROFILE)}
+    proc = _run_zsh('. $PROF; zsh -f -i -c ". $PROF; alias ls"', env)
+    assert proc.returncode == 0, proc.stderr
+    assert "eza" in proc.stdout, "the child shell skipped the profile"

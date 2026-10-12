@@ -283,11 +283,12 @@ impl App {
 
     fn rumble(&self) -> Task<cosmic::Action<Message>> {
         let Some(pad) = self.selected_pad() else { return Task::none() };
-        let level = crate::rumble_level(self.strength * 327);
-        let effect = Rumble { weak: level, strong: level };
+        // strength is 0..100 percent of the kernel's 0..65535 magnitude.
+        let level = crate::rumble_level(self.strength * 655);
+        let effect = Rumble { strong: level, weak: level };
         self.rumbling.store(true, Ordering::Relaxed);
         background(move |send| {
-            let msg = raw::rumble(&pad, effect.weak, effect.strong, Duration::from_millis(400));
+            let msg = raw::rumble(&pad, effect.strong, effect.weak, Duration::from_millis(400));
             send(Message::Rumbled(match msg {
                 Ok(()) => Ok(format!("{} rumbled.", pad.name)),
                 Err(e) => Err(e),

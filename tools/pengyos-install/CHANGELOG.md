@@ -47,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root slots are 8 GiB (`SLOT_SIZE`); the minimum disk is 18.25 GiB.
 
 ### Fixed
+- **Seeding the Pengy config no longer leaves `~/.config` owned by root.** The
+  Server and Core skeletons have no `~/.config`, so creating
+  `.config/pengy/` made it as root, and only `.config/pengy` was handed to the
+  user: every app that writes settings would have failed for them. The
+  installer now chowns `~/.config`, `~/.config/pengy` and `settings.json`.
 - root-b is wiped (`wipefs -a`) after partitioning: an old filesystem under
   it (the previous layout's data volume) showed up as a drive.
 

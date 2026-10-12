@@ -31,8 +31,10 @@ A Rust crate `pengyos-gamepads` (MIT), built like `pengyos-disks`:
 - `layout.rs` — std only: the panel's geometry in a fixed 1000×560 unit space,
   computed from the device's capabilities, plus the scale into a canvas.
 - `raw.rs` (feature `evdev`, libc) — the sysfs scan, the evdev ioctls
-  (`EVIOCGBIT`, `EVIOCGABS`), the event reader, the `/dev/input/jsN` lookup and
-  the `EVIOCSFF` rumble request.
+  (`EVIOCGBIT`, `EVIOCGABS`), the event reader and the rumble request
+  (`EVIOCSFF`, an `EV_FF` write, `EVIOCRMFF`).
+- `ioctl.rs` — std only: the evdev ioctl numbers and the `ff_effect` /
+  `input_event` layouts, tested against the values `<linux/input.h>` produces.
 - `app.rs` (feature `cosmic` = `evdev` + libcosmic) — the window: the device
   list, the canvas, the live values, the rumble controls, the event log.
 
@@ -93,13 +95,19 @@ reporting through a channel the UI drains on a 40 ms timer. `ENODEV` (unplugged)
 drops the device from the list and says so. The list is re-scanned every 2 s, so
 plugging a pad in is noticed without any action.
 
-**Rumble.** `EVIOCSFF` with a `FF_RUMBLE` effect on the pad's `/dev/input/jsN`,
-found by matching the sysfs parent of the event node and the js node. Needs
-`joydev` loaded (the Desktop loads it at boot), `CONFIG_INPUT_FF_MEMSET` (in the
-kernel fragment) and the js node writable by the user (the udev rule hands it to
-`input`). A pad with no motors, or a machine without the layer, gets the
-kernel's error as a sentence; the button is inert where the device reports no
-`FF_RUMBLE`.
+**Rumble.** Force feedback is an evdev interface: open the pad's own
+`/dev/input/eventN` read-write (group `input`, 0660 — the same group the panel
+needs to read it), upload a `FF_RUMBLE` effect with `EVIOCSFF` (the kernel
+writes the slot id back), start it by writing an `EV_FF` `input_event` with
+that id and value 1, stop it with value 0, and free the slot with `EVIOCRMFF`
+(the id passed by value). The pad's driver supplies the motors through
+`INPUT_FF_MEMLESS`, which every FF-capable pad driver selects; the joystick
+node (`/dev/input/jsN`) has no force-feedback interface at all. A pad with no
+motors gets the kernel's error as a sentence; the button is inert where the
+device reports no `FF_RUMBLE`.
+
+**Sysfs bitmaps** are printed as kernel `unsigned long` words: 64 bits on
+x86_64, most significant word first, leading zeros dropped.
 
 **Permissions.** Reading `/dev/input/eventN` needs the `input` group, which
 systemd's udev rules give the devices (mode 0660). The image defines `input`

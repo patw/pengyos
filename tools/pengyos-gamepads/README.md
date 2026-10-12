@@ -17,7 +17,7 @@ or a stuck trigger meant launching Steam and finding a pad setup screen.
   you selected the pad, so a calibration sweep is readable. Every event is also
   printed as text, newest first.
 - **Rumble**: a strength slider and a Rumble button, sent as a real
-  force-feedback effect to the pad's `/dev/input/js` node.
+  force-feedback effect to the pad's event node.
 
 Plugging a pad in is noticed by itself (the list is re-scanned every two
 seconds); unplugging one says so and drops it.
@@ -28,8 +28,9 @@ Enumeration reads **sysfs** (`/sys/class/input/*/device/…`), which is
 world-readable, so the list is complete even for a user who may not open the
 device node — the card then says exactly that, and names the `input` group.
 The live panel reads the evdev node itself, one reader thread per selected
-device (an evdev read blocks), drained by the UI on a 40 ms timer. Rumble is an
-`EVIOCSFF` `FF_RUMBLE` effect on the matching `/dev/input/jsN`. The app never
+device (an evdev read blocks), drained by the UI on a 40 ms timer. Rumble uploads an
+`FF_RUMBLE` effect to the pad's own event node (`EVIOCSFF`), starts it by
+writing an `EV_FF` event, and erases it (`EVIOCRMFF`). The app never
 runs as root and adds no polkit rule.
 
 - `src/lib.rs`, `src/layout.rs` — std only: the device model, the

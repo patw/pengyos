@@ -12,18 +12,18 @@
 # Nix, a Buildroot image, etc.); otherwise sensible local defaults are set so
 # `Ctrl-R`, `Ctrl-T` and `Alt-A` still work.
 
-# Idempotency guard: a marker env var, so a double source is a no-op.
-if [ -n "${PENGYOS_TOOLSET_FZF_INIT:-}" ]; then
-    return 0 2>/dev/null || true
-fi
-PENGYOS_TOOLSET_FZF_INIT=1
-export PENGYOS_TOOLSET_FZF_INIT
-
 # Only useful in an interactive shell.
 case "$-" in
     *i*) : ;;
     *) return 0 2>/dev/null || true ;;
 esac
+
+# Idempotency guard: a shell variable (not exported, so a child shell runs
+# its own init), set only once we know the shell is interactive.
+if [ -n "${PENGYOS_TOOLSET_FZF_INIT:-}" ]; then
+    return 0 2>/dev/null || true
+fi
+PENGYOS_TOOLSET_FZF_INIT=1
 
 # Prefer ripgrep for the file finder when it is installed; fall back to find.
 if command -v rg >/dev/null 2>&1; then

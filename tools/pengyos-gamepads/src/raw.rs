@@ -6,104 +6,14 @@
 //! file stays thin and the tests stay display-free.
 
 use std::fs::File;
-use std::io::{Error as IoError, Read};
-use std::os::fd::{AsRawFd, FromRawFd, RawFd};
-use std::path::{Path, PathBuf};
+use std::io::{Error as IoError, Read, Write};
+use std::os::fd::{AsRawFd, RawFd};
+use std::path::Path;
 use std::time::Duration;
 
 use crate::{Caps, DeviceInfo, Ev, Pad, INPUT_DIR};
 
-// --- ioctl numbers (uapi/linux/input.h) ------------------------------------
-// libc does not export the evdev ioctls, so they are built from the same
-// _IOR/_IOWR macros the kernel header uses: direction, magic 'E', number, size.
-const IOC_NRBITS: u32 = 8;
-const IOC_TYPEBITS: u32 = 8;
-const IOC_SIZEBITS: u32 = 14;
-/// The direction field's width: documented here because the two direction
-/// constants below are the only place it is used, and the layout is easier to
-/// check against the kernel header when all four field widths are named.
-#[allow(dead_code)]
-const IOC_DIRBITS: u32 = 2;
-const IOC_NRSHIFT: u32 = 0;
-const IOC_TYPESHIFT: u32 = IOC_NRSHIFT + IOC_NRBITS;
-const IOC_SIZESHIFT: u32 = IOC_TYPESHIFT + IOC_TYPEBITS;
-const IOC_DIRSHIFT: u32 = IOC_SIZESHIFT + IOC_SIZEBITS;
-const IOC_READ: u32 = 1;
-const IOC_WRITE: u32 = 2;
-
-const fn ioc(dir: u32, nr: u32, size: u32) -> u32 {
-    (dir << IOC_DIRSHIFT) | (b'E' as u32) << IOC_TYPESHIFT | nr << IOC_NRSHIFT | size << IOC_SIZESHIFT
-}
-
-pub const EVIOCGVERSION: u32 = ioc(IOC_READ, 0x01, 4);
-pub const EVIOCGID: u32 = ioc(IOC_READ, 0x02, 8);
-pub const EVIOCGNAME: u32 = ioc(IOC_READ, 0x06, 64);
-pub const EVIOCGPHYS: u32 = ioc(IOC_READ, 0x07, 128);
-pub const EVIOCGUNIQ: u32 = ioc(IOC_READ, 0x08, 128);
-pub const EVIOCGPROP: u32 = ioc(IOC_READ, 0x09, 128);
-pub const EVIOCGABS: fn(u16) -> u32 = |n| ioc(IOC_READ, u32::from(n) + 0x26, 24);
-pub const EVIOCGBIT: fn(u16) -> u32 = |n| ioc(IOC_READ, u32::from(n) + 0x20, 64);
-pub const EVIOCSFF: u32 = ioc(IOC_WRITE, 0x30, std::mem::size_of::<FfEffect>() as u32);
-pub const EVIOCRMFF: u32 = ioc(IOC_WRITE, 0x31, 4);
-
-/// `struct input_absinfo`.
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct AbsRaw {
-    pub value: i32,
-    pub minimum: i32,
-    pub maximum: i32,
-    pub fuzz: i32,
-    pub flat: i32,
-    pub resolution: i32,
-}
-
-/// `struct input_ff_effect` (uapi/linux/input.h), the layout ff-memset accepts.
-///
-/// The anonymous union in the header is flattened: `small` and `large` are the
-/// rumble pair at the same offset as the `direction`/`gain`/`period` triple,
-/// which is exactly what a rumble effect writes.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct FfEffect {
-    pub type_: u16,
-    pub id: i16,
-    pub direction: u16,
-    pub gain: u16,
-    pub period: u16,
-    pub magnitude: u16,
-    pub delay: u16,
-    pub duration: u16,
-    pub attack_length: u16,
-    pub attack_level: u16,
-    pub fade_length: u16,
-    pub fade_level: u16,
-    pub repeat_length: u16,
-    pub repeat_level: u16,
-}
-
-impl Default for FfEffect {
-    fn default() -> Self {
-        FfEffect {
-            type_: 0x50, // FF_RUMBLE
-            id: -1,      // let the kernel pick a slot
-            direction: 0,
-            gain: 0,
-            period: 0,
-            magnitude: 0,
-            delay: 0,
-            duration: 0,
-            attack_length: 0,
-            attack_level: 0,
-            fade_length: 0,
-            fade_level: 0,
-            repeat_length: 0,
-            repeat_level: 0,
-        }
-    }
-}
-
-const _: () = assert!(std::mem::size_of::<FfEffect>() == 28);
+use crate::ioctl::{self, AbsInfo, FfEffect};
 
 // --- enumeration -----------------------------------------------------------
 
@@ -203,12 +113,12 @@ impl Device {
 
     /// `EVIOCGABS` for one axis: the range the panel scales the bar by.
     pub fn axis_info(&self, code: u16) -> crate::AxisInfo {
-        let mut raw = AbsRaw::default();
+        let mut raw = AbsInfo::default();
         let rc = unsafe {
             libc::ioctl(
                 self.file.as_raw_fd(),
-                EVIOCGABS(code) as libc::c_ulong,
-                &mut raw as *mut AbsRaw,
+                ioctl::eviocgabs(code) as libc::c_ulong,
+                &mut raw as *mut AbsInfo,
             )
         };
         if rc != 0 {
@@ -225,16 +135,17 @@ impl Device {
 
     /// `EVIOCGBIT` for one event type, as a code set.
     pub fn bits(&self, kind: u16) -> Caps {
-        let mut bytes = [0u8; 64];
+        let mut bytes = [0u8; ioctl::KEY_BITS_LEN];
         let rc = unsafe {
             libc::ioctl(
                 self.file.as_raw_fd(),
-                EVIOCGBIT(kind) as libc::c_ulong,
+                ioctl::eviocgbit(kind, ioctl::KEY_BITS_LEN as u32) as libc::c_ulong,
                 bytes.as_mut_ptr(),
             )
         };
         let mut set = std::collections::BTreeSet::new();
-        if rc == 0 {
+        // EVIOCGBIT answers the number of bytes it copied, not 0.
+        if rc >= 0 {
             for (i, byte) in bytes.iter().enumerate() {
                 for bit in 0..8u32 {
                     if byte & (1 << bit) != 0 {
@@ -306,84 +217,46 @@ fn poll_readable(fd: RawFd, timeout: Duration) -> Result<bool, String> {
 
 // --- rumble ---------------------------------------------------------------
 
-/// The joystick node that belongs to a pad, from the sysfs parent directory:
-/// `/sys/class/input/event13/device` and `/sys/class/input/js0/device` are the
-/// same device when the pad has a `/dev/input/js0`.
-pub fn js_device(pad: &Pad) -> Option<String> {
-    let event_device = std::fs::canonicalize(format!("/sys/class/input/{}/device", pad.sys)).ok()?;
-    let js_root = Path::new("/sys/class/input");
-    let entries = std::fs::read_dir(js_root).ok()?;
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !name.starts_with("js") {
-            continue;
-        }
-        let same = std::fs::canonicalize(js_root.join(&name).join("device"))
-            .ok()
-            .is_some_and(|p| p == event_device);
-        if same {
-            return Some(format!("/dev/input/{name}"));
-        }
-    }
-    None
-}
-
-/// Ask a pad to rumble for `for_` long, over its `/dev/input/jsN` node.
+/// Rumble a pad for `for_`, through its **event** node.
 ///
-/// Needs the `joydev` module (the image loads it at boot) and `CONFIG_INPUT_FF_MEMSET`
-/// (the kernel's force-feedback layer). The node is group `input`, mode 0660 —
-/// the desktop user is in that group. Every failure is returned as the sentence
-/// the app shows, because a pad without motors answers `ENOTSUP`.
-pub fn rumble(pad: &Pad, weak: u16, strong: u16, for_: Duration) -> Result<(), String> {
-    let path = js_device(pad)
-        .ok_or_else(|| format!("{} has no joystick (/dev/input/js) node", pad.name))?;
-    let raw = unsafe {
-        libc::open(
-            PathBuf::from(&path).to_string_lossy().as_ptr() as *const libc::c_char,
-            libc::O_RDWR | libc::O_CLOEXEC,
-        )
-    };
-    if raw < 0 {
-        let e = IoError::last_os_error();
-        return Err(format!("{path}: {e}"));
-    }
-    let file = unsafe { File::from_raw_fd(raw) };
-    let effect = FfEffect {
-        type_: 0x50,
-        id: -1,
-        direction: 0,
-        gain: ((weak as u32 + strong as u32) / 2) as u16,
-        period: 0,
-        magnitude: 0,
-        delay: 0,
-        duration: (for_.as_millis() as u32).clamp(0, u32::from(u16::MAX)) as u16,
-        attack_length: 0,
-        attack_level: weak,
-        fade_length: 0,
-        fade_level: 0,
-        repeat_length: 0,
-        repeat_level: strong,
-    };
+/// Force feedback is an evdev interface: the effect is uploaded with
+/// `EVIOCSFF`, started by writing an `EV_FF` event with the effect's id, and
+/// erased with `EVIOCRMFF` (which also stops it). The joystick node
+/// (`/dev/input/jsN`) implements none of this — that is where the first
+/// version sent it, and why it answered `ENOTTY`. The event node is group
+/// `input`, mode 0660, so opening it read-write needs the same group the live
+/// panel already needs to read it. A pad without motors answers `EINVAL`.
+pub fn rumble(pad: &Pad, strong: u16, weak: u16, for_: Duration) -> Result<(), String> {
+    let path = &pad.path;
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|e| format!("{path}: {e}"))?;
+    let length = for_.as_millis().min(u128::from(u16::MAX)) as u16;
+    let mut effect = FfEffect::rumble(strong, weak, length);
+    // The kernel writes the slot it chose back into `effect.id`.
     let rc = unsafe {
-        libc::ioctl(
-            file.as_raw_fd(),
-            EVIOCSFF as libc::c_ulong,
-            &effect as *const FfEffect,
-        )
+        libc::ioctl(file.as_raw_fd(), ioctl::EVIOCSFF as libc::c_ulong, &mut effect as *mut FfEffect)
     };
-    if rc != 0 {
+    if rc < 0 {
         let e = IoError::last_os_error();
-        return Err(format!("{path}: {e}"));
+        return Err(match e.raw_os_error() {
+            Some(libc::EINVAL) | Some(libc::ENOSYS) | Some(libc::ENOTTY) => {
+                format!("{} has no rumble motors the kernel can drive ({e})", pad.name)
+            }
+            _ => format!("{path}: {e}"),
+        });
     }
-    std::thread::sleep(for_);
-    // Stop: remove the effect so the motor does not keep buzzing.
     let id = effect.id;
+    let played = file.write_all(&ioctl::ff_play_event(id, true));
+    if played.is_ok() {
+        std::thread::sleep(for_);
+        let _ = file.write_all(&ioctl::ff_play_event(id, false));
+    }
+    // Erase the effect: frees the slot and stops the motors if still running.
     let _ = unsafe {
-        libc::ioctl(
-            file.as_raw_fd(),
-            EVIOCRMFF as libc::c_ulong,
-            &id as *const i16,
-        )
+        libc::ioctl(file.as_raw_fd(), ioctl::EVIOCRMFF as libc::c_ulong, libc::c_int::from(id))
     };
-    Ok(())
+    played.map_err(|e| format!("{path}: starting the effect: {e}"))
 }

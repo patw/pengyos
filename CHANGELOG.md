@@ -17,6 +17,24 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: what the review of the 2026-10-12 batch found before it shipped
+
+- **The comfort shell broke the commands it aliased:** `grep`/`fg` ran a
+  nonexistent `ripgrep`, `fg` lost job control, `diff` ran an unshipped
+  `delta`, root's `ls` failed on an eza flag that does not exist, and
+  `cat`/`grep` forced colour into pipes. Its run-once markers were exported, so
+  tmux panes and nested shells skipped it, and the starter `~/.zshrc` printed
+  `no such option: hist_substring_search` on every start and then overwrote the
+  starship prompt. Details in `tools/pengyos-server-toolset/CHANGELOG.md`.
+- **Gamepads' Rumble could not have worked** (wrong node, wrong ioctl numbers,
+  wrong struct, never started), `EVIOCGABS` was misnumbered, and the sysfs
+  bitmaps were read as 32-bit words, so a mouse listed as a keyboard. The
+  kernel fragment's `CONFIG_INPUT_FF_MEMSET` named a symbol that does not
+  exist. Details in `tools/pengyos-gamepads/CHANGELOG.md` (0.1.1).
+- **Seeding the Pengy config left `~/.config` owned by root** on Server and
+  Core, whose skeletons have no `~/.config`.
+- `board/desktop/post-build.sh` had lost its execute bit in the working tree.
+
 ### Changed: the userland agents keep tripping over is the real one — Rust coreutils, and no more cut-down applets
 
 Agents on PengyOS kept behaving as if the box were an initramfs: `find -printf`
@@ -88,8 +106,8 @@ place in a reproducible distro); the curated equivalent is now wired:
   and `/etc/profile.d/pengyos-shell.sh` source it; `/etc/skel/.zshrc` and a new
   `/etc/skel/.bashrc` source it for new accounts, and stay useful standalone on
   Core.
-- **The starter `~/.zshrc` gained the plugin-free oh-my-zsh bits:** Ctrl-R
-  substring history search, complete-in-word, cached/grouped/colored completion,
+- **The starter `~/.zshrc` gained the plugin-free oh-my-zsh bits:**
+  complete-in-word, cached/grouped/colored completion,
   git aliases — and it keeps the `%`-prompt fix (logind's CAP_WAKE_ALARM makes
   zsh's `%#` show `#` for a wheel user).
 - **Fixed in the profile:** `starship init sh` emits nothing (init is
@@ -158,13 +176,17 @@ exist, so the first chat was a stranger with no tools pointed at anything.
   never noticed). `input` is now an explicit row in `board/desktop/users.table`,
   the installer adds the owner (it was already in `USER_GROUPS`), and
   `merge-accounts` adds existing owners at the next boot.
-- **Rumble needed two things the image did not have**: `CONFIG_INPUT_FF_MEMSET`
-  (the kernel's force-feedback layer — with no FF driver built-in the option was
-  simply absent, so `EVIOCSFF` answered `ENOTTY`), and `joydev` loaded at boot
-  (`usr/lib/modules-load.d/pengyos-joydev.conf`) so `/dev/input/jsN` exists;
-  `90-pengyos-joystick.rules` hands the js node to `input` at 0660, because
-  systemd leaves it root:root at 0664 — readable, never writable.
-- **Measured:** 21 unit tests with no display and no `/dev` (the classification
+- **Rumble goes through the pad's event node.** Force feedback is an evdev
+  interface: upload a `FF_RUMBLE` effect (`EVIOCSFF`), start and stop it with
+  `EV_FF` writes, erase it (`EVIOCRMFF`). The event node is already the
+  `input` group's at 0660, and the pad drivers select `INPUT_FF_MEMLESS`, so
+  the image needed nothing new for it. `joydev` is loaded at boot
+  (`usr/lib/modules-load.d/pengyos-joydev.conf`) for the legacy
+  `/dev/input/jsN` API older games read, and `90-pengyos-joystick.rules`
+  gives that node the event nodes' group and mode instead of systemd's
+  world-readable 0664.
+- **Measured:** 25 unit tests with no display and no `/dev` (the ioctl numbers
+  and `ff_effect` layout checked against `<linux/input.h>`; the classification
   of eleven device shapes — a mouse never reads as a joystick, a wheel is not
   drawn as a gamepad; the sysfs capability-bitmask round trip and its word
   order; the event decoder; the live state, axis normalisation over the device's

@@ -1,7 +1,6 @@
-# The joystick device: rumble (force feedback) can only be requested on
-# /dev/input/jsN, and systemd's 50-udev-default.rules leaves it root:root at
-# mode 0664 — world-readable, so a test panel can read it, but nobody may
-# write, and EVIOCSFF is a write. Hand it to the `input` group, which the
-# desktop user is a member of (board/desktop/users.table + the installer's
-# USER_GROUPS). Same group and mode the event nodes already have.
+# The legacy joystick node /dev/input/jsN: systemd's 50-udev-default.rules
+# leaves it root:root at mode 0664, readable by every account on the machine.
+# Give it the same owner and mode as the event nodes of the same pad (group
+# `input`, 0660), which the desktop user is a member of
+# (board/desktop/users.table + the installer's USER_GROUPS).
 SUBSYSTEM=="input", KERNEL=="js[0-9]*", GROUP="input", MODE="0660"

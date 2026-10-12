@@ -821,8 +821,14 @@ def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
         settings = pengy_dir / Path(PENGY_CONFIG_REL).name
         settings.write_text(render_pengy_settings(answers))
         os.chmod(settings, 0o600)
-        _run(run, ["chroot", str(root), "chown", "-R", f"{answers.username}:{answers.username}",
-                   f"/home/{answers.username}/{Path(PENGY_CONFIG_REL).parent}"],
+        # Every path we may have created, not just the leaf: the Server and Core
+        # skeletons have no ~/.config, so mkdir(parents=True) made it as root,
+        # and a root-owned ~/.config locks the user out of every app's settings.
+        home = f"/home/{answers.username}"
+        rel = Path(PENGY_CONFIG_REL)
+        owned = [f"{home}/{p}" for p in reversed(rel.parents[:-1])] + [f"{home}/{rel}"]
+        _run(run, ["chroot", str(root), "chown", f"{answers.username}:{answers.username}",
+                   *owned],
              "giving the user their Pengy settings")
     # The same password for root: the image ships the build's default root
     # password, which every copy of the image would otherwise share.

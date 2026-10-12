@@ -111,12 +111,15 @@ def test_the_gamepads_app_is_wired_end_to_end():
         "to it at 0660, and without the group a user cannot read a controller"
     )
     frag = (ROOT / "buildroot-external" / "board" / "desktop" / "linux.fragment").read_text()
-    assert "CONFIG_INPUT_FF_MEMSET=y" in frag, "rumble needs the kernel's ff-memset layer"
+    # Rumble goes through the event node (EVIOCSFF + an EV_FF write); the
+    # pad drivers select INPUT_FF_MEMLESS themselves. There is no
+    # CONFIG_INPUT_FF_MEMSET: a line for it was once added here and kconfig
+    # dropped it silently.
+    assert "INPUT_FF_MEMSET" not in frag, "CONFIG_INPUT_FF_MEMSET does not exist"
     assert "CONFIG_INPUT_JOYDEV=m" in frag
     overlay = ROOT / "buildroot-external" / "board" / "desktop" / "rootfs-overlay"
     assert (overlay / "usr/lib/modules-load.d/pengyos-joydev.conf").is_file(), (
-        "joydev must load at boot: /dev/input/jsN is the only node a rumble "
-        "request can be sent on"
+        "joydev must load at boot so legacy games find /dev/input/jsN"
     )
     rules = (overlay / "usr/lib/udev/rules.d/90-pengyos-joystick.rules").read_text()
     assert 'KERNEL=="js[0-9]*"' in rules and 'GROUP="input"' in rules
