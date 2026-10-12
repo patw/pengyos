@@ -145,10 +145,14 @@ description = "the serial console reached a login prompt with the Server hostnam
 # that proves autologin worked is the shell prompt after the login banner, which
 # is why the harness keeps reading the serial log after readiness
 # (boot.DEFAULT_SETTLE_SECONDS) and why the window below is bounded.
+# The prompt is the plain `# ` or the comfort shell's starship `❯` (Server
+# since 26.10.25: root's console shows `root ~ ❯`, after two systemd OSC 3008
+# context sequences of ~500 bytes — hence the 2000-byte window). 26.10.27's
+# release run failed here on a healthy image while the pattern knew only `# `.
 [[check]]
 id = "autologin-shell"
 kind = "present"
-pattern = "pengyos-server login: root \\(automatic login\\)[\\s\\S]{0,900}?# "
+pattern = "pengyos-server login: root \\(automatic login\\)[\\s\\S]{0,2000}?(# |❯)"
 description = "autologin produced a working shell (the prompt after the login banner), not just a login line"
 
 [[check]]

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-12
+
+### Fixed
+- **`autologin-shell` failed a healthy Server image.** Since 26.10.25 the Server
+  root console runs the comfort shell, whose prompt is starship's `root ~ ❯`,
+  not `# `, and it follows ~500 bytes of systemd OSC 3008 context sequences.
+  The Core and Server matrices' pattern knew only `# ` within 900 bytes, so
+  26.10.27's release run stopped at Server with every other check green. The
+  pattern now accepts `# ` or `❯` within 2000 bytes of this login's banner; the
+  real serial log is a fixture (`serial_login_server_starship.log`), and the
+  "Permission denied" login of 26.10.3 still fails both checks.
+
 ## [0.6.0] - 2026-10-08
 
 ### Added

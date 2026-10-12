@@ -793,3 +793,23 @@ def test_server_matrix_requires_the_servers_own_autologin_shell():
     assert run_assertions(core_log, (check.to_assertion(),))[0].passed is False
     server_log = SERVER_UEFI_LOG.read_text(encoding="utf-8", errors="replace")
     assert run_assertions(server_log, (check.to_assertion(),))[0].passed is True
+
+
+SERVER_STARSHIP_LOG = Path(__file__).parent / "fixtures" / "serial_login_server_starship.log"
+
+
+def test_server_autologin_shell_accepts_the_starship_prompt():
+    """26.10.27's release run: a healthy Server image whose root console shows
+    the comfort shell's starship prompt (`root ~ ❯`, after ~500 bytes of systemd
+    OSC 3008 context sequences) failed autologin-shell, which only knew `# `.
+    The real serial log is the fixture; the old plain-`# ` boot still passes and
+    a login that never produced a shell still fails (test above)."""
+    matrix = smoke.load_matrix(str(SERVER_MATRIX))
+    check = _check(matrix, "autologin-shell")
+    log = SERVER_STARSHIP_LOG.read_text(encoding="utf-8", errors="replace")
+    assert "\u276f" in log and "# " not in log.split("(automatic login)")[-1]
+    assert run_assertions(log, (check.to_assertion(),))[0].passed is True
+    old = SERVER_UEFI_LOG.read_text(encoding="utf-8", errors="replace")
+    assert run_assertions(old, (check.to_assertion(),))[0].passed is True
+    outcome = smoke.run_matrix(matrix, "img", boot_fn=_boot_from(SERVER_STARSHIP_LOG))
+    assert outcome.passed is True, [v.failed_checks for v in outcome.variants]
