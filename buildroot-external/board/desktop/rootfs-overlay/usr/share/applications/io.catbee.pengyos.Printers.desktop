@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Printers
+GenericName=Printer Settings
+Comment=Add and remove printers, see and manage the print queue, and print a test page
+Keywords=printer;print;printing;queue;job;cancel;test page;driver;cups;ipp;airprint;
+Icon=printer
+Exec=pengyos-printers
+Terminal=false
+Categories=COSMIC;Settings;HardwareSettings;Printing;
+StartupNotify=true
+Actions=add;
+
+[Desktop Action add]
+Name=Add a printer
+Exec=pengyos-printers --add

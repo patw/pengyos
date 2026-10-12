@@ -1,0 +1,35 @@
+# Printers (pengyos-printers): add and remove printers, manage the print queue
+# and print a test page, over CUPS' own protocol (IPP on its local socket).
+#
+# The decision logic (lib.rs), the IPP wire format (ipp.rs) and the CUPS client
+# (cups.rs) are all std only, so `cargo test` needs no display and no CUPS. The
+# window is behind `cosmic` (libcosmic), off by default — the same shape as
+# pengyos-disks and pengyos-gamepads.
+[package]
+name = "pengyos-printers"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+description = "Printers: add and remove printers, manage the print queue and print a test page on the COSMIC desktop."
+
+[features]
+default = []
+cosmic = ["dep:libcosmic"]
+
+[lib]
+name = "pengyos_printers"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-printers"
+path = "src/main.rs"
+
+# Same pinned libcosmic and feature set as pengyos-install-gui, pengyos-updates,
+# pengyos-disks and pengyos-gamepads, so all five build from one cache
+# (CARGO_TARGET_DIR=~/cosmic-build/install-gui).
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
+features = ["about", "single-instance", "markdown", "qr_code", "wgpu", "xdg-portal"]
