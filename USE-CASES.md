@@ -466,9 +466,10 @@ project with the box's toolchain, and its extensions persist across image update
 > *As the daily-driver user, I want to add my printer and scanner and use them from apps,
 > so paper still works.*
 
-How: CUPS + drivers and SANE, with a way to *add* a printer from the desktop (today the
-Desktop has CUPS but no visible printer/scanner UI). Candidate for the printing
-**extension** (US-ALL-2) rather than the base.
+How: CUPS + drivers and SANE, with a way to *add* a printer from the desktop: the
+Printers app (`tools/pengyos-printers`) finds, adds and removes printers, manages the
+queue and prints a test page. There is still no scanner UI of our own. Candidate for the
+printing **extension** (US-ALL-2) rather than the base.
 **Acceptance:** a network printer is discovered and added from the GUI; an app prints a
 test page; a scanner is found and scans from a scanning app.
 

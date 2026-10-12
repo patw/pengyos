@@ -35,8 +35,8 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   moved (events were queued and never drained), 15 input codes were wrong
   against the kernel header (the D-pad showed as stray bars), and the window
   listed every keyboard and audio jack above the pad. 0.1.2 fixes all three
-  and lays the panel out like an Xbox pad, with a no-overlap test; buttons,
-  buttons and rumble confirmed by hand on behoweather.
+  and lays the panel out like an Xbox pad, with a no-overlap test; buttons
+  and rumble confirmed by hand on behoweather.
 - **Seeding the Pengy config left `~/.config` owned by root** on Server and
   Core, whose skeletons have no `~/.config`.
 - `board/desktop/post-build.sh` had lost its execute bit in the working tree.
@@ -46,6 +46,32 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   `FZF_DEFAULT_OPTS` defaulted to `-height …`, which fzf rejects.
 - **The starship theme did not parse**: every prompt printed
   `Error parsing "format"` (seen on the first QEMU boot of the review build).
+
+### Added: Printers — add a printer, manage the queue and print a test page without a browser
+- **Managing printers meant CUPS' web pages.** COSMIC Settings (epoch 1.9) has
+  no printer page, so the "Printers" launcher opened `localhost:631` in a
+  browser: a password prompt, CUPS' vocabulary, and no way to see the queue
+  from the desktop (US-DSK-13).
+- **`tools/pengyos-printers`** (*Printers*, MIT, libcosmic, host-built like
+  Disks and Gamepads, in `scripts/build-cosmic.sh`'s app list): the printers
+  with status in words and supply levels, Print test page, Pause/Resume, Make
+  default and Remove…; the print queue with Cancel, Hold/Resume and Cancel all;
+  the last few finished documents. **Add printer…** lists what CUPS finds on USB
+  and the network (one entry per printer, driverless first) or takes an
+  address, and recommends the driverless (IPP Everywhere) driver whenever the
+  printer supports it, else the drivers matching its device ID or model, with a
+  search over all ~5,500. It speaks IPP to cupsd's local socket with peer
+  credentials, so wheel members change printers with **no password**; others
+  can look and are told they cannot change anything.
+- **The old launcher is gone** (`pengyos-printers.desktop` →
+  `io.catbee.pengyos.Printers.desktop`, with an "Add a printer" action), and
+  the Desktop post-build deletes it from existing build trees.
+- Tested on behoweather against the network Brother MFC-L3720CDW and a
+  throwaway `socket://` queue: add (driverless and a model driver), default,
+  pause, test page, hold, release, cancel, resume, remove, and a non-wheel user
+  refused. It found one real bug in the obvious approach: the image's test page
+  is cups-filters' PDF banner, and declaring it as CUPS' own banner format is
+  refused ("Unsupported format"), so the format is read from the file.
 
 ### Changed: the userland agents keep tripping over is the real one — Rust coreutils, and no more cut-down applets
 

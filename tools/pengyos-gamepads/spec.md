@@ -17,8 +17,8 @@ and the Desktop ships the controller drivers, `steam-devices` and GameMode for
 it. But a controller is invisible until a game opens: nothing shows what is
 attached, and nothing lets you check a stick calibration, a dead button or a
 stuck trigger without launching Steam and finding a title with a pad setup
-screen. COSMIC has no gamepad page; the Printer gap was closed the same way
-(`pengyos-printers.desktop`), the disk gap with Disks.
+screen. COSMIC has no gamepad page; the printer gap was closed the same way
+(Printers, `tools/pengyos-printers`), the disk gap with Disks.
 
 ## Deliverable
 A Rust crate `pengyos-gamepads` (MIT), built like `pengyos-disks`:

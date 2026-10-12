@@ -31,9 +31,10 @@ APPS_DIR = (
     / "usr" / "share" / "applications"
 )
 
-# Launchers that point at something other than a PengyOS app binary (the
-# Printers entry opens CUPS' web pages through xdg-open).
-NON_APP_LAUNCHERS = {"pengyos-printers.desktop"}
+# Launchers that point at something other than a PengyOS app binary. (The old
+# Printers entry, pengyos-printers.desktop, opened CUPS' web pages through
+# xdg-open; the Printers app replaced it.)
+NON_APP_LAUNCHERS: set[str] = set()
 
 
 def _app_list() -> list[str]:
@@ -83,9 +84,9 @@ def test_apps_are_built_and_installed():
 
 
 def test_the_desktop_apps_have_launchers():
-    """The two apps that are meant to be opened from the Applications list."""
+    """The apps that are meant to be opened from the Applications list."""
     programs = set(_launchers().values())
-    for app in ("pengyos-disks", "pengyos-gamepads", "pengyos-updates"):
+    for app in ("pengyos-disks", "pengyos-gamepads", "pengyos-printers", "pengyos-updates"):
         assert app in programs, f"{app} is installed but no .desktop launcher runs it"
 
 
@@ -123,3 +124,23 @@ def test_the_gamepads_app_is_wired_end_to_end():
     )
     rules = (overlay / "usr/lib/udev/rules.d/90-pengyos-joystick.rules").read_text()
     assert 'KERNEL=="js[0-9]*"' in rules and 'GROUP="input"' in rules
+
+
+def test_the_printers_app_is_wired_end_to_end():
+    """Printers replaced a launcher that opened CUPS' web pages: the app must be
+    built, installed and launched, the old launcher gone from the overlay *and*
+    deleted from existing build trees (Buildroot never removes target files, so
+    a tree that shipped it would keep listing two "Printers"), and wheel must
+    stay a CUPS admin group, or the app could not add a printer."""
+    assert "pengyos-printers" in _app_list()
+    assert "pengyos-printers" in _installed_bins()
+    launchers = _launchers()
+    assert launchers.get("io.catbee.pengyos.Printers.desktop") == "pengyos-printers"
+    assert "pengyos-printers.desktop" not in launchers
+    desktop = (APPS_DIR / "io.catbee.pengyos.Printers.desktop").read_text()
+    assert "Exec=pengyos-printers --add" in desktop, "the launcher's Add a printer action"
+    post = POST_BUILD.read_text(encoding="utf-8")
+    assert 'rm -f "${TARGET_DIR}/usr/share/applications/pengyos-printers.desktop"' in post
+    assert re.search(r"SystemGroup lpadmin sys root wheel", post), (
+        "the app administers CUPS by peer credentials as a wheel member"
+    )

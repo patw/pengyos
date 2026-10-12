@@ -150,6 +150,18 @@ else
     echo "post-build: ${GAMEPADS_GUI} not built — no Gamepads app (controllers are invisible)"
 fi
 
+# --- Printers (add/remove printers, the print queue, test pages) ---------------
+# tools/pengyos-printers, host-built the same way. It talks IPP to cupsd on its
+# local socket; wheel members administer CUPS (SystemGroup, below) with no
+# password, by peer credentials. The .desktop file is in the overlay.
+PRINTERS_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-printers"
+if [ -x "${PRINTERS_GUI}" ]; then
+    install -Dm0755 "${PRINTERS_GUI}" "${TARGET_DIR}/usr/bin/pengyos-printers"
+    echo "post-build: installed pengyos-printers"
+else
+    echo "post-build: ${PRINTERS_GUI} not built — no Printers app (adding a printer needs a terminal)"
+fi
+
 # --- Strip the host-built binaries ---------------------------------------------
 # Buildroot strips target binaries before post-build runs, so everything copied in
 # above (COSMIC, pop-launcher, the installer GUI) arrived with its symbol tables.
@@ -157,7 +169,8 @@ STRIP_BIN="$(ls "${HOST_DIR}"/bin/*-buildroot-linux-gnu-strip 2>/dev/null | head
 if [ -n "${STRIP_BIN}" ]; then
     for f in "${TARGET_DIR}"/usr/bin/cosmic-* "${TARGET_DIR}"/usr/bin/pop-launcher \
              "${TARGET_DIR}"/usr/bin/pengyos-install-gui "${TARGET_DIR}"/usr/bin/pengyos-updates \
-             "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-gamepads; do
+             "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-gamepads \
+             "${TARGET_DIR}"/usr/bin/pengyos-printers; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
     echo "post-build: stripped host-built binaries"
@@ -686,6 +699,9 @@ rm -f "${TARGET_DIR}/etc/NetworkManager/conf.d/10-pengyos.conf" \
       "${TARGET_DIR}/etc/wpa_supplicant.conf" \
       "${TARGET_DIR}/wifi-firmware.txt"
 rmdir "${TARGET_DIR}/etc/skel/.config/cosmic-settings" 2>/dev/null || true
+# The "Printers" launcher that opened CUPS' web pages, replaced by the Printers
+# app (io.catbee.pengyos.Printers.desktop) on 2026-10-12.
+rm -f "${TARGET_DIR}/usr/share/applications/pengyos-printers.desktop"
 
 # --- Host names: .local through avahi first (nss-mdns) -------------------------
 # One mDNS stack, avahi (resolved.conf.d sets MulticastDNS=no). systemd's recipe
@@ -701,15 +717,16 @@ if grep -q '^hosts:' "${TARGET_DIR}/etc/nsswitch.conf" && \
 fi
 
 # --- One printer launcher --------------------------------------------------------
-# CUPS ships cups.desktop ("Manage Printing", opens localhost:631); it
-# duplicated our "Printers" launcher (pengyos-printers.desktop, same page).
+# CUPS ships cups.desktop ("Manage Printing", opens localhost:631); the Printers
+# app (io.catbee.pengyos.Printers.desktop) does that job.
 rm -f "${TARGET_DIR}/usr/share/applications/cups.desktop"
 
 # --- CUPS administration: the wheel group --------------------------------------
 # The desktop user is in wheel (the installer adds it; sudo too); CUPS only let
-# lpadmin/sys/root add printers or change defaults through its admin pages (the
-# "Printers" launcher). CUPS is built without PAM and checks the password
-# against /etc/shadow itself.
+# lpadmin/sys/root add printers or change defaults. With wheel in SystemGroup the
+# Printers app (and lpadmin) administer CUPS over its local socket by peer
+# credentials, with no password; CUPS' web pages still ask for one (CUPS is
+# built without PAM and checks it against /etc/shadow itself).
 if [ -f "${TARGET_DIR}/etc/cups/cups-files.conf" ]; then
     sed -i -E 's/^SystemGroup .*/SystemGroup lpadmin sys root wheel/' "${TARGET_DIR}/etc/cups/cups-files.conf"
     grep -q '^SystemGroup .*wheel' "${TARGET_DIR}/etc/cups/cups-files.conf"

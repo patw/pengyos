@@ -139,7 +139,7 @@ fi
 
 # Our libcosmic apps share one target dir so they share the libcosmic build.
 if [ "${FETCH_ONLY}" = 0 ]; then
-    for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-gamepads; do
+    for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-gamepads pengyos-printers; do
         wanted "${app}" || continue
         echo "[cosmic] cargo build --release -p ${app} --features cosmic"
         (cd "${REPO}/tools/${app}" && \
