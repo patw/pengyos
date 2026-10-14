@@ -27,10 +27,15 @@ jobs:
 
       # Disk-image tests use these when present and skip without them; the
       # QEMU/swtpm/OVMF integration tests are opt-in (PENGYOS_IT) and skip here.
+      # zsh is NOT optional: test_server_comfort_shell parses the login-shell
+      # profile with `zsh -n` and has no skipif, because a profile that zsh
+      # cannot parse breaks every Server login shell. The runner image has no
+      # zsh, so it must be installed here (it was missing 2026-10-12→14: the
+      # suite failed with FileNotFoundError: 'zsh' on every push).
       - name: Host tools for the image tests
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gdisk dosfstools mtools zstd
+          sudo apt-get install -y --no-install-recommends gdisk dosfstools mtools zstd zsh
 
       # The Rust tools' default `cargo test` is std-only (libcosmic is behind an
       # off-by-default feature), so the runner's stable toolchain is enough.
