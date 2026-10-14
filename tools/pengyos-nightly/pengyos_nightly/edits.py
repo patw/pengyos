@@ -167,12 +167,80 @@ def _split_top(args: str) -> list[str]:
     return [a.strip() for a in out]
 
 
-def expand(raw: dict, prefix: str, version: str, name: str) -> dict:
+# Buildroot does not always fetch the archive its SITE names. For a package it pulls
+# from a VCS it *rebuilds* the archive itself, and Buildroot decides both its name and
+# its bytes:
+#
+#   package/pkg-generic.mk:572   $(2)_SOURCE ?= $(2)_BASENAME_RAW$(call pkg_source_ext,$(2))
+#   package/pkg-utils.mk:51      pkg_source_ext = $(BR_FMT_VERSION_$($(1)_SITE_METHOD))
+#                                        $(BR_FMT_VERSION_$($(1)_DOWNLOAD_POST_PROCESS)).tar.gz
+#   package/pkg-download.mk:12-15   BR_FMT_VERSION_git = -git4, -svn5, -go2, -cargo6
+#   package/pkg-golang.mk:101    $(2)_DOWNLOAD_POST_PROCESS = go
+#   package/pkg-cargo.mk:190     $(2)_DOWNLOAD_POST_PROCESS = cargo
+#
+# So an authored golang recipe with no explicit *_SOURCE ships `fzf-0.74.5-go2.tar.gz`,
+# and the sha256 check-hash wants is the sha256 of an archive Buildroot generated. A hash
+# written under `<name>-<version>.tar.gz` names a file the build never produces: check-hash
+# exits 3, dl-wrapper treats that as fatal, and the download step dies. Measured on
+# 2026-10-12: fzf 0.74.5 failed exactly this way, and the component was then blacklisted.
+BR_FMT_VERSION = {"git": "-git4", "svn": "-svn5", "go": "-go2", "cargo": "-cargo6"}
+
+# The infra that sets a DOWNLOAD_POST_PROCESS, read from the recipe's own eval line.
+INFRA_POST_PROCESS = {"golang": "go", "cargo": "cargo"}
+
+
+def infra_post_process(mk_text: str) -> str:
+    """Which download post-process Buildroot applies, from the recipe's own infra line."""
+    m = re.search(r"\$\(eval\s+\$\((golang|cargo)-package\)\)", mk_text)
+    return INFRA_POST_PROCESS.get(m.group(1), "") if m else ""
+
+
+def site_method(raw: dict, coords: dict) -> str:
+    """Buildroot's `$(PKG)_SITE_METHOD`: the recipe's own, else the SITE's URI scheme.
+
+    package/pkg-generic.mk:606-611. Only git and svn carry a BR_FMT_VERSION, which is why
+    an ordinary https tarball gets no suffix at all.
+    """
+    explicit = (raw.get("SITE_METHOD") or "").strip()
+    if explicit:
+        return explicit
+    m = re.match(r"^([A-Za-z][A-Za-z0-9+.-]*)://", coords.get("SITE") or "")
+    return m.group(1) if m else ""
+
+
+def source_suffix(mk_text: str, raw: dict, coords: dict) -> str:
+    """Buildroot's `pkg_source_ext` for this recipe: the archive extension, suffix included."""
+    post = (raw.get("DOWNLOAD_POST_PROCESS") or "").strip() or infra_post_process(mk_text)
+    ext = BR_FMT_VERSION.get(site_method(raw, coords), "") + BR_FMT_VERSION.get(post, "")
+    return ext + ".tar.gz"
+
+
+def hash_is_generated(mk_text: str, raw: dict, coords: dict) -> bool:
+    """True when Buildroot *builds* the archive, so its sha256 exists only after a build.
+
+    The honest answer to "what is this tarball's hash?" for a golang/cargo recipe is not a
+    download: Buildroot clones the repo and re-tars it. Hashing the SITE archive here
+    produces a real digest of the wrong file - measured 2026-10-12, fzf 0.74.5's generated
+    archive is 45fa3fb8..., GitHub's own tarball at the SITE URL is 5529d088...
+    An explicit *_SOURCE means the recipe names a real file, so it stays downloadable.
+    """
+    if (raw.get("SOURCE") or "").strip():
+        return False
+    post = (raw.get("DOWNLOAD_POST_PROCESS") or "").strip() or infra_post_process(mk_text)
+    return post in ("go", "cargo")
+
+
+def expand(raw: dict, prefix: str, version: str, name: str,
+           mk_text: str = "") -> dict:
     """Expand the download coordinates with `version` substituted for VERSION.
 
     Handles `$(PKG_VAR)` references (nested) and Buildroot's
     `$(call github,owner,name,ref)` macro. Anything it cannot resolve stays
     unresolved, so the caller sees a broken URL instead of a plausible wrong one.
+
+    `mk_text` lets the default source name follow Buildroot's own rule (see
+    `source_suffix`); without it the caller keeps the pre-2026.10 behaviour of a bare
+    `.tar.gz`, which is what a plain https tarball actually is.
     """
     values = dict(raw)
     values["VERSION"] = version
@@ -210,7 +278,9 @@ def expand(raw: dict, prefix: str, version: str, name: str) -> dict:
     out = {k: render(values[k]) for k in ("VERSION", "SITE", "SOURCE", "SOURCE_SUFFIX")
            if k in values}
     if not out.get("SOURCE"):
-        out["SOURCE"] = f"{name}-{version}{out.get('SOURCE_SUFFIX') or '.tar.gz'}"
+        # A recipe's own *_SOURCE_SUFFIX is an explicit override; otherwise the extension
+        # is Buildroot's, suffix included - the part that was missing before 2026.10.14.
+        out["SOURCE"] = f"{name}-{version}{out.get('SOURCE_SUFFIX') or source_suffix(mk_text, raw, out)}"
     return out
 
 
@@ -265,6 +335,41 @@ def download_hash(url: str, filename: str, get=fetch_bytes) -> HashInfo:
     """Hash the artifact ourselves. Honest about what that means."""
     return HashInfo(sha256=sha256_of(get(url)), filename=filename,
                     source="self-attested (downloaded here)", url=url)
+
+
+class GeneratedHashError(Exception):
+    """Buildroot could not produce the archive, or produced a file we cannot read."""
+
+
+def generated_hash(run, build_root: Path, br_version: str, external_tree: str,
+                   target: str, pkg: str, filename: str) -> HashInfo:
+    """Let Buildroot build the archive, then hash the file Buildroot actually produced.
+
+    This is the only way to get a true hash for a golang/cargo recipe: Buildroot clones the
+    repo and re-tars it (`-go2` / `-cargo6`), so the digest `check-hash` will compare against
+    exists only after `<pkg>-source` has run. `run` is injected so this is testable without
+    a build tree, exactly like `dirclean_package`.
+
+    Raises GeneratedHashError rather than returning a plausible digest: a hash of the wrong
+    file is worse than no hash, because it passes the plan and fails the build.
+    """
+    src = build_root / f"buildroot-{br_version}"
+    import os
+    env = {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
+    p = run(["make", "-C", str(src), f"O={build_root / 'output' / target}",
+             f"BR2_EXTERNAL={external_tree}", f"{pkg}-source"],
+            capture_output=True, text=True, env=env)
+    if p.returncode != 0:
+        out = (p.stdout or "") + (p.stderr or "")
+        raise GeneratedHashError(f"make {pkg}-source exited {p.returncode}: {out[-400:]}")
+    # BR2_DL_DIR = $(TOPDIR)/dl (see output/<target>/.config), shared across editions.
+    archive = src / "dl" / pkg / filename
+    if not archive.is_file():
+        raise GeneratedHashError(
+            f"make {pkg}-source succeeded but {archive} is not there; the archive Buildroot "
+            f"names is the one the hash must be keyed to")
+    return HashInfo(sha256=sha256_of(archive.read_bytes()), filename=filename,
+                    source=f"generated by Buildroot (make {pkg}-source, {target})")
 
 
 # --- the shapes --------------------------------------------------------------
@@ -731,13 +836,31 @@ def patch_slug(patch_text: str, sha: str) -> str:
 
 def recipe_bump(repo: Path, pkg: str, mk_text: str, hash_text: str, target: str,
                 get=fetch_bytes) -> tuple[list[Edit], HashInfo]:
-    """A package we author: change its own .mk and its own .hash."""
+    """A package we author: change its own .mk and its own .hash.
+
+    A golang/cargo recipe gets no .hash edit from here, on purpose: Buildroot generates
+    that archive itself, so its sha256 does not exist until `<pkg>-source` has run. The
+    returned HashInfo says so (`source="generated ..."`) with the filename Buildroot will
+    look for, and the act lane fills it in from the file the build produced
+    (see act.run_batch's generated-hash step). Writing a download-and-hash here would name
+    a file the build never produces and blacklist the component - that is how fzf 0.74.5
+    was lost on 2026-10-12.
+    """
     name = Path(pkg).name
     prefix = recipe_prefix(mk_text, "")
     raw = read_recipe(mk_text, prefix)
     current = raw.get("VERSION", "")
-    coords = expand(raw, prefix, target, name)
+    coords = expand(raw, prefix, target, name, mk_text)
     filename = coords.get("SOURCE") or f"{name}-{target}.tar.gz"
+
+    if hash_is_generated(mk_text, raw, coords):
+        hi = HashInfo(sha256="", filename=filename,
+                      source="generated by Buildroot (make "
+                             f"{name}-source); sha256 read from the archive it produces")
+        return [Edit(path=f"buildroot-external/package/{name}/{name}.mk", kind="replace",
+                     old=f"{prefix}_VERSION = {current}",
+                     new=f"{prefix}_VERSION = {target}",
+                     note=f"authored recipe: {name} {current} -> {target}")], hi
 
     hi = upstream_hash(hash_text, current, target, filename, get)
     if hi is None:
@@ -767,6 +890,22 @@ def _hash_block(hi: HashInfo, comment: str) -> str:
     lines = [comment, f"sha256  {hi.sha256}  {hi.filename}"]
     lines += hi.extra
     return "\n".join(lines) + "\n"
+
+
+def generated_hash_edit(pkg: str, hash_text: str, current: str, hi: HashInfo) -> Edit:
+    """The .hash edit recording a hash Buildroot's own build produced.
+
+    Same file shape as a `recipe_bump` hash edit, and deliberately built here rather than
+    in the act lane: the .hash format belongs to this module, and a second writer of it in
+    act.py is a second format to drift. The comment says where the digest came from, so a
+    reader of the recipe can tell a generated archive from an upstream checksum.
+    """
+    name = Path(pkg).name
+    hi.extra = carry_license_hashes(hash_text, current)
+    return Edit(path=f"buildroot-external/package/{name}/{name}.hash", kind="replace",
+                old=_tarball_lines(hash_text, current),
+                new=_hash_block(hi, comment=f"# Generated by Buildroot (make {name}-source)"),
+                note=f"tarball hash for {hi.filename} ({hi.source})")
 
 
 def apply_edits(repo: Path, edits: list[Edit]) -> list[str]:

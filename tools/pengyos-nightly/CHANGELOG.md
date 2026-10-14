@@ -7,6 +7,22 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **A golang/cargo bump now hashes the archive Buildroot actually builds.** `recipe_bump`
+  named the tarball `<name>-<version>.tar.gz` — Buildroot's *default* — but golang and cargo
+  infra append their own suffix (`pkg-utils.mk:51` `pkg_source_ext`, `pkg-download.mk:12-15`
+  `-go2`/`-cargo6`, `pkg-golang.mk:101`, `pkg-cargo.mk:190`), so the `.hash` line named a file
+  the build never produces. `check-hash` exits 3, `dl-wrapper` treats that as fatal, the
+  download step dies, and the component is recorded as known-bad. Measured on 2026-10-12:
+  `routine-fzf-0.74.5` failed exactly this way and fzf stayed refused.
+  The digest is also *unobtainable* by download-and-hash: Buildroot clones the repo and
+  re-tars it, so hashing the SITE URL yields a true digest of the wrong file (fzf 0.74.5:
+  generated archive `45fa3fb8…`, GitHub's own tarball `5529d088…`). The plan now carries the
+  `.mk` edit alone plus an honest `hash_generated` marker naming the file Buildroot will
+  produce, and the act lane runs `make <pkg>-source` and hashes the archive it finds —
+  verified against the live tree: for fzf 0.74.4 it computes `de72d134…`, byte-identical to
+  the hand-authored line in `fzf.hash`. A recipe with an explicit `*_SOURCE` (cosmic-portal)
+  is unaffected: Buildroot downloads that file, so a download-and-hash stays correct.
+  No golang/cargo recipe fixture existed before this, which is why the defect survived.
 - **A finding about an authored recipe must be keyed by the package name.** The PengyR
   source emitted `component: "pengyr"`; `obs["packages"]` is keyed `pengy` (pkg-stats
   names our authored recipe by its Buildroot package). The planner's join found nothing,
@@ -23,6 +39,10 @@ versions follow [SemVer](https://semver.org/).
   build would fail on it. `pengy` joins `DENIED` with that reason and the manual recipe
   (`make pengy-source`, record the hash it reports). Without the first fix the refusal
   would have been attributed to invented guards.
+  *(Superseded on this point by 0.12.1 above: the lane can now read the generated archive's
+  hash itself, so this reason no longer describes a limit of the tool. Keeping `pengy` in
+  `DENIED` is now an operator policy call, not a technical necessity — the hand-bump recipe
+  still works, it is just no longer the only way.)*
 - **`test_status_reads_a_recovered_batch_as_recovered` was date-sensitive.** It logged a
   batch dated 2026-10-08 and asserted `"1 published today"` while letting `do_status` read
   the wall clock, so it passed only on 2026-10-08 and failed every day since. `today` is

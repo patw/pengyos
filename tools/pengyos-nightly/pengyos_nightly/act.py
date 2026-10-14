@@ -832,6 +832,17 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     step("guards", True, f"{len(actions)} action(s) allowed, key present, tree clean, "
                          f"{why}, {runnable}")
 
+    # Build coordinates, read once. Needed by the generated-hash step below as well as by
+    # the pre-flight, and a tree that cannot be described is a bail before anything is spent.
+    try:
+        import tomllib
+        targets = tomllib.loads((repo / "targets.toml").read_text())["targets"]
+        by_name = {t["name"]: t for t in targets}
+        br_version = targets[0]["br_version"]
+        tree = str((repo / by_name[actions[0]["editions"][0]]["external_tree"]).resolve())
+    except (OSError, ValueError, KeyError) as exc:
+        return bail("targets.toml", f"could not read the build targets: {exc}")
+
     # --- one branch; every edit applied, but nothing committed yet ------------
     # The order matters: pre-flight decides *which* changes are real, and a change
     # that fails it must not end up in the commit that gets published and merged.
@@ -851,16 +862,34 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     except (RuntimeError, ValueError, OSError) as exc:
         return bail("local edit", str(exc))
 
-    # --- pre-flight every package: cheap, and it decides what is real ---------
-    try:
-        import tomllib
-        targets = tomllib.loads((repo / "targets.toml").read_text())["targets"]
-        by_name = {t["name"]: t for t in targets}
-        br_version = targets[0]["br_version"]
-        tree = str((repo / by_name[actions[0]["editions"][0]]["external_tree"]).resolve())
-    except (OSError, ValueError, KeyError) as exc:
-        return bail("targets.toml", f"could not read the build targets: {exc}")
+    # --- a generated archive's hash can only be read from the build -----------
+    # The .mk edit is in the tree now, so `make <pkg>-source` produces the very archive
+    # Buildroot will check, and the hash is keyed to the filename Buildroot names. Here
+    # and not in the plan because the plan cannot know this digest: Buildroot clones the
+    # repo and re-tars it (-go2 / -cargo6), so hashing the SITE URL yields a true digest
+    # of the wrong file. That is what blacklisted fzf 0.74.5 on 2026-10-12.
+    # The edit is appended to the action's edits so a bail or a drop takes it back out
+    # with the rest of the change (see _revert_dropped).
+    for a in actions:
+        if not a.get("hash_generated"):
+            continue
+        want = (a.get("hash") or {}).get("filename") or ""
+        edition = a["editions"][0]
+        hash_path = f"buildroot-external/package/{a['component']}/{a['component']}.hash"
+        try:
+            hi = E.generated_hash(run, build_root, br_version, tree, edition,
+                                  a["component"], want)
+            he = E.generated_hash_edit(a["component"], (repo / hash_path).read_text(),
+                                       a.get("current") or "", hi)
+            touched[a["id"]] += E.apply_edits(repo, [he])
+        except (E.GeneratedHashError, OSError, ValueError) as exc:
+            return bail("generated hash", f"{a['component']}: {exc}")
+        a["edits"].append(vars(he))
+        a["hash"] = vars(hi)
+        step(f"hash {a['component']}", True,
+             f"{he.note}: {hi.sha256[:16]}...")
 
+    # --- pre-flight every package: cheap, and it decides what is real ---------
     live: list[dict] = []
     for a in actions:
         triaged = triage_package(run, repo, build_root, br_version, tree, a["editions"], a)
