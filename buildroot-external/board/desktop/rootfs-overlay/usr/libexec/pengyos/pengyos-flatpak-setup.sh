@@ -12,9 +12,15 @@ MARK=/var/lib/flatpak/.pengyos-setup
 
 mkdir -p /var/lib/flatpak
 
-# Flathub remote (this also initialises the repo).
+# Flathub remote (this also initialises the repo). Offline this fails, and so
+# must the script: it used to carry on and write the marker, so a machine
+# installed before it joined a network never got a system Flathub, the Store
+# listed no sources, and anything added by hand became a per-user remote
+# (a laptop on 26.10.27, 2026-10-13). The service retries, and
+# NetworkManager's dispatcher (50-pengyos-flatpak-setup) starts it again the
+# moment a connection reaches the internet.
 /usr/bin/flatpak --system remote-add --if-not-exists flathub \
-    https://dl.flathub.org/repo/flathub.flatpakrepo || true
+    https://dl.flathub.org/repo/flathub.flatpakrepo
 
 # flatpak's 500 MB default min-free-space blocks appstream/app pulls on this
 # ~1.8 GB root; lower it.

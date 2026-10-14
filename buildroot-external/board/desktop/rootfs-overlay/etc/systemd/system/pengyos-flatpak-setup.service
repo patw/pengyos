@@ -5,11 +5,17 @@ Documentation=https://github.com/pop-os/cosmic-store
 After=network-online.target
 Wants=network-online.target
 ConditionPathExists=!/var/lib/flatpak/.pengyos-setup
+StartLimitIntervalSec=0
 
+# Offline (installed before joining a network), the remote-add fails: retry,
+# and 50-pengyos-flatpak-setup in NetworkManager's dispatcher starts it as soon
+# as a connection is up rather than waiting out RestartSec.
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/libexec/pengyos/pengyos-flatpak-setup.sh
+Restart=on-failure
+RestartSec=10min
 
 [Install]
 WantedBy=multi-user.target

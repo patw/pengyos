@@ -17,6 +17,25 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — installing offline and joining wifi afterwards left the Store with no sources and Store apps out of every menu (found on a laptop running 26.10.27)
+- **The COSMIC Store listed no sources.** `pengyos-flatpak-setup.sh` ignored a
+  failed `flatpak remote-add flathub` (no network on the first boot) and still
+  wrote its `.pengyos-setup` marker, so it never ran again and the machine had
+  no system Flathub. It now fails without the marker and retries
+  (`Restart=on-failure`).
+- **Apps installed from the Store appeared in no menu.** With no system remote,
+  the sources added by hand were per-user, so the Store installed into
+  `~/.local/share/flatpak`. `start-cosmic` set `XDG_DATA_DIRS` to the system
+  export folder only (flatpak's `profile.d` and user environment generator
+  don't reach a greetd session). It now puts the user's export folder first and
+  creates it before the panel scans icons.
+- **Firefox arrived up to 10 minutes after joining wifi, or only after a
+  reboot.** New NetworkManager dispatcher hook
+  `/usr/lib/NetworkManager/dispatcher.d/50-pengyos-flatpak-setup` starts both
+  first-boot units once a connection is up. It uses `restart` on a unit
+  waiting out `RestartSec`, because systemd holds a `start` behind the restart
+  timer, and it leaves a running unit alone.
+
 ### Fixed (26.10.26) — blank buttons across COSMIC: the icons it leaves to the Pop theme were never installed (found on behoweather running 26.10.25)
 - **The COSMIC Store's Updates page showed an empty square next to every
   Update button** (the release-notes button, `help-info-symbolic`). COSMIC's

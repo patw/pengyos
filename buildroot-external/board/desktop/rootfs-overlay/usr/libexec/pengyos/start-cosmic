@@ -4,7 +4,14 @@
 # pam_systemd has already made this a logind session on seat0 and started
 # user@<uid>, whose bus is /run/user/<uid>/bus).
 #
-# - XDG_DATA_DIRS: Flatpak apps' exported .desktop files and icons first.
+# - XDG_DATA_DIRS: Flatpak apps' exported .desktop files and icons first, the
+#   user installation's before the system one's (what flatpak's own profile.d
+#   and user environment generator do; neither reaches a greetd session). With
+#   only the system folder, an app the Store installed per-user -- the only
+#   choice it offers when Flathub is a user remote -- ran but appeared in no
+#   menu (a laptop on 26.10.27, 2026-10-13). The user folders are created here
+#   for the same reason tmpfiles creates the system ones: the panel scans icon
+#   folders once, at startup.
 # - LIBSEAT_BACKEND=seatd: cosmic-comp opens the seat through seatd (the user
 #   is in the seat group); desktop.config explains why not logind.
 # - xdg-user-dirs-update: ~/Downloads, ~/Documents, … exist before any app
@@ -41,7 +48,9 @@ RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export XDG_SESSION_TYPE=wayland
 export XDG_SESSION_DESKTOP=COSMIC
 export XDG_CURRENT_DESKTOP=COSMIC
-export XDG_DATA_DIRS=/var/lib/flatpak/exports/share:/usr/local/share:/usr/share
+FLATPAK_USER_SHARE="${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/exports/share"
+mkdir -p "$FLATPAK_USER_SHARE/applications" "$FLATPAK_USER_SHARE/icons/hicolor" 2>/dev/null || true
+export XDG_DATA_DIRS="$FLATPAK_USER_SHARE:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share"
 export XDG_CONFIG_DIRS=/etc/xdg
 export LANG="${LANG:-en_US.UTF-8}"
 export LIBSEAT_BACKEND=seatd

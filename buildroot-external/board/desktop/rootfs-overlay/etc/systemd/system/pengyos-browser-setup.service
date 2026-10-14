@@ -1,5 +1,8 @@
 # PengyOS Desktop - install Firefox from Flathub, once (first boot with a
 # network). Not on the live stick: its /var is thrown away at shutdown.
+# Offline it fails and retries; 50-pengyos-flatpak-setup in NetworkManager's
+# dispatcher also starts it once a connection is up, so joining wifi after the
+# install no longer means up to RestartSec (or a reboot) without a browser.
 [Unit]
 Description=PengyOS: install the web browser (Firefox Flatpak)
 After=network-online.target pengyos-flatpak-setup.service
