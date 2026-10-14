@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Warning
 
-Never auto commit to this repo, the user will always do that themselves.
+Never auto commit to this repo, the user will always do that themselves.  Also the machine is tight on memory use /data/tmp not /tmp for temporary stuff.
 
 ## What this is
 
