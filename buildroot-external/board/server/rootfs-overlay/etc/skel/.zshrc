@@ -22,7 +22,16 @@ setopt share_history hist_ignore_all_dups hist_reduce_blanks extended_history
 
 # Completion (menu-select, case-insensitive), emacs-style keys.
 [[ -d ~/.cache ]] || mkdir -p ~/.cache
-autoload -Uz compinit && compinit -d ~/.cache/zcompdump
+# -i: skip compinit's compaudit security check and its interactive prompt. The prompt
+# needs a terminal; with none, `read -q` prints "not interactive and can't open terminal"
+# and compinit aborts, so any non-tty zsh that sources this file leaks that to stderr and
+# loses completion entirely. Measured on the CI gate 2026-10-14 (run 38580797351): the
+# runner's fpath has directories compaudit calls insecure, so the check fires there and
+# test_skel_zshrc_starts_silently_and_keeps_the_profile failed. Reproduced locally with a
+# world-writable fpath entry: without -i, rc=1 and that exact pair of lines on stderr;
+# with -i, rc=0 and silent. The security prompt is a developer convenience - it has no
+# business running on every shell start of a managed image.
+autoload -Uz compinit && compinit -i -d ~/.cache/zcompdump
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 bindkey -e

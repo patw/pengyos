@@ -18,6 +18,7 @@ suite, ``tests/test_syntax.py``), item 6 (the planted-URL no-telemetry scan,
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -565,6 +566,43 @@ def test_skel_zshrc_starts_silently_and_keeps_the_profile(shell_dir_env, tmp_pat
     assert proc.stderr == "", f"zsh start is not silent: {proc.stderr!r}"
     assert "P=$(starship prompt)" in proc.stdout, "skel .zshrc clobbered the starship prompt"
     assert "eza" in proc.stdout, "skel .zshrc clobbered the profile's ls alias"
+
+
+def test_skel_zshrc_stays_silent_with_no_terminal_and_an_insecure_fpath(shell_dir_env,
+                                                                        tmp_path):
+    """The CI gate's condition, made reproducible on any host.
+
+    compinit runs compaudit. When a directory in fpath is world-writable and not owned by
+    root, compinit prompts - and `read -q` needs a terminal. With no terminal it prints
+    "not interactive and can't open terminal" and compinit aborts: the shell loses
+    completion entirely and leaks that pair of lines to stderr. The CI runner hits this
+    because its fpath has directories compaudit calls insecure; a developer box with a
+    controlling terminal does not, which is exactly why
+    test_skel_zshrc_starts_silently_and_keeps_the_profile passed for a week and then failed
+    only in CI (gate run 38580797351, 2026-10-14).
+
+    `compinit -i` skips the security check and the prompt. Measured: without -i, rc=1 and
+    that exact stderr; with -i, rc=0 and silent.
+    """
+    if subprocess.run(["which", "zsh"], capture_output=True).returncode != 0:
+        pytest.skip("zsh not installed on the test host")
+    fpath = tmp_path / "fpath"
+    (fpath / "Completion").mkdir(parents=True)
+    (fpath / "Completion" / "_pengyos_test").write_text("#compdef pengyos-test\n")
+    os.chmod(fpath, 0o777)                      # what compaudit calls insecure
+    os.chmod(fpath / "Completion", 0o777)
+    home = tmp_path / "home"
+    home.mkdir()
+    bindir = _fake_starship(tmp_path)
+    env = {**shell_dir_env, "PROF": str(PROFILE), "HOME": str(home),
+           "SKEL": str(SERVER_SKEL / ".zshrc"), "PATH": f"{bindir}:/usr/bin:/bin"}
+    # setsid + stdin from /dev/null: no controlling terminal, like a CI runner.
+    proc = subprocess.run(
+        ["setsid", "zsh", "-f", "-i", "-c",
+         f'fpath=("{fpath}" $fpath); . $PROF; . $SKEL; print -r -- "P=$PROMPT"'],
+        capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL, timeout=30)
+    assert proc.stderr == "", f"zsh start is not silent: {proc.stderr!r}"
+    assert "P=$(starship prompt)" in proc.stdout, proc.stdout
 
 
 def test_child_shell_runs_the_profile_again(shell_dir_env):

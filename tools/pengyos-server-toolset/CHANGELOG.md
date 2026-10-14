@@ -33,6 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generated defconfigs, rc wiring, `sh -n` + `zsh -n` on the profile).
 
 ### Fixed
+- **`/etc/skel/.zshrc` now runs `compinit -i`, so a shell with no terminal stays silent.**
+  Plain `compinit` runs the `compaudit` security check; when a directory in `fpath` is
+  world-writable and not owned by root it **prompts**, and `read -q` needs a terminal. With
+  none it prints `not interactive and can't open terminal`, compinit aborts, and the shell
+  loses completion entirely — so any non-tty zsh that sources the skel leaks that pair of
+  lines to stderr. Found by the CI gate on 2026-10-14 (run 38580797351): the runner's fpath
+  has directories compaudit calls insecure, so `test_skel_zshrc_starts_silently_and_keeps_the_profile`
+  failed there while passing on every dev box, which has a controlling terminal. Reproduced
+  locally with a world-writable fpath entry: without `-i`, rc=1 and that exact stderr; with
+  `-i`, rc=0 and silent. `tests/test_shell.py` gained a test that reproduces the condition on
+  any host (setsid + stdin from `/dev/null` + an insecure fpath entry), mutation-checked by
+  dropping `-i`. The security prompt is a developer convenience; it has no business running on
+  every shell start of a managed image.
 - **The profile no longer breaks the commands it aliases** (found in review
   on behoweather before any image shipped it). `grep`/`grepv`/`fg` were aliased
   to a `ripgrep` binary that does not exist (it is `rg`), `fg` shadowed the
