@@ -589,25 +589,67 @@ def test_generated_hash_hashes_the_file_buildroot_produced(tmp_path):
     assert any(a.startswith("BR2_EXTERNAL=") for a in argv), "the br2-external tree must be passed"
 
 
-def test_generated_hash_refuses_when_the_build_failed(tmp_path):
-    """Negative control: a failed make must raise, never return a digest of stale bytes."""
+def test_generated_hash_survives_the_chicken_and_egg(tmp_path):
+    """The bootstrap pass is EXPECTED to fail, and the archive is still usable.
+
+    `make <pkg>-source` ends at check-hash, which cannot find a hash for a version whose
+    hash is exactly what we are computing. support/download/dl-wrapper cats the generated
+    archive to its final path before it exits with the hash verdict, so the bytes are on
+    disk. Measured 2026-10-14 on the live tree: make exited 2 with "ERROR: No hash found
+    for fzf-0.74.5-go2.tar.gz" and dl/fzf/fzf-0.74.5-go2.tar.gz was there. Treating that
+    failure as fatal is what made the first version of this fix bail.
+    """
+    src, payload = _gen_tree(tmp_path)
+    run = _Make(rc=2, err="ERROR: No hash found for fzf-0.74.5-go2.tar.gz\n"
+                          "make[1]: *** [package/pkg-generic.mk:179: .../.stamp_downloaded] Error 1\n"
+                          "make: *** [Makefile:83: _all] Error 2")
+    hi = E.generated_hash(run, tmp_path, "2026.08", "/repo/buildroot-external",
+                          "pengyos-server", "fzf", "fzf-0.74.5-go2.tar.gz")
+    assert hi.sha256 == E.sha256_of(payload), "the archive Buildroot generated is the hash source"
+
+
+def test_generated_hash_refuses_when_the_build_failed_for_a_real_reason(tmp_path):
+    """Negative control: a failure that is NOT the missing hash must raise.
+
+    Only the missing-hash verdict is expected. A clone that failed, a bad GOMOD, a
+    network error - none of those produced an archive, and hashing whatever is lying in
+    dl/ is the original defect in a new costume.
+    """
     src, _ = _gen_tree(tmp_path)
-    with pytest.raises(E.GeneratedHashError, match="exited 2"):
-        E.generated_hash(_Make(rc=2, err="make: *** Error 2"), tmp_path, "2026.08",
-                         "/repo/buildroot-external", "pengyos-server", "fzf",
-                         "fzf-0.74.5-go2.tar.gz")
+    with pytest.raises(E.GeneratedHashError, match="without reaching the hash check"):
+        E.generated_hash(_Make(rc=2, err="make: *** [package/pkg-generic.mk:179] Error 1"),
+                         tmp_path, "2026.08", "/repo/buildroot-external", "pengyos-server",
+                         "fzf", "fzf-0.74.5-go2.tar.gz")
 
 
 def test_generated_hash_refuses_when_the_archive_is_not_where_buildroot_named(tmp_path):
-    """Negative control: make succeeded, the file is not there - say so, do not guess.
-
-    The old defect was exactly a hash written against a filename the build does not
-    produce; silently hashing some other file in dl/ is the same mistake in a new costume.
-    """
+    """Negative control: the file Buildroot names is not there - say so, do not guess."""
     src, _ = _gen_tree(tmp_path, filename="fzf-0.74.4-go2.tar.gz")
     with pytest.raises(E.GeneratedHashError, match="fzf-0.74.5-go2.tar.gz"):
         E.generated_hash(_Make(rc=0), tmp_path, "2026.08", "/repo/buildroot-external",
                          "pengyos-server", "fzf", "fzf-0.74.5-go2.tar.gz")
+    with pytest.raises(E.GeneratedHashError, match="nothing to hash"):
+        E.generated_hash(_Make(rc=2, err="ERROR: No hash found for fzf-0.74.5-go2.tar.gz"),
+                         tmp_path, "2026.08", "/repo/buildroot-external", "pengyos-server",
+                         "fzf", "fzf-0.74.5-go2.tar.gz")
+
+
+def test_verify_source_passes_when_make_succeeds(tmp_path):
+    _gen_tree(tmp_path)
+    run = _Make(rc=0)
+    assert E.verify_source(run, tmp_path, "2026.08", "/repo/buildroot-external",
+                           "pengyos-server", "fzf") is None
+    assert run.calls, "it must actually re-run the download step"
+    assert run.calls[0][-1] == "fzf-source"
+
+
+def test_verify_source_refuses_a_hash_buildroot_does_not_accept(tmp_path):
+    """The proof step. If the download step still fails with the hash written, the hash is wrong."""
+    _gen_tree(tmp_path)
+    with pytest.raises(E.GeneratedHashError, match="not the one Buildroot accepts"):
+        E.verify_source(_Make(rc=2, err="fzf-0.74.5-go2.tar.gz: 1 of 1 hashes FAILED!"),
+                        tmp_path, "2026.08", "/repo/buildroot-external", "pengyos-server",
+                        "fzf")
 
 
 def test_generated_hash_edit_keys_the_hash_to_the_file_the_build_produces(tmp_path):

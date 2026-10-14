@@ -23,6 +23,17 @@ versions follow [SemVer](https://semver.org/).
   the hand-authored line in `fzf.hash`. A recipe with an explicit `*_SOURCE` (cosmic-portal)
   is unaffected: Buildroot downloads that file, so a download-and-hash stays correct.
   No golang/cargo recipe fixture existed before this, which is why the defect survived.
+- **…and the chicken-and-egg in that fix, found by running it.** `make <pkg>-source` ends at
+  `check-hash`, which cannot find a hash for a version whose hash is precisely the thing being
+  computed — so the bootstrap pass is *expected* to fail with `ERROR: No hash found for
+  fzf-0.74.5-go2.tar.gz`. `support/download/dl-wrapper` cats the generated archive to its
+  final path before it exits with the hash verdict, so the bytes are on disk anyway. Treating
+  any non-zero exit as fatal made the lane bail on its own bootstrap (measured 2026-10-14
+  08:28, act rc=1; the bail behaved — tree restored to main, no bogus hash written, fzf not
+  re-blacklisted). Now: only the missing-hash verdict is tolerated, the archive must be
+  present, and `verify_source` re-runs the download step with the hash written and requires it
+  to pass — the second pass is the only thing that proves the recorded digest is the one
+  Buildroot accepts.
 - **A finding about an authored recipe must be keyed by the package name.** The PengyR
   source emitted `component: "pengyr"`; `obs["packages"]` is keyed `pengy` (pkg-stats
   names our authored recipe by its Buildroot package). The planner's join found nothing,

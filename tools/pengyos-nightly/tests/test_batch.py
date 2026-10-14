@@ -1044,6 +1044,31 @@ def test_a_generated_hash_is_computed_before_the_pre_flight_that_validates_it(tm
     assert steps.index("hash fzf") < steps.index("pre-flight"), steps
 
 
+def test_the_generated_hash_is_verified_by_a_second_download_step(tmp_path):
+    """Bootstrap, write, prove: `make fzf-source` must run twice.
+
+    The first pass generates the archive (and fails at check-hash, which is expected -
+    the hash it is looking for is the one we are computing). The second pass, with the
+    hash in the tree, must pass. That second pass is the only thing that proves the
+    digest we recorded is the one Buildroot accepts.
+    """
+    _dl(tmp_path, "fzf-0.74.5-go2.tar.gz")
+    result, fake, repo, site, state, cfg = _run(tmp_path, [_gen_action()])
+    assert result["published"], result
+    assert fake.count("fzf-source") == 2, fake.calls
+
+
+def test_a_generated_hash_buildroot_rejects_bails_and_publishes_nothing(tmp_path):
+    """Negative control: the download step fails for a real reason, not the missing hash."""
+    _dl(tmp_path, "fzf-0.74.5-go2.tar.gz")
+    result, fake, repo, site, state, cfg = _run(tmp_path, [_gen_action()],
+                                                fail=("fzf-source",))
+    assert not result["published"], result
+    assert "generated hash" in result["error"], result["error"]
+    assert _branch(repo) == "main", _branch(repo)
+    assert _dirty(repo) == "", _dirty(repo)
+
+
 def test_a_generated_hash_that_cannot_be_read_publishes_nothing_and_leaves_no_edits(tmp_path):
     """Negative control: make succeeded, the archive Buildroot names is not there.
 

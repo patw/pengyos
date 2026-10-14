@@ -882,12 +882,14 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
             he = E.generated_hash_edit(a["component"], (repo / hash_path).read_text(),
                                        a.get("current") or "", hi)
             touched[a["id"]] += E.apply_edits(repo, [he])
+            # Prove it: the same download step must now pass with the hash in the tree.
+            E.verify_source(run, build_root, br_version, tree, edition, a["component"])
         except (E.GeneratedHashError, OSError, ValueError) as exc:
             return bail("generated hash", f"{a['component']}: {exc}")
         a["edits"].append(vars(he))
         a["hash"] = vars(hi)
         step(f"hash {a['component']}", True,
-             f"{he.note}: {hi.sha256[:16]}...")
+             f"{he.note}: {hi.sha256[:16]}... (verified by a second make {a['component']}-source)")
 
     # --- pre-flight every package: cheap, and it decides what is real ---------
     live: list[dict] = []
