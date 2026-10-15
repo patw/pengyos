@@ -1,0 +1,260 @@
+#!/bin/sh
+# pengyos-upscale — neural image upscaling for PengyOS (Real-ESRGAN, ncnn-vulkan).
+#
+# One command with a stable contract, so the Desktop's right-click action, a
+# terminal and any script all call the same thing. The engine's CLI flags stay
+# an implementation detail; the contract is the exit codes and the output name.
+#
+#   pengyos-upscale photo.jpg                       # 4x, next to the original
+#   pengyos-upscale -s 2 photo.jpg                  # 2x
+#   pengyos-upscale -n realesrgan-x4plus photo.jpg  # the big photo model (slow)
+#   pengyos-upscale *.jpg                           # batch
+#   pengyos-upscale -s 2 -o /tmp/out dir/           # batch into a directory
+#
+# Output naming: <input dir>/<name>_x<scale>.<format>, written next to the
+# input. A right-click action has no dialog to ask where the result goes, so
+# the answer is decided here and is the same every time.
+#
+# Exit codes:
+#   0  every input produced an output file
+#   2  an input is missing, unreadable, or not a format the engine decodes
+#   3  engine or model files missing
+#   4  the engine ran and produced nothing (Vulkan allocation failure, decode
+#      failure, OOM) - the engine exits 0 for all of these, see below
+#   5  usage error
+#
+# Why the wrapper exists at all: the vendor binary reports failure in two
+# different ways, and one of them is not a failure at all (measured,
+# results/measured.json):
+#   - it cannot decode the input  -> exit status 0 and no output file
+#   - a Vulkan allocation fails   -> SIGSEGV (exit 139)
+# A context action shows no output, so the first of those is a silent no-op.
+# The wrapper checks the output file, names the cause, and raises a
+# notification.
+set -u
+
+ENGINE=${PENGYOS_UPSCALE_ENGINE:-/usr/lib/pengyos/upscale/realesrgan-ncnn-vulkan}
+MODELS=${PENGYOS_UPSCALE_MODELS:-/usr/share/pengyos/upscale/models}
+MODEL=${PENGYOS_UPSCALE_MODEL:-realesr-animevideov3}
+SCALE=${PENGYOS_UPSCALE_SCALE:-4}
+FORMAT=${PENGYOS_UPSCALE_FORMAT:-auto}
+GPU=${PENGYOS_UPSCALE_GPU:-}
+TILE=${PENGYOS_UPSCALE_TILE:-0}
+NOTIFY=${PENGYOS_UPSCALE_NOTIFY:-1}
+QUIET=0
+TTA=""
+OUT=""
+
+usage() {
+    cat >&2 <<'USAGE'
+usage: pengyos-upscale [-s 2|3|4] [-n MODEL] [-f auto|png|jpg|webp] [-o OUT]
+                       [-g GPU] [-t TILE] [-x] [-N] [-q] FILE [FILE...]
+  -s N     scale factor: 2, 3 or 4 (default 4)
+  -n MODEL realesr-animevideov3 (default, fast, runs on the GPU) |
+           realesrgan-x4plus-anime | realesrgan-x4plus (best quality, slowest)
+  -f FMT   auto (default: keep the input's own format; ppm/pgm have no
+           matching encoder, so they become png), png, jpg, webp
+  -o OUT   output file (single input) or directory (several inputs)
+  -g N     Vulkan device index; default is the engine's own pick. -g 2 is the
+           llvmpipe CPU fallback on this image's Mesa
+  -t N     tile size in pixels (0 = auto). Lower it when the engine runs out of
+           device memory: -t 128
+  -x       TTA mode: slower, marginally better
+  -N       no desktop notification
+  -q       no per-file stdout
+  -h       this help
+  env:     PENGYOS_UPSCALE_ENGINE, PENGYOS_UPSCALE_MODELS, PENGYOS_UPSCALE_MODEL,
+           PENGYOS_UPSCALE_SCALE, PENGYOS_UPSCALE_FORMAT, PENGYOS_UPSCALE_GPU,
+           PENGYOS_UPSCALE_TILE, PENGYOS_UPSCALE_NOTIFY
+  Input formats the engine decodes: jpg, jpeg, png, webp, ppm, pgm.
+  Output is <input dir>/<name>_x<scale>.<fmt> unless -o names a file.
+USAGE
+}
+
+note() {
+    [ "$NOTIFY" = 1 ] || return 0
+    command -v notify-send >/dev/null 2>&1 || return 0
+    notify-send -t 8000 "Image Upscale" "$1" >/dev/null 2>&1 || return 0
+}
+# A launcher (.desktop Exec with %U) hands over a file:// URI; a file manager's
+# context action and a shell hand over a plain path. Accept both.
+path_of() {
+    case "$1" in
+        file://*) printf '%s' "${1#file://}" ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -s|-n|-f|-g|-t|-o)
+            [ $# -ge 2 ] || { echo "pengyos-upscale: $1 needs a value" >&2; exit 5; }
+            v=$2
+            case "$1" in
+                -s) SCALE=$v ;;
+                -n) MODEL=$v ;;
+                -f) FORMAT=$v ;;
+                -g) GPU=$v ;;
+                -t) TILE=$v ;;
+                -o) OUT=$v ;;
+            esac
+            shift 2 ;;
+        -x) TTA="-x"; shift ;;
+        -N) NOTIFY=0; shift ;;
+        -q) QUIET=1; shift ;;
+        -h) usage; exit 0 ;;
+        --) shift; break ;;
+        -*) echo "pengyos-upscale: unknown option '$1'" >&2; usage; exit 5 ;;
+        *) break ;;
+    esac
+done
+
+# --- argument validation, before any availability check, so -h and a bad scale
+# are reported the same with and without the engine installed ---------------
+[ $# -gt 0 ] || { echo "pengyos-upscale: no input file" >&2; usage; exit 5; }
+
+case "$SCALE" in 2|3|4) ;; *) echo "pengyos-upscale: scale must be 2, 3 or 4 (got '$SCALE')" >&2; exit 5 ;; esac
+case "$FORMAT" in auto|png|jpg|webp) ;; *) echo "pengyos-upscale: format must be auto, png, jpg or webp (got '$FORMAT')" >&2; exit 5 ;; esac
+case "$TILE" in ''|*[!0-9]*) echo "pengyos-upscale: tile must be a number (got '$TILE')" >&2; exit 5 ;; esac
+if [ -n "$GPU" ]; then
+    case "$GPU" in *[!0-9]*) echo "pengyos-upscale: -g must be a device number (got '$GPU')" >&2; exit 5 ;; esac
+fi
+
+# The formats the vendor binary decodes, measured: jpg/jpeg/png/webp/ppm/pgm.
+# bmp, tif and tga are decoded by nothing in it ("decode image ... failed").
+for f in "$@"; do
+    p=$(path_of "$f")
+    ext=$(printf '%s' "${p##*.}" | tr '[:upper:]' '[:lower:]')
+    case "$ext" in jpg|jpeg|png|webp|ppm|pgm) ;; *)
+        echo "pengyos-upscale: not an input format the engine decodes: $f" >&2
+        note "$f is not a format the upscaler decodes (jpg, png, webp, ppm, pgm)"
+        exit 2 ;;
+    esac
+    [ -r "$p" ] || { echo "pengyos-upscale: cannot read $f" >&2; exit 2; }
+done
+
+n_in=$#
+
+# -o: with several inputs it is always a directory (created if missing, the way
+# the engine's own directory mode works). With one input it is a file, unless it
+# is an existing directory or ends in '/'.
+out_is_dir=0
+out_file=""
+if [ -n "$OUT" ]; then
+    if [ "$n_in" -gt 1 ]; then
+        out_is_dir=1
+        mkdir -p "${OUT%/}" 2>/dev/null || {
+            echo "pengyos-upscale: cannot create the output directory $OUT" >&2; exit 4; }
+    elif [ -d "$OUT" ] || [ "${OUT%/}" != "$OUT" ]; then
+        out_is_dir=1
+    else
+        out_file="$OUT"
+    fi
+fi
+
+# --- availability, checked after parsing so a missing model is reported as a
+# missing model, not as a parse error ---------------------------------------
+[ -x "$ENGINE" ] || { echo "pengyos-upscale: engine missing: $ENGINE" >&2; note "The upscaler engine is not installed ($ENGINE)."; exit 3; }
+[ -d "$MODELS" ] || { echo "pengyos-upscale: model folder missing: $MODELS" >&2; note "The upscaler models are not installed ($MODELS)."; exit 3; }
+# Model file naming is not uniform upstream: the fast model is
+# realesr-animevideov3-x{2,3,4}.param, the big models are realesrgan-x4plus.param
+# with no scale suffix (2x and 3x are the 4x graph with the result downsampled,
+# which is what the engine does). Accept either spelling.
+if [ ! -r "$MODELS/$MODEL-x4.param" ] && [ ! -r "$MODELS/$MODEL.param" ]; then
+    echo "pengyos-upscale: model not installed: $MODEL (looked for $MODELS/$MODEL-x4.param and $MODELS/$MODEL.param)" >&2
+    note "Model '$MODEL' is not installed. Installed models live in $MODELS."
+    exit 3
+fi
+
+gpu_args=""
+[ -z "$GPU" ] || gpu_args="-g $GPU"
+
+rc_all=0
+done_n=0
+last_out=""
+written=" "
+for f in "$@"; do
+    f=$(path_of "$f")
+    dir=$(dirname "$f")
+    base=$(basename "$f")
+    stem="${base%.*}"
+    in_ext=$(printf '%s' "${base##*.}" | tr '[:upper:]' '[:lower:]')
+
+    # -f auto keeps what the user already has: a JPEG stays a JPEG. The raw
+    # pixmap inputs have no matching encoder, so they become png.
+    case "$FORMAT" in
+        auto)
+            case "$in_ext" in
+                jpg|jpeg) fmt=jpg ;;
+                png|webp) fmt=$in_ext ;;
+                *) fmt=png ;;
+            esac ;;
+        *) fmt=$FORMAT ;;
+    esac
+
+    if [ -n "$out_file" ]; then
+        out="$out_file"
+    elif [ "$out_is_dir" = 1 ]; then
+        out="${OUT%/}/${stem}_x${SCALE}.${fmt}"
+    else
+        out="${dir}/${stem}_x${SCALE}.${fmt}"
+    fi
+
+    # Two inputs can name the same output (a.jpg + a.jpeg, both to jpg). The
+    # second must not overwrite the first: number it, the way a file manager
+    # numbers a copy.
+    case "$written" in
+        *" $out "*)
+            n=2
+            while :; do
+                case "$written" in
+                    *" ${out%.*}_$n.${fmt} "*) n=$((n + 1)) ;;
+                    *) break ;;
+                esac
+            done
+            out="${out%.*}_$n.${fmt}"
+            ;;
+    esac
+
+    outdir=$(dirname "$out")
+    if [ ! -d "$outdir" ] && ! mkdir -p "$outdir" 2>/dev/null; then
+        echo "pengyos-upscale: cannot write to $outdir" >&2
+        rc_all=4
+        continue
+    fi
+
+    # The engine exits 0 when it fails to decode, when a Vulkan allocation
+    # fails, and when it runs out of memory. Only the output file is evidence.
+    log=$(mktemp "${TMPDIR:-/tmp}/pengyos-upscale.XXXXXX")
+    # shellcheck disable=SC2086
+    "$ENGINE" -i "$f" -o "$out" -n "$MODEL" -s "$SCALE" -m "$MODELS" \
+        -f "$fmt" -t "$TILE" $gpu_args $TTA >"$log" 2>&1
+    rc=$?
+
+    if [ "$rc" -ne 0 ] || [ ! -s "$out" ]; then
+        rm -f "$out"
+        cause=$(grep -m1 -o -e 'vkAllocateMemory failed[^ ]*' -e 'decode image.*failed' \
+                   -e 'out of memory' -e 'failed to load model' "$log" 2>/dev/null)
+        [ -n "$cause" ] || cause="engine exit $rc"
+        echo "pengyos-upscale: $f failed: $cause" >&2
+        tail -3 "$log" >&2
+        note "Upscale failed: $cause. Try the fast model (-n realesr-animevideov3) or a smaller tile (-t 128)."
+        rm -f "$log"
+        rc_all=4
+        continue
+    fi
+    rm -f "$log"
+    done_n=$((done_n + 1))
+    last_out="$out"
+    written="$written $out "
+    [ "$QUIET" = 1 ] || printf '%s\n' "$out"
+done
+
+if [ "$rc_all" = 0 ]; then
+    if [ "$n_in" -eq 1 ]; then
+        note "Upscaled 1 image at ${SCALE}x: ${last_out}"
+    else
+        note "Upscaled ${done_n} images at ${SCALE}x, saved next to the originals"
+    fi
+fi
+exit "$rc_all"

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Image Upscaler
+Comment=Neural 2x/4x upscale (Real-ESRGAN)
+# %U is what a launcher passes; a local file arrives as a file:// URI, which
+# pengyos-upscale accepts and strips.
+Exec=pengyos-upscale -s 4 %U
+Icon=image-upscale
+Terminal=false
+# Not an app to open: it is an action on a file. NoDisplay keeps it out of the
+# Applications list, the MimeType lines put it in COSMIC Files' "Open with".
+NoDisplay=true
+Categories=Graphics;Utility;
+StartupNotify=false
+MimeType=image/jpeg;image/png;image/webp;image/x-portable-pixmap;image/x-portable-graymap;

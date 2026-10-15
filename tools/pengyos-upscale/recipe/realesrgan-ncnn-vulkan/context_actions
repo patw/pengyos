@@ -1,0 +1,37 @@
+// PengyOS Desktop - the right-click "Upscale" actions in COSMIC Files.
+//
+// Installed by the realesrgan-ncnn-vulkan recipe to
+//   /usr/share/cosmic/com.system76.CosmicFiles/v1/context_actions
+// which is cosmic-config's system default for that key: libcosmic reads
+// ~/.config/cosmic/com.system76.CosmicFiles/v1/context_actions first and only
+// falls back to this file (Config::get -> get_local, then get_system_default),
+// so every user gets the actions with nothing written in their home, and a
+// user who defines their own actions replaces this list wholesale.
+//
+// cosmic-files has had user-defined context actions since epoch 1.0.10
+// (src/context_action.rs: name, confirm, selection, steps). The pinned
+// Desktop set (epoch 1.9) has the file, so this works with no patch.
+//
+// selection: Files = the entry shows when the selection contains no folder.
+// There is no MIME filter in cosmic-files, so the entry is offered on a .txt
+// as well; pengyos-upscale refuses formats the engine cannot decode (exit 2)
+// and says so in a notification, which is the guard.
+//
+// steps lines are parsed like a .desktop Exec and run with no shell: absolute
+// paths only, no ~, no $HOME, no globs, no pipes. %F hands the whole selection
+// to one invocation (%f would start one process per file). The action shows no
+// output window, so the wrapper reports through notify-send.
+[
+    (
+        name: "Upscale 2×",
+        confirm: false,
+        selection: Files,
+        steps: ["/usr/bin/pengyos-upscale -s 2 %F"],
+    ),
+    (
+        name: "Upscale 4×",
+        confirm: false,
+        selection: Files,
+        steps: ["/usr/bin/pengyos-upscale -s 4 %F"],
+    ),
+]

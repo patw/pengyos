@@ -1,0 +1,10 @@
+# Pinned digests for the vendor's own release archive (v0.2.5.0, the newest
+# release that publishes a Linux build: 2022-04-24). Measured on 2026-10-15 by
+# downloading the archive from the release URL and hashing it; the binary and
+# the eleven model files inside it hash the same as the copies the local
+# upscale skill has used since 2026-06-19, which is the provenance check.
+sha256  e5aa6eb131234b87c0c51f82b89390f5e3e642b7b70f2b9bbe95b6a285a40c96  realesrgan-ncnn-vulkan-20220424-ubuntu.zip
+# The release archive carries no license text; this is the LICENSE from the
+# same tag, fetched from raw.githubusercontent.com (the recipe's
+# _EXTRA_DOWNLOADS) and placed in the build dir by the post-extract hook.
+sha256  4a699ec4863d96a91fc265948a0c90033f7e8735d515524dcf3444736406e0c2  LICENSE

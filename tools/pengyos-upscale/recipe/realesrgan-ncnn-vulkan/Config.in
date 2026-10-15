@@ -1,0 +1,52 @@
+config BR2_PACKAGE_REALESRGAN_NCNN_VULKAN
+	bool "realesrgan-ncnn-vulkan (neural image upscaler)"
+	depends on BR2_x86_64
+	select BR2_PACKAGE_VULKAN_LOADER
+	select BR2_PACKAGE_LIBNOTIFY
+	help
+	  Real-ESRGAN: a neural network image upscaler (2x, 3x, 4x) built on
+	  Tencent's ncnn with a Vulkan backend, shipped by the project as one
+	  portable binary. Lane 2 (SPEC 2.5): the vendor's own prebuilt
+	  binary, pinned by hash, installed under /usr/lib/pengyos/upscale.
+	  No CUDA, no Python, no PyTorch.
+
+	  Vulkan compute runs it on the GPUs this image already drives
+	  (Intel/AMD through Mesa, NVIDIA through the NVIDIA edition), with
+	  Mesa's llvmpipe as the CPU fallback.
+
+	  Installs the pengyos-upscale command, the COSMIC Files right-click
+	  actions ("Upscale 2x" / "Upscale 4x") and the "Open with" entry, so
+	  enabling this package is the whole feature and disabling it removes
+	  the whole feature.
+
+	  https://github.com/xinntao/Real-ESRGAN
+
+comment "realesrgan-ncnn-vulkan needs x86_64 (upstream publishes no other Linux build)"
+	depends on !BR2_x86_64
+
+if BR2_PACKAGE_REALESRGAN_NCNN_VULKAN
+
+config BR2_PACKAGE_REALESRGAN_NCNN_VULKAN_MODEL_FAST
+	bool "realesr-animevideov3 (fast, runs on the GPU)"
+	default y
+	help
+	  3.7 MB, three graphs (x2/x3/x4). The only model measured to run on
+	  a discrete GPU here: 1920x1080 -> 3840x2160 in 4.1 s on an RTX 5060
+	  Ti. Tuned for anime and illustration, and the sensible default for
+	  photos too, because it is the one that does not fall back to the CPU.
+
+config BR2_PACKAGE_REALESRGAN_NCNN_VULKAN_MODEL_ANIME
+	bool "realesrgan-x4plus-anime (9 MB)"
+	help
+	  The anime-tuned x4plus. Measured on this box: it fails to allocate
+	  on the NVIDIA devices ("vkAllocateMemory failed -2") and runs on
+	  llvmpipe.
+
+config BR2_PACKAGE_REALESRGAN_NCNN_VULKAN_MODEL_PHOTO
+	bool "realesrgan-x4plus (33 MB, best quality, slowest)"
+	help
+	  The general-photo model. Measured: 512x512 -> 2048x2048 in 51 s on
+	  llvmpipe (it does not allocate on the NVIDIA devices here). Ship it
+	  only where the CPU path is acceptable; it is 33 MB of weights.
+
+endif

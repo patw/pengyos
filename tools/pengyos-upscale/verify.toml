@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# Python tool: pytest in this tool's directory. The behaviour layer skips when
+# PENGYOS_UPSCALE_ENGINE / PENGYOS_UPSCALE_MODELS are not provided, so the gate
+# stays offline, root-free and GPU-free.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-upscale"
+expect = "exit0"
+timeout = 600

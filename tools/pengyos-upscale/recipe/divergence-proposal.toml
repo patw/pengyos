@@ -1,0 +1,53 @@
+# Proposed divergence-ledger entry — paste into /data/PengyOS/divergence.toml
+# only when the component is actually enabled in an edition. It is not pasted
+# now: this prototype ships nothing, and an entry in the ledger is a claim that
+# something is being carried.
+
+# kind = "host-built" is the honest bucket: the binary is assembled by the
+# vendor, not by a Buildroot recipe we own, so it voids byte-identity
+# reproducibility for that component — a debt, exactly as the ledger header says.
+
+[[divergence]]
+id        = "realesrgan-ncnn-vulkan-prebuilt-upscale"
+kind      = "host-built"
+component = "realesrgan-ncnn-vulkan"
+pinned_version = "0.2.5.0"
+editions  = ["pengyos-desktop"]
+carried_since = "<set when it lands>"
+carried_in    = ["<first image version carrying it>"]
+
+# The expiry is the upstream event that ends the divergence, per the ledger rule
+# ("an entry with no expiry condition is not an approved divergence").
+expiry = "ncnn gains a Buildroot recipe (Lane 1) and glslang gains a target
+  recipe, so realesrgan-ncnn-vulkan builds from its published source against our
+  toolchain; at that point the recipe is Lane 1, the vendor archive pin is
+  deleted and this entry goes away. Measured on 2026-10-15 against the pinned
+  Buildroot 2026.08 tree: package/ has no ncnn recipe at all, and glslang exists
+  only as python-glslang, a host-only package. Watch
+  github.com/Tencent/ncnn and github.com/xinntao/Real-ESRGAN (the last Linux
+  binary release is 2022-04-24)."
+
+# An authored pin is invisible to Buildroot's pkg-stats, so it must name its own
+# observe source or the pin rots silently.
+observe_source = "pengyos-nightly: github releases of xinntao/Real-ESRGAN
+  (newest Linux build is v0.2.5.0, 2022-04-24) and the pinned digests in
+  buildroot-external/package/realesrgan-ncnn-vulkan/realesrgan-ncnn-vulkan.hash"
+
+upstream_status = "binary-only-upstream-since-2022"
+
+# Cost, stated up front:
+#  - The engine binary is not reproducible from source. The SBOM names it as an
+#    upstream artifact; pengyos-repro cannot rebuild it.
+#  - Two digests become trust anchors (the 47 MB release archive, the license
+#    text). A vendor re-release under the same version string is a supply-chain
+#    event, so the observer diffs digests, not version strings.
+#  - x86_64 only: upstream publishes linux (x86_64), macos and windows builds.
+#    The recipe's `depends on BR2_x86_64` guard fails the build rather than
+#    installing nothing on any other architecture.
+#  - The binary links libgomp.so.1 (measured with ldd) and the image does not
+#    ship it, so enabling this component adds a GCC runtime library to the
+#    Desktop image via the post-build host-lib copy. That is a second, smaller
+#    host-built debt carried by the same component.
+#  - The models are data with their own weight: 3.7 MB (fast), 9 MB (anime),
+#    33 MB (photo). Only the fast model is measured to run on the GPU; the
+#    others run on llvmpipe at 47 s (512²) and 359 s (1080p).
