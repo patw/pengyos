@@ -17,6 +17,49 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — PDFs get a real viewer (Evince, the ratified entry, wired in)
+- **The gap:** the Desktop image shipped **no PDF viewer**. The overlay's
+  `mimeapps.list` named Firefox for `application/pdf`, so a PDF opened in a
+  browser — fine as a fallback, not as a document viewer (no page navigation,
+  no continuous scroll, no reflow, no page-range printing; a 200-page scan is a
+  browser tab). The only PDF code in the image was poppler's `pdftocairo`,
+  wired to the COSMIC Files thumbnailer.
+- **What ships now:** `pengyos-pdf-viewer-setup` installs **Evince** from
+  Flathub on the first boot with a network, the same first-boot pattern as
+  Firefox (oneshot unit + `/var/lib/flatpak/.pengyos-pdf-viewer` marker +
+  `Restart=on-failure`, started by `50-pengyos-flatpak-setup` the moment the
+  machine is online). It is `After=pengyos-browser-setup`, not beside it:
+  flatpak's system repo takes a lock, so the two installs serialise.
+- **This is the ratified entry, not a new choice.** Evince is the
+  human-signed `PDF` row in
+  [`tools/pengyos-desktop-curation/curated.toml`](tools/pengyos-desktop-curation/)
+  (spec Principle 8: the default-app set is a human decision). That set is
+  still not consumed by any build — this wires **one** category (PDF) out of
+  it, the one with a working fallback; ratifying the whole set stays Pat's
+  call.
+- **`application/pdf=org.gnome.Evince.desktop;org.mozilla.firefox.desktop;`** —
+  the fallback is a *chain*, and it is load-bearing. Measured with the image's
+  own resolver (xdg-utils 1.2.1): `xdg-mime` walks the row and **skips a
+  handler whose `.desktop` does not resolve**, so a machine that installed
+  offline and has not reached Flathub yet answers "no method available for
+  opening" if Evince is named alone. With Firefox behind it the same machine
+  opens the PDF in the browser, and Evince takes over by itself the moment it
+  is installed. Verified all three ways: Evince present → Evince; Evince
+  missing → Firefox; Evince installed later → Evince.
+- **Why not a native (Lane 1) viewer, measured against the pinned tree:**
+  Buildroot 2026.08 has `mupdf`, and its `mupdf.mk` gates the graphical front
+  ends on `BR2_PACKAGE_XLIB_LIBX11`/`LIBXEXT` (`HAVE_X11`) and
+  `BR2_PACKAGE_LIBFREEGLUT` (`HAVE_GLUT`) — i.e. an X11 window and an
+  OpenGL/GLUT window. The Desktop edition is a Wayland session with no X11
+  stack enabled in the layer, so neither is buildable as shipped; a console
+  framebuffer viewer is not a desktop app. `poppler` in the same tree offers
+  **only** `BR2_PACKAGE_POPPLER_QT5` and `POPPLER_UTILS` — no glib wrapper —
+  and the Desktop layer ships Qt **6**, which is exactly the binding Evince
+  needs; so Evince carries its own poppler (26.07.0, GTK backend) inside the
+  Flatpak and the host poppler stays a thumbnailer. `zathura` is not a
+  Buildroot package at all. A libcosmic viewer over the MuPDF core is the real
+  Lane 1 answer and is left as a scoped proposal, not a night's work.
+
 ### Fixed — installing offline and joining wifi afterwards left the Store with no sources and Store apps out of every menu (found on a laptop running 26.10.27)
 - **The COSMIC Store listed no sources.** `pengyos-flatpak-setup.sh` ignored a
   failed `flatpak remote-add flathub` (no network on the first boot) and still

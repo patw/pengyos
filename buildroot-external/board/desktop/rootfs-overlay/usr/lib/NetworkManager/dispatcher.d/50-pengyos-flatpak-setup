@@ -1,10 +1,11 @@
 #!/bin/sh
 # PengyOS Desktop - finish the network-dependent first-boot setup as soon as
 # the machine is online. pengyos-flatpak-setup (system Flathub remote +
-# appstream) and pengyos-browser-setup (Firefox) both need Flathub; on a machine
-# installed before it joined a network they fail at boot and wait RestartSec to
-# retry. Starting them here makes joining wifi enough. Once each has written its
-# marker, its ConditionPathExists= turns the start into a no-op.
+# appstream), pengyos-browser-setup (Firefox) and pengyos-pdf-viewer-setup
+# (Evince) all need Flathub; on a machine installed before it joined a network
+# they fail at boot and wait RestartSec to retry. Starting them here makes
+# joining wifi enough. Once each has written its marker, its ConditionPathExists=
+# turns the start into a no-op.
 #
 # NetworkManager runs this as root with $1 = interface, $2 = action.
 case "$2" in
@@ -18,7 +19,13 @@ esac
 # the timer fires (systemd queues the job behind it), so cut the wait with
 # `restart`. One that is running is left alone: restarting it would kill a
 # Firefox download halfway through.
-for u in pengyos-flatpak-setup.service pengyos-browser-setup.service; do
+#
+# The list is in dependency order: the Evince unit is After= the browser one,
+# so starting the browser first is also the ordering the units declare
+# (flatpak's system repo takes a lock; serialising the two installs avoids a
+# first-boot race).
+for u in pengyos-flatpak-setup.service pengyos-browser-setup.service \
+         pengyos-pdf-viewer-setup.service; do
     case "$(/usr/bin/systemctl show -P SubState "$u")" in
         auto-restart) /usr/bin/systemctl --no-block restart "$u" ;;
         dead|failed)  /usr/bin/systemctl --no-block start "$u" ;;

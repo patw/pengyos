@@ -10,7 +10,16 @@ x-scheme-handler/http=org.mozilla.firefox.desktop;
 x-scheme-handler/https=org.mozilla.firefox.desktop;
 text/html=org.mozilla.firefox.desktop;
 application/xhtml+xml=org.mozilla.firefox.desktop;
-application/pdf=org.mozilla.firefox.desktop;
+# PDFs: Evince (org.gnome.Evince), the human-ratified entry for the PDF
+# category in tools/pengyos-desktop-curation/curated.toml, installed on first
+# boot by pengyos-pdf-viewer-setup. Firefox stays as the fallback in the same
+# row: xdg-mime walks the list and skips a handler whose .desktop does not
+# resolve, so a machine that installed offline and has not reached Flathub yet
+# keeps opening PDFs in the browser instead of answering "no method available
+# for opening". Evince's own .desktop (exported to
+# /var/lib/flatpak/exports/share/applications) declares application/pdf, so it
+# also appears in COSMIC Files' "Open with" next to Firefox.
+application/pdf=org.gnome.Evince.desktop;org.mozilla.firefox.desktop;
 image/bmp=com.system76.CosmicViewer.desktop;
 image/gif=com.system76.CosmicViewer.desktop;
 image/jpeg=com.system76.CosmicViewer.desktop;
