@@ -17,6 +17,65 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Docs — SteamVR to a Quest 3S, assessed (research, nothing shipped)
+- **The question:** can a PengyOS machine stream SteamVR games to the household Quest
+  3S wirelessly? Answer: **the software stack is viable, our OS setup is not, and the
+  house Wi-Fi is the hardest of the three problems.** Recorded in
+  [`docs/steamvr-quest-wireless-viability.md`](docs/steamvr-quest-wireless-viability.md).
+- **Why "not today" is a fleet fact, not a code fact:** the only machines running
+  PengyOS (behoweather, behocraptop — N100 / Alder Lake-N iGPU) cannot do VR, and every
+  VR-capable machine (behotv RTX 3070, behopc 3060 Ti, behoserver 2× 5060 Ti) runs
+  Ubuntu. So this is a requirements analysis of Desktop NVIDIA, explicitly **not a
+  measurement**.
+- **The load-bearing contradiction:** US-DSK-4 makes Steam a Flatpak from the store,
+  and Valve's support entry says SteamVR for Linux "cannot run properly within the
+  unsupported Steam Snap or Steam Flatpak packages as they break both DRM leasing and
+  asynchronous reprojection". On an image-based OS with no native package lane, that
+  makes the store lane the wrong lane for VR.
+- **Three gaps found by reading the tree and one live box** (behoweather, 26.10,
+  kernel 7.2.5): the image ships **no Flatpak NVIDIA GL/Vulkan extension** — so on an
+  NVIDIA machine Flatpak apps see Mesa/lavapipe, while `nvidia.config` states the
+  extension as an expectation the image never arranges; **`CONFIG_NTSYNC=m` is built
+  and never loaded** (no `modules-load.d` entry, `/dev/ntsync` absent), so Proton 11+
+  VR games lose the primitive the Linux VR guidance treats as required; and **no NVIDIA
+  application profile** ships, which is WiVRn's documented fix for NVENC parking the
+  GPU in P2.
+- **What is already right, and worth saying out loud:** kernel 7.2.5 ≥ the 6.14 ntsync
+  floor, `uinput` auto-loaded, Valve's `60-steam-vr.rules`, Avahi active, and a
+  firewall that already opens mDNS plus every inbound high UDP port — WiVRn's 9757 and
+  Steam Link's 10400 need no configuration here.
+- **Not proposed here:** a WiVRn/xrizer recipe. The Flathub Flatpak (v26.9, bundles
+  xrizer + OpenComposite) answers the question; the recipe is the last step, not the
+  first. The first step is the radio: the 2026-09 diagnosis (BotTalk
+  `c7cb9f01bf05651ca3000000`) already proved the Deco mesh, not the OS, was the cause.
+
+### Added — a Jev-class (System One) decision service, measured (prototype, not shipped)
+- **The question:** can a small "JEV" model run in PengyOS as a service —
+  Vulkan, statically compiled, tiny enough for a 16 GB laptop? **TypeSafe's Jev
+  itself is closed-weight** (API only, no checkpoint). What is open are the
+  Jev-class reproductions, and llama.cpp grew a native TypeSafe-compatible
+  `/v1/systemone` endpoint on 2026-10-02 (`b11318`) serving `laya`, `openjev`,
+  `clef`, `nimble`, `lev`, `kev`, `pplx-decider`, `vllm-decision2`, `vllm-d3`,
+  `lfm2-d1`, `lfm2-d1-omni`.
+- **Measured, not promised.** A static (`BUILD_SHARED_LIBS=OFF`), Vulkan-only
+  `llama-server` (61 MB, links only libvulkan/OpenSSL/libstdc++/libc/z) serving
+  **Laya (421 M, Apache-2.0)**: 8.4 ms per decision on an RTX 3070; **304 ms per
+  decision and 146 MB peak RSS on a PengyOS Desktop Intel N100 using its
+  integrated GPU as a Vulkan device** (405 ms / 96 MB CPU-only). d1-3B-Q4_K_M:
+  16 ms, 2.08 GB peak. The same binary ran on PengyOS Desktop 26.10 unchanged.
+- **Three packaging traps found by hitting them:** Buildroot 2026.08 has **no
+  shaderc/glslc recipe**, so `BR2_PACKAGE_LLAMA_CPP_VULKAN=y` cannot configure
+  (ggml-vulkan requires `glslc` + `SPIRV-Headers`); PengyOS ships **no
+  `libgomp.so.1`**, so the default OpenMP build dies at exec —
+  `-DGGML_OPENMP=OFF` is required; and the 2026.08 `llama-cpp` pin (`b8117`,
+  2026-02-20) predates the decision API by eight months.
+- **Licence position:** Laya Apache-2.0 (clean), d1-3B LFM Open License
+  (Apache-2.0 + a $10 M revenue condition — needs an audit exception), OpenJev
+  **CC-BY-NC-4.0 (must not ship)**.
+- **Lands as** [`docs/jev-model-service-viability.md`](docs/jev-model-service-viability.md)
+  + [`tools/pengyos-jev/`](tools/pengyos-jev/) (client, unit skeleton, recipe
+  skeleton, 14 offline tests). **Nothing is enabled in an image.**
+
 ### Added — PDFs get a real viewer (Evince, the ratified entry, wired in)
 - **The gap:** the Desktop image shipped **no PDF viewer**. The overlay's
   `mimeapps.list` named Firefox for `application/pdf`, so a PDF opened in a
@@ -59,6 +118,105 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   Flatpak and the host poppler stays a thumbnailer. `zathura` is not a
   Buildroot package at all. A libcosmic viewer over the MuPDF core is the real
   Lane 1 answer and is left as a scoped proposal, not a night's work.
+
+### Added — Firmware updates get a Desktop app (and fwupd finally runs)
+- New tool [`tools/pengyos-firmware`](tools/pengyos-firmware/): the **Firmware**
+  app (libcosmic) shows the devices fwupd can update, what each update goes to,
+  its size and urgency, and what it needs from the person (wall power, applies
+  while switched off, a restart, a replug), installs what is pressed with
+  progress, offers **Restart now** for a staged update, and snoozes reminders —
+  the Ubuntu "Firmware Updater" job, in the PengyOS shape. The session notifier
+  follows the `pengyos-updates` rules exactly: one notification a day per thing,
+  a snoozed set stays quiet, a newer update is news, off means off.
+- **Privilege stays where the repo puts it.** The app is unprivileged: checking
+  and installing are `pengyos-firmware-check.service` (daily timer) and
+  `pengyos-firmware-update@<ids>.service`, started through `systemctl`, with
+  `60-pengyos-firmware.rules` letting wheel at an active local session start them
+  without a password. The install unit runs `fwupdmgr` with the prompts answered
+  and **never restarts the machine**; writing firmware is irreversible, so it
+  happens only after a person presses the button.
+- **`fwupd.service` is now enabled** in the Desktop overlay. `BR2_PACKAGE_FWUPD`
+  has been in the Desktop layer for a while, and Buildroot's recipe installs the
+  unit files and enables none of them, so the daemon was not running and
+  `fwupdmgr` had nothing to talk to — the fleet's firmware work has all been done
+  from a terminal, which is how the gap stayed invisible.
+- Wiring is enforced, not remembered: `scripts/tests/test_cosmic_app_wiring.py`
+  now requires the app in the cargo list, the post-build install, the launcher,
+  the notifier autostart entry, the three units, both `multi-user.target.wants`
+  symlinks and the polkit rule to agree.
+
+### Added — Disks can partition a hard drive, not just format a stick
+- `pengyos-disks` 0.2.0 grows from the USB-stick tool into the Desktop's disk
+  utility, the GNOME-Disks-shaped job the Desktop was missing: it now lists **every
+  drive** (internal, external, USB, memory card) with its partition table and
+  partitions, and does the work over UDisks2 with no root and no new polkit rules —
+  create a partition table (MBR/GPT), add a partition with a size, a filesystem
+  (FAT32, exFAT, NTFS, ext4, btrfs, XFS, swap, or none) and a name, format a
+  partition in place, grow a partition and its filesystem, delete a partition,
+  mount/unmount, turn swap on/off, erase a drive. The 0.1.0 stick flows (format,
+  write an image, eject) are unchanged.
+- **The system cannot be destroyed from the window.** A drive the system has
+  mounted (outside `/run/media`) is locked for the drive-level operations; a
+  partition is locked when it is mounted by the system, is active swap, is
+  write-protected, is a locked LUKS container, or is one of this machine's own
+  partitions (`PENGYOS-ESP`, `pengyos-root-a/b`, `pengyos-data`, the `pengyos-*`
+  and `EFI` and `data` filesystem labels the installer writes) — the lock holds
+  even if `80-pengyos-udisks-hide.rules` stops hiding those partitions from UDisks.
+  Sizes are checked against the real free space in the table (1 MiB alignment) and
+  refused before anything is written; every destructive step names the drive, its
+  size and exactly what is on it, and needs a destructive button pressed.
+- `pengyos-disks --list` prints the same picture without a window (SSH, tests).
+  32 unit tests cover the model, the plans, the locks, the free-space maths and the
+  name rules with no display and no D-Bus; the QEMU pass (a second `virtio` disk
+  partitioned, formatted, grown, deleted) is the open item.
+
+### Added — `pengyos-storage`: where the disk went, as a picture
+- A new toolkit tool for the question `du` answers badly: **what is taking the
+  space**. `pengyos-storage scan /data -f html -o report.html` walks the tree and
+  writes **one self-contained page** — inline CSS, inline SVG, no JavaScript and
+  no network references — with a donut of the top entries, a squarified treemap
+  where rectangle area is bytes, ranked tables per depth, and the top individual
+  files. `scan` on a terminal prints the same ranking as bars; `du` is the
+  `du | sort -n` replacement (sorted biggest-first, with share bars); `disks`
+  lists every filesystem with a used-space bar.
+- **The numbers are the disk's, not the file's**: disk usage (`st_blocks*512`)
+  by default with `--apparent` for `st_size`, hard links counted once (so a
+  snapshot-heavy btrfs `data` does not report double), symlinks never followed,
+  `--one-file-system` reporting a mount point instead of walking it, and
+  `--exclude` space reported as excluded — `total = listed + below-the-cut +
+  excluded` is printed, so nothing vanishes between the scan and the report.
+  Read-only throughout: it never deletes, moves or compresses anything.
+- 118 tests, no root and no network: the walker takes an injectable `scandir`,
+  so hard links, foreign devices, permission errors and the chart geometry
+  (slices summing to 360°, non-overlapping area-proportional rectangles) are all
+  checked offline. Measured on behoserver: 472 GiB / 11.4M files / 956k
+  directories in 3m16s, a 15 KB page.
+- Agent-authored (Pengy, on behoserver) from the operator's request. Not wired
+  into any image and not in the `pengyos` meta-CLI's subcommand list yet — that
+  is a follow-up, not part of this change.
+
+### Fixed — the dev box's cargo and uv were installed and not on the PATH (found on behocraptop running 26.10.27)
+- **`pengyos-guest enter dev` gave a zsh with no cargo.** The dev box installs
+  rustup into `~/.cargo/bin` and exported the PATH through
+  `/etc/profile.d/pengyos-dev.sh`, which only **bash login shells** read. PengyOS's
+  default shell is zsh, and Ubuntu's zsh never sources `/etc/profile` — it reads
+  `/etc/zsh/zshenv`, `zprofile` and `zshrc`, none of which touch `profile.d`. So
+  the box came out with `cargo`, `rustc` and `uv` installed and none of them
+  findable, while `gcc`, `git` and `go` (apt packages, in `/usr/bin`) worked, and
+  `uv` worked only by accident because the shared `~/.zshrc` adds `~/.local/bin`.
+- **One PATH file, sourced by both shells.** `guests.d/dev.toml` and
+  `guests.d/cuda.toml` now write `/etc/pengyos-dev-path.sh` and have
+  `/etc/profile.d/pengyos-dev.sh` source it for bash, and append a guarded
+  `. /etc/pengyos-dev-path.sh` line to the box's `/etc/zsh/zshenv` for zsh.
+  `zshenv` is the only system zsh file sourced on *every* invocation, so it
+  covers both `enter dev` and `enter dev -- cargo build`. The append is guarded
+  by a marker so re-applying the guest does not accumulate lines. The box's own
+  `/etc` is what changes — the shared `~/.bashrc`/`~/.zshrc` stay untouched, so
+  the host PATH is unchanged.
+- **Locked by a test.** New `tools/pengyos-guest/tests/test_guests_d.py` tests
+  the shipped `guests.d/*.toml` as the deliverable (post-build copies them
+  verbatim) and asserts any guest that puts a toolchain on the PATH wires it for
+  both shells, from one shared file, idempotently.
 
 ### Fixed — installing offline and joining wifi afterwards left the Store with no sources and Store apps out of every menu (found on a laptop running 26.10.27)
 - **The COSMIC Store listed no sources.** `pengyos-flatpak-setup.sh` ignored a
