@@ -17,6 +17,13 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — no "Todos - Iced" in the App Library
+- The Desktop post-build installed every `.desktop` file under the COSMIC source
+  tree, and libcosmic vendors iced, whose `examples/todos` ships
+  `iced-todos.desktop`. The App Library showed a "Todos - Iced" entry with no binary
+  behind it. `examples/` is now skipped, and the stale file is removed from build
+  trees that already have it. It was the only installed entry whose `Exec` was missing.
+
 ### Docs — SteamVR to a Quest 3S, assessed (research, nothing shipped)
 - **The question:** can a PengyOS machine stream SteamVR games to the household Quest
   3S wirelessly? Answer: **the software stack is viable, our OS setup is not, and the
@@ -137,28 +144,52 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ### Added — Disks can partition a hard drive, not just format a stick
 - `pengyos-disks` 0.2.0 grows from the USB-stick tool into the Desktop's disk
-  utility, the GNOME-Disks-shaped job the Desktop was missing: it now lists **every
-  drive** (internal, external, USB, memory card) with its partition table and
-  partitions, and does the work over UDisks2 with no root and no new polkit rules —
-  create a partition table (MBR/GPT), add a partition with a size, a filesystem
-  (FAT32, exFAT, NTFS, ext4, btrfs, XFS, swap, or none) and a name, format a
-  partition in place, grow a partition and its filesystem, delete a partition,
-  mount/unmount, turn swap on/off, erase a drive. The 0.1.0 stick flows (format,
-  write an image, eject) are unchanged.
-- **The system cannot be destroyed from the window.** A drive the system has
-  mounted (outside `/run/media`) is locked for the drive-level operations; a
-  partition is locked when it is mounted by the system, is active swap, is
-  write-protected, is a locked LUKS container, or is one of this machine's own
-  partitions (`PENGYOS-ESP`, `pengyos-root-a/b`, `pengyos-data`, the `pengyos-*`
-  and `EFI` and `data` filesystem labels the installer writes) — the lock holds
-  even if `80-pengyos-udisks-hide.rules` stops hiding those partitions from UDisks.
-  Sizes are checked against the real free space in the table (1 MiB alignment) and
-  refused before anything is written; every destructive step names the drive, its
-  size and exactly what is on it, and needs a destructive button pressed.
-- `pengyos-disks --list` prints the same picture without a window (SSH, tests).
-  32 unit tests cover the model, the plans, the locks, the free-space maths and the
-  name rules with no display and no D-Bus; the QEMU pass (a second `virtio` disk
-  partitioned, formatted, grown, deleted) is the open item.
+  utility, the GNOME-Disks-shaped job the Desktop was missing. Every drive
+  (internal, external, USB, memory card) is in a sidebar; the chosen one shows its
+  partition table and a bar of its partitions and free space in proportion. Over
+  UDisks2, with no root and no new polkit rules: *New partition table…* (GPT/MBR),
+  *Create partition…* in free space (a size or all of it; ext4, btrfs, XFS, FAT32,
+  exFAT, NTFS, swap or unformatted; a name), *Format…*, *Grow…* (a partition and
+  its filesystem into the space after it), *Delete…*, *Mount*/*Unmount*, swap
+  on/off. The 0.1.0 stick flows (format, write an image, eject) are unchanged.
+- **The running system cannot be broken from the window.** Whole-drive actions are
+  refused on a drive the system has something mounted from or swapping on. A
+  partition is locked when the system has it mounted, it is active swap or
+  read-only, or, on the drive the system runs from, it is one of PengyOS's own
+  (`PENGYOS-ESP`, `pengyos-root-a/b`, `pengyos-data`, `PENGYOS-PAYLOAD`) or an EFI
+  System Partition or x86-64 root by type — mounted or not, since the inactive root
+  slot never is and the installer stick's ESP is just called "boot". The same
+  partitions on another, unused disk can be erased. `80-pengyos-udisks-hide.rules`
+  stays: `UDISKS_IGNORE` only sets `HintIgnore`, so COSMIC Files still hides those
+  partitions while Disks shows them, locked (checked in QEMU).
+- Sizes, names and each filesystem's smallest size are checked before anything is
+  written; every destructive step names what it erases and needs a red button.
+  `--list` prints the layout and the locks. 38 unit tests, no display, no D-Bus.
+- QEMU, Desktop image, live stick + a blank 20 GB virtio disk, all from the
+  window: new GPT table; a 5 GB ext4 partition created, mounted, grown to fill the
+  disk while mounted (a file on it survived), reformatted as btrfs (unmounted
+  first), deleted; a 2 GB swap partition and exFAT in the rest, swap turned on
+  (partition and drive then locked) and off; then an MBR table and a partition on
+  it (type `0x83`). The stick is locked whole, its "boot" ESP locked by type. Not
+  yet run: an installed system as a non-root user (the polkit prompts for an
+  internal disk).
+- Rebuilt from scratch on 2026-10-16: the first 0.2.0, written by a PengyTasker job
+  on 2026-10-15, was thrown away uncommitted by the nightly cron (see
+  `pengyos-nightly`'s CHANGELOG); only this entry had been committed.
+
+### Added — Disk Usage: what is taking the space, as a ring chart
+- `pengyos-usage` 0.1.0, *Disk Usage* in the App Library: the native Desktop app
+  for "where did my space go" (GNOME's Disk Usage Analyzer, for COSMIC). Places
+  lists the home folder and each filesystem once, with how full it is; a scan
+  (parallel, stoppable, live counts) shows the folder as a four-ring chart you
+  click into, beside a ranked list with shares; crumbs, *Open in Files*, *Scan
+  again*. Read-only.
+- The numbers match `du -s -B1` to the byte: disk usage, hard links once,
+  symlinks not followed, other filesystems not walked (by mount point, so btrfs
+  subvolumes are walked), btrfs `.snapshots` not counted (they share blocks with
+  what they copy), unreadable folders noted. A 12.4-million-file `/data` in 2 m 44 s.
+- `pengyos-storage` (below) stays as the terminal/HTML version for Server and
+  scripts.
 
 ### Added — `pengyos-storage`: where the disk went, as a picture
 - A new toolkit tool for the question `du` answers badly: **what is taking the
@@ -170,8 +201,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   `du | sort -n` replacement (sorted biggest-first, with share bars); `disks`
   lists every filesystem with a used-space bar.
 - **The numbers are the disk's, not the file's**: disk usage (`st_blocks*512`)
-  by default with `--apparent` for `st_size`, hard links counted once (so a
-  snapshot-heavy btrfs `data` does not report double), symlinks never followed,
+  by default with `--apparent` for `st_size`, hard links counted once, symlinks never followed,
   `--one-file-system` reporting a mount point instead of walking it, and
   `--exclude` space reported as excluded — `total = listed + below-the-cut +
   excluded` is printed, so nothing vanishes between the scan and the report.
@@ -183,7 +213,9 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   directories in 3m16s, a 15 KB page.
 - Agent-authored (Pengy, on behoserver) from the operator's request. Not wired
   into any image and not in the `pengyos` meta-CLI's subcommand list yet — that
-  is a follow-up, not part of this change.
+  is a follow-up, not part of this change. (An earlier version of this entry said
+  counting hard links once keeps btrfs snapshots from counting double; it does not —
+  snapshots are not hard links. `pengyos-usage` skips btrfs `.snapshots` instead.)
 
 ### Fixed (26.10.29) — the dev box's cargo and uv were installed and not on the PATH (found on behocraptop running 26.10.27)
 - **`pengyos-guest enter dev` gave a zsh with no cargo.** The dev box installs

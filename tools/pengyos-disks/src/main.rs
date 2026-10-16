@@ -1,10 +1,12 @@
 //! `pengyos-disks` — the "Disks" window. `pengyos-disks FILE` opens it with FILE
-//! chosen as the image to write; `--list` prints the drives instead (no window).
+//! chosen as the image to write; `--list` prints the drives, their partitions
+//! and free space, and what is locked, instead (no window).
 
 use std::process::ExitCode;
 
 #[cfg(feature = "udisks")]
 fn list() -> ExitCode {
+    use pengyos_disks::{human, Slot};
     let drives = match pengyos_disks::udisks::connect().and_then(|c| pengyos_disks::udisks::drives(&c)) {
         Ok(d) => d,
         Err(e) => {
@@ -13,13 +15,33 @@ fn list() -> ExitCode {
         }
     };
     if drives.is_empty() {
-        println!("no removable drives");
+        println!("no drives");
     }
     for d in &drives {
-        println!("{}  {}  ({})", d.device, d.name(), d.summary());
+        println!("{}  {}  ({} · {} · {})", d.device, d.name(), d.kind(), human(d.size), d.table_name());
         match d.lock() {
-            Some(l) => println!("    locked: {}", l.text()),
-            None => println!("    can format, write an image, eject"),
+            Some(l) => println!("    drive locked: {}", l.text()),
+            None => println!("    drive: can repartition, format, write an image{}", if d.removable { ", eject" } else { "" }),
+        }
+        let show = |v: &pengyos_disks::Volume, indent: &str| {
+            let at = if v.mount_points.is_empty() { String::new() } else { format!(" at {}", v.mount_points.join(", ")) };
+            let lock = d.volume_lock(v).map(|l| format!("  [locked: {}]", l.text())).unwrap_or_default();
+            println!("{indent}{}  {}{at}{lock}", v.device, v.describe());
+        };
+        for s in d.layout() {
+            match s {
+                Slot::Part(i) => {
+                    let v = &d.volumes[i];
+                    show(v, "    ");
+                    if v.container {
+                        d.partitions().filter(|p| p.contained).for_each(|p| show(p, "        "));
+                    }
+                }
+                Slot::Free(g) => println!("    free  {} at {}", human(g.size), human(g.offset)),
+            }
+        }
+        if d.table.is_empty() {
+            d.volumes.iter().filter(|v| v.backing.is_empty()).for_each(|v| show(v, "    "));
         }
     }
     ExitCode::SUCCESS
@@ -36,7 +58,7 @@ fn main() -> ExitCode {
     #[cfg(feature = "cosmic")]
     {
         let image = args.iter().find(|a| !a.starts_with("--")).map(std::path::PathBuf::from);
-        let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(680.0, 560.0));
+        let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(980.0, 680.0));
         match cosmic::app::run::<pengyos_disks::app::App>(settings, image) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {

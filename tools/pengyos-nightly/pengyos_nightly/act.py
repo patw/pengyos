@@ -515,9 +515,15 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
         print(f"[act] {name}: {detail or ('ok' if ok else 'failed')}", flush=True)
         return ok
 
+    # Set the moment act leaves main. Until then the tree is not act's: a guard that
+    # refuses (a dirty tree above all) must leave it exactly as it found it. On
+    # 2026-10-15 the clean_tree refusal ran `checkout -f main` and threw away a
+    # PengyTasker job's uncommitted work.
+    entered = []
+
     def bail(name, detail):
         step(name, False, detail)
-        if apply:
+        if apply and entered:
             try:
                 _git(run, repo, "checkout", "-f", "main")
             except RuntimeError as exc:
@@ -559,6 +565,7 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
         version, why = next_version(repo, site)
         result["version"] = version
         result["branch"] = branch
+        entered.append(branch)
         _git(run, repo, "checkout", "-B", branch)
         step("branch", True, branch)
         touched = E.apply_edits(repo, [E.Edit(**e) for e in action["edits"]])
@@ -743,9 +750,14 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
         print(f"[act] {name}: {detail or ('ok' if ok else 'failed')}", flush=True)
         return ok
 
+    # Set the moment act leaves main; see run_act. Everything bail undoes - the
+    # checkout, the edits replayed back, the declarations, the dirclean - is act's own
+    # work only after that point. Before it, the tree belongs to whoever left it dirty.
+    entered = []
+
     def bail(name, detail):
         step(name, False, detail)
-        if apply:
+        if apply and entered:
             try:
                 _git(run, repo, "checkout", "-f", "main")
                 # `checkout -f` does not touch files main has never seen, and the patch
@@ -852,6 +864,7 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
         version, why = next_version(repo, site)
         result["version"] = version
         result["branch"] = branch
+        entered.append(branch)
         _git(run, repo, "checkout", "-B", branch)
         step("branch", True, f"{branch} ({len(actions)} action(s))")
         (repo / "VERSION").write_text(version + "\n")

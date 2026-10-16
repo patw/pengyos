@@ -1,0 +1,38 @@
+# Disk Usage (pengyos-usage): where the space on a drive went, as a ring chart
+# you can click into, on the COSMIC desktop.
+#
+# The scanner and the chart geometry (lib.rs) are std + libc only and fully
+# `cargo test`-able without a display. The window is behind `cosmic`
+# (libcosmic), off by default, like pengyos-disks.
+[package]
+name = "pengyos-usage"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+description = "Disk Usage: see what is taking the space on a drive, as a ring chart, on the COSMIC desktop."
+
+[features]
+default = []
+cosmic = ["dep:libcosmic"]
+
+[lib]
+name = "pengyos_usage"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-usage"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
+
+# Same pinned libcosmic and feature set as pengyos-install-gui, pengyos-updates
+# and pengyos-disks, so all of them build from one cache
+# (CARGO_TARGET_DIR=$PENGYOS_COSMIC_BUILD/install-gui). `qr_code` is what turns
+# on iced's canvas, which draws the chart.
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
+features = ["about", "single-instance", "markdown", "qr_code", "wgpu", "xdg-portal"]

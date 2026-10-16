@@ -127,7 +127,7 @@ else
     echo "post-build: ${UPDATES_GUI} not built — no update app or notifications"
 fi
 
-# --- Disks (format / write images to / eject removable drives) ---------------
+# --- Disks (partition and format drives, write images, eject) ----------------
 # tools/pengyos-disks, host-built the same way. It only talks to UDisks2 (in the
 # desktop layer); the .desktop file is in the overlay.
 DISKS_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-disks"
@@ -135,7 +135,18 @@ if [ -x "${DISKS_GUI}" ]; then
     install -Dm0755 "${DISKS_GUI}" "${TARGET_DIR}/usr/bin/pengyos-disks"
     echo "post-build: installed pengyos-disks"
 else
-    echo "post-build: ${DISKS_GUI} not built — no Disks app (formatting needs a terminal)"
+    echo "post-build: ${DISKS_GUI} not built — no Disks app (partitioning needs a terminal)"
+fi
+
+# --- Disk Usage (what is taking the space, as a ring chart) -------------------
+# tools/pengyos-usage, host-built the same way. Read-only and unprivileged: it
+# walks what the user can read. The .desktop file is in the overlay.
+USAGE_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-usage"
+if [ -x "${USAGE_GUI}" ]; then
+    install -Dm0755 "${USAGE_GUI}" "${TARGET_DIR}/usr/bin/pengyos-usage"
+    echo "post-build: installed pengyos-usage"
+else
+    echo "post-build: ${USAGE_GUI} not built — no Disk Usage app"
 fi
 
 # --- Gamepads (list the controllers and test their controls) ----------------
@@ -182,7 +193,8 @@ STRIP_BIN="$(ls "${HOST_DIR}"/bin/*-buildroot-linux-gnu-strip 2>/dev/null | head
 if [ -n "${STRIP_BIN}" ]; then
     for f in "${TARGET_DIR}"/usr/bin/cosmic-* "${TARGET_DIR}"/usr/bin/pop-launcher \
              "${TARGET_DIR}"/usr/bin/pengyos-install-gui "${TARGET_DIR}"/usr/bin/pengyos-updates \
-             "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-gamepads \
+             "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-usage \
+             "${TARGET_DIR}"/usr/bin/pengyos-gamepads \
              "${TARGET_DIR}"/usr/bin/pengyos-printers "${TARGET_DIR}"/usr/bin/pengyos-firmware; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
@@ -427,11 +439,15 @@ fi
 # surface never attaches a buffer (the bar never appears). Install every entry.
 # cosmic.desktop (cosmic-comp, cosmic-session) is a wayland-sessions entry, not an
 # app: installed here it showed up in the App Library as "COSMIC" and launched a
-# second compositor.
-find "${COSMIC_SRC}" -path '*/target/*' -prune -o -name '*.desktop' ! -name cosmic.desktop -print 2>/dev/null | while IFS= read -r d; do
+# second compositor. examples/ is skipped for the same reason: libcosmic vendors
+# iced, whose examples/todos ships iced-todos.desktop, and that put a "Todos - Iced"
+# entry with no binary behind it in the App Library. The rm takes it out of build
+# trees that already have it (post-build never deletes on its own).
+find "${COSMIC_SRC}" \( -path '*/target/*' -o -path '*/examples/*' \) -prune -o -name '*.desktop' ! -name cosmic.desktop -print 2>/dev/null | while IFS= read -r d; do
     [ -f "$d" ] || continue
     install -Dm0644 "$d" "${TARGET_DIR}/usr/share/applications/$(basename "$d")"
  done
+rm -f "${TARGET_DIR}/usr/share/applications/iced-todos.desktop"
 echo "post-build: installed COSMIC app .desktop files"
 
 # cosmic-panel's App button launches the App Library, whose binary is not part

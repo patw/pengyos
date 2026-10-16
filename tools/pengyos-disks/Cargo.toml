@@ -1,16 +1,16 @@
-# Disks (pengyos-disks): format, write images to and eject removable drives,
-# over UDisks2.
+# Disks (pengyos-disks): partition and format drives, write images to and
+# eject removable drives, over UDisks2.
 #
 # The decision logic (lib.rs) is std only and fully `cargo test`-able without a
 # display or D-Bus. The UDisks2 client is behind `udisks` (zbus) and the window
 # behind `cosmic` (libcosmic + udisks), both off by default, like pengyos-updates.
 [package]
 name = "pengyos-disks"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Pat Wendorf"]
-description = "Disks: format, write images to and eject removable drives on the COSMIC desktop."
+description = "Disks: partition and format drives, write images to and eject removable drives on the COSMIC desktop."
 
 [features]
 default = []

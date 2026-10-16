@@ -20,9 +20,6 @@ use crate::{copy_image, explain, plan_write, CountingReader, Compression, Drive,
 
 const DEST: &str = "org.freedesktop.UDisks2";
 const PREFIX: &str = "org.freedesktop.UDisks2.";
-/// UDisks aligns partitions to 1 MiB; the first one starts there.
-const FIRST_PARTITION: u64 = 1 << 20;
-
 pub fn connect() -> Result<Connection, String> {
     Connection::system().map_err(|e| format!("Cannot reach the disk service (UDisks): {e}"))
 }
@@ -88,32 +85,63 @@ fn call0(conn: &Connection, object: &str, iface: &str, method: &str) -> Result<(
     proxy(conn, object, iface)?.call::<_, _, ()>(method, &(Opts::new(),)).map_err(err)
 }
 
+fn format_opts(label: &str, take_ownership: bool) -> Opts<'_> {
+    let mut o = Opts::new();
+    if !label.is_empty() {
+        o.insert("label", Value::from(label));
+    }
+    if take_ownership {
+        o.insert("take-ownership", Value::from(true));
+    }
+    o
+}
+
 /// Run one step. [`Step::Restore`] is not a single call; see [`write_image`].
 pub fn run(conn: &Connection, step: &Step) -> Result<(), String> {
     match step {
         Step::Unmount { object } => call0(conn, object, "Filesystem", "Unmount"),
+        Step::Mount { object } => {
+            proxy(conn, object, "Filesystem")?.call::<_, _, String>("Mount", &(Opts::new(),)).map(|_| ()).map_err(err)
+        }
         Step::Lock { object } => call0(conn, object, "Encrypted", "Lock"),
+        Step::SwapOn { object } => call0(conn, object, "Swapspace", "Start"),
+        Step::SwapOff { object } => call0(conn, object, "Swapspace", "Stop"),
         Step::Rescan { object } => call0(conn, object, "Block", "Rescan"),
         Step::PowerOff { object } => call0(conn, object, "Drive", "PowerOff"),
         Step::Eject { object } => call0(conn, object, "Drive", "Eject"),
         Step::FormatTable { object, table } => {
             proxy(conn, object, "Block")?.call::<_, _, ()>("Format", &(*table, Opts::new())).map_err(err)
         }
-        Step::CreatePartition { object, ptype, fs, label, take_ownership } => {
-            let mut fopts = Opts::new();
-            if !label.is_empty() {
-                fopts.insert("label", Value::from(label.as_str()));
-            }
-            if *take_ownership {
-                fopts.insert("take-ownership", Value::from(true));
-            }
-            proxy(conn, object, "PartitionTable")?
-                .call::<_, _, OwnedObjectPath>(
+        Step::CreatePartition { object, offset, size, ptype, fs, label, take_ownership } => {
+            let table = proxy(conn, object, "PartitionTable")?;
+            if fs.is_empty() {
+                table.call::<_, _, OwnedObjectPath>("CreatePartition", &(*offset, *size, *ptype, "", Opts::new()))
+            } else {
+                table.call::<_, _, OwnedObjectPath>(
                     "CreatePartitionAndFormat",
-                    &(FIRST_PARTITION, 0u64, *ptype, "", Opts::new(), *fs, fopts),
+                    &(*offset, *size, *ptype, "", Opts::new(), *fs, format_opts(label, *take_ownership)),
                 )
-                .map(|_| ())
-                .map_err(err)
+            }
+            .map(|_| ())
+            .map_err(err)
+        }
+        Step::FormatVolume { object, fs, label, take_ownership } => {
+            let mut o = format_opts(label, *take_ownership);
+            // Keep the partition's type in step with what is on it (Linux
+            // filesystem, swap, basic data).
+            o.insert("update-partition-type", Value::from(true));
+            proxy(conn, object, "Block")?.call::<_, _, ()>("Format", &(*fs, o)).map_err(err)
+        }
+        Step::Delete { object } => {
+            let mut o = Opts::new();
+            o.insert("tear-down", Value::from(true));
+            proxy(conn, object, "Partition")?.call::<_, _, ()>("Delete", &(o,)).map_err(err)
+        }
+        Step::ResizePartition { object, size } => {
+            proxy(conn, object, "Partition")?.call::<_, _, ()>("Resize", &(*size, Opts::new())).map_err(err)
+        }
+        Step::ResizeFilesystem { object } => {
+            proxy(conn, object, "Filesystem")?.call::<_, _, ()>("Resize", &(0u64, Opts::new())).map_err(err)
         }
         Step::Restore { .. } => Err("internal: Restore is run by write_image".into()),
     }

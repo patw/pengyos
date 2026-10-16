@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Disk Usage
+GenericName=Disk Usage Analyzer
+Comment=See what is taking the space on your drives
+Exec=pengyos-usage %f
+Icon=disk-usage-analyzer
+Terminal=false
+Categories=System;Utility;
+Keywords=storage;space;usage;full;du;size;folder;big;files;chart;
+StartupNotify=true

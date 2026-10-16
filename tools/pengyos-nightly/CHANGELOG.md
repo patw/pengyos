@@ -7,6 +7,17 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **A refusal no longer throws away someone else's uncommitted work.** `act` refuses a
+  dirty tree (`clean_tree`), but every refusal went through `bail()`, and in `--apply`
+  mode `bail()` ran `git checkout -f main` — and in a batch also replayed each action's
+  edits back and ran `<pkg>-dirclean` — whether or not `act` had touched the tree. On
+  2026-10-15 at 21:00 that put every modified tracked file in the shared checkout back
+  to HEAD: a PengyTasker job's Disks 0.2.0, the `tools/README.md` index entries for five
+  new tools, CLAUDE.md and a docs edit. `bail()` now undoes only what `act` did: nothing
+  until it has switched to its nightly branch. Tests for a dirty tree refused by
+  `clean_tree` and by an earlier guard, single action and batch, fail on the old code.
+
+### Fixed
 - **A golang/cargo bump now hashes the archive Buildroot actually builds.** `recipe_bump`
   named the tarball `<name>-<version>.tar.gz` — Buildroot's *default* — but golang and cargo
   infra append their own suffix (`pkg-utils.mk:51` `pkg_source_ext`, `pkg-download.mk:12-15`

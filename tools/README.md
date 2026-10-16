@@ -69,7 +69,8 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-desktop-drivers`](pengyos-desktop-drivers/) | The generic (no vendor-acceleration) driver set for the PengyOS Desktop live + installed image: a kernel linux.frag… |
 | [`pengyos-desktop-nvidia`](pengyos-desktop-nvidia/) | Containment lint for the opt-in NVIDIA editions, Server and Desktop (package `nvidia-open`): the proprietary driver stays out of every default image. |
 | [`pengyos-desktop-session`](pengyos-desktop-session/) | The COSMIC session + a VM-testable smoke matrix (US-DSK-1) for PengyOS Desktop. |
-| [`pengyos-disks`](pengyos-disks/) | *Disks*: format, write images to and eject USB sticks and memory cards (Rust, libcosmic, over UDisks2). |
+| [`pengyos-disks`](pengyos-disks/) | *Disks*: every drive and its partitions; create a partition table, create, format, grow and delete partitions, mount, swap; format, write images to and eject USB sticks and cards. The running system's own partitions are locked (Rust, libcosmic, over UDisks2). |
+| [`pengyos-firmware`](pengyos-firmware/) | *Firmware*: the devices fwupd can update, what is on offer, and Update all / just this one, with update notifications (Rust, libcosmic, over fwupd). |
 | [`pengyos-flatpak-mirror`](pengyos-flatpak-mirror/) | Self-hosted Flatpak (OSTree) repo manager for PengyOS. |
 | [`pengyos-gamepads`](pengyos-gamepads/) | *Gamepads*: list the attached game controllers and joysticks and test their buttons, sticks, triggers and D-pad live (Rust, libcosmic, over evdev + sysfs). |
 | [`pengyos-printers`](pengyos-printers/) | *Printers*: add and remove printers, manage the print queue and print a test page (Rust, libcosmic, IPP to CUPS' local socket). |
@@ -84,6 +85,7 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-install-gui`](pengyos-install-gui/) | A libcosmic-native graphical installer for PengyOS Desktop. It drives pengyos-install through a pure, headless view… |
 | [`pengyos-install-tui`](pengyos-install-tui/) | Guided Core/Server installer wizard + unattended --auto for PengyOS. |
 | [`pengyos-installer`](pengyos-installer/) | Install PengyOS Core from the live stick onto a target disk. |
+| [`pengyos-jev`](pengyos-jev/) | Prototype, not shipped: a Jev-class "System One" decision model as a PengyOS service, measured, with a client and a recipe skeleton. |
 | [`pengyos-kernel-fragments`](pengyos-kernel-fragments/) | Kernel config fragment library + composer for PengyOS. |
 | [`pengyos-layout`](pengyos-layout/) | The declarative disk/layout planner for PengyOS installs (ESP + A/B + data, optional LUKS2). |
 | [`pengyos-license-audit`](pengyos-license-audit/) | Verify each PengyOS component's license claim and enforce the freedom policy; emit LICENSES.md. |
@@ -113,11 +115,15 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-server-monitoring`](pengyos-server-monitoring/) | Node-exporter + TheWatcher systemd units, a small Prometheus-style alert-rule set stored as data, and a fixture-dri… |
 | [`pengyos-server-toolset`](pengyos-server-toolset/) | The Server edition's remote-admin comfort set for PengyOS. It ships two things, both validated by a pytest suite: |
 | [`pengyos-sign`](pengyos-sign/) | Minimal, modern artifact signing for PengyOS. |
+| [`pengyos-storage`](pengyos-storage/) | `du` that draws: a read-only terminal/HTML/JSON storage report (Python, stdlib only) for Server and scripts; the Desktop app is `pengyos-usage`. |
+| [`pengyos-stt-whistle`](pengyos-stt-whistle/) | Prototype, not shipped: Cactus Whistle speech-to-text, measured, with a `pengyos-say` command and a recipe pair. |
 | [`pengyos-systemd-units`](pengyos-systemd-units/) | Core systemd unit set for PengyOS, plus a small, dependency-free Python validator that checks unit syntax and secti… |
 | [`pengyos-tiers`](pengyos-tiers/) | The 3-tier change policy engine for PengyOS. |
 | [`pengyos-update`](pengyos-update/) | The on-device A/B updater: read the signed feed, write the release into the other root slot, boot it once, keep it only if it comes up (`status`/`check`/`apply`/`rollback`/`channel`). |
 | [`pengyos-updates`](pengyos-updates/) | *PengyOS Updates*: the Desktop app + notifier (Rust, libcosmic) over `pengyos-update`. |
 | [`pengyos-update-triage`](pengyos-update-triage/) | Advisories + changelogs → update proposals for PengyOS — the "flagship" of the PengyOS SPEC §3: let the agent watch… |
+| [`pengyos-upscale`](pengyos-upscale/) | Prototype, not shipped: Real-ESRGAN (ncnn, Vulkan) image upscaling, measured, with a Files right-click integration and a recipe. |
+| [`pengyos-usage`](pengyos-usage/) | *Disk Usage*: what is taking the space, as a ring chart you click into beside a ranked list; your home or any filesystem, read-only (Rust, libcosmic). |
 | [`pengyos-upstream-watch`](pengyos-upstream-watch/) | Detect new upstream releases for PengyOS pins → change proposals. |
 | [`pengyos-verifier`](pengyos-verifier/) | External witness for PengyOS builds. |
 | [`pengyos-witness-bundle`](pengyos-witness-bundle/) | Present a pengyos-build output in the canonical witness layout and verify its SBOM signature, so an external witnes… |

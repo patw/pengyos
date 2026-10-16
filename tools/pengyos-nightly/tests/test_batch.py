@@ -1093,3 +1093,25 @@ def test_a_downloadable_bump_never_asks_for_a_generated_archive(tmp_path):
     assert result["published"], result
     assert not fake.asked("libmtp-source"), fake.calls
     assert not any(s["step"] == "hash libmtp" for s in result["journal"]), result["journal"]
+
+
+# --- someone else's work in progress is never act's to throw away ------------
+# The batch bail also replays each action's edits back and wipes build trees, so a
+# refusal on a dirty tree (2026-10-15: a PengyTasker job's Disks 0.2.0, lost) has to
+# stop before any of it.
+
+def test_a_dirty_tree_is_refused_and_left_exactly_as_it_was(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / "VERSION").write_text("someone's edit\n")
+    edited = repo / _patch_action()["edits"][0]["path"]
+    edited.parent.mkdir(parents=True, exist_ok=True)
+    edited.write_text("someone's patch in progress\n")
+    fake = Fake(repo=repo)
+    result = A.run_batch([_patch_action()], _cfg(key_file=_key(tmp_path)), repo, tmp_path,
+                         _site(tmp_path), tmp_path / "state", apply=True, run=fake,
+                         today=TODAY)
+    assert "clean_tree" in result["error"]
+    assert (repo / "VERSION").read_text() == "someone's edit\n"
+    assert edited.read_text() == "someone's patch in progress\n"
+    assert _branch(repo) == "main"
+    assert not fake.asked("dirclean")

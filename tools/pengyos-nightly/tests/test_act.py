@@ -441,3 +441,43 @@ def test_refresh_package_keeps_the_lines_the_triage_needs(tmp_path):
         assert A._failed_patch(str(exc)) == \
             "0001-ima-adpcm-fix-int-overflow-in-ima-reader-init.patch", str(exc)
         assert "already present in the pinned version" == A._patch_reason(str(exc))
+
+
+# --- someone else's work in progress is never act's to throw away ------------
+# On 2026-10-15 the 21:00 cron found a PengyTasker job's uncommitted Disks 0.2.0 in
+# the shared checkout, refused (clean_tree) - and then bail() ran `checkout -f main`,
+# which put every modified tracked file back to HEAD. A refusal must touch nothing.
+
+def _work_in_progress(repo):
+    (repo / "VERSION").write_text("26.10.8\nsomeone's edit\n")
+    (repo / "new-tool.rs").write_text("fn main() {}\n")
+
+
+def _assert_untouched(repo):
+    assert (repo / "VERSION").read_text() == "26.10.8\nsomeone's edit\n"
+    assert (repo / "new-tool.rs").read_text() == "fn main() {}\n"
+    assert _branch(repo) == "main"
+
+
+def test_a_dirty_tree_is_refused_and_left_exactly_as_it_was(tmp_path):
+    repo = _repo(tmp_path)
+    _work_in_progress(repo)
+    key = tmp_path / "release.key"
+    key.write_text("pengyos-key-v1 ed25519 abc\n")
+    fake = Fake()
+    result = A.run_act(_action(), _cfg(key_file=str(key)), repo, tmp_path,
+                       tmp_path / "site", tmp_path / "state", apply=True, run=fake,
+                       today=TODAY)
+    assert "clean_tree" in result["error"]
+    _assert_untouched(repo)
+    assert fake.calls == []
+
+
+def test_an_early_guard_on_a_dirty_tree_leaves_it_alone(tmp_path):
+    repo = _repo(tmp_path)
+    _work_in_progress(repo)
+    result = A.run_act(_action(), _cfg(act_enabled=False), repo, tmp_path,
+                       tmp_path / "site", tmp_path / "state", apply=True, run=Fake(),
+                       today=TODAY)
+    assert "kill switch" in result["error"]
+    _assert_untouched(repo)
