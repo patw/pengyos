@@ -17,7 +17,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Fixed — no "Todos - Iced" in the App Library
+### Fixed (26.10.30) — no "Todos - Iced" in the App Library
 - The Desktop post-build installed every `.desktop` file under the COSMIC source
   tree, and libcosmic vendors iced, whose `examples/todos` ships
   `iced-todos.desktop`. The App Library showed a "Todos - Iced" entry with no binary
@@ -142,7 +142,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   longer deletes the progress file under the app, and fwupdmgr's stderr goes to
   the journal instead of a pipe nothing drained.
 
-### Added — Disks can partition a hard drive, not just format a stick
+### Added (26.10.30) — Disks can partition a hard drive, not just format a stick
 - `pengyos-disks` 0.2.0 grows from the USB-stick tool into the Desktop's disk
   utility, the GNOME-Disks-shaped job the Desktop was missing. Every drive
   (internal, external, USB, memory card) is in a sidebar; the chosen one shows its
@@ -177,7 +177,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   on 2026-10-15, was thrown away uncommitted by the nightly cron (see
   `pengyos-nightly`'s CHANGELOG); only this entry had been committed.
 
-### Added — Disk Usage: what is taking the space, as a ring chart
+### Added (26.10.30) — Disk Usage: what is taking the space, as a ring chart
 - `pengyos-usage` 0.1.0, *Disk Usage* in the App Library: the native Desktop app
   for "where did my space go" (GNOME's Disk Usage Analyzer, for COSMIC). Places
   lists the home folder and each filesystem once, with how full it is; a scan
