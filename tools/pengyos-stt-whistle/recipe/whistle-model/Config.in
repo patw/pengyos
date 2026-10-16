@@ -1,0 +1,10 @@
+config BR2_PACKAGE_WHISTLE_MODEL
+	bool "whistle-model (Cactus speech-to-text weights, 16.9 MB)"
+	depends on BR2_PACKAGE_NEEDLE_ENGINE
+	help
+	  The Cactus Whistle speech-to-text model: one 16.9 MB .cact file,
+	  Apache-2.0, transcribing English, German, French, Spanish, Italian,
+	  Dutch and Polish on the CPU. Installed to
+	  /usr/share/pengyos/stt/whistle.cact.
+
+	  https://huggingface.co/Cactus-Compute/whistle

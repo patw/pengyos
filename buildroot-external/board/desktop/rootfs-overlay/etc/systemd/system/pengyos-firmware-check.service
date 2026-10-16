@@ -1,0 +1,22 @@
+# PengyOS — look for firmware updates (pengyos-firmware-check.timer, daily).
+#
+# Only checks: asks fwupd (which refreshes its metadata from LVFS) and saves the
+# answer in /var/lib/pengyos-firmware/state.json, which the "Firmware" app and
+# its notifier read. Installing is always the user's choice, in the app.
+# Running as root is what lets fwupdmgr refresh metadata without a polkit prompt;
+# a user at the console can ask the same questions from the app.
+[Unit]
+Description=Check for firmware updates
+Wants=network-online.target
+After=network-online.target fwupd.service
+ConditionPathExists=/usr/bin/fwupdmgr
+
+[Service]
+Type=oneshot
+# /var/lib/pengyos-firmware (the saved answer) and /run/pengyos-firmware (the
+# progress file the app reads) are created by systemd, root-owned, world-readable.
+StateDirectory=pengyos-firmware
+RuntimeDirectory=pengyos-firmware
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/pengyos-firmware check --save --quiet
+Nice=10

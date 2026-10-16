@@ -1,0 +1,23 @@
+config BR2_PACKAGE_LLAMA_CPP_VK
+	bool "llama-cpp-vk (Vulkan-enabled llama-server, pinned)"
+	depends on BR2_INSTALL_LIBSTDCPP
+	depends on BR2_PACKAGE_LLAMA_CPP_ARCH_SUPPORTS
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	depends on BR2_TOOLCHAIN_GCC_AT_LEAST_11
+	depends on BR2_USE_WCHAR
+	select BR2_PACKAGE_VULKAN_LOADER
+	help
+	  A pinned, source-built llama-server with the Vulkan backend and the
+	  /v1/systemone decision endpoint (llama.cpp >= b11318; the 2026.08
+	  llama-cpp recipe pins b8117, which predates both). Lane 1: built
+	  from source, statically linked against the ggml static libs.
+
+	  NOT INSTALLED — this is the prototype skeleton. Two gaps must close
+	  before it builds:
+	    * host-shaderc (glslc) — ggml-vulkan's CMake does
+	      find_package(Vulkan COMPONENTS glslc REQUIRED) and Buildroot
+	      2026.08 ships no host-shaderc recipe; measured 2026-10-15.
+	    * spirv-headers as a *build* dependency (find_package(SPIRV-Headers
+	      CONFIG REQUIRED)); the target package is not enough.
+
+	  https://github.com/ggml-org/llama.cpp

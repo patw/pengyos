@@ -1,0 +1,47 @@
+# pengyos-jev.service — skeleton, not installed.
+# A local System One (Jev-class) decision service: loopback only, own user,
+# weights read-only. Enable by moving the recipe + this unit into the tree.
+#
+# Vulkan needs the GPU render nodes: AccessDevices=/dev/dri (systemd scopes
+# DeviceAllow=), and the service user must be in the `render` group on
+# PengyOS Desktop. No GPU? Run with -ngl 0 and drop the device lines: the
+# CPU path is ~1.3x slower and uses ~100 MB.
+[Unit]
+Description=PengyOS System One (Jev-class) decision service
+Documentation=https://github.com/ggml-org/llama.cpp (tools/server, /v1/systemone)
+After=multi-user.target
+
+[Service]
+Type=simple
+User=jev
+Group=jev
+ExecStart=/usr/bin/llama-server \
+    -m /usr/share/pengyos/jev/Laya-Q8_0.gguf \
+    --device Vulkan0 -c 4096 -ngl 99 \
+    --host 127.0.0.1 --port 8199 \
+    --api-key-file /etc/pengyos/jev/apikey \
+    --cache-ram 0
+Restart=on-failure
+RestartSec=5
+# A 421 M decision model fits in a tight budget; raise for a 9 B backbone.
+MemoryMax=4G
+TasksMax=256
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+DeviceAllow=/dev/dri rw
+StateDirectory=pengyos-jev
+
+[Install]
+WantedBy=multi-user.target

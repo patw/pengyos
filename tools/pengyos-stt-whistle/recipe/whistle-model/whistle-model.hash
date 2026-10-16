@@ -1,0 +1,5 @@
+# Pinned digests for the Whistle model, upstream-published.
+# whistle.cact is the quantised archive the engine loads; the safetensors
+# checkpoint it was built from is pinned too, so the archive is re-derivable.
+sha256  b6e02f048568ac5d01a2042556c658061e699acbc0aa2a1439f52f3d461dffeb  whistle.cact
+sha256  cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  LICENSE

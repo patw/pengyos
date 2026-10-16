@@ -1,0 +1,21 @@
+config BR2_PACKAGE_NEEDLE_ENGINE
+	bool "needle-engine (Cactus STT/LLM runtime)"
+	help
+	  The Cactus Compute inference engine that runs the Whistle speech
+	  model. A vendor prebuilt binary (Lane 2): there is no source, so the
+	  binary is pinned by hash and installed under /usr/lib/pengyos/stt.
+
+	  https://github.com/cactus-compute/needle
+
+config BR2_PACKAGE_NEEDLE_ENGINE_ARCH_OK
+	bool "upstream publishes a build for this architecture"
+	depends on BR2_PACKAGE_NEEDLE_ENGINE
+	default y if BR2_x86_64
+	default y if BR2_aarch64
+	default y if BR2_arm
+	default y if BR2_riscv
+	default y if BR2_mips
+	help
+	  Upstream ships prebuilt engines for linux-x86_64, linux-arm64,
+	  linux-armv7, linux-riscv64 and linux-mipsel only. On any other
+	  architecture the recipe fails rather than installing nothing.

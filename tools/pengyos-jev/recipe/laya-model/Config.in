@@ -1,0 +1,14 @@
+config BR2_PACKAGE_LAYA_MODEL
+	bool "laya-model (System One decision weights, 450 MB Q8_0)"
+	depends on BR2_PACKAGE_LLAMA_CPP_VK
+	help
+	  Laya: a 421 M-parameter System One (Jev-class) decision model,
+	  Apache-2.0, multilingual (100+ languages), calibrated probabilities
+	  from RLCD training, up to 8192 tokens on the multilingual checkpoint.
+	  Installed to /usr/share/pengyos/jev/Laya-Q8_0.gguf.
+
+	  Measured on a PengyOS Desktop Intel N100 (integrated GPU, Vulkan):
+	  304 ms per decision, 146 MB peak RSS. CPU-only fallback: 405 ms,
+	  96 MB.
+
+	  https://huggingface.co/convaiinnovations/laya

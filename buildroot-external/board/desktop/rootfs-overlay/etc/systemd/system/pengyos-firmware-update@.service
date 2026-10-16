@@ -1,0 +1,27 @@
+# PengyOS — install firmware updates. Started by the "Firmware" app (polkit lets
+# administrators start it, see 60-pengyos-firmware.rules) or by hand:
+#
+#   systemctl start pengyos-firmware-update@all.service
+#   systemctl start pengyos-firmware-update@<DEVICE-ID>[,<DEVICE-ID>…].service
+#
+# %i is the instance name: "all", or the device ids fwupdmgr should update.
+# Progress goes to /run/pengyos-firmware/progress.json, which the app streams.
+#
+# Writing firmware is irreversible on hardware, so this unit never restarts the
+# computer: fwupdmgr is run with the prompts answered and the reboot check off,
+# and the app offers "Restart now" when something is staged. A device that needs
+# to apply while the machine is switched off shuts itself down — that is the
+# hardware's path, not this unit's.
+[Unit]
+Description=Install firmware updates (%i)
+Wants=network-online.target
+After=network-online.target fwupd.service
+ConditionPathExists=/usr/bin/fwupdmgr
+
+[Service]
+Type=oneshot
+RuntimeDirectory=pengyos-firmware
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/pengyos-firmware apply %i
+Nice=10
+IOSchedulingClass=idle

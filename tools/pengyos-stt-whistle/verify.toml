@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# Python tool: pytest in this tool's directory. The behaviour layer skips when
+# PENGYOS_STT_ENGINE / WHISTLE_MODEL / PENGYOS_STT_CLIPS are not provided, so
+# the gate stays offline and root-free.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-stt-whistle"
+expect = "exit0"
+timeout = 600

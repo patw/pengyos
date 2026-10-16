@@ -1,0 +1,33 @@
+{
+  "measured_at": "2026-10-15",
+  "binary": {
+    "name": "llama-server",
+    "version": "0.7.0-dev (build 1, commit b76b133)",
+    "build": "static (BUILD_SHARED_LIBS=OFF), GGML_VULKAN=ON, GGML_CUDA=OFF, GGML_OPENMP=OFF, LLAMA_CURL=OFF",
+    "size_bytes": 61108296,
+    "sha256": "803de90696cb39a277dee21fbcb56b5e2ac1596a95189200972d0fbe7e782e1f",
+    "dynamic_libs": ["libvulkan.so.1", "libssl.so.3", "libcrypto.so.3", "libstdc++.so.6", "libm.so.6", "libgcc_s.so.1", "libc.so.6", "libz.so.1", "libzstd.so.1"],
+    "host_build_prereqs": ["glslc (extracted from Ubuntu glslc + libshaderc1 debs into a user prefix)", "spirv-headers (deb, extracted)"]
+  },
+  "models": {
+    "Laya-Q8_0": {"repo": "ggml-org/Laya-GGUF", "file": "Laya-Q8_0.gguf", "bytes": 449397600, "sha256": "c06528c5746d3bb8baa72a27938be95abbfd0b226f8471e8a9e365ed0bb066d2", "params": 421293827, "license": "apache-2.0", "decision_type": "laya"},
+    "d1-3B-Q4_K_M": {"repo": "LiquidAI/d1-3B-GGUF", "file": "d1-3B-Q4_K_M.gguf", "bytes": 1674456672, "sha256": "16aff27ea2eefdc32b9897f43854a5d3170c1dc8dccb9c756905af30a4e22402", "params": 3123483888, "license": "LFM Open License v1.0 (Apache-2.0 + $10M commercial threshold)", "decision_type": "lfm2-d1"}
+  },
+  "runs": [
+    {"host": "behotv", "os": "Ubuntu 26.04.1", "device": "Vulkan0 NVIDIA RTX 3070", "model": "Laya-Q8_0", "ngl": 99, "latency_ms_steady": 8.4, "latency_ms_first": 379, "peak_rss_mb": 632, "rss_mb": 355, "vram_used_delta_mib": 845, "notes": "all layers assigned to Vulkan0 (verified at -lv 6)"},
+    {"host": "behotv", "os": "Ubuntu 26.04.1", "device": "Vulkan0 NVIDIA RTX 3070", "model": "d1-3B-Q4_K_M", "ngl": 99, "latency_ms_steady": 16.1, "latency_ms_first": 872, "peak_rss_mb": 2083, "rss_mb": 736, "vram_used_delta_mib": 2169, "cold_start_s": 3.4},
+    {"host": "behoweather", "os": "PengyOS Desktop 26.10", "device": "Vulkan0 Intel(R) Graphics (ADL-N) = N100 iGPU", "model": "Laya-Q8_0", "ngl": 99, "latency_ms_steady": 304.3, "latency_ms_first": 1152, "peak_rss_mb": 146, "notes": "the 16 GB laptop proxy; same binary as behotv, glibc 2.44 (Buildroot)"},
+    {"host": "behoweather", "os": "PengyOS Desktop 26.10", "device": "CPU only (-ngl 0, -t 4)", "model": "Laya-Q8_0", "ngl": 0, "latency_ms_steady": 405.4, "peak_rss_mb": 96},
+    {"host": "behoserver", "os": "Ubuntu 26.04", "device": "CPU only (-ngl 0, -t 8, Ryzen 7 5700)", "model": "Laya-Q8_0", "ngl": 0, "latency_ms_steady": 210.1, "peak_rss_mb": 639}
+  ],
+  "answers_checked": {
+    "customer_ticket": {"state": "Customer message: I was charged twice for my order last week and nobody has replied.", "route_choice": "billing (p=0.990 RTX 3070 / 0.992 N100 iGPU)", "angry_noul": 0.786, "urgency_score": 1.89},
+    "build_server": {"state": "The build server is offline and 3 deploys are queued.", "down_noul_d1_3b": 0.992, "severity_score_d1_3b": 2.3}
+  },
+  "notes": [
+    "The same binary ran on PengyOS Desktop unchanged; the only missing runtime dep was libgomp.so.1, fixed by building with GGML_OPENMP=OFF.",
+    "Vulkan on the N100 iGPU is 1.33x faster than its own CPU path for this model.",
+    "Latency numbers are steady-state (second request onward); the first request includes slot warm-up.",
+    "behoserver's GPUs were fully occupied by Strata during the session, so its rows are CPU-only."
+  ]
+}

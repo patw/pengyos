@@ -1,0 +1,76 @@
+#!/bin/sh
+# pengyos-say — speech to text on the Cactus Whistle model (prototype).
+#
+# Thin, deliberate wrapper over the pinned prebuilt engine. It exists so the
+# Desktop has one speech-to-text command with a stable contract, and so the
+# engine's CLI flags stay an implementation detail.
+#
+#   pw-record --target 16000 --rate 16000 --channels 1 - | pengyos-say -
+#   pengyos-say clip.wav
+#   pengyos-say -l en -k /usr/share/pengyos/stt/keywords.txt clip.wav
+#
+# Exit codes: 0 transcript written (empty transcript is a valid 0), 2 bad input,
+# 3 model/engine missing, 4 engine failure.
+set -eu
+
+ENGINE=${PENGYOS_STT_ENGINE:-/usr/lib/pengyos/stt/needle}
+MODEL=${WHISTLE_MODEL:-/usr/share/pengyos/stt/whistle.cact}
+
+json=0
+args=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -j) json=1; shift ;;
+        -l) args="$args --audio-language $2"; shift 2 ;;
+        -k) args="$args --audio-keywords $2"; shift 2 ;;
+        -t) args="$args --audio-word-timestamps"; shift ;;
+        -h)
+            cat >&2 <<'USAGE'
+usage: pengyos-say [-] [-l en|de|fr|es|it|nl|pl] [-k keywords-file] [-t] [-j]
+  reads a RIFF WAV from a file, or from stdin with '-'; writes the transcript.
+  -l lang   force the language (default: the model detects it)
+  -k file   keyword-bias list, one phrase per line (names, jargon, product words)
+  -t        include word timestamps in the JSON
+  -j        print the engine's JSON (text, language, ttft_ms, decode_tps)
+  env: PENGYOS_STT_ENGINE, WHISTLE_MODEL override the pinned paths.
+USAGE
+            exit 0 ;;
+        *) break ;;
+    esac
+done
+
+[ $# -gt 0 ] || set -- -
+
+if [ "$1" = "-" ]; then
+    # The engine opens the clip by path, so a pipe goes through a temp file.
+    tmp=${TMPDIR:-/tmp}/pengyos-say-$$.wav
+    cat > "$tmp"
+    trap 'rm -f "$tmp"' EXIT INT TERM
+    set -- "$tmp"
+fi
+
+# Availability is checked after argument parsing, so -h works with no engine
+# installed, and a missing model is reported as a missing model.
+if [ ! -r "$MODEL" ];  then echo "pengyos-say: model missing: $MODEL" >&2; exit 3; fi
+if [ ! -x "$ENGINE" ]; then echo "pengyos-say: engine missing: $ENGINE" >&2; exit 3; fi
+
+# shellcheck disable=SC2086
+set +e
+out=$("$ENGINE" --model "$MODEL" --audio "$1" $args 2>&1)
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+    # The engine names the format it wanted when the input is not that format.
+    case "$out" in
+        *"RIFF WAV"*|*"cannot read"*) echo "pengyos-say: input is not a readable RIFF WAV" >&2; exit 2 ;;
+        *) echo "pengyos-say: engine failed: $out" >&2; exit 4 ;;
+    esac
+fi
+if [ "$json" = 1 ]; then
+    printf '%s\n' "$out"
+else
+    # The engine's JSON is {"text":"…","language":…}. Cutting at the last
+    # '","language' keeps a transcript that itself contains a quote+comma.
+    printf '%s\n' "$out" \
+      | sed -e 's/^{"text":"//' -e 's/","language.*$//' -e 's/\\"/"/g' -e 's/\\n/ /g'
+fi

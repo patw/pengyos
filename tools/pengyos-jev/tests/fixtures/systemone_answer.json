@@ -1,0 +1,41 @@
+{
+  "model": "Laya-Q8_0.gguf",
+  "answers": {
+    "route": {
+      "type": "choice",
+      "choice": "billing",
+      "probabilities": {
+        "billing": 0.9903895231068245,
+        "shipping": 0.006676366485961575,
+        "technical": 0.0029341104072139667
+      },
+      "confidence": 0.9855842846602367
+    },
+    "angry": {
+      "type": "noul",
+      "noul": 0.7855600366655545
+    },
+    "urgency": {
+      "type": "score",
+      "score": 1.8948948038376654,
+      "legend": {
+        "0": "can wait",
+        "1": "this week",
+        "2": "today",
+        "3": "right now"
+      },
+      "probabilities": {
+        "0": 0.03996855550365644,
+        "1": 0.468100577275949,
+        "2": 0.04899837509946745,
+        "3": 0.44293249212092717
+      },
+      "confidence": 0.02516808515502178
+    }
+  },
+  "usage": {
+    "input_tokens": 136,
+    "output_tokens": 0
+  },
+  "_provenance": "Captured 2026-10-15 from llama-server 0.7.0-dev (b76b133, static, Vulkan) on behotv (RTX 3070), state: 'Customer message: I was charged twice for my order last week and nobody has replied.'"
+}

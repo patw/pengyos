@@ -1,0 +1,48 @@
+# Proposed divergence-ledger entry — paste into /data/PengyOS/divergence.toml
+# only when the component is actually enabled in an edition. It is not pasted
+# now: this prototype ships nothing, and an entry in the ledger is a claim that
+# something is being carried.
+
+# kind = "host-built" is the honest bucket: the binary is assembled by the
+# vendor, not by a Buildroot recipe we own, so it voids byte-identity
+# reproducibility for that component — a debt, exactly as the ledger header says.
+
+[[divergence]]
+id        = "needle-engine-prebuilt-stt"
+kind      = "host-built"
+component = "needle-engine"
+pinned_version = "3.3.1"
+editions  = ["pengyos-desktop"]
+carried_since = "<set when it lands>"
+carried_in    = ["<first image version carrying it>"]
+
+# The expiry is the upstream event that ends the divergence, per the ledger rule
+# ("an entry with no expiry condition is not an approved divergence").
+expiry = "Cactus Compute publishes the needle engine source under a buildable
+  licence (Apache-2.0, matching the binary); at that point needle-engine becomes a
+  Lane 1 recipe and this entry is deleted. Watch the repo:
+  github.com/cactus-compute/needle (the Python package and the published engine
+  live there; the C++ engine is distributed only as prebuilt libneedle.a / needle
+  binaries as of 2026-10-15)."
+
+# An authored pin is invisible to Buildroot's pkg-stats, so it must name its own
+# observe source or the pin rots silently (the PengyR case in the ledger header).
+observe_source = "pengyos-nightly: huggingface Cactus-Compute/needle3 (linux-<arch>/needle)
+  + Cactus-Compute/whistle (whistle.cact); compare against the pinned digests in
+  buildroot-external/package/needle-engine/needle-engine.hash"
+
+upstream_status = "binary-only-upstream"
+
+# Cost, stated up front:
+#  - The engine binary is not reproducible from source. The SBOM names it as an
+#    upstream artifact, not a built component; pengyos-repro cannot rebuild it.
+#  - Two digests become trust anchors (engine 1.5 MB, model 16.9 MB). A vendor
+#    re-release under the same version string is a supply-chain event, so the
+#    nightly observer must diff digests, not version strings.
+#  - Upstream publishes engines for x86_64, arm64, armv7, riscv64, mipsel only.
+#    Any other architecture cannot ship this component (the recipe's arch guard
+#    fails the build rather than installing nothing).
+#  - The Python wrapper around this engine (cactus-needle) sends anonymous
+#    usage counts by default and re-fetches a config file from Hugging Face on
+#    every model load. Shipping the binary avoids both; the wrapper must never
+#    be added to an image.

@@ -1,0 +1,114 @@
+{
+  "measured_on": "2026-10-15",
+  "machine": {
+    "cpu": "AMD Ryzen 9 5900XT (16c, AVX2, no AVX-512)",
+    "os": "Ubuntu 26.04 (glibc)",
+    "avx512": false
+  },
+  "model": {
+    "name": "Cactus Whistle",
+    "version": "2.0.0",
+    "size_bytes": 16919407,
+    "sha256": "b6e02f048568ac5d01a2042556c658061e699acbc0aa2a1439f52f3d461dffeb",
+    "languages": [
+      "en",
+      "de",
+      "fr",
+      "es",
+      "it",
+      "nl",
+      "pl"
+    ],
+    "license": "Apache-2.0",
+    "engine": "Cactus needle 3.3.1 (prebuilt, Apache-2.0)",
+    "engine_binary_bytes": 1548480,
+    "engine_sha256": "3531889c4d677acc47905b21c79741b52fd9af2c54ba177f54f83c0bc12e84c7"
+  },
+  "audio_source": "Kokoro-82M neural TTS at 16 kHz mono (synthetic voices, not a human corpus)",
+  "wer_by_clip": {
+    "en_f_short": 0.0,
+    "en_m_short": 0.0,
+    "en_m_numbers": 0.3333,
+    "en_f_names": 0.3,
+    "en_f_long": 0.0526,
+    "es_m_short": 0.3333,
+    "fr_f_short": 0.125,
+    "silence": 0.0
+  },
+  "latency_s_by_clip": {
+    "en_f_short": 0.06,
+    "en_m_short": 0.098,
+    "en_m_numbers": 0.321,
+    "en_f_names": 0.114,
+    "en_f_long": 2.215,
+    "es_m_short": 0.071,
+    "fr_f_short": 0.109,
+    "silence": 0.031
+  },
+  "peak_rss_mb_by_clip": {
+    "en_f_short": 39.8,
+    "en_m_short": 39.7,
+    "en_m_numbers": 39.7,
+    "en_f_names": 40.0,
+    "en_f_long": 64.7,
+    "es_m_short": 40.0,
+    "fr_f_short": 39.7,
+    "silence": 39.3
+  },
+  "ttft_ms_by_clip": {
+    "en_f_short": 12.5,
+    "en_m_short": 23.3,
+    "en_m_numbers": 248.0,
+    "en_f_names": 33.6,
+    "en_f_long": 1323.7,
+    "es_m_short": 13.3,
+    "fr_f_short": 22.9,
+    "silence": 0.0
+  },
+  "decode_tps_by_clip": {
+    "en_f_short": 465.6,
+    "en_m_short": 469.0,
+    "en_m_numbers": 446.3,
+    "en_f_names": 445.8,
+    "en_f_long": 373.0,
+    "es_m_short": 466.6,
+    "fr_f_short": 492.6,
+    "silence": 0.0
+  },
+  "cold_start_s": [
+    0.2,
+    0.06,
+    0.11,
+    0.06,
+    0.06
+  ],
+  "peak_rss_mb_cold": 39.7,
+  "observations": {
+    "network_syscalls_at_load_and_transcribe": 0,
+    "binary_shared_objects": [
+      "libc.so.6",
+      "libm.so.6",
+      "libpthread.so.0",
+      "libdl.so.2"
+    ],
+    "glibc_floor": "2.17 (manylinux2014 baseline)",
+    "musl_build_published": true,
+    "musl_build_needed_libs": [
+      "libc.so"
+    ],
+    "avx512_kernels_present": true,
+    "runs_on_a_cpu_without_avx512": true,
+    "silence_returns_empty_transcript": true,
+    "pure_tone_returns_empty_transcript": true,
+    "keyword_biasing_fixed": "Krakow (WER 0.300 -> 0.200 on the names clip)",
+    "decoder_ladder_tps": {
+      "2": 868.8,
+      "4": 581.3,
+      "6": 457.0,
+      "8": 376.2
+    },
+    "robust_to_quiet_audio_db": -22,
+    "robust_to_8khz_upsampled": true,
+    "libneedle_a_link_requires": "clang/libc++ >= 19 (libstdc++ and libc++ 14 are not enough)"
+  }
+}

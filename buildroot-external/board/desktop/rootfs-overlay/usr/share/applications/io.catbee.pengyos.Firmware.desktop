@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Firmware
+GenericName=Firmware Updates
+Comment=See which devices have a firmware update and install it
+Exec=pengyos-firmware
+Icon=application-x-firmware
+Terminal=false
+Categories=COSMIC;Settings;HardwareSettings;System;
+Keywords=firmware;uefi;bios;vbios;ec;dbx;secureboot;driver;device;fwupd;lvfs;update;
+StartupNotify=true

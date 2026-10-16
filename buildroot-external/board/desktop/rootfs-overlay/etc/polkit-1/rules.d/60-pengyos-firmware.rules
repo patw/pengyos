@@ -1,0 +1,20 @@
+// PengyOS: administrators (wheel) at the computer may check for firmware updates
+// and install them from the "Firmware" app without a password — the same posture
+// as system updates (60-pengyos-update.rules) and app updates
+// (60-pengyos-flatpak.rules). The units run fwupdmgr as root; the app never
+// touches a device itself. Firmware writes are irreversible, so they happen only
+// when a person presses the button: this rule starts the job, it does not decide
+// it.
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.systemd1.manage-units" ||
+        action.lookup("verb") != "start" ||
+        !subject.local || !subject.active || !subject.isInGroup("wheel")) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    if (unit == "pengyos-firmware-check.service" ||
+        unit.indexOf("pengyos-firmware-update@") == 0) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

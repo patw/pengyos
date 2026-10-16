@@ -1,0 +1,15 @@
+# PengyOS — check for firmware updates once a day (and a few minutes after boot).
+#
+# Firmware metadata is big and the vendors publish rarely, so the delay is
+# generous; the notifier only ever reads what this saved.
+[Unit]
+Description=Check for firmware updates daily
+
+[Timer]
+OnBootSec=15min
+OnCalendar=daily
+RandomizedDelaySec=4h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

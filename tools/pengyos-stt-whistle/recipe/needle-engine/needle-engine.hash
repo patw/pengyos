@@ -1,0 +1,5 @@
+# Pinned digests, upstream-published (sha256 of the linux-x86_64 engine,
+# engine 3.3.1). The linux-arm64 digest is filled in from the same release
+# before that arch is enabled — an unfilled pin must never be used to build.
+sha256  3531889c4d677acc47905b21c79741b52fd9af2c54ba177f54f83c0bc12e84c7  needle
+sha256  a27dac4b3239eead91d124b7f7dbce5495c13019903fd817b68c16d39b055a99  needle.h

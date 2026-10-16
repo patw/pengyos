@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PengyOS Firmware Notifier
+Comment=Says when a firmware update is available (only if you want to hear it)
+Exec=pengyos-firmware --notifier
+Icon=application-x-firmware
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true

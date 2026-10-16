@@ -1,0 +1,14 @@
+{
+  "model": "Laya-Q8_0.gguf",
+  "answers": {
+    "q": {
+      "type": "noul",
+      "noul": 0.9917509140692362
+    }
+  },
+  "usage": {
+    "input_tokens": 91,
+    "output_tokens": 0
+  },
+  "_provenance": "Captured 2026-10-15 from llama-server 0.7.0-dev (b76b133, static, Vulkan) on behotv (RTX 3070) serving LiquidAI d1-3B-Q4_K_M; state: 'The build server is offline and 3 deploys are queued.'"
+}
