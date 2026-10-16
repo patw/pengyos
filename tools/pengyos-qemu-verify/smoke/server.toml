@@ -11,7 +11,7 @@
 
 version = 1
 name = "server"
-description = "PengyOS Server — Core plus nftables, podman, sshd, backup/metrics/update timers"
+description = "PengyOS Server — Core plus nftables, podman, sshd, metrics/update timers (backup timer off)"
 image = "output/pengyos-server/images/pengyos-server-x86_64.img"
 
 [[variant]]
@@ -106,10 +106,10 @@ pattern = "Started .*Podman API Service"
 description = "the podman API service started"
 
 [[check]]
-id = "backup-timer"
-kind = "present"
+id = "backup-timer-off"
+kind = "absent"
 pattern = "Started .*PengyOS Server backup timer"
-description = "scheduled backups are armed"
+description = "the backup timer is opt-in: its defaults filled the drive (a full tar of /etc and /home, kept 7 times, on the same disk)"
 
 [[check]]
 id = "metrics-timer"

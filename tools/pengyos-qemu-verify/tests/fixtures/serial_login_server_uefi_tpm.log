@@ -676,7 +676,6 @@ BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [[0;32m  OK  [0m] Started [0;1;39mlvm-devices-import to create system.devices[0m.
 [    3.359842] e1000e 0000:00:02.0 enp0s2: NIC Link is Up 1000 Mbps Full Duplex, Flow Control: Rx/Tx
 [[0;32m  OK  [0m] Started [0;1;39mDiscard unused filesystem blocks once a week[0m.
-[[0;32m  OK  [0m] Started [0;1;39mPengyOS Server backup timer[0m.
 [[0;32m  OK  [0m] Started [0;1;39mPengyOS Server metrics collection timer[0m.
 [[0;32m  OK  [0m] Started [0;1;39mCheck for PengyOS updates daily[0m.
 [[0;32m  OK  [0m] Started [0;1;39mDaily Cleanup of Temporary Directories[0m.

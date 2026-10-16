@@ -674,7 +674,6 @@ BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [[0;32m  OK  [0m] Reached target [0;1;39mSystem Initialization[0m.
 [[0;32m  OK  [0m] Started [0;1;39mlvm-devices-import to create system.devices[0m.
 [[0;32m  OK  [0m] Started [0;1;39mDiscard unused filesystem blocks once a week[0m.
-[[0;32m  OK  [0m] Started [0;1;39mPengyOS Server backup timer[0m.
 [[0;32m  OK  [0m] Started [0;1;39mPengyOS Server metrics collection timer[0m.
 [[0;32m  OK  [0m] Started [0;1;39mCheck for PengyOS updates daily[0m.
 [[0;32m  OK  [0m] Started [0;1;39mDaily Cleanup of Temporary Directories[0m.

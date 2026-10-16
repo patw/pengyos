@@ -6,8 +6,12 @@
 # missed run (host asleep) is caught up on the next boot/run, so a long downtime
 # does not skip a nightly backup.
 #
-# Timers are enabled by a symlink in timers.target.wants/ (systemd's own
-# convention for on-calendar units), NOT multi-user.target.wants.
+# Shipped DISABLED by 10-pengyos-server.preset (without it, the image build's
+# `systemctl preset-all` would enable it from [Install]). The defaults tar all
+# of /etc and /home onto the same disk and keep 7 copies, so on a Desktop
+# (Steam libraries, Flatpak data in /home) it filled the drive. To turn it on, point BACKUP_DEST in
+# /etc/pengyos/backup.conf at a different disk, then
+#   systemctl enable --now pengyos-backup.timer
 # ============================================================================
 
 [Unit]

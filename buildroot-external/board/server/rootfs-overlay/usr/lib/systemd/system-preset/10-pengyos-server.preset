@@ -1,0 +1,7 @@
+# PengyOS Server (and every edition built on it). Presets are read in name order,
+# first match wins, so this comes before Buildroot's and systemd's "enable *".
+#
+# The backup timer is opt-in. Its defaults tar all of /etc and /home onto the
+# same disk and keep 7 copies, which filled Desktops' drives. `enable *` would
+# arm it at image build from its [Install] section, so it is named here.
+disable pengyos-backup.timer

@@ -223,7 +223,7 @@ def test_server_matrix_rejects_a_core_boot_on_exactly_the_server_facts():
     outcome = smoke.run_matrix(matrix, "img", boot_fn=_boot_from(CORE_UEFI_LOG))
     expected = {
         "distro-welcome", "network-online", "nftables-loaded", "sshd-started",
-        "podman-socket", "podman-service", "backup-timer", "metrics-timer",
+        "podman-socket", "podman-service", "metrics-timer",
         "update-timer", "server-target", "reached-login", "autologin-shell",
     }
     for variant in outcome.variants:

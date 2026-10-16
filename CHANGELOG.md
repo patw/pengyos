@@ -17,6 +17,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — the nightly backup filled the drive; it is now off by default
+- `pengyos-backup.timer` was enabled in Server and therefore in every edition built
+  on it (both Desktops included). Its defaults tar all of `/etc` and `/home` every
+  night to `/var/backups/pengyos` on the same disk and keep 7 copies, so a Desktop
+  with a Steam library or large Flatpak data in `/home` ran out of space. The image
+  disables it with a preset (`10-pengyos-server.preset`): dropping the
+  `timers.target.wants/` link alone was not enough, because the image build's
+  `systemctl preset-all` re-enabled it from the unit's `[Install]` section (the
+  Server smoke matrix caught that). The Server post-build also removes the old link
+  from existing build trees. Installed machines lose it with the next
+  update (`/etc` is an overlay on the image's copy), unless someone enabled it on
+  that machine. The units and `backup.conf` still ship: point `BACKUP_DEST` at
+  another disk, then `systemctl enable --now pengyos-backup.timer`. Tarballs that
+  already exist under `/var/backups/pengyos` stay on `data` until deleted by hand.
+
 ### Changed — kernel 7.2.11, NVIDIA 615.78.08
 - **Linux 7.2.5 → 7.2.11**, a point release in the same series, in every edition.
 - **`nvidia-open` 610.57.04 → 615.78.08**, NVIDIA's current feature branch, in both

@@ -183,7 +183,7 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 | Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq, curl |
 | Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo |
 | Containers | **podman**, rootless and daemonless, with the API socket |
-| Ops | default-deny nftables, a backup timer, a metrics timer, the daily update check |
+| Ops | default-deny nftables, a metrics timer, an opt-in backup timer (off by default), the daily update check |
 | Virtual machines | **QEMU** (x86_64 system emulation, KVM-accelerated, TCG fallback; SeaBIOS + edk2 guest firmware; `qemu-img`) and KVM, vhost, VFIO in the kernel |
 | Install & update | the console installer on a USB stick, the A/B layout, `pengyos-update` |
 | Pengy | `pengy-web` (the assistant in a browser) |

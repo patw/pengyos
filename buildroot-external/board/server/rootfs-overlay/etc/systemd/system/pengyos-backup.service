@@ -16,7 +16,8 @@
 # The single ExecStart argument is the conf path; the script reads it and falls
 # back to defaults if the conf is absent, so the service still runs.
 #
-# Enabled via timers.target.wants/ (see pengyos-backup.timer).
+# Not enabled by default: the timer is disabled by
+# /usr/lib/systemd/system-preset/10-pengyos-server.preset (see pengyos-backup.timer).
 # ============================================================================
 
 [Unit]

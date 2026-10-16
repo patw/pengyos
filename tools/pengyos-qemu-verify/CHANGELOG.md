@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The Server matrix now requires the backup timer to be off** (`backup-timer` →
+  `backup-timer-off`, kind `absent`). The image no longer enables
+  `pengyos-backup.timer`: its defaults filled the drive. The three Server serial
+  fixtures were captured from images that still started it, so that one line is
+  removed from each; the rest of each log is as captured.
+
 ## [0.6.1] - 2026-10-12
 
 ### Fixed

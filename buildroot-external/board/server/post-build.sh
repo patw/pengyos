@@ -23,6 +23,12 @@ else
     sh "$(dirname "$0")/../common/os-release.sh" "${TARGET_DIR}" Server server
 fi
 
+# The backup timer ships disabled (its defaults filled the drive: a full tar of
+# /etc and /home, kept 7 times, on the same disk). Buildroot's target/ keeps the
+# enable link the overlay used to carry, so drop it from older build trees. (The
+# preset in 10-pengyos-server.preset is what keeps preset-all from re-enabling it.)
+rm -f "${TARGET_DIR}/etc/systemd/system/timers.target.wants/pengyos-backup.timer"
+
 # Bootable image: install our GRUB menu once grub2 has staged efi-part/ in
 # BINARIES_DIR (same pattern as Core). Requires BR2_TARGET_GRUB2_X86_64_EFI.
 BOARD_DIR=$(dirname "$0")
