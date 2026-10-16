@@ -9,6 +9,8 @@ Free and MIT-licensed. It's also a side project rather than a product: no roadma
 no target market. What it's trying to show is narrower than "another distro": that a
 small human–AI team can build an operating system and keep it maintained.
 
+![PengyOS Desktop: the COSMIC session, with the PengyOS wallpaper](docs/images/pengyos-desktop.png)
+
 ## What you get
 
 | Edition | What's on it |
