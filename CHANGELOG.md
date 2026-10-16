@@ -76,7 +76,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   + [`tools/pengyos-jev/`](tools/pengyos-jev/) (client, unit skeleton, recipe
   skeleton, 14 offline tests). **Nothing is enabled in an image.**
 
-### Changed — PDFs open in Evince once it is installed (Firefox until then)
+### Changed (26.10.29) — PDFs open in Evince once it is installed (Firefox until then)
 - **`application/pdf=org.gnome.Evince.desktop;org.mozilla.firefox.desktop;`**
   in the Desktop's `mimeapps.list`. Evince is the human-signed `PDF` row in
   [`tools/pengyos-desktop-curation/curated.toml`](tools/pengyos-desktop-curation/),
@@ -97,7 +97,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   KDE one, Sioyek freedesktop 24.08 (Firefox is on 25.08). A libcosmic viewer
   over the MuPDF core is the real Lane 1 answer, left as a proposal.
 
-### Added — Firmware updates get a Desktop app (and fwupd finally runs)
+### Added (26.10.29) — Firmware updates get a Desktop app (and fwupd finally runs)
 - New tool [`tools/pengyos-firmware`](tools/pengyos-firmware/): the **Firmware**
   app (libcosmic) shows the devices fwupd can update, what each update goes to,
   its size and urgency, and what it needs from the person (wall power, applies
@@ -185,7 +185,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   into any image and not in the `pengyos` meta-CLI's subcommand list yet — that
   is a follow-up, not part of this change.
 
-### Fixed — the dev box's cargo and uv were installed and not on the PATH (found on behocraptop running 26.10.27)
+### Fixed (26.10.29) — the dev box's cargo and uv were installed and not on the PATH (found on behocraptop running 26.10.27)
 - **`pengyos-guest enter dev` gave a zsh with no cargo.** The dev box installs
   rustup into `~/.cargo/bin` and exported the PATH through
   `/etc/profile.d/pengyos-dev.sh`, which only **bash login shells** read. PengyOS's
