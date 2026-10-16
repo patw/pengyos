@@ -17,6 +17,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — kernel 7.2.11, NVIDIA 615.78.08
+- **Linux 7.2.5 → 7.2.11**, a point release in the same series, in every edition.
+- **`nvidia-open` 610.57.04 → 615.78.08**, NVIDIA's current feature branch, in both
+  NVIDIA editions. Against 610 the install list changed only in its side-versions
+  (`libnvidia-egl-wayland2` 1.0.1 → 1.0.2, `libnvidia-egl-xcb` / `-xlib` 1.0.5 →
+  1.0.6). The kernel module now also requests `ucodes_ga10x.bin` / `ucodes_tu10x.bin`
+  beside the GSP firmware (`kernel-open/common/inc/nv-firmware.h`), so they ship too.
+  `LICENSE` is byte-identical. Both bumps were made by hand: they are report-only
+  to the nightly loop (`guards.DENIED`).
+
 ### Fixed (26.10.30) — no "Todos - Iced" in the App Library
 - The Desktop post-build installed every `.desktop` file under the COSMIC source
   tree, and libcosmic vendors iced, whose `examples/todos` ships

@@ -9,15 +9,14 @@
 # same release. Building both from it keeps them in lockstep -- a module/userspace
 # version mismatch is a dead GPU. Blackwell (RTX 50) needs >= 570.
 #
-# 595.104.02 was the production branch and built against our 7.2 kernel. 610.57.04
-# is NVIDIA's feature branch, taken deliberately: every library this recipe names
-# is present in its .run, and the side-versions hardcoded below (egl-gbm 1.1.3,
-# egl-wayland 1.1.20 / wayland2 1.0.1, egl-xcb / xlib 1.0.5, nvvm70.so.4) are
-# unchanged from 595, so the bump is the version and the hash - not a rewrite of
-# the install list. What is NOT yet proved here: kernel-open/ building against our
-# 7.2 kernel, and the driver working on real hardware. Both are the reason the
-# nightly loop is forbidden from making this change on its own.
-NVIDIA_OPEN_VERSION = 610.57.04
+# 615.78.08 is NVIDIA's current feature branch (595 production -> 610 -> 615).
+# Against 610 the install list moved only in its side-versions: egl-wayland2
+# 1.0.1 -> 1.0.2 and egl-xcb / egl-xlib 1.0.5 -> 1.0.6 (egl-gbm 1.1.3, egl-wayland
+# 1.1.20 and nvvm70.so.4 are unchanged). The kernel module now also requests
+# ucodes_<arch>.bin beside gsp_<arch>.bin (kernel-open/common/inc/nv-firmware.h),
+# so both are installed. The driver working on real hardware is still only proved
+# by booting it on one, which is why the nightly loop may not make this change.
+NVIDIA_OPEN_VERSION = 615.78.08
 NVIDIA_OPEN_SITE = https://download.nvidia.com/XFree86/Linux-x86_64/$(NVIDIA_OPEN_VERSION)
 NVIDIA_OPEN_SOURCE = NVIDIA-Linux-x86_64-$(NVIDIA_OPEN_VERSION).run
 NVIDIA_OPEN_LICENSE = NVIDIA Software License (userspace, GSP firmware), MIT or GPL-2.0 (kernel modules)
@@ -76,7 +75,7 @@ NVIDIA_OPEN_LIBS += \
 	libnvidia-allocator.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-egl-gbm.so.1.1.3 \
 	libnvidia-egl-wayland.so.1.1.20 \
-	libnvidia-egl-wayland2.so.1.0.1
+	libnvidia-egl-wayland2.so.1.0.2
 define NVIDIA_OPEN_INSTALL_GRAPHICS
 	# GBM backend: Mesa's libgbm loads <drm driver name>_gbm.so.
 	mkdir -p $(TARGET_DIR)/usr/lib/gbm
@@ -105,8 +104,8 @@ NVIDIA_OPEN_LIBS += \
 	libGLX_nvidia.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-rtcore.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-present.so.$(NVIDIA_OPEN_VERSION) \
-	libnvidia-egl-xcb.so.1.0.5 \
-	libnvidia-egl-xlib.so.1.0.5
+	libnvidia-egl-xcb.so.1.0.6 \
+	libnvidia-egl-xlib.so.1.0.6
 define NVIDIA_OPEN_INSTALL_VULKAN
 	$(INSTALL) -D -m 0644 $(@D)/nvidia_icd.json \
 		$(TARGET_DIR)/usr/share/vulkan/icd.d/nvidia_icd.json
@@ -143,7 +142,8 @@ define NVIDIA_OPEN_INSTALL_TARGET_CMDS
 	$(NVIDIA_OPEN_INSTALL_VULKAN)
 	# GSP firmware: the open modules always run the GPU through GSP.
 	$(INSTALL) -D -m 0644 -t $(TARGET_DIR)/lib/firmware/nvidia/$(NVIDIA_OPEN_VERSION) \
-		$(@D)/firmware/gsp_ga10x.bin $(@D)/firmware/gsp_tu10x.bin
+		$(@D)/firmware/gsp_ga10x.bin $(@D)/firmware/gsp_tu10x.bin \
+		$(@D)/firmware/ucodes_ga10x.bin $(@D)/firmware/ucodes_tu10x.bin
 	$(foreach p,$(NVIDIA_OPEN_PROGS), \
 		$(INSTALL) -D -m 0755 $(@D)/$(p) $(TARGET_DIR)/usr/bin/$(p)$(sep))
 	# The MPS control daemon and server: several CUDA processes share one GPU.
