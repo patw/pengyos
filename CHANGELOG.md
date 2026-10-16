@@ -17,7 +17,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Fixed — the nightly backup filled the drive; it is now off by default
+### Fixed (26.10.31) — the nightly backup filled the drive; it is now off by default
 - `pengyos-backup.timer` was enabled in Server and therefore in every edition built
   on it (both Desktops included). Its defaults tar all of `/etc` and `/home` every
   night to `/var/backups/pengyos` on the same disk and keep 7 copies, so a Desktop
@@ -32,7 +32,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   another disk, then `systemctl enable --now pengyos-backup.timer`. Tarballs that
   already exist under `/var/backups/pengyos` stay on `data` until deleted by hand.
 
-### Changed — kernel 7.2.11, NVIDIA 615.78.08
+### Changed (26.10.31) — kernel 7.2.11, NVIDIA 615.78.08
 - **Linux 7.2.5 → 7.2.11**, a point release in the same series, in every edition.
 - **`nvidia-open` 610.57.04 → 615.78.08**, NVIDIA's current feature branch, in both
   NVIDIA editions. Against 610 the install list changed only in its side-versions
