@@ -860,14 +860,30 @@ def test_the_real_ffmpeg_shape_19_fixes_8_known_bad_carries_11(tmp_path):
 
 # --- the agent the image ships: pengy -----------------------------------------
 
-def _pengy_obs(available="1.11.5"):
-    obs = _obs(pengy=_pkg(current="1.11.2", tree="PENGYOS", pkg_path="package/pengy",
+def _pengy_obs(available="1.11.6", lane="routine"):
+    obs = _obs(pengy=_pkg(current="1.11.5", tree="PENGYOS", pkg_path="package/pengy",
                           mk_path="package/pengy/pengy.mk",
                           url="https://github.com/patw/PengyR",
                           editions=["pengyos-core", "pengyos-desktop", "pengyos-server"]))
-    obs["findings"] = [{"lane": "routine", "component": "pengy", "current": "1.11.2",
-                        "available": available, "note": "PengyR patch release"}]
+    obs["findings"] = [{"lane": lane, "component": "pengy", "current": "1.11.5",
+                        "available": available, "note": "PengyR release"}]
     return obs
+
+
+def _pengy_repo(tmp_path):
+    d = _repo(tmp_path) / "buildroot-external" / "package" / "pengy"
+    d.mkdir(parents=True, exist_ok=True)
+    for name in ("pengy.mk", "pengy.hash"):
+        (d / name).write_text((FIX / "recipes" / name).read_text())
+
+
+def _pengy_plan(tmp_path, obs, decisions=None, cfg=None):
+    _pengy_repo(tmp_path)
+    cfg = cfg or {"act_enabled": True, "push": True, "lanes": ["security", "routine"],
+                  "priorities": ["P0", "P1"], "max_actions": 1, "cooldown_days": 7,
+                  "allow_patch_shape": True, "skip_cosmic": True}
+    return planner.build_plan(obs, _st(), cfg, TODAY, _repo(tmp_path), tmp_path,
+                              lambda cve: {}, fake_get, decisions=decisions)
 
 
 def test_the_pengy_finding_joins_the_package_entry_it_is_about(tmp_path):
@@ -879,22 +895,89 @@ def test_the_pengy_finding_joins_the_package_entry_it_is_about(tmp_path):
     the empty fallback package, because `packages` is keyed `pengy` and the finding
     was keyed `pengyr`. A finding that joins nothing is refused for invented reasons.
     """
-    a = _by_id(_plan(tmp_path, _pengy_obs(), _st(), _nvd(tmp_path)), "routine-pengy-1.11.5")
-    assert a["current"] == "1.11.2", "the pin came from the package entry, not the fallback"
+    a = _by_id(_pengy_plan(tmp_path, _pengy_obs()), "routine-pengy-1.11.6")
+    assert a["current"] == "1.11.5", "the pin came from the package entry, not the fallback"
     assert a["editions"] == ["pengyos-core", "pengyos-desktop", "pengyos-server"]
-    assert a["bump_kind"] == "routine", "1.11.2 -> 1.11.5 is a patch inside the pinned minor"
-    refused = [g["guard"] for g in a["guards"] if not g["ok"]]
-    assert refused == ["denied_component"], a["guards"]
-    assert "not_host_only" not in refused and "major_never" not in refused
+    assert a["bump_kind"] == "routine", "1.11.5 -> 1.11.6 is a patch inside the pinned minor"
 
 
-def test_pengy_is_report_only_because_its_hash_is_generated_not_downloaded(tmp_path):
-    """The image ships the cargo-VENDORED tarball Buildroot generates at download time
-    (`pengy-1.11.5-cargo6.tar.gz`), not the SITE archive. A recipe_bump hashes what it
-    can download — the GitHub tarball under the SOURCE name — so its .hash would name
-    a file the build never produces. The refusal must say that, not hide it.
+def test_a_pengy_patch_release_is_bumped_with_a_hash_the_act_lane_generates(tmp_path):
+    """pengy was report-only until 2026-10-16 because its archive is the cargo-VENDORED
+    tarball Buildroot generates (`pengy-<v>-cargo6.tar.gz`), not the SITE archive, and the
+    planner cannot download that. The act lane generates and verifies exactly that kind of
+    hash since 2026-10-12, so the plan edits only the version and leaves the hash to act.
     """
-    a = _by_id(_plan(tmp_path, _pengy_obs(), _st(), _nvd(tmp_path)), "routine-pengy-1.11.5")
-    reason = next(g["reason"] for g in a["guards"] if not g["ok"])
-    assert "cargo" in reason and "vendor" in reason.lower()
-    assert not a["allowed"] and a["hash"] is None, "no action, so no wrong hash is written"
+    a = _by_id(_pengy_plan(tmp_path, _pengy_obs()), "routine-pengy-1.11.6")
+    assert a["allowed"], [g for g in a["guards"] if not g["ok"]]
+    assert a["hash_generated"] and a["hash"]["sha256"] == ""
+    assert [e["path"] for e in a["edits"]] == ["buildroot-external/package/pengy/pengy.mk"]
+    assert a["edits"][0]["new"] == "PENGY_VERSION = 1.11.6"
+
+
+# --- the operator's decisions (decisions.json, from the web page) -------------
+
+def _decided(kind, component, decision, target):
+    return {f"{kind}:{component}": {"kind": kind, "component": component,
+                                    "decision": decision, "target": target,
+                                    "at": "2026-10-16T12:00:00"}}
+
+
+def test_a_new_series_waits_for_the_operator(tmp_path):
+    plan = _pengy_plan(tmp_path, _pengy_obs("1.12.2", lane="major"))
+    assert plan["actions"] == [] and plan["refused"] == [], \
+        "a major finding is not even a candidate until someone approves it"
+
+
+def test_an_approved_new_series_becomes_an_action(tmp_path):
+    plan = _pengy_plan(tmp_path, _pengy_obs("1.12.2", lane="major"),
+                       _decided("update", "pengy", "approved", "1.12.2"))
+    a = _by_id(plan, "approved-pengy-1.12.2")
+    assert a["allowed"], [g for g in a["guards"] if not g["ok"]]
+    assert a["lane"] == "approved" and a["bump_kind"] == "major"
+    assert a["edits"][0]["new"] == "PENGY_VERSION = 1.12.2"
+
+
+def test_an_approval_covers_later_patch_releases_of_the_same_series(tmp_path):
+    plan = _pengy_plan(tmp_path, _pengy_obs("1.12.3", lane="major"),
+                       _decided("update", "pengy", "approved", "1.12.2"))
+    assert _by_id(plan, "approved-pengy-1.12.3")["allowed"]
+
+
+def test_an_approval_does_not_cover_the_next_series(tmp_path):
+    plan = _pengy_plan(tmp_path, _pengy_obs("1.13.0", lane="major"),
+                       _decided("update", "pengy", "approved", "1.12.2"))
+    assert plan["actions"] == [] and plan["refused"] == []
+
+
+def test_an_approval_does_not_lift_the_other_guards(tmp_path):
+    """An approval stands in for the person the major lane waits for, nothing else."""
+    obs = _obs(**{"nvidia-open": _pkg(current="610.57.04", tree="PENGYOS",
+                                      editions=["pengyos-desktop-nvidia"])})
+    obs["findings"] = [{"lane": "major", "component": "nvidia-open", "current": "610.57.04",
+                        "available": "615.78.08", "note": "new driver branch"}]
+    plan = _pengy_plan(tmp_path, obs, _decided("update", "nvidia-open", "approved", "615.78.08"))
+    a = _by_id(plan, "approved-nvidia-open-615.78.08")
+    assert not a["allowed"] and "denied_component" in a["refused_by"]
+
+
+def test_a_denied_routine_bump_is_not_acted_on_and_says_who_stopped_it(tmp_path):
+    plan = _pengy_plan(tmp_path, _pengy_obs("1.11.6"),
+                       _decided("update", "pengy", "denied", "1.11.6"))
+    assert plan["actions"] == []
+    a = _by_id(plan, "routine-pengy-1.11.6")
+    assert a["refused_by"] == ["operator_denied"] and "denied" in a["refused_reason"][0]
+
+
+def test_a_held_security_action_is_not_acted_on(tmp_path):
+    obs = _obs(libxml2=_pkg(current="2.15.3", latest="2.15.4",
+                            cpeid="cpe:2.3:a:xmlsoft:libxml2:2.15.3:-:*:*:*:*:*:*"))
+    nvd = _nvd(tmp_path, ("CVE-2026-86137", LIBXML2))
+    st = _st(_triaged("CVE-2026-86137", "libxml2"))
+    cfg = {"act_enabled": True, "push": True, "lanes": ["security", "routine"],
+           "priorities": ["P0", "P1"], "max_actions": 1, "cooldown_days": 7,
+           "allow_patch_shape": True, "skip_cosmic": True}
+    plan = planner.build_plan(obs, st, cfg, TODAY, _repo(tmp_path), tmp_path,
+                              lambda cve: sources.nvd_raw(nvd, cve), fake_get,
+                              decisions=_decided("security", "libxml2", "denied", "2.15.3"))
+    assert plan["actions"] == []
+    assert _by_id(plan, "security-libxml2-2.15.3")["refused_by"] == ["operator_denied"]

@@ -22,7 +22,11 @@ CHANNEL = "testing"          # the only channel this tool may ever publish to
 PROMOTE = "update-promote"   # the command this tool must never run
 
 # Components the act lane may not touch in this phase, with the reason that goes
-# into the plan. Report-only here is a decision, not an oversight.
+# into the plan. Report-only here is a decision, not an oversight. An operator approval
+# (decisions.py) does not lift these: there is no act path for them to run.
+# `pengy` left the list on 2026-10-16: it was here because its cargo-vendored hash only
+# exists after `make pengy-source`, and the act lane has generated and verified exactly
+# that kind of hash since 2026-10-12 (edits.hash_is_generated, act.run_batch).
 DENIED = {
     "linux": "a kernel bump invalidates the NVIDIA module build and every package stamp "
              "chain in the tree; it needs its own lane and its own gate",
@@ -31,12 +35,6 @@ DENIED = {
                  "edition; that is a scheduled event, not a nightly one",
     "cosmic": "COSMIC is host-built from pinned commits and moves as an epoch, which is a "
               "major decision by design",
-    "pengy": "the image ships the cargo-VENDORED tarball Buildroot generates at download "
-             "time (pkg-cargo.mk: DOWNLOAD_POST_PROCESS, BR_FMT_VERSION_cargo = -cargo6), "
-             "not the SITE archive; its sha256 only exists after `make <pkg>-source` runs "
-             "cargo vendor, so the download-and-hash a recipe_bump does cannot produce it. "
-             "Bump the pin by hand: set PENGY_VERSION, run `make pengy-source` once, and "
-             "record the hash it reports",
 }
 
 
@@ -64,6 +62,11 @@ def assert_locked(argv: list[str]) -> list[str]:
 
 def lane_allowed(action: dict, cfg: dict) -> tuple[bool, str]:
     lane = action.get("lane")
+    if lane == "approved":
+        # The planner puts a candidate here only when decisions.json holds the operator's
+        # yes for this version (see decisions.py). That is the decision the major lane
+        # waits for; it lifts nothing else.
+        return True, "approved by the operator (pengyos_nightly web)"
     if lane == "major":
         return False, "major_never: a new release series is a human decision"
     if lane == "bump":
@@ -86,6 +89,9 @@ def major_never(action: dict) -> tuple[bool, str]:
     if action.get("shape") == "tree_move":
         return True, "tree move: crossing to a new release series is the event itself"
     if action.get("bump_kind") == "major":
+        if action.get("lane") == "approved":
+            return True, (f"{action['current']} -> {action['target']} changes the series, "
+                          "and the operator approved it")
         return False, f"major_never: {action['current']} -> {action['target']} changes the series"
     if action.get("bump_kind") == "none":
         return False, "nothing_newer: upstream has no newer release than the pin"
@@ -95,7 +101,7 @@ def major_never(action: dict) -> tuple[bool, str]:
 def stock_version_immovable(action: dict) -> tuple[bool, str]:
     """The routine lane means 'move the pin', and a stock package's pin is not ours
     to move (see edits.py). Routine bumps apply to recipes we author."""
-    if action.get("lane") == "routine" and action.get("shape") == "patch_dir":
+    if action.get("lane") in ("routine", "approved") and action.get("shape") == "patch_dir":
         return False, ("stock_version_immovable: a stock package moves with a Buildroot "
                        "release, not with a nightly bump; only recipes we author are "
                        "bumped")

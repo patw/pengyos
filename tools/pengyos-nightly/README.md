@@ -7,7 +7,8 @@ about it**: it batches up to `max_actions` changes, verifies them as one build, 
 publishes **one** boot-checked, signed image to **testing**.
 
 Phase 1 is **observe, triage, report**. Phase 2 is **plan, act**. Phase 3 is
-**batch, one release** — see [`spec.md`](spec.md), the contract for all three.
+**batch, one release**. Phase 5 is **decide**: a page where the maintainer approves or
+denies what the report recommends. See [`spec.md`](spec.md), the contract for all of them.
 
 ## What it looks at
 
@@ -116,6 +117,26 @@ The signing key and the site target never enter the repo and are never printed:
 `~/Personal/.secrets`. Missing either one makes `act` refuse and the loop stays
 report-only — a reported condition, not a crash.
 
+## Decide (the web page)
+
+The report says what needs a decision; the page is where you make it.
+
+```sh
+python3 -m pengyos_nightly web --host 0.0.0.0 --port 5050   # needs Flask
+```
+
+It lists every recommendation from the last run: version updates waiting for you (a
+new series first), security fixes the loop handles itself, what you decided earlier,
+and the last few act runs. **Approve** writes your yes into `decisions.json` next to
+the plan; the 21:00 `act` re-plans if a decision is newer than the plan, and builds the
+approved bump as the `approved` lane, through every other guard, into **testing**.
+**Deny** (or **Hold** for a security fix) keeps it out until upstream offers a new
+series. Things no act path can carry out (the kernel, the NVIDIA driver, COSMIC,
+Buildroot, stock packages) say so and cannot be approved. Set `web_url` in
+`nightly.toml` and the email links the page.
+
+On behoserver it runs as the user unit `pengyos-nightly-web.service` (port 5050).
+
 ## Usage
 
 ```sh
@@ -130,6 +151,7 @@ python3 -m pengyos_nightly act                     # dry run of the night's batc
 python3 -m pengyos_nightly act --max 4             # cap this run's batch below max_actions
 python3 -m pengyos_nightly act --only <id>         # one action, as a batch of one
 python3 -m pengyos_nightly status                  # alive? and what is queued?
+python3 -m pengyos_nightly web                     # the decision page (127.0.0.1:5050)
 ```
 
 `status` also reports the Buildroot release-bump lane (spec phase 4):
@@ -144,7 +166,7 @@ with a `!` line when a newer series is a finding and nothing is scheduled. Those
 are attention, not failure: they do not change the exit code.
 
 State lives in `~/build/pengyos/nightly/` (`--state-dir`): `observations.json`,
-`state.json`, `plan.json`, `actions.json`, `nightly.toml`, `attest.jsonl` (the
+`state.json`, `plan.json`, `actions.json`, `decisions.json`, `nightly.toml`, `attest.jsonl` (the
 `pengyos-attest` hash chain of every action), `reports/`, the per-edition
 `pkgstats-*.json`, and `nvd/` (a clone of fkie-cad/nvd-json-data-feeds that
 `pkg-stats` updates).

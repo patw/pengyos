@@ -11,6 +11,7 @@ import datetime as dt
 import tomllib
 from pathlib import Path
 
+from pengyos_nightly import decisions as D
 from pengyos_nightly import edits as E
 from pengyos_nightly import evidence as EV
 from pengyos_nightly import guards as G
@@ -347,12 +348,34 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
     return action
 
 
+def _denied(kind: str, name: str, lane: str, current: str, target: str,
+            pkg: dict | None, entry: dict) -> dict:
+    """A refusal the operator made. Recorded like any other refusal, so the plan still
+    says the candidate existed and who stopped it."""
+    reason = (f"operator_denied: {kind} {name} {target} was denied on "
+              f"{entry.get('at', '?')} (pengyos_nightly web)")
+    return {"id": f"{lane}-{name}-{target}", "lane": lane, "component": name,
+            "current": current, "target": target, "allowed": False,
+            "editions": list((pkg or {}).get("editions") or []), "cves": [], "closes": [],
+            "edits": [], "hash": None, "risks": [],
+            "guards": [{"guard": "operator_denied", "ok": False, "reason": reason}],
+            "refused_by": ["operator_denied"], "refused_reason": [reason]}
+
+
 def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
-               build_root: Path, nvd_of=lambda cve: {}, get=E.fetch_bytes) -> dict:
-    """Actions (ranked, capped) and refusals (named), from the loop's own state."""
+               build_root: Path, nvd_of=lambda cve: {}, get=E.fetch_bytes,
+               decisions: dict | None = None) -> dict:
+    """Actions (ranked, capped) and refusals (named), from the loop's own state.
+
+    `decisions` is decisions.json: what the operator approved or denied from the web
+    page. An approval puts a finding in the `approved` lane; a denial keeps a candidate
+    out and records it as refused by `operator_denied`.
+    """
     packages = obs.get("packages", {})
     br_version = obs.get("buildroot", "")
     considered: dict[str, dict] = {}
+    decided = decisions or {}
+    denied: list[dict] = []
 
     # Which CVEs belong to a different component of a monorepo than the one pkg-stats
     # reported them against. Computed once, with a shared fetch cache, before any candidate
@@ -364,17 +387,35 @@ def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
     for name, pkg in sorted(packages.items()):
         if not _matches(obs, st, cfg, name, pkg, attribution):
             continue
+        current = pkg.get("current") or ""
+        if D.lookup(decided, "security", name, current) == D.DENIED:
+            denied.append(_denied("security", name, "security", current, current, pkg,
+                                  decided[D.key("security", name)]))
+            continue
         considered[name] = ("security", pkg.get("latest") or "")
 
     # Routine lane: the version gaps observe already found (authored recipes, the
     # kernel's own series, the driver branch). They are considered even when the lane
     # is disabled, so the plan records *why* they were not acted on: a candidate that
     # never appears is indistinguishable from one nobody looked at.
+    #
+    # Approved lane: a finding the operator said yes to on the web page, whatever lane
+    # observe gave it. The approval stands in for the person the major lane waits for;
+    # it does not stand in for any other guard.
     for f in obs.get("findings", []):
-        if f.get("lane") != "routine":
+        name, available = f["component"], f.get("available") or ""
+        verdict = D.lookup(decided, "update", name, available)
+        if verdict == D.DENIED:
+            denied.append(_denied("update", name, f.get("lane") or "routine",
+                                  f.get("current") or "", available, packages.get(name),
+                                  decided[D.key("update", name)]))
             continue
-        name = f["component"]
         if name in considered:
+            continue
+        if verdict == D.APPROVED:
+            considered[name] = ("approved", available)
+            continue
+        if f.get("lane") != "routine":
             continue
         pkg = packages.get(name)
         if pkg is None:
@@ -388,7 +429,7 @@ def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
     if cfg.get("bump_buildroot"):
         considered["buildroot"] = ("bump", cfg["bump_buildroot"])
 
-    actions, refused = [], []
+    actions, refused = [], list(denied)
     # Security first, worst first; routine after it.
     ranked = sorted(considered.items(),
                     key=lambda kv: (0 if kv[1][0] == "security" else 1, kv[0]))

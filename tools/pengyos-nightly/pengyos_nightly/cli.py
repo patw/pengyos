@@ -5,6 +5,7 @@
     pengyos-nightly triage  [--max-triage N] [--jobs N] [--model ALIAS]
     pengyos-nightly report  [--no-email] [--force-email] [--mark-reported]
     pengyos-nightly status          # is the loop alive? read-only, exit 1 if not
+    pengyos-nightly web             # the decision page: approve or deny (needs Flask)
 
 Phase 1 of tools/pengyos-nightly/spec.md: nothing is built or published.
 """
@@ -20,7 +21,7 @@ import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from pengyos_nightly import (__version__, act as actlane, config as cfgmod, edits,
+from pengyos_nightly import (__version__, act as actlane, config as cfgmod, decisions, edits,
                              guards, planner, report, sources, state, triage)
 
 HOME = Path.home()
@@ -31,6 +32,7 @@ def _paths(args) -> dict:
     return {"state_dir": sd, "obs": sd / "observations.json", "state": sd / "state.json",
             "nvd": sd / "nvd", "reports": sd / "reports", "plan": sd / "plan.json",
             "policy": sd / "nightly.toml", "actions": sd / "actions.json",
+            "decisions": sd / "decisions.json",
             "site": Path(getattr(args, "site", HOME / "build/pengyos/site")).expanduser()}
 
 
@@ -202,7 +204,8 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
     body = report.render(today.isoformat(), new_cves, new_findings, errors,
                          open_cves if show_open else None,
                          obs["findings"] if show_open else None, digest,
-                         carried if show_open else None, acted if show_open else None)
+                         carried if show_open else None, acted if show_open else None,
+                         web_url=cfgmod.load(p["policy"]).get("web_url", ""))
     subj = report.subject(today.isoformat(), new_cves, new_findings, errors, digest,
                           open_cves if show_open else None,
                           obs["findings"] if show_open else None)
@@ -268,7 +271,8 @@ def do_plan(args, today: dt.date | None = None, get=None) -> dict:
     cfg = cfgmod.load(p["policy"])
     plan = planner.build_plan(obs, st, cfg, today or dt.date.today(), repo, build_root,
                               lambda cve: sources.nvd_raw(p["nvd"], cve),
-                              get or edits.fetch_bytes)
+                              get or edits.fetch_bytes,
+                              decisions=decisions.load(p["decisions"]))
     p["state_dir"].mkdir(parents=True, exist_ok=True)
     p["plan"].write_text(json.dumps(plan, indent=1, sort_keys=True))
     return plan
@@ -286,6 +290,13 @@ def do_act(args, today: dt.date | None = None, run=subprocess.run) -> dict:
     if not p["plan"].exists():
         print("act: no plan.json - run plan first")
         return {"error": "no plan"}
+    # The plan is written at 19:00 and act runs at 21:00. A decision made on the web page
+    # in between must count tonight, not tomorrow, so a plan older than the last decision
+    # is rebuilt from the same observations first.
+    if (p["decisions"].exists() and p["obs"].exists()
+            and p["decisions"].stat().st_mtime > p["plan"].stat().st_mtime):
+        print("act: decisions changed since the plan was written - re-planning")
+        do_plan(args, today=today)
     plan = json.loads(p["plan"].read_text())
     cfg = cfgmod.load(p["policy"])
     allowed = [a for a in plan["actions"] if a.get("allowed")]
@@ -529,7 +540,7 @@ def main(argv=None) -> int:
     ap.add_argument("--site", default=str(HOME / "build/pengyos/site"),
                     help="the local site dir release.sh publishes into")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("run", "observe", "triage", "report", "status", "plan", "act"):
+    for name in ("run", "observe", "triage", "report", "status", "plan", "act", "web"):
         sp = sub.add_parser(name)
         if name in ("run", "triage"):
             sp.add_argument("--max-triage", type=int, default=400,
@@ -556,8 +567,18 @@ def main(argv=None) -> int:
             sp.add_argument("--apply", action="store_true",
                             help="really branch, build, sign and publish; without this the "
                                  "run is a dry run that changes nothing")
+        if name == "web":
+            sp.add_argument("--host", default="127.0.0.1",
+                            help="address to listen on (0.0.0.0 for the LAN)")
+            sp.add_argument("--port", type=int, default=5050)
     args = ap.parse_args(argv)
     report_failed = False
+
+    if args.cmd == "web":
+        from pengyos_nightly import web          # Flask is needed for this one command only
+        web.create_app(_paths(args), Path(args.repo).expanduser()).run(
+            host=args.host, port=args.port)
+        return 0
 
     if args.cmd in ("run", "observe"):
         obs = observe(args)

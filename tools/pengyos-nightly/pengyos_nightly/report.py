@@ -101,10 +101,15 @@ def _finding_list(items: list[dict]) -> str:
 def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: dict,
            all_cves: list[dict] | None = None, all_findings: list[dict] | None = None,
            digest: bool = False, carried: list[dict] | None = None,
-           acted: list[dict] | None = None) -> str:
+           acted: list[dict] | None = None, web_url: str = "") -> str:
     serious = [c for c in new_cves if c["priority"] in ("P0", "P1")]
     minor = [c for c in new_cves if c["priority"] == "P2"]
     parts = [f"<h2>PengyOS nightly — {_e(date)}</h2>"]
+    if web_url:
+        # The email tells; the page is where the answer goes (pengyos_nightly web).
+        parts.append(f'<p><a href="{_e(web_url)}"><b>Approve or deny</b></a> what this '
+                     "report recommends. An approval is built by the 21:00 run and "
+                     "published to testing.</p>")
     if errors:
         parts.append("<h3>Source errors</h3><ul>" + "".join(
             f"<li><b>{_e(k)}</b>: {_e(v)}</li>" for k, v in sorted(errors.items())) + "</ul>")

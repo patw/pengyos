@@ -311,7 +311,7 @@ does not publish more than `max_releases` images a night, and it never reaches
 | Guard | Rule |
 |---|---|
 | `channel_locked` | the publish channel is the constant `testing`; `update-promote` and `--channel stable` are unreachable — asserted on the argv before anything runs |
-| `major_never` | a bump that changes the release series is never acted on. A `tree_move` is exempt: crossing to a new Buildroot series **is** the scheduled event, and `major_never` guards package pins, not the tree |
+| `major_never` | a bump that changes the release series is never acted on unless the operator approved that version (the `approved` lane). A `tree_move` is exempt: crossing to a new Buildroot series **is** the scheduled event, and `major_never` guards package pins, not the tree |
 | `tree_move_not_executable` | a `tree_move` is planned, guarded and accounted for, then refused **by name**: the act lane has no full-rebuild path yet, so publishing a plan that looks executable would hand a tree move to a lane that cannot run it and turn a design gap into a 21:00 build error |
 | `stock_version_immovable` | the routine lane may only bump pins we own; a stock package moves with a Buildroot release, not with a nightly |
 | `evidence_required` | NVD must place the shipped version inside the affected range (patch shape) or prove the target closes the CVE (bump shape) |
@@ -320,7 +320,8 @@ does not publish more than `max_releases` images a night, and it never reaches
 | `patch_does_not_apply` | a **specific upstream fix** proved not to apply is not retried: the record is `patch_failures[<pkg>]["fixes"]`, the list of upstream fix URLs that failed, and a candidate is refused only when it wants one of them. A cherry-pick authored against a newer series says nothing about a fix that would apply cleanly, so the package stays open. A record with no fix list predates per-fix tracking and is honoured as a component-wide block until a human clears it |
 | `confirmed_only` | pkg-stats `unsure_cves` are never actionable |
 | `not_host_only` | a build-host package is not a security update to an image |
-| `lane_allowed` | a candidate only enters the night if its lane is enabled. `bump` is its own lane and is enabled **only** by `bump_buildroot` being set — so scheduling a Buildroot bump cannot quietly enable the kernel or the NVIDIA driver, which share the "new release series" label |
+| `operator_denied` | the operator denied this item on the decision page (`decisions.json`); it is not considered, and is recorded as refused by this name |
+| `lane_allowed` | a candidate only enters the night if its lane is enabled. `approved` is enabled by the operator's approval of that version on the decision page. `bump` is its own lane and is enabled **only** by `bump_buildroot` being set — so scheduling a Buildroot bump cannot quietly enable the kernel or the NVIDIA driver, which share the "new release series" label |
 | `denied_component` | `linux`, `nvidia-open`, `buildroot` and COSMIC are report-only in this phase (a kernel bump invalidates the NVIDIA module build and every stamp chain; a Buildroot release means a new tree and a full rebuild; both need their own lane). `buildroot`'s default is lifted **only** for the event the operator scheduled (`bump_buildroot` names the target); the others stay denied whatever is scheduled |
 | `bump_event_approved` | a new Buildroot release series is a *finding*; the tree move is refused unless `bump_buildroot` names exactly that target |
 | `cooldown` | the same component is not touched twice inside `cooldown_days` |
@@ -456,6 +457,46 @@ Status as of 2026-10-07, measured against the tests, not against intent:
 22. **not met.** `cosmic_compat` and `nvidia_module_build` are named in this spec and exist in
     no code.
 23. **not met.** There is no build to fail.
+
+## Phase 5 — the decision page (added 2026-10-16)
+
+The report told the operator what needed a decision and offered nowhere to make it: a
+major finding (a new PengyR minor, an authored recipe's new series) stayed in the email
+night after night. `pengyos_nightly web` is that place: a small Flask page on the build
+host listing everything the loop recommends, each with **Approve** and **Deny**.
+
+- **What it lists.** Every finding in `observations.json` (version updates; the ones no act
+  path can carry out — `denied_component`, or a stock package — are shown with the reason
+  and cannot be approved), every security candidate in `plan.json` (allowed ones can be
+  **held**, blocked ones dismissed; there is nothing to approve, since the security lane
+  runs on its own guards), what was decided earlier (with Undo), and the recent act runs.
+  A dirty working tree and `act_enabled = false` are shown, because either one means
+  nothing approved gets built.
+- **What it writes.** One file, `<state-dir>/decisions.json`: `{"<kind>:<component>":
+  {decision, target, at}}`, `kind` being `update` or `security`. It never builds, signs,
+  publishes or edits the tree.
+- **What an approval means.** The planner considers the finding in the `approved` lane,
+  which `lane_allowed` enables and `major_never` lets cross a series. **Every other guard
+  still runs**: an approval cannot lift a cooldown, a missing fix, a report-only
+  component, a dirty tree, a missing key, the gate, the boot check or the testing-only
+  channel. It covers the approved version and later patch releases of the same series; a
+  new series is a new question.
+- **What a denial means.** The item is not considered (`operator_denied`) and leaves the
+  page's waiting list, over the same span as an approval.
+- **When it counts.** `act` re-plans when `decisions.json` is newer than `plan.json`, so an
+  answer given after the 19:00 plan still counts at 21:00.
+- **The email links it** when `web_url` is set in `nightly.toml`.
+
+### Acceptance criteria (phase 5)
+24. An approved major finding is an allowed action in the `approved` lane; the same finding
+    without an approval is not a candidate. An approval covers later patch releases of the
+    approved series and not the next series.
+25. An approval of a `denied_component` is refused by that guard; the page will not record
+    an approval for it, nor for a stock package, nor for a security candidate.
+26. A denied update or a held security candidate is not an action and is refused as
+    `operator_denied`.
+27. `act` re-plans when a decision is newer than the plan, and only then.
+28. Tests run without a server (`view()` is data; the routes use Flask's test client).
 
 ## Acceptance criteria
 1. `pengyos-nightly run --no-email` on the build host writes observations, a

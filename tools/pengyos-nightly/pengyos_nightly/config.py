@@ -44,6 +44,9 @@ DEFAULTS = {
     # newer release series stays a finding and nothing moves. Naming a target is the
     # operator scheduling that event; the loop never decides it from a tag alone.
     "bump_buildroot": "",
+    # Where `pengyos_nightly web` is reachable, for the link at the top of the email.
+    # Empty: no link.
+    "web_url": "",
     "key_file": str(HOME / "Personal/pengyos-keys/release-2026.key"),
     "secrets": str(HOME / "Personal/.secrets"),
 }

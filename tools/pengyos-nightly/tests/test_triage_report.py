@@ -428,3 +428,9 @@ def test_carried_fixes_are_reported_as_closed_not_open():
     assert "Published by the loop (1)" in html and "26.10.8</b> on testing" in html
     assert "pkg-stats still flags these" in html
     assert "act on the testing channel" in html and "phase 1" not in html
+
+
+def test_the_report_links_the_decision_page_when_one_is_configured():
+    assert "Approve or deny" not in report.render("2026-10-16", [], [], {})
+    html = report.render("2026-10-16", [], [], {}, web_url="http://behoserver:5050/")
+    assert 'href="http://behoserver:5050/"' in html and "Approve or deny" in html

@@ -6,6 +6,26 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — a page to approve or deny what the report recommends (0.13.0)
+- **`pengyos_nightly web`** (Flask, optional extra `web`): every recommendation from the
+  last run on one page — version updates waiting for a decision, the security fixes
+  the loop handles itself (which can be held), earlier decisions (with Undo), and the
+  last act runs — with **Approve** / **Deny**. It writes only `decisions.json`. Until now a
+  major finding had nowhere to go: PengyR 1.12 sat in the report from its release on.
+- **The `approved` lane.** The planner considers an approved finding in it; `lane_allowed`
+  enables it and `major_never` lets it cross a series. No other guard is lifted. An
+  approval covers later patch releases of the same series. A denial or hold is refused
+  as `operator_denied`.
+- **`act` re-plans when a decision is newer than the plan**, so an answer given after the
+  19:00 plan counts at 21:00.
+- **The email links the page** when `web_url` is set in `nightly.toml`.
+
+### Changed
+- **`pengy` is no longer report-only.** It was denied because its cargo-vendored archive
+  hash only exists after `make pengy-source`; the act lane has generated and verified
+  exactly that hash since the fzf fix (2026-10-12). A PengyR patch release is now a
+  routine bump; a new minor needs an approval on the page.
+
 ### Fixed
 - **A refusal no longer throws away someone else's uncommitted work.** `act` refuses a
   dirty tree (`clean_tree`), but every refusal went through `bail()`, and in `--apply`

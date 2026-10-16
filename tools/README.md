@@ -94,7 +94,7 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-media`](pengyos-media/) | Build PengyOS — the live install medium (ISO or disk image) for an edition. |
 | [`pengyos-mutations`](pengyos-mutations/) | Journaled, reversible system changes for PengyOS. |
 | [`pengyos-net`](pengyos-net/) | Baseline systemd-networkd/systemd-resolved configuration plus an nftables ruleset with a default-deny inbound polic… |
-| [`pengyos-nightly`](pengyos-nightly/) | The nightly maintenance loop: observe upstream, triage CVEs with the local model, email a report (phase 1). |
+| [`pengyos-nightly`](pengyos-nightly/) | The nightly maintenance loop: observe upstream, triage CVEs with the local model, email a report, batch the allowed fixes into one boot-checked testing release, and a web page to approve or deny what it recommends. |
 | [`pengyos-pins`](pengyos-pins/) | Pinned component manifest for PengyOS. |
 | [`pengyos-propose-client`](pengyos-propose-client/) | A Python CLI that formats change proposals and routes them to the human-gated propose/approve gate for PengyOS (a f… |
 | [`pengyos-qemu-verify`](pengyos-qemu-verify/) | A headless QEMU/KVM boot-test harness for PengyOS: boot a PengyOS disk image under QEMU (q35), wait for readiness m… |
