@@ -12,9 +12,9 @@ config BR2_PACKAGE_NEEDLE_ENGINE_ARCH_OK
 	depends on BR2_PACKAGE_NEEDLE_ENGINE
 	default y if BR2_x86_64
 	default y if BR2_aarch64
-	default y if BR2_arm
-	default y if BR2_riscv
-	default y if BR2_mips
+	default y if BR2_arm && BR2_ARM_CPU_ARMV7A
+	default y if BR2_riscv && BR2_RISCV_64
+	default y if BR2_mipsel
 	help
 	  Upstream ships prebuilt engines for linux-x86_64, linux-arm64,
 	  linux-armv7, linux-riscv64 and linux-mipsel only. On any other

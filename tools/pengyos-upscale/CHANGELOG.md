@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The staged `realesrgan-ncnn-vulkan` recipe could not get past extraction:
+  Buildroot's generic extract has no rule for `.zip`. It now unpacks with
+  `$(UNZIP)` in `EXTRACT_CMDS`, the way the stock cryptopp/espeak recipes do.
+  Built in a throwaway Buildroot 2026.08 tree: download, hash, extract, install
+  and legal-info all pass.
+
 ### Added — prototype: Real-ESRGAN as the Desktop image upscaler
 - **Measured evaluation** (`results/measure.py` → `results/measured.json`) on a
   box with two RTX 5060 Ti and Mesa llvmpipe: the fast model

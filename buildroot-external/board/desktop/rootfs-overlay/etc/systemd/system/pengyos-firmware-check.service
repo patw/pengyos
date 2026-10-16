@@ -18,5 +18,6 @@ Type=oneshot
 StateDirectory=pengyos-firmware
 RuntimeDirectory=pengyos-firmware
 RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 ExecStart=/usr/bin/pengyos-firmware check --save --quiet
 Nice=10

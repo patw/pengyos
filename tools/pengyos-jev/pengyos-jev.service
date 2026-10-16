@@ -2,13 +2,14 @@
 # A local System One (Jev-class) decision service: loopback only, own user,
 # weights read-only. Enable by moving the recipe + this unit into the tree.
 #
-# Vulkan needs the GPU render nodes: AccessDevices=/dev/dri (systemd scopes
-# DeviceAllow=), and the service user must be in the `render` group on
+# Vulkan needs the GPU render nodes: DeviceAllow=char-drm below, and the
+# service user must be in the `render` group on
 # PengyOS Desktop. No GPU? Run with -ngl 0 and drop the device lines: the
 # CPU path is ~1.3x slower and uses ~100 MB.
 [Unit]
 Description=PengyOS System One (Jev-class) decision service
-Documentation=https://github.com/ggml-org/llama.cpp (tools/server, /v1/systemone)
+# The /v1/systemone endpoint lives in llama.cpp's tools/server.
+Documentation=https://github.com/ggml-org/llama.cpp/tree/master/tools/server
 After=multi-user.target
 
 [Service]
@@ -40,7 +41,9 @@ RestrictAddressFamilies=AF_INET AF_INET6
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=
-DeviceAllow=/dev/dri rw
+# The GPU, for Vulkan: every DRM node (/dev/dri/card*, renderD*). A directory
+# path such as /dev/dri is not a device, and systemd ignores it.
+DeviceAllow=char-drm rw
 StateDirectory=pengyos-jev
 
 [Install]

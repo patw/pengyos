@@ -34,6 +34,13 @@ REALESRGAN_NCNN_VULKAN_INSTALL_TARGET = YES
 # copies the six other runtime libs the host-built binaries need. Without it
 # the engine does not start.
 
+# A .zip has no INFLATE rule in Buildroot's generic extract (only tar and its
+# compressors), so unpack it by hand, the way cryptopp and espeak do. The zip is
+# flat: the binary, models/ and the demo files sit at its top level.
+define REALESRGAN_NCNN_VULKAN_EXTRACT_CMDS
+	$(UNZIP) -d $(@D) $(REALESRGAN_NCNN_VULKAN_DL_DIR)/$(REALESRGAN_NCNN_VULKAN_SOURCE)
+endef
+
 define REALESRGAN_NCNN_VULKAN_COPY_LICENSE
 	$(INSTALL) -D -m 0644 $(REALESRGAN_NCNN_VULKAN_DL_DIR)/LICENSE \
 		$(@D)/LICENSE

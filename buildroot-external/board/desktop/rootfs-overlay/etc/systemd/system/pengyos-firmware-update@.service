@@ -4,7 +4,9 @@
 #   systemctl start pengyos-firmware-update@all.service
 #   systemctl start pengyos-firmware-update@<DEVICE-ID>[,<DEVICE-ID>…].service
 #
-# %i is the instance name: "all", or the device ids fwupdmgr should update.
+# %I is the instance name, unescaped: "all", or the comma-separated device ids
+# fwupdmgr should update. A comma is not allowed in a unit name, so the app
+# starts the escaped form (systemd-escape: `,` -> `\x2c`) and %I undoes it.
 # Progress goes to /run/pengyos-firmware/progress.json, which the app streams.
 #
 # Writing firmware is irreversible on hardware, so this unit never restarts the
@@ -22,6 +24,9 @@ ConditionPathExists=/usr/bin/fwupdmgr
 Type=oneshot
 RuntimeDirectory=pengyos-firmware
 RuntimeDirectoryMode=0755
-ExecStart=/usr/bin/pengyos-firmware apply %i
+# Shared with pengyos-firmware-check.service: keep it when either unit stops, so
+# a check finishing mid-install does not delete the progress file under it.
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/pengyos-firmware apply %I
 Nice=10
 IOSchedulingClass=idle

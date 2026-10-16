@@ -6,6 +6,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- `laya-model` could not build: a bare `.gguf` needs `EXTRACT_CMDS`, and its
+  `LICENSE_FILES` named a file the upstream repository does not have. The
+  model card (`README.md`, `license: apache-2.0`) is now a pinned extra
+  download and the license file. Built in a throwaway Buildroot 2026.08 tree.
+- `pengyos-jev.service` allowed `DeviceAllow=/dev/dri`, a directory, which
+  systemd ignores — the service would have had no GPU. It is now
+  `DeviceAllow=char-drm rw`. The `Documentation=` line is a valid URL.
+- `llama-cpp-vk` has a `.hash` (the b11318 tag archive and its LICENSE), so
+  `pengyos-recipe-lint` passes on the skeleton.
+
 ### Added
 - **Prototype evaluation of a Jev-class (System One) decision service for
   PengyOS.** Measured 2026-10-15 with a static, Vulkan-only `llama-server`

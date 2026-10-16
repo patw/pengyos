@@ -6,6 +6,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The staged recipes could not build. `_SOURCES` is not a Buildroot variable,
+  so `needle.h` and the license texts were never fetched; they are now
+  `_EXTRA_DOWNLOADS`. The downloads are bare files, which Buildroot's generic
+  extract cannot unpack, so both recipes copy them in `EXTRACT_CMDS`.
+  `needle-engine` now takes its license from the repository's `LICENSE`
+  (`needle.h` carries none), and maps Buildroot's arch names to upstream's
+  directories (`aarch64` → `linux-arm64`, `arm` → `linux-armv7`; little-endian
+  MIPS and 64-bit RISC-V only). Built in a throwaway Buildroot 2026.08 tree:
+  download, hash, extract, install and legal-info all pass.
+
 ### Added
 - **Prototype evaluation of Cactus Whistle as PengyOS's primary speech input.**
   Measured on a Ryzen 9 5900XT: 0.06–0.10 s wall time for a 2–4 s clip, 9–34 ms

@@ -76,48 +76,26 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   + [`tools/pengyos-jev/`](tools/pengyos-jev/) (client, unit skeleton, recipe
   skeleton, 14 offline tests). **Nothing is enabled in an image.**
 
-### Added — PDFs get a real viewer (Evince, the ratified entry, wired in)
-- **The gap:** the Desktop image shipped **no PDF viewer**. The overlay's
-  `mimeapps.list` named Firefox for `application/pdf`, so a PDF opened in a
-  browser — fine as a fallback, not as a document viewer (no page navigation,
-  no continuous scroll, no reflow, no page-range printing; a 200-page scan is a
-  browser tab). The only PDF code in the image was poppler's `pdftocairo`,
-  wired to the COSMIC Files thumbnailer.
-- **What ships now:** `pengyos-pdf-viewer-setup` installs **Evince** from
-  Flathub on the first boot with a network, the same first-boot pattern as
-  Firefox (oneshot unit + `/var/lib/flatpak/.pengyos-pdf-viewer` marker +
-  `Restart=on-failure`, started by `50-pengyos-flatpak-setup` the moment the
-  machine is online). It is `After=pengyos-browser-setup`, not beside it:
-  flatpak's system repo takes a lock, so the two installs serialise.
-- **This is the ratified entry, not a new choice.** Evince is the
-  human-signed `PDF` row in
-  [`tools/pengyos-desktop-curation/curated.toml`](tools/pengyos-desktop-curation/)
-  (spec Principle 8: the default-app set is a human decision). That set is
-  still not consumed by any build — this wires **one** category (PDF) out of
-  it, the one with a working fallback; ratifying the whole set stays Pat's
-  call.
-- **`application/pdf=org.gnome.Evince.desktop;org.mozilla.firefox.desktop;`** —
-  the fallback is a *chain*, and it is load-bearing. Measured with the image's
-  own resolver (xdg-utils 1.2.1): `xdg-mime` walks the row and **skips a
-  handler whose `.desktop` does not resolve**, so a machine that installed
-  offline and has not reached Flathub yet answers "no method available for
-  opening" if Evince is named alone. With Firefox behind it the same machine
-  opens the PDF in the browser, and Evince takes over by itself the moment it
-  is installed. Verified all three ways: Evince present → Evince; Evince
-  missing → Firefox; Evince installed later → Evince.
+### Changed — PDFs open in Evince once it is installed (Firefox until then)
+- **`application/pdf=org.gnome.Evince.desktop;org.mozilla.firefox.desktop;`**
+  in the Desktop's `mimeapps.list`. Evince is the human-signed `PDF` row in
+  [`tools/pengyos-desktop-curation/curated.toml`](tools/pengyos-desktop-curation/),
+  but the image does **not** install it: it is a Flatpak on the GNOME runtime,
+  which nothing else in the image uses — measured on Flathub, ~290 MB of
+  download and ~650 MB on disk on top of what Firefox already pulls, for a
+  13 MB app, plus the runtime's own updates. Firefox's built-in viewer opens
+  PDFs out of the box; Evince is one click in the Store, and the moment it is
+  installed it becomes the PDF handler by itself. (`xdg-mime` skips a handler
+  whose `.desktop` does not resolve, so the chain never answers "no method
+  available for opening".) A first-boot unit that installed Evince for
+  everyone was tried and dropped for that cost before release.
 - **Why not a native (Lane 1) viewer, measured against the pinned tree:**
-  Buildroot 2026.08 has `mupdf`, and its `mupdf.mk` gates the graphical front
-  ends on `BR2_PACKAGE_XLIB_LIBX11`/`LIBXEXT` (`HAVE_X11`) and
-  `BR2_PACKAGE_LIBFREEGLUT` (`HAVE_GLUT`) — i.e. an X11 window and an
-  OpenGL/GLUT window. The Desktop edition is a Wayland session with no X11
-  stack enabled in the layer, so neither is buildable as shipped; a console
-  framebuffer viewer is not a desktop app. `poppler` in the same tree offers
-  **only** `BR2_PACKAGE_POPPLER_QT5` and `POPPLER_UTILS` — no glib wrapper —
-  and the Desktop layer ships Qt **6**, which is exactly the binding Evince
-  needs; so Evince carries its own poppler (26.07.0, GTK backend) inside the
-  Flatpak and the host poppler stays a thumbnailer. `zathura` is not a
-  Buildroot package at all. A libcosmic viewer over the MuPDF core is the real
-  Lane 1 answer and is left as a scoped proposal, not a night's work.
+  Buildroot 2026.08's `mupdf` only builds X11/GLUT front ends (the Desktop is
+  Wayland with no X11 stack), its `poppler` has no glib wrapper (Qt5 or utils
+  only), and `zathura` is not a Buildroot package. No other Flathub viewer is
+  cheaper: Papers, Zathura and Foliate need a GNOME runtime too, Okular the
+  KDE one, Sioyek freedesktop 24.08 (Firefox is on 25.08). A libcosmic viewer
+  over the MuPDF core is the real Lane 1 answer, left as a proposal.
 
 ### Added — Firmware updates get a Desktop app (and fwupd finally runs)
 - New tool [`tools/pengyos-firmware`](tools/pengyos-firmware/): the **Firmware**
@@ -142,8 +120,20 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   from a terminal, which is how the gap stayed invisible.
 - Wiring is enforced, not remembered: `scripts/tests/test_cosmic_app_wiring.py`
   now requires the app in the cargo list, the post-build install, the launcher,
-  the notifier autostart entry, the three units, both `multi-user.target.wants`
-  symlinks and the polkit rule to agree.
+  the notifier autostart entry, the three units, the `fwupd.service` and
+  `pengyos-firmware-check.timer` enablement symlinks (the timer under
+  `timers.target.wants`, matching its `[Install]`) and the polkit rule to agree.
+- **Installing works at all.** The binary passed its own `apply` subcommand to
+  fwupdmgr as a device id, so every install — "Update all" included — failed
+  with `'apply' is not a valid GUID nor DEVICE-ID`. Found under QEMU.
+- **Installing on more than one device at once works.** The app joined the device
+  ids with commas into the unit's instance name, and systemd refuses a comma in
+  a unit name, so "Update all" worked and installing a chosen set did not start.
+  The app now starts the `systemd-escape`d name (`\x2c`) and the unit passes the
+  unescaped `%I` on. Both units keep `/run/pengyos-firmware` on exit
+  (`RuntimeDirectoryPreserve=yes`), so a daily check finishing mid-install no
+  longer deletes the progress file under the app, and fwupdmgr's stderr goes to
+  the journal instead of a pipe nothing drained.
 
 ### Added — Disks can partition a hard drive, not just format a stick
 - `pengyos-disks` 0.2.0 grows from the USB-stick tool into the Desktop's disk
@@ -212,7 +202,10 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   covers both `enter dev` and `enter dev -- cargo build`. The append is guarded
   by a marker so re-applying the guest does not accumulate lines. The box's own
   `/etc` is what changes — the shared `~/.bashrc`/`~/.zshrc` stay untouched, so
-  the host PATH is unchanged.
+  the host PATH is unchanged. Both boxes now install `zsh` with their packages,
+  so `/etc/zsh/zshenv` belongs to the package before the line is appended (a
+  later `apt install zsh` would otherwise meet a config file it does not own),
+  and the PATH file skips the export when `~/.cargo/bin` is already on the PATH.
 - **Locked by a test.** New `tools/pengyos-guest/tests/test_guests_d.py` tests
   the shipped `guests.d/*.toml` as the deliverable (post-build copies them
   verbatim) and asserts any guest that puts a toolchain on the PATH wires it for

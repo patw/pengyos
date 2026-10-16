@@ -14,13 +14,32 @@
 ################################################################################
 
 NEEDLE_ENGINE_VERSION = 3.3.1
-NEEDLE_ENGINE_SITE = https://huggingface.co/Cactus-Compute/needle3/resolve/main/linux-$(BR2_ARCH)
+# Upstream names its directories after the CPU, not Buildroot's BR2_ARCH
+# (aarch64 -> arm64, arm -> armv7, mipsel stays mipsel).
+NEEDLE_ENGINE_ARCH = $(BR2_ARCH)
+ifeq ($(BR2_aarch64),y)
+NEEDLE_ENGINE_ARCH = arm64
+else ifeq ($(BR2_arm),y)
+NEEDLE_ENGINE_ARCH = armv7
+endif
+NEEDLE_ENGINE_SITE = https://huggingface.co/Cactus-Compute/needle3/resolve/main/linux-$(NEEDLE_ENGINE_ARCH)
 NEEDLE_ENGINE_SOURCE = needle
-NEEDLE_ENGINE_SOURCES = needle needle.h
+# The header (for pengyos-say.c) is a second download from the same directory;
+# the license text sits at the repository root (needle.h carries none).
+NEEDLE_ENGINE_EXTRA_DOWNLOADS = \
+	needle.h \
+	https://huggingface.co/Cactus-Compute/needle3/resolve/main/LICENSE
 NEEDLE_ENGINE_LICENSE = Apache-2.0
-NEEDLE_ENGINE_LICENSE_FILES = needle.h
+NEEDLE_ENGINE_LICENSE_FILES = LICENSE
 NEEDLE_ENGINE_INSTALL_STAGING = NO
 NEEDLE_ENGINE_INSTALL_TARGET = YES
+
+# The downloads are bare files, not archives, and Buildroot's generic extract
+# only unpacks tar (and its compressors): copy them into the build dir.
+define NEEDLE_ENGINE_EXTRACT_CMDS
+	cp $(NEEDLE_ENGINE_DL_DIR)/needle $(NEEDLE_ENGINE_DL_DIR)/needle.h \
+		$(NEEDLE_ENGINE_DL_DIR)/LICENSE $(@D)/
+endef
 
 # Upstream publishes linux-x86_64, linux-arm64, linux-armv7, linux-riscv64 and
 # linux-mipsel. Refuse to build anywhere else rather than fetch nothing.
@@ -31,7 +50,7 @@ define NEEDLE_ENGINE_INSTALL_TARGET_CMDS
 endef
 else
 define NEEDLE_ENGINE_INSTALL_TARGET_CMDS
-	echo "needle-engine: upstream publishes no linux-$(BR2_ARCH) build" >&2; \
+	echo "needle-engine: upstream publishes no linux-$(NEEDLE_ENGINE_ARCH) build" >&2; \
 	exit 1
 endef
 endif

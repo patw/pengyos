@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The shipped dev and CUDA boxes put `~/.cargo/bin` and `~/.local/bin` on the
+  PATH only for bash login shells (`/etc/profile.d`); zsh, the shell `enter`
+  gives a PengyOS user, never read it. `guests.d/*.toml` now write one
+  `/etc/pengyos-dev-path.sh`, sourced from `profile.d` for bash and from a
+  marker-guarded line in the box's `/etc/zsh/zshenv` for zsh, and install
+  `zsh` with the packages so that file is the package's own. Locked by
+  `tests/test_guests_d.py`.
+
 ## [0.2.0] - 2026-09-29
 
 The dev box: the tool now ships in the Server (and so Desktop) image and was

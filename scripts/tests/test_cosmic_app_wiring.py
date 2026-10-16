@@ -86,7 +86,8 @@ def test_apps_are_built_and_installed():
 def test_the_desktop_apps_have_launchers():
     """The apps that are meant to be opened from the Applications list."""
     programs = set(_launchers().values())
-    for app in ("pengyos-disks", "pengyos-gamepads", "pengyos-printers", "pengyos-updates"):
+    for app in ("pengyos-disks", "pengyos-firmware", "pengyos-gamepads", "pengyos-printers",
+                "pengyos-updates"):
         assert app in programs, f"{app} is installed but no .desktop launcher runs it"
 
 
@@ -144,3 +145,33 @@ def test_the_printers_app_is_wired_end_to_end():
     assert re.search(r"SystemGroup lpadmin sys root wheel", post), (
         "the app administers CUPS by peer credentials as a wheel member"
     )
+
+
+def test_the_firmware_app_is_wired_end_to_end():
+    """The Firmware app is unprivileged; root's side is two units that run the
+    same binary. All of it must ship together: the build, the install, the
+    launcher, the notifier, the units, their enablement and the polkit rule
+    that lets wheel start them. (It first landed with the overlay half only —
+    a launcher, a timer and two units all pointing at a binary nothing built.)"""
+    assert "pengyos-firmware" in _app_list()
+    assert "pengyos-firmware" in _installed_bins()
+    assert _launchers().get("io.catbee.pengyos.Firmware.desktop") == "pengyos-firmware"
+    overlay = ROOT / "buildroot-external" / "board" / "desktop" / "rootfs-overlay"
+    notifier = (overlay / "etc/xdg/autostart/io.catbee.pengyos.FirmwareNotifier.desktop").read_text()
+    assert "Exec=pengyos-firmware --notifier" in notifier
+    units = overlay / "etc/systemd/system"
+    for unit in ("pengyos-firmware-check.service", "pengyos-firmware-check.timer",
+                 "pengyos-firmware-update@.service"):
+        assert (units / unit).is_file(), unit
+    assert (units / "timers.target.wants/pengyos-firmware-check.timer").is_symlink()
+    assert (units / "multi-user.target.wants/fwupd.service").is_symlink(), (
+        "Buildroot's fwupd recipe enables nothing; without the daemon fwupdmgr has "
+        "nothing to talk to"
+    )
+    # A comma (the device-id separator) is not allowed in a unit name: the app
+    # starts the systemd-escaped instance, so the unit must pass the unescaped %I.
+    update = (units / "pengyos-firmware-update@.service").read_text()
+    assert "ExecStart=/usr/bin/pengyos-firmware apply %I" in update
+    rules = (overlay / "etc/polkit-1/rules.d/60-pengyos-firmware.rules").read_text()
+    assert '"pengyos-firmware-check.service"' in rules
+    assert '"pengyos-firmware-update@"' in rules

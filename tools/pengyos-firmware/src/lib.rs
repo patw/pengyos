@@ -659,7 +659,9 @@ pub fn apply(ids: &[String], progress_path: &Path) -> Result<(), String> {
     cmd.args(["--assume-yes", "--no-unreported-check", "--no-remote-check", "--no-metadata-check"]);
     cmd.arg("update");
     cmd.args(ids);
-    let mut out = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("Cannot run fwupdmgr: {e}"))?;
+    // stderr is never read here: inherit it (the unit sends it to the journal)
+    // rather than pipe it, or a chatty fwupdmgr fills the pipe and stalls.
+    let mut out = cmd.stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().map_err(|e| format!("Cannot run fwupdmgr: {e}"))?;
     let mut stdout = out.stdout.take().ok_or("fwupdmgr produced no output")?;
     let mut progress = Progress { phase: "Starting".into(), fraction: 0.0, message: "Starting…".into() };
     let _ = progress.save_to(progress_path);
@@ -859,12 +861,39 @@ pub fn decide(state: &FirmwareState, prefs: &Prefs, now: i64) -> Option<Notice> 
 pub const UNIT_CHECK: &str = "pengyos-firmware-check.service";
 pub const UNIT_APPLY_PREFIX: &str = "pengyos-firmware-update@";
 
-/// The unit that installs `ids` (all of them when the list is empty). Device ids
-/// are hex, so they survive a systemd instance name; the unit passes `%i` to
-/// `pengyos-firmware apply`, which splits it back into ids.
+/// The unit that installs `ids` (all of them when the list is empty). The ids are
+/// comma-joined, and a comma is not allowed in a unit name, so the instance is
+/// escaped the way `systemd-escape` does it (`,` -> `\x2c`); the unit passes the
+/// unescaped `%I` to `pengyos-firmware apply`, which splits it back into ids.
 pub fn update_unit(ids: &[String]) -> String {
-    let instance = if ids.is_empty() { "all".into() } else { ids.join(",") };
+    let instance = if ids.is_empty() { "all".into() } else { escape_instance(&ids.join(",")) };
     format!("{UNIT_APPLY_PREFIX}{instance}.service")
+}
+
+/// `systemd-escape` for an instance name: keep `[A-Za-z0-9:_.]` (no leading
+/// `.`), write every other byte as `\xNN`.
+fn escape_instance(s: &str) -> String {
+    let mut out = String::new();
+    for (i, b) in s.bytes().enumerate() {
+        if b.is_ascii_alphanumeric() || b == b':' || b == b'_' || (b == b'.' && i > 0) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("\\x{b:02x}"));
+        }
+    }
+    out
+}
+
+/// The device ids in `apply`'s arguments (what follows the subcommand): the
+/// unit passes its instance name, so they arrive comma-joined, and `all` (or
+/// nothing) means every device. Empty = all.
+pub fn apply_ids(args: &[String]) -> Vec<String> {
+    args.iter()
+        .flat_map(|a| a.split(','))
+        .map(str::trim)
+        .filter(|a| !a.is_empty() && *a != "all" && !a.starts_with('-'))
+        .map(str::to_string)
+        .collect()
 }
 
 /// `systemctl start UNIT` (waits for a oneshot to finish); Err = why not.
@@ -1181,7 +1210,19 @@ mod tests {
             update_unit(&["2a4c23bfb79b5dabe474cb7b1b3e604645d6f9c6".into()]),
             "pengyos-firmware-update@2a4c23bfb79b5dabe474cb7b1b3e604645d6f9c6.service"
         );
-        assert!(update_unit(&["a".into(), "b".into()]).contains("a,b"));
+        // systemd rejects a comma in a unit name; this is what systemd-escape writes.
+        assert_eq!(
+            update_unit(&["2a4c23bf".into(), "364cc0a5".into()]),
+            "pengyos-firmware-update@2a4c23bf\\x2c364cc0a5.service"
+        );
+    }
+
+    #[test]
+    fn apply_ids_from_the_instance() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(apply_ids(&s(&["all"])).is_empty());
+        assert!(apply_ids(&[]).is_empty());
+        assert_eq!(apply_ids(&s(&["2a4c23bf,364cc0a5"])), s(&["2a4c23bf", "364cc0a5"]));
     }
 
     #[test]

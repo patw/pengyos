@@ -3,3 +3,5 @@
 # before that arch is enabled — an unfilled pin must never be used to build.
 sha256  3531889c4d677acc47905b21c79741b52fd9af2c54ba177f54f83c0bc12e84c7  needle
 sha256  a27dac4b3239eead91d124b7f7dbce5495c13019903fd817b68c16d39b055a99  needle.h
+# https://huggingface.co/Cactus-Compute/needle3/resolve/main/LICENSE (Apache-2.0)
+sha256  cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  LICENSE

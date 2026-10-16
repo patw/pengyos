@@ -14,9 +14,14 @@ WHISTLE_MODEL_SOURCE = whistle.cact
 WHISTLE_MODEL_LICENSE = Apache-2.0
 WHISTLE_MODEL_LICENSE_FILES = LICENSE
 # The license text is a second pinned download, so the license scan has it.
-WHISTLE_MODEL_SOURCES = whistle.cact LICENSE
+WHISTLE_MODEL_EXTRA_DOWNLOADS = LICENSE
 WHISTLE_MODEL_INSTALL_STAGING = NO
 WHISTLE_MODEL_INSTALL_TARGET = YES
+
+# Bare files, not an archive: copy them into the build dir.
+define WHISTLE_MODEL_EXTRACT_CMDS
+	cp $(WHISTLE_MODEL_DL_DIR)/whistle.cact $(WHISTLE_MODEL_DL_DIR)/LICENSE $(@D)/
+endef
 
 define WHISTLE_MODEL_INSTALL_TARGET_CMDS
 	mkdir -p $(TARGET_DIR)/usr/share/pengyos/stt

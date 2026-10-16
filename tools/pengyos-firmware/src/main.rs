@@ -34,7 +34,7 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
         "check" => return check_cmd(&args),
-        "apply" => return apply_cmd(&args),
+        "apply" => return apply_cmd(&args[1..]),
         "status" => return status_cmd(),
         #[cfg(feature = "cosmic")]
         "--notifier" => return notifier::run(),
@@ -96,16 +96,9 @@ fn check_cmd(args: &[String]) -> ExitCode {
 }
 
 /// Install. Root's job (the unit runs it); progress goes to PROGRESS.
-/// The unit passes its instance name, so ids arrive comma-joined.
+/// `args` is what follows `apply`: the unit's instance name, ids comma-joined.
 fn apply_cmd(args: &[String]) -> ExitCode {
-    let ids: Vec<String> = args
-        .iter()
-        .flat_map(|a| a.split(','))
-        .map(str::trim)
-        .filter(|a| !a.is_empty() && *a != "all" && !a.starts_with('-'))
-        .map(str::to_string)
-        .collect();
-    match apply(&ids, Path::new(PROGRESS)) {
+    match apply(&apply_ids(args), Path::new(PROGRESS)) {
         Ok(()) => {
             println!("Firmware update finished. Anything that needs a restart says so.");
             ExitCode::SUCCESS

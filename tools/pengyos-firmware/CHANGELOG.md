@@ -1,5 +1,22 @@
 # Changelog — pengyos-firmware
 
+## [Unreleased]
+
+### Fixed
+- No install could ever succeed: `main` handed `apply` its whole argument list,
+  subcommand included, so the unit ran `fwupdmgr update apply …` and fwupdmgr
+  refused (`'apply' is not a valid GUID nor DEVICE-ID`) — "Update all" too.
+  Found booting the Desktop under QEMU; the id parsing now lives in
+  `apply_ids` (tested) and gets only what follows the subcommand.
+- Installing a chosen set of devices never started: the ids were comma-joined
+  into the unit's instance name, and systemd refuses a comma in a unit name.
+  `update_unit` now writes the `systemd-escape`d instance (`,` → `\x2c`) and
+  `pengyos-firmware-update@.service` passes the unescaped `%I` to `apply`.
+- `apply` piped fwupdmgr's stderr and never read it, so a chatty run could fill
+  the pipe and stall the install; stderr now goes to the unit's journal.
+- The image wiring the 0.1.0 entry describes landed: the app is in
+  `build-cosmic.sh`'s cargo list and `board/desktop/post-build.sh` installs it.
+
 ## [0.1.0] — 2026-10-15
 
 ### Added

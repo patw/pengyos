@@ -1,2 +1,4 @@
 # https://huggingface.co/ggml-org/Laya-GGUF/resolve/main/Laya-Q8_0.gguf
 sha256  c06528c5746d3bb8baa72a27938be95abbfd0b226f8471e8a9e365ed0bb066d2  Laya-Q8_0.gguf
+# https://huggingface.co/ggml-org/Laya-GGUF/resolve/main/README.md (model card: license: apache-2.0)
+sha256  8c6758b5e50d2119c152e1f80440e6f1a4da1f3cc9a67fe42aac9fc324257bf4  README.md

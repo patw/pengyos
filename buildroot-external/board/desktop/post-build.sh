@@ -162,6 +162,19 @@ else
     echo "post-build: ${PRINTERS_GUI} not built — no Printers app (adding a printer needs a terminal)"
 fi
 
+# --- Firmware (fwupd: device firmware updates) -------------------------------
+# tools/pengyos-firmware, host-built the same way. The app and its session
+# notifier are unprivileged; root's side is pengyos-firmware-check.service and
+# pengyos-firmware-update@.service (overlay), which run this same binary. The
+# .desktop file, the autostart entry and the polkit rule are in the overlay.
+FIRMWARE_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-firmware"
+if [ -x "${FIRMWARE_GUI}" ]; then
+    install -Dm0755 "${FIRMWARE_GUI}" "${TARGET_DIR}/usr/bin/pengyos-firmware"
+    echo "post-build: installed pengyos-firmware"
+else
+    echo "post-build: ${FIRMWARE_GUI} not built — no Firmware app (firmware updates need a terminal)"
+fi
+
 # --- Strip the host-built binaries ---------------------------------------------
 # Buildroot strips target binaries before post-build runs, so everything copied in
 # above (COSMIC, pop-launcher, the installer GUI) arrived with its symbol tables.
@@ -170,7 +183,7 @@ if [ -n "${STRIP_BIN}" ]; then
     for f in "${TARGET_DIR}"/usr/bin/cosmic-* "${TARGET_DIR}"/usr/bin/pop-launcher \
              "${TARGET_DIR}"/usr/bin/pengyos-install-gui "${TARGET_DIR}"/usr/bin/pengyos-updates \
              "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-gamepads \
-             "${TARGET_DIR}"/usr/bin/pengyos-printers; do
+             "${TARGET_DIR}"/usr/bin/pengyos-printers "${TARGET_DIR}"/usr/bin/pengyos-firmware; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
     echo "post-build: stripped host-built binaries"
