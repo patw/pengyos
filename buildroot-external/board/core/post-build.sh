@@ -6,12 +6,26 @@
 # common to all of them — SSH key injection, no baked host keys, provenance,
 # the SBOM, the "not installed" tool stubs. The Core-specific bits (hostname,
 # os-release, GRUB menu) are overwritten by a later edition's script.
-# There is no busybox /etc/inittab under systemd — the serial getty (ttyS0) and its autologin drop-in come
-# from the rootfs overlay (etc/systemd/system/getty@.service.d/autologin.conf),
-# and BR2_TARGET_GENERIC_GETTY_PORT drives the systemd unit.
+# There is no busybox /etc/inittab under systemd — the serial getty (ttyS0) is
+# started by systemd-getty-generator from console=ttyS0 (grub.cfg adds it only
+# when a real UART exists), and its autologin drop-in comes from the rootfs
+# overlay (etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf).
 set -e
 
 TARGET_DIR="$1"
+
+# --- The kernel config must hold what we asked for -----------------------------
+# Kconfig drops a fragment line whose dependencies are unmet without a word, and
+# anything we rely on that only x86_64_defconfig provides can vanish on a kernel
+# bump (board/*/kernel-required.txt). Fail the build instead of shipping it.
+KCONFIG="$(find "${BUILD_DIR}" -maxdepth 2 -path '*/linux-[0-9]*/.config' 2>/dev/null | head -1)"
+if [ -n "${KCONFIG}" ] && [ -n "${BR2_CONFIG:-}" ]; then
+    python3 "$(dirname "$0")/../../../scripts/check-kernel-fragments.py" \
+        --built "${KCONFIG}" --br-config "${BR2_CONFIG}" || {
+        echo "post-build: the kernel config lost options listed above" >&2
+        exit 1
+    }
+fi
 
 # Hostname (belt-and-braces alongside BR2_TARGET_GENERIC_HOSTNAME).
 echo "pengyos-core" > "${TARGET_DIR}/etc/hostname"
@@ -20,6 +34,13 @@ echo "pengyos-core" > "${TARGET_DIR}/etc/hostname"
 # Buildroot ships a generic "Buildroot <version>" os-release; board/common's
 # writer replaces it (and the /usr/lib copy) from the repository's VERSION.
 sh "$(dirname "$0")/../common/os-release.sh" "${TARGET_DIR}" Core core
+
+# Until 26.10.32 BR2_TARGET_GENERIC_GETTY_PORT was "ttyS0", and Buildroot wrote
+# DefaultInstance=ttyS0 into this drop-in, so preset-all enabled a ttyS0 getty on
+# every machine. Buildroot only ever writes the file and never removes it, so a
+# build tree from before then still carries it. The generator starts the serial
+# getty where there is one (see core.config).
+rm -f "${TARGET_DIR}/usr/lib/systemd/system/serial-getty@.service.d/buildroot-console.conf"
 
 # Keep a copy of the build identity for provenance/debugging.
 if [ -f "${BINARIES_DIR}/buildroot.config" ]; then

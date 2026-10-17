@@ -58,3 +58,10 @@ CONFIG_MACVLAN=m
 CONFIG_MACVTAP=m
 CONFIG_VFIO=m
 CONFIG_VFIO_PCI=m
+
+# --- Gaps found against a distro kernel (2026-10-17) ----------------------------
+# SR-IOV: a server NIC's (or GPU's) virtual functions, for VMs and containers.
+CONFIG_PCI_IOV=y
+# SMB/CIFS client: `mount -t cifs` for Windows and NAS shares (the Desktop's file
+# manager goes through gvfs/libsmbclient instead, but fstab mounts need this).
+CONFIG_CIFS=m

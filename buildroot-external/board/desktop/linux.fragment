@@ -49,6 +49,15 @@ CONFIG_DRM_AMDGPU=m
 CONFIG_DRM_I915=m
 CONFIG_DRM_NOUVEAU=m
 CONFIG_DRM_RADEON=m
+# Hybrid laptops: without vga_switcheroo, snd_hda_intel never enables runtime PM
+# on a dGPU's HDMI audio function (init_vga_switcheroo() is what adds
+# AZX_DCAPS_PM_RUNTIME). The PCI GPU/HDA quirk makes that function a runtime-PM
+# consumer of the GPU, so an always-active HDA held the dGPU in D0. On
+# beholaptop (Radeon 680M + RTX 3070 Ti, 26.10.31) the GPU never suspended, even
+# with the session stopped and nothing holding /dev/nvidia*. Needs FB=y (below).
+CONFIG_VGA_SWITCHEROO=y
+# The dGPU then reached D3hot, but not D3cold: that also needs native PCIe
+# hotplug (CONFIG_HOTPLUG_PCI_PCIE, in the core fragment).
 
 # --- Framebuffer console ----------------------------------------------------
 # No fbcon on the Desktop: boot text never reaches the screen (the serial
@@ -252,6 +261,38 @@ CONFIG_USB4=m
 # Monitor control over DDC/CI (ddcutil) and DisplayPort AUX.
 CONFIG_I2C_CHARDEV=m
 CONFIG_DRM_DISPLAY_DP_AUX_CHARDEV=y
+
+# --- Laptops: USB-C, power modes, thermal, speaker amps (2026-10-17) -------------
+# Found missing in a diff against Ubuntu's config, on a Legion 5 15ARH7H:
+# USB-C ports through the firmware's UCSI interface (ACPI USBC000 had no
+# driver): port roles, power delivery, DisplayPort alt mode where the OS drives it.
+CONFIG_TYPEC=m
+CONFIG_TYPEC_UCSI=m
+CONFIG_UCSI_ACPI=m
+CONFIG_TYPEC_DP_ALTMODE=m
+# Power modes (quiet/balanced/performance, Fn+Q) come through platform_profile,
+# which power-profiles-daemon drives. Legion laptops set it through the Lenovo
+# GameZone WMI interface, newer AMD laptops through AMD PMF; neither was built,
+# so /sys/firmware/acpi/platform_profile did not exist.
+CONFIG_LENOVO_WMI_GAMEZONE=m
+# AMD PMF runs its policies in the AMD Secure Processor's TEE: without TEE and
+# AMDTEE Kconfig dropped AMD_PMF (the first catch of the post-build check).
+CONFIG_TEE=m
+CONFIG_AMDTEE=m
+CONFIG_AMD_PMF=m
+# Intel Dynamic Platform and Thermal Framework (power and thermal limits on Intel
+# laptops).
+CONFIG_ACPI_DPTF=y
+CONFIG_DPTF_POWER=m
+CONFIG_DPTF_PCH_FIVR=m
+# Instantiates the I2C/SPI devices of one ACPI node: the Cirrus CS35L41 and
+# similar speaker amplifiers on many HP, Lenovo and ASUS laptops. The codec
+# drivers were built (SND_HDA_SCODEC_*), but without this they never bind, and
+# the speakers stay silent.
+CONFIG_SERIAL_MULTI_INSTANTIATE=m
+# Power down idle HDA codecs after 1 s (Ubuntu's default; the kernel's is 0 =
+# never). On beholaptop this was ~6 W on battery (23 -> 17 W).
+CONFIG_SND_HDA_POWER_SAVE_DEFAULT=1
 
 # --- Audio: Intel SOF (Sound Open Firmware) ------------------------------------
 # The Intel audio DSP driver most Intel laptops since ~2019 need (digital

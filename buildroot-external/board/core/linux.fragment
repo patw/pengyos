@@ -197,3 +197,47 @@ CONFIG_SECURITY_YAMA=y
 CONFIG_SECURITY_LANDLOCK=y
 # WireGuard: NetworkManager's and wg-quick's VPNs need the kernel module.
 CONFIG_WIREGUARD=m
+
+# --- Gaps found against a distro kernel (2026-10-17) ----------------------------
+# Our kernel is x86_64_defconfig plus these fragments, so whatever nobody added
+# is off. A diff against Ubuntu's config found these missing; each was silent.
+# (kernel-required.txt lists what the base defconfig provides and we rely on.)
+#
+# cgroup v2 memory control and BPF: without MEMCG, systemd's MemoryMax=/
+# MemoryHigh= were no-ops on Core; without BPF_SYSCALL + CGROUP_BPF, systemd's
+# DeviceAllow= and IPAddressDeny= sandboxing could not be enforced. Server and
+# Desktop already got them through other options; Core did not.
+CONFIG_MEMCG=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_CGROUP_BPF=y
+# Run systemd's BPF programs JIT-compiled, and drop the interpreter (Ubuntu).
+CONFIG_BPF_JIT=y
+CONFIG_BPF_JIT_ALWAYS_ON=y
+# Memory pressure stall info: what systemd-oomd and resource monitors read.
+CONFIG_PSI=y
+# Intel's cpuidle driver: without it Intel CPUs fall back to acpi_idle and the
+# C-states the firmware lists, often shallower.
+CONFIG_INTEL_IDLE=y
+# Native PCIe hotplug. A hybrid laptop's dGPU sits in a hotplug slot, and
+# without this pci_bridge_d3_possible() refuses D3 for the port, so the slot
+# never powers off (beholaptop, RTX 3070 Ti, ~23 W idle). Also NVMe hot-swap
+# bays and USB4/Thunderbolt PCIe tunnels. Moved here from the Desktop fragment.
+CONFIG_HOTPLUG_PCI_PCIE=y
+# PCIe Advanced Error Reporting and Downstream Port Containment: a flaky NVMe
+# or GPU link is logged and recovered instead of showing up as a hang.
+CONFIG_PCIEAER=y
+CONFIG_PCIE_DPC=y
+# pstore: the kernel log of a panic or oops is kept in EFI variables across the
+# reboot, and systemd-pstore.service moves it to /var/lib/systemd/pstore. Without
+# it a freeze on real hardware left no trace at all.
+CONFIG_PSTORE=y
+CONFIG_EFI_VARS_PSTORE=y
+# Transparent huge pages for what asks (madvise), as Ubuntu: VMs, databases,
+# JIT runtimes and games that use them get fewer TLB misses.
+CONFIG_TRANSPARENT_HUGEPAGE=y
+CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=y
+# Multi-generational LRU: page reclaim that keeps desktops responsive under
+# memory pressure (default in Ubuntu, Fedora, Arch, ChromeOS).
+CONFIG_LRU_GEN=y
+CONFIG_LRU_GEN_ENABLED=y
+# NOT zswap: swap is zram (above), and zswap in front of zram compresses twice.

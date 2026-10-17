@@ -31,6 +31,7 @@ board/<name>/
 ├── grub-efi.cfg        # the GRUB menu entry (kernel cmdline, root= by PARTUUID)
 ├── grub-pengyos.pf2    # the PengyOS GRUB theme font (Core/Server/Desktop)
 ├── linux.fragment      # kernel config fragment: this board's drivers/options
+├── kernel-required.txt # (core) options we rely on that only the base defconfig sets
 ├── post-build.sh       # runs after the rootfs is assembled (branding, ssh keys, SBOM, …)
 ├── post-image.sh       # runs after the image is generated (GRUB staging, genimage)
 └── rootfs-overlay/     # files copied verbatim onto the target root (a mirror of /)
@@ -38,7 +39,12 @@ board/<name>/
 
 - **`linux.fragment`** is merged onto the base x86_64 kernel defconfig — this is
   how a board gets exactly the drivers it needs and nothing more (see
-  `tools/pengyos-kernel-fragments` and `pengyos-hwprofile-kernel`).
+  `tools/pengyos-kernel-fragments` and `pengyos-hwprofile-kernel`). Kconfig drops
+  a line whose dependencies are unmet without a word, so the core `post-build.sh`
+  runs `scripts/check-kernel-fragments.py --built` and fails the build if any
+  fragment line, or any option in a `kernel-required.txt`, did not end up in the
+  kernel's resolved `.config`. Anything nobody listed is simply off: the base is
+  `x86_64_defconfig`, not a distro config.
 - **`rootfs-overlay/`** mirrors the target `/`. It carries our branding
   (`/etc/motd`), systemd units and drop-ins,
   `/etc/skel` defaults, and service config (NetworkManager, sshd, nftables).

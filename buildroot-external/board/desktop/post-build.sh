@@ -731,6 +731,10 @@ rmdir "${TARGET_DIR}/etc/skel/.config/cosmic-settings" 2>/dev/null || true
 # The "Printers" launcher that opened CUPS' web pages, replaced by the Printers
 # app (io.catbee.pengyos.Printers.desktop) on 2026-10-12.
 rm -f "${TARGET_DIR}/usr/share/applications/pengyos-printers.desktop"
+# The amdgpu runtime-PM udev rule, removed in 26.10.32. amdgpu turns runtime PM on
+# itself (pm_runtime_allow, 5 s autosuspend) wherever the GPU supports it; on an APU
+# it has none, so the rule only logged a sysfs write error per DRM connector.
+rm -f "${TARGET_DIR}/etc/udev/rules.d/60-pengyos-amdgpu-runtime-pm.rules"
 
 # --- Host names: .local through avahi first (nss-mdns) -------------------------
 # One mDNS stack, avahi (resolved.conf.d sets MulticastDNS=no). systemd's recipe

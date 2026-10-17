@@ -67,10 +67,15 @@ BR2_TARGET_GENERIC_ROOT_PASSWD="$$5$$pengyosroot$$0NxsYkraU5R8qP3TNBTMVJ3Pt2EVVG
 
 # --- Serial console / getty -------------------------------------------------
 # Buildroot has no BR2_SERIAL symbol: the serial console IS a getty on a
-# serial port. ttyS0 (the qemu serial line, wired by the kernel fragment's
-# serial8250) hosts the login prompt; the rootfs-overlay ships the
-# getty@.service autologin drop-in that logs in without a password.
-BR2_TARGET_GENERIC_GETTY_PORT="ttyS0"
+# serial port. The port is tty1, not ttyS0: "ttyS0" made Buildroot set
+# DefaultInstance=ttyS0 on serial-getty@.service, so preset-all enabled a ttyS0
+# getty on every machine. serial8250 always registers ttyS0, so on a laptop
+# with no UART it failed and restarted every 10 s forever (beholaptop,
+# 26.10.31). systemd-getty-generator starts serial-getty@ttyS0 from
+# console=ttyS0, which grub.cfg adds only when GRUB finds a real UART (QEMU
+# does), and the rootfs-overlay's serial-getty@ttyS0 drop-in logs it in without
+# a password.
+BR2_TARGET_GENERIC_GETTY_PORT="tty1"
 
 # --- Userspace packages -----------------------------------------------------
 # D-Bus: the systemd userspace messaging bus.

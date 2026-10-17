@@ -17,6 +17,76 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed (26.10.32) — the kernel gets what a distro kernel has, and the build checks it
+- Our kernel is `x86_64_defconfig` plus three fragments, so anything nobody added
+  was off, silently. A diff against Ubuntu 26.04's config found 7,514 options it
+  enables that we do not. Nearly all are drivers for specific hardware. Checking
+  ~150 infrastructure options turned up these, now on:
+  - **Every edition** (core fragment):
+    - cgroup v2 memory control and BPF (`MEMCG`, `BPF_SYSCALL`, `CGROUP_BPF`): on
+      Core, systemd's `MemoryMax=`, `DeviceAllow=` and `IPAddressDeny=` were no-ops.
+    - The BPF JIT, `PSI`, and `intel_idle` (Intel CPUs got only `acpi_idle`'s
+      C-states).
+    - Native PCIe hotplug (moved down from the Desktop fragment: NVMe bays and
+      USB4 tunnels need it too), plus PCIe AER and DPC, so link errors are logged
+      and recovered instead of hanging.
+    - pstore in EFI variables, so a panic's log survives the reboot
+      (`systemd-pstore` was already enabled).
+    - Transparent huge pages (madvise) and the multi-generational LRU.
+    - zswap stays off: swap is zram.
+  - **Server**: SR-IOV and the SMB/CIFS client.
+  - **Desktop** (laptops):
+    - USB-C through UCSI, with DisplayPort alt mode.
+    - Power modes: Lenovo GameZone and AMD PMF. Until now there was no
+      `platform_profile`, so power-profiles-daemon had nothing to switch.
+    - Intel DPTF.
+    - `serial-multi-instantiate`: without it, Cirrus CS35L41-type speaker amps
+      never bind, and many HP/Lenovo/ASUS laptops have silent speakers.
+    - HDA codec power save on by default: about 6 W on battery on beholaptop.
+- Kconfig drops a fragment line whose dependencies are unmet without a word (the
+  existing `scripts/check-kernel-fragments.py` found eight in September, but
+  only when someone ran it). The core post-build now runs it with `--built`
+  against the kernel's resolved `.config` and **fails the build** on any dropped
+  line. It also checks the new `board/core/kernel-required.txt`: options every
+  edition relies on that only the base defconfig provides (the EFI stub, vfat's
+  codepage for the ESP, built-in usb-storage for the live stick, systemd's hard
+  requirements, ...), so a kernel bump can no longer take one away unnoticed.
+
+### Fixed (26.10.32) — a serial login that restarted every 10 s; `switcherooctl` would not start
+- Every edition enabled a login on `ttyS0`, whether or not the machine had a
+  serial port. The kernel always creates `ttyS0`, so on a laptop with no UART
+  (beholaptop, a Lenovo with a Radeon 680M and an RTX 3070 Ti, 26.10.31) agetty failed and
+  restarted every 10 s, two journal lines each time, forever. The getty port is now
+  `tty1`. `systemd-getty-generator` starts the serial login from
+  `console=ttyS0`, which GRUB adds only when it finds a real UART (QEMU has one), so
+  QEMU and machines with a COM port keep their serial login and autologin.
+- `switcherooctl` started with the build host's Python
+  (`#!…/output/<target>/host/bin/python3`), so it failed with "required file not
+  found". The daemon, which is what COSMIC's "Launch using discrete graphics" uses,
+  was unaffected. The shebang is now `/usr/bin/python3`.
+- Checked on the same laptop: hybrid graphics work. CUDA, Vulkan and OpenGL work on
+  both GPUs, natively and inside the Flathub 26.08 runtime (Steam, Heroic) with
+  `GL.nvidia-615-78-08` and its 32-bit twin. The switcheroo variables pick the GPU
+  inside the sandbox too.
+- The dGPU never runtime-suspended. It stayed in D0 from boot, with
+  `runtime_suspended_time` at 0 and ~23 W on battery, even with the session stopped
+  and nothing holding `/dev/nvidia*`, so it was not COSMIC. The cause was
+  `CONFIG_VGA_SWITCHEROO` being unset: then `snd_hda_intel` never turns on runtime PM
+  for the GPU's own HDMI audio function, and the kernel's GPU/HDA device link keeps a
+  GPU awake while its audio function is. Fixing that got the GPU to D3hot. The slot
+  still never lost power: its root port is a hotplug port, and without
+  `CONFIG_HOTPLUG_PCI_PCIE` the kernel refuses D3 for such ports. The Desktop kernel
+  now has `CONFIG_VGA_SWITCHEROO=y`, and every edition has `CONFIG_HOTPLUG_PCI_PCIE=y`. Tested on the
+  laptop: the GPU and its root port reach D3cold within seconds of boot, with
+  `cosmic-comp` still holding `/dev/nvidia0` and video memory off. A CUDA+Vulkan
+  job wakes it in 1.8 s, and it is back in D3cold within 25 s.
+- Removed `60-pengyos-amdgpu-runtime-pm.rules`. Its `card[0-9]*` match also fired on
+  every DRM connector and on the simpledrm card, and even on the real card its
+  `autosuspend_delay_ms` write failed. An APU has no runtime PM ("Runtime PM not
+  available"), and on dGPUs amdgpu already enables runtime PM itself
+  (`pm_runtime_allow`, 5 s autosuspend). It was ~12 udev errors per boot and did
+  nothing.
+
 ### Added (26.10.32) — crash dumps and `coredumpctl` (capped), build-ids on every binary
 - Every edition now ships `systemd-coredump`. Before, `kernel.core_pattern` was
   `|/bin/false`: a crash left only the kernel's one-line "segfault at", and nothing
