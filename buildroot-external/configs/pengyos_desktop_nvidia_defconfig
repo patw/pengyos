@@ -36,19 +36,13 @@ BR2_x86_64=y
 # with any dynamic glibc toolchain.)
 BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
 BR2_TOOLCHAIN_HAS_THREADS=y
-# Every ELF the cross-gcc links carries a .note.gnu.build-id (36 bytes, no runtime
-# cost). It is how a crash dump (systemd-coredump) is matched to the unstripped
-# binary of the exact build later; it cannot be added to a release after the fact.
-# A gcc configure option rather than BR2_TARGET_LDFLAGS: it also covers glibc,
-# hand-written Makefiles and Rust (which links through gcc). Changing it means a
-# clean rebuild of every edition (the toolchain is rebuilt).
-BR2_EXTRA_GCC_CONFIG_OPTIONS="--enable-linker-build-id"
 
 # --- Reproducible builds -----------------------------------------------------
 # UTC + C locale, fixed kernel build user/host/timestamp, SOURCE_DATE_EPOCH
 # everywhere (scripts/release.sh pins it to the PengyOS commit date). Buildroot
 # only promises identical output for the same output directory: build from the
-# same absolute paths on every host you compare.
+# same absolute paths on every host you compare. (That is also why external.mk
+# can turn the build-id back on, which BR2_REPRODUCIBLE switches off.)
 BR2_REPRODUCIBLE=y
 
 # --- System init ------------------------------------------------------------

@@ -11,6 +11,15 @@ include $(sort $(wildcard $(BR2_EXTERNAL_PENGYOS_PATH)/package/*/*.mk))
 # Overrides of stock Buildroot recipes (this file is included after them).
 ################################################################################
 
+# Build-ids: BR2_REPRODUCIBLE makes the toolchain wrapper link everything with
+# -Wl,--build-id=none (upstream b285c80143), because the same package built in two
+# different output directories can hash differently. We build every release from the
+# same absolute paths (core.config, "Reproducible builds"), so that does not apply,
+# and without an id a crash dump (systemd-coredump) can never be matched to the
+# unstripped binary of the build that shipped. 36 bytes per ELF, no runtime cost.
+# Changing this relinks everything: rebuild every edition from scratch.
+TOOLCHAIN_WRAPPER_OPTS := $(patsubst -Wl$(comma)--build-id=none,-Wl$(comma)--build-id,$(TOOLCHAIN_WRAPPER_OPTS))
+
 # crates.io sources (<name>-<version>.crate) are gzipped tarballs; Buildroot
 # picks the decompressor from the file extension.
 INFLATE.crate = $(ZCAT)

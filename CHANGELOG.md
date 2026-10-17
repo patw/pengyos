@@ -32,10 +32,12 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   such as libc's resolve); the build-id below is what matches a dump to the
   unstripped binaries in the build tree.
 - Every binary the Buildroot toolchain links now carries a GNU build-id
-  (`BR2_EXTRA_GCC_CONFIG_OPTIONS="--enable-linker-build-id"`): 36 bytes per ELF, no
-  runtime cost. glibc, coreutils, flatpak and the rest had none; COSMIC (built
-  with the host toolchain) and the Go binaries already did. A toolchain option, so
-  every edition is rebuilt from scratch.
+  (`external.mk`): 36 bytes per ELF, no runtime cost. `BR2_REPRODUCIBLE` links with
+  `--build-id=none`, because two output directories can hash differently; we build
+  every release from the same paths, so that reason does not apply. glibc,
+  coreutils, flatpak and the rest had none; COSMIC (built with the host toolchain)
+  and the Go binaries already did. Everything relinks, so every edition is rebuilt
+  from scratch.
 
 ### Fixed (26.10.31) — the nightly backup filled the drive; it is now off by default
 - `pengyos-backup.timer` was enabled in Server and therefore in every edition built
