@@ -17,6 +17,26 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — crash dumps and `coredumpctl` (capped), build-ids on every binary
+- Every edition now ships `systemd-coredump`. Before, `kernel.core_pattern` was
+  `|/bin/false`: a crash left only the kernel's one-line "segfault at", and nothing
+  at all for an abort. Now each crash logs a stack trace to the journal (libdw is
+  in the image), and `coredumpctl list` / `coredumpctl info` show what crashed and
+  where. Flatpak apps are covered: the kernel runs the handler outside the sandbox.
+- Storage is capped in `/usr/lib/systemd/coredump.conf.d/50-pengyos.conf`, since a
+  browser or Steam dump alone can be gigabytes: the store never exceeds 1G, never
+  leaves less than 10G free, and a process over 2G keeps only its journal backtrace.
+- Dumps are root-only files; each user can read their own. Verified in QEMU (Desktop):
+  a `SIGSEGV`'d process was stored and `coredumpctl info` showed its stack. The
+  image is stripped, so frames in our own code show as offsets (exported symbols
+  such as libc's resolve); the build-id below is what matches a dump to the
+  unstripped binaries in the build tree.
+- Every binary the Buildroot toolchain links now carries a GNU build-id
+  (`BR2_EXTRA_GCC_CONFIG_OPTIONS="--enable-linker-build-id"`): 36 bytes per ELF, no
+  runtime cost. glibc, coreutils, flatpak and the rest had none; COSMIC (built
+  with the host toolchain) and the Go binaries already did. A toolchain option, so
+  every edition is rebuilt from scratch.
+
 ### Fixed (26.10.31) — the nightly backup filled the drive; it is now off by default
 - `pengyos-backup.timer` was enabled in Server and therefore in every edition built
   on it (both Desktops included). Its defaults tar all of `/etc` and `/home` every

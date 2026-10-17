@@ -2,8 +2,8 @@
 
 A Linux distribution built from source with [Buildroot](https://buildroot.org), in
 three editions that nest: Core inside Server inside Desktop. It runs on ordinary
-modern PC hardware: laptops, desktops and mini PCs that boot in UEFI mode. Current
-images: 26.10.13.
+modern PC hardware: laptops, desktops and mini PCs that boot in UEFI mode. The
+newest install images are on the [download page](https://pengyos.catbee.ca/download/).
 
 Free and MIT-licensed. It's also a side project rather than a product: no roadmap,
 no target market. What it's trying to show is narrower than "another distro": that a
