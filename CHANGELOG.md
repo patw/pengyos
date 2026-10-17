@@ -17,7 +17,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Added — crash dumps and `coredumpctl` (capped), build-ids on every binary
+### Added (26.10.32) — crash dumps and `coredumpctl` (capped), build-ids on every binary
 - Every edition now ships `systemd-coredump`. Before, `kernel.core_pattern` was
   `|/bin/false`: a crash left only the kernel's one-line "segfault at", and nothing
   at all for an abort. Now each crash logs a stack trace to the journal (libdw is
@@ -38,6 +38,31 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   coreutils, flatpak and the rest had none; COSMIC (built with the host toolchain)
   and the Go binaries already did. Everything relinks, so every edition is rebuilt
   from scratch.
+
+### Changed (26.10.32) — the agent the images ship: Pengy 1.11.5 → 1.12.3
+- `package/pengy` pinned 1.11.5 (images 26.10.24 onward) and stopped moving, while
+  upstream released 1.12.0, 1.12.1, 1.12.2 and 1.12.3 — the newest on 2026-10-16,
+  the day before this build. The pin now tracks 1.12.3, and the `pengy.hash` line
+  is the sha256 of the cargo-vendored tarball Buildroot generates
+  (`pengy-1.12.3-cargo6.tar.gz`), verified by a second `pengy-source` run;
+  `LICENSE` is byte-identical. One package rebuilds; no toolchain change, so the
+  existing build trees stay.
+- What 1.12.x fixes in the shipped agent, in the order a user meets it: tool-call
+  arguments are validated against the tool's own schema before anything runs, so a
+  misplaced `dry_run` key or a stringified boolean is coerced or rejected instead
+  of silently ignored (a "preview" that wrote files); `write_file`,
+  `replace_in_file` and `apply_changes` write through a staged temp file renamed
+  over the target, so a failed write leaves the original intact; provider timeouts
+  (408/504, and a request that outlives `llm_timeout`) and transient 500/502/503
+  are retried on the same ladder as 429/529 instead of ending the turn; a 200 with
+  no choices, or a message with no content and no tool calls, is a failed turn
+  rather than a blank answer saved as the assistant's reply; `run_bash`,
+  `run_python` and `run_powershell` return the output they printed before a
+  timeout killed them; two edits far apart in a large file diff as two small hunks
+  instead of a 4000-line re-write; an endpoint/model that rejected an image is
+  remembered, so later turns stop resending it; and the web prompt lease no longer
+  cancels a long unattended run at about 30 minutes. The Qt GUI no longer
+  segfaults when a file chip is removed or submitted (1.12.3).
 
 ### Fixed (26.10.31) — the nightly backup filled the drive; it is now off by default
 - `pengyos-backup.timer` was enabled in Server and therefore in every edition built
