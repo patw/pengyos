@@ -1,0 +1,25 @@
+config BR2_PACKAGE_PENGY_SOLITAIRE
+	bool "pengy-solitaire"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Frostbite Solitaire: Klondike, draw three, unlimited redeals — the
+	  game every OS used to ship and PengyOS did not. The PengyOS pack-in
+	  game in the cards slot (next to blocks, breakout, floe, icefield,
+	  invaders, lander, merge, pong and rogue). Rust, std only, zero
+	  dependencies: the recipe is an offline cargo build and the game needs
+	  no libraries at run time. Terminal=true, so it runs in any terminal,
+	  over ssh, and on Core.
+
+	  h/j/k/l (or the arrows) move the cursor, space takes a run and drops
+	  it, d draws three (an empty stock recycles the waste), f collects the
+	  cards that are safe to send up, u undoes (50 deep), n deals a new
+	  game, q quits. Standard Klondike scoring floored at zero, a move
+	  counter, an elapsed timer, and a best score kept in
+	  $XDG_DATA_HOME/pengyos/games/pengy-solitaire/, under the player's home.
+
+	  --mono draws with plain ASCII when the locale cannot render the box
+	  drawing and the suit characters; --headless proves it works where
+	  there is no pty.
+
+	  https://github.com/pengyos/tree/main/tools/pengy-solitaire
