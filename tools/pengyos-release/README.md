@@ -33,12 +33,35 @@ pengyos-release index --feed DIR [--json]
 # Verify a feed entry (or whole feed) is well-formed, hashed, and signed
 pengyos-release verify --feed DIR [--edition E] [--version V] [--json]
 
-# Prune old versions per policy (newest N per edition; dry-run by default)
+# Prune old versions of the legacy feed (newest N per edition; dry-run by default).
+# The public site uses `prune` instead (below).
 pengyos-release retain --feed DIR --keep N          # dry run: report what would be pruned
 pengyos-release retain --feed DIR --keep N --apply  # actually prune + re-sign the index
 ```
 
-## Feed layout
+## The public site (`update/` + `download/`)
+
+What pengyos.catbee.ca serves, written by `scripts/release.sh --publish`:
+
+```bash
+pengyos-release update-publish --build OUT --site SITE --key KEY [--channel testing]
+pengyos-release update-promote --site SITE --image pengyos-desktop --release 26.10.29 --channel stable
+pengyos-release download-publish --build OUT [--build OUT ...] --site SITE --key KEY
+pengyos-release update-feed --site SITE      # regenerate update/feed.xml + index.html
+
+# Delete superseded testing releases (dry run by default)
+pengyos-release prune --site SITE
+pengyos-release prune --site SITE --apply [--keep-stable N]
+```
+
+`prune` keeps, per edition, every stable release (or the newest `N`) and the
+newest release of any channel, and deletes the rest of `update/<image>/`.
+A `download/<version>/` goes once none of its editions is kept and it isn't the
+newest. The updater never downgrades, so a machine on a pruned testing build
+just waits for the next one. Pruning is local: push with `rsync --delete` or
+the server keeps its copies.
+
+## Feed layout (legacy `publish` / `index` / `retain`)
 
 ```
 <feed>/index.json                     # signed table of contents + channel pointers

@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-10-17
+
+### Added
+
+- `prune --site DIR [--apply] [--keep-stable N]` deletes superseded testing
+  releases from the public site. Per edition it keeps every stable release (or
+  the newest N) and the newest release of any channel; every other one is a
+  testing build a newer one replaced. A `download/<version>/` goes once none of
+  its editions is kept (Core follows any edition of its version) and it isn't
+  the newest; a half-kept one stays whole, so prune never needs the signing
+  key. Dry run by default; `--apply` deletes and rewrites `update/feed.xml`,
+  `update/index.html` and `download/index.html`. The old `retain` only knew the
+  legacy `<feed>/pengyos/` layout, so the site had never been pruned (49 GB
+  by 26.10.31).
+
 ## [0.10.0] — 2026-10-07
 
 ### Changed

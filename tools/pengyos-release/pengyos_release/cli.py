@@ -1,7 +1,7 @@
 """Command-line interface for ``pengyos-release``.
 
 Subcommands: ``publish``, ``index``, ``verify``, ``retain``, and the public
-update feed's ``update-publish``, ``update-promote``, ``update-feed``. The argument
+update feed's ``update-publish``, ``update-promote``, ``update-feed``, ``prune``. The argument
 parsing, dispatch, error handling, and ``--json`` output are real and tested
 here. Each handler returns a result dict (or raises); the concrete release
 logic lives in :mod:`pengyos_release.publish` etc., added one task at a time.
@@ -100,6 +100,13 @@ def _add_update(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--site", required=True, help="web root that holds download/")
     p.add_argument("--key", required=True, help="pengyos-sign private key (pengyos-key-v1)")
     p.add_argument("--force", action="store_true", help="recompress images that already exist")
+    p.add_argument("--json", action="store_true")
+
+    p = subparsers.add_parser("prune", help="delete superseded testing releases from update/ + download/ (dry run by default)")
+    p.add_argument("--site", required=True, help="web root that holds update/ and download/")
+    p.add_argument("--keep-stable", type=int, help="keep only the newest N stable releases per edition (default: all)")
+    p.add_argument("--apply", action="store_true", help="actually delete, then regenerate the feed and both index pages")
+    p.add_argument("--base-url", default="https://pengyos.catbee.ca/update/")
     p.add_argument("--json", action="store_true")
 
     p = subparsers.add_parser("update-feed", help="regenerate update/feed.xml + index.html")
@@ -227,6 +234,28 @@ def _download_publish(args: argparse.Namespace) -> dict[str, Any]:
             print(f"{e['file']}  {e['size'] >> 20} MiB")
         print(f"-> {dest}")
     return listing
+
+
+@register("prune")
+def _prune(args: argparse.Namespace) -> dict[str, Any]:
+    from .prune import apply, plan
+
+    site = Path(args.site)
+    p = plan(site, keep_stable=args.keep_stable)
+    paths = p.paths(site)
+    if args.apply:
+        apply(site, p, args.base_url)
+    if not args.json:
+        verb = "removed" if args.apply else "would remove"
+        for path in paths:
+            print(f"{verb} {path}")
+        if not paths:
+            print("nothing to prune")
+        elif not args.apply:
+            print("(dry run: pass --apply to delete)")
+    return {"dry_run": not args.apply, "kept": p.kept, "pruned": p.pruned,
+            "downloads_kept": p.downloads_kept, "downloads_pruned": p.downloads_pruned,
+            "removed": [str(x) for x in paths] if args.apply else []}
 
 
 @register("update-feed")

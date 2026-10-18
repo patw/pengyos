@@ -17,6 +17,13 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed (26.10.33) — `su` logged two PAM errors every time
+- Buildroot's util-linux `su.pam` lists `pam_lastlog.so`, but our Linux-PAM is built
+  without it, so every `su` logged "PAM unable to dlopen(/usr/lib/security/pam_lastlog.so)"
+  and "PAM adding faulty module" (seen on behoweather, 26.10.31). The line is `optional`,
+  so `su` worked. The core post-build now removes it from `/etc/pam.d/su` and `su-l` in
+  every edition; `su` does not need lastlog, and Debian's and Fedora's have none.
+
 ### Changed (26.10.32) — the kernel gets what a distro kernel has, and the build checks it
 - Our kernel is `x86_64_defconfig` plus three fragments, so anything nobody added
   was off, silently. A diff against Ubuntu 26.04's config found 7,514 options it

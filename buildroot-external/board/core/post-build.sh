@@ -42,6 +42,17 @@ sh "$(dirname "$0")/../common/os-release.sh" "${TARGET_DIR}" Core core
 # getty where there is one (see core.config).
 rm -f "${TARGET_DIR}/usr/lib/systemd/system/serial-getty@.service.d/buildroot-console.conf"
 
+# Buildroot's util-linux su.pam always lists pam_lastlog.so, but Linux-PAM is
+# built without it (BR2_PACKAGE_LINUX_PAM_LASTLOG is off), so every su logged
+# "PAM unable to dlopen(/usr/lib/security/pam_lastlog.so)" plus "adding faulty
+# module" (seen on behoweather, 26.10.31). su does not need lastlog; Debian's and
+# Fedora's su stacks have none.
+for f in su su-l; do
+    if [ -f "${TARGET_DIR}/etc/pam.d/${f}" ]; then
+        sed -i '/pam_lastlog\.so/d' "${TARGET_DIR}/etc/pam.d/${f}"
+    fi
+done
+
 # Keep a copy of the build identity for provenance/debugging.
 if [ -f "${BINARIES_DIR}/buildroot.config" ]; then
     mkdir -p "${TARGET_DIR}/etc/pengyos"
