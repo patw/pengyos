@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ice Rogue
+GenericName=Rogue
+Comment=Five floors down, one penguin, permanent death
+Exec=pengy-rogue
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;
+Keywords=game;rogue;dungeon;crawl;ice;penguin;thaw;roguelike;
+StartupWMClass=pengy-rogue

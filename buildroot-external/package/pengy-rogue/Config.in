@@ -1,0 +1,27 @@
+config BR2_PACKAGE_PENGY_ROGUE
+	bool "pengy-rogue"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Ice Rogue: Rogue (1980), the original dungeon crawl — five floors
+	  down, one penguin, permanent death, and at the bottom The Thaw. The
+	  PengyOS pack-in game in the rogue slot (next to blocks, breakout,
+	  floe, icefield, invaders, lander, merge, pong, solitaire). Rust, std
+	  only, zero dependencies: the recipe is an offline cargo build and the
+	  game needs no libraries at run time. Terminal=true, so it runs in any
+	  terminal, over ssh, and on Core.
+
+	  h/j/k/l (or the arrows) and y/u/b/n for the diagonals move, . waits,
+	  g picks up, i shows the pack, > descends, q quits. Walk into a
+	  monster to hit it. 12 hp, attack 1d4+1, defence 0; rats, ice crabs,
+	  wolves, and a 20 hp boss on floor 5. Fish heal 3, a scroll maps the
+	  floor, a parka is +1 defence, gold scores. Field of view radius 7
+	  with line of sight; explored tiles stay drawn dim. Score is
+	  floor*100 + gold + kills, and the best score is kept in
+	  $XDG_DATA_HOME/pengyos/games/pengy-rogue/, under the player's home.
+
+	  --mono draws with plain ASCII when the locale cannot render the box
+	  drawing; --headless and --replay prove it works where there is no
+	  pty.
+
+	  https://github.com/pengyos/tree/main/tools/pengy-rogue
