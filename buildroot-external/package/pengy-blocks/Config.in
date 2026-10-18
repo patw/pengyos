@@ -1,0 +1,23 @@
+config BR2_PACKAGE_PENGY_BLOCKS
+	bool "pengy-blocks"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Glacier Blocks: ten columns, twenty rows, all seven tetrominoes,
+	  no mercy. The PengyOS pack-in game in the falling-blocks slot
+	  (next to floe, merge, icefield, breakout, invaders, lander, pong,
+	  solitaire and rogue). Rust, std only, zero dependencies: the recipe
+	  is an offline cargo build and the game needs no libraries at run
+	  time. Terminal=true, so it runs in any terminal, over ssh, and on
+	  Core.
+
+	  h/j/k/l (or the arrows) move and rotate, x/z rotate, space hard
+	  drops, c holds, p pauses, r restarts, q quits. 7-bag, gravity from
+	  800 ms down to 80 ms by level, wall kicks, a 300 ms lock delay, a
+	  next-3 preview, and a best score kept in
+	  $XDG_DATA_HOME/pengyos/games/pengy-blocks/, under the player's home.
+
+	  --mono draws with plain ASCII when the locale cannot render the box
+	  drawing characters; --headless proves it works where there is no pty.
+
+	  https://github.com/pengyos/tree/main/tools/pengy-blocks

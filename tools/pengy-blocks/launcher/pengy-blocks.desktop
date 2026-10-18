@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Glacier Blocks
+GenericName=Tetris
+Comment=Ten columns, twenty rows, seven pieces, no mercy
+Exec=pengy-blocks
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;
+Keywords=game;tetris;blocks;falling;glacier;penguin;
+StartupWMClass=pengy-blocks

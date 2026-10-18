@@ -1,0 +1,46 @@
+# pengy-blocks — Glacier Blocks, a PengyOS pack-in game.
+#
+# HARD CONSTRAINT: zero external dependencies. `[dependencies]` stays empty,
+# on purpose, forever. That is what makes the Buildroot recipe
+# (buildroot-external/package/pengy-blocks) an offline, reproducible
+# `cargo build --release`: no crate tarballs to vendor, no digests to pin,
+# no C to cross-compile. std only — see spec.md "Constraints".
+[package]
+name = "pengy-blocks"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+license = "MIT"
+description = "Glacier Blocks: 10x20 Tetris with 7-bag, SRS-style kicks and lock delay, for the PengyOS terminal (Rust, std only)."
+authors = ["Pat Wendorf <dungeons@gmail.com>"]
+repository = "https://github.com/patw/pengyos"
+homepage = "https://github.com/pengyos/tree/main/tools/pengy-blocks"
+keywords = ["game", "tui", "tetris", "blocks", "pengyos"]
+categories = ["games"]
+publish = false
+
+# The game binary. `src/lib.rs` holds every rule and the renderer;
+# `src/main.rs` is the terminal front-end. Tests live in `tests/` and drive
+# the library directly.
+[[bin]]
+name = "pengy-blocks"
+path = "src/main.rs"
+
+[lib]
+name = "pengy_blocks"
+path = "src/lib.rs"
+
+# ZERO dependencies. Do not add one.
+[dependencies]
+
+# A game ships in the image's /usr/bin: keep it small.
+#
+# `panic = "abort"` is deliberately NOT set (pengy-panel sets it): the TUI
+# restores the terminal from a Drop guard, and destructors do not run on an
+# abort. Unwinding is the feature that makes "no flicker, no wrecked terminal"
+# true after a panic.
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
