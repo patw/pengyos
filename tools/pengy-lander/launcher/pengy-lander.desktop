@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ice Lander
+GenericName=Lunar Lander
+Comment=Land the probe on a pad: not fast, not tilted, not out of fuel
+Exec=pengy-lander
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;
+Keywords=game;arcade;lander;lunar;moon;rocket;fuel;
+StartupWMClass=pengy-lander

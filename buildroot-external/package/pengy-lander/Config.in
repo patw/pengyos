@@ -1,0 +1,27 @@
+config BR2_PACKAGE_PENGY_LANDER
+	bool "pengy-lander"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Ice Lander: the 1979 Lunar Lander cart on the PengyOS terminal. A
+	  60-metre ridge of ice broken by two to four flat landing pads worth
+	  1x, 2x and 5x, a probe with 100 units of fuel, moon gravity (1.62
+	  m/s^2) or asteroid gravity (5.0 m/s^2), and three numbers that all
+	  have to be small when the feet touch: sideways speed under 1.0 m/s,
+	  descent under 2.0 m/s, tilt under 5 degrees. Land, then n flies the
+	  next wave on fresh terrain. Crash, and the run is over. The PengyOS
+	  pack-in game in the lander slot (next to floe, merge, pong, icefield,
+	  breakout, invaders, blocks, solitaire and rogue). Rust, std only, zero
+	  dependencies: the recipe is an offline cargo build and the game needs
+	  no libraries at run time. Terminal=true, so it runs in any terminal,
+	  over ssh, and on Core.
+
+	  space thrusts, a/d rotate, n is new terrain, r restarts, q quits
+	  (Ctrl-C quits too). The high score is kept in
+	  $XDG_DATA_HOME/pengyos/games/pengy-lander/, under the player's home.
+
+	  --headless and --replay FILE prove the rules work with no pty, which
+	  is how the repo gate and pengyos-qemu-verify run it. --mono draws with
+	  plain ASCII when the locale cannot render the box drawing characters.
+
+	  https://github.com/pengyos/tree/main/tools/pengy-lander
