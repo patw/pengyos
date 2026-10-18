@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed (26.10.33) — no split-lock stall on the Desktops
+- On Intel CPUs with split-lock detection the kernel stalls a thread ~10 ms on every
+  split-lock trap. Steam's client traps (behoweather's N100 logged `steam`,
+  `IPC:CSteamEngin` and `gldriverquery`), and some games under Proton trap often
+  enough to stutter. Desktop and Desktop NVIDIA now set `kernel.split_lock_mitigate = 0`
+  (`/usr/lib/sysctl.d/60-pengyos-split-lock.conf`): the log warning stays, the stall
+  goes. Bazzite, CachyOS and Nobara ship the same value. The Servers keep the kernel
+  default, where the stall stops one process from slowing every core. Nobara also
+  patches its kernel to rate-limit bus locks to 100/s on CPUs with hardware bus-lock
+  detection, after Steam's 32-bit client hung machines with ~1,000/s; not taken here
+  (untested on our hardware, and Nobara calls it temporary).
+
 ### Fixed (26.10.33) — `su` logged two PAM errors every time
 - Buildroot's util-linux `su.pam` lists `pam_lastlog.so`, but our Linux-PAM is built
   without it, so every `su` logged "PAM unable to dlopen(/usr/lib/security/pam_lastlog.so)"
