@@ -1115,3 +1115,44 @@ def test_a_dirty_tree_is_refused_and_left_exactly_as_it_was(tmp_path):
     assert edited.read_text() == "someone's patch in progress\n"
     assert _branch(repo) == "main"
     assert not fake.asked("dirclean")
+
+
+def test_the_divergence_is_written_down_in_the_same_commit(tmp_path):
+    """The ledger is the thing that gives a carried patch set an expiry. Until 2026-10-18
+    writing the entry was a human step after an unattended one, so three patch sets sat in
+    the tree for eight days with no entry and nothing said so. The lane that lands the
+    patches writes the entry, in the commit that describes them."""
+    result, fake, repo, site, state, cfg = _run(tmp_path, [_two_patch_action()])
+    rel = "divergence.toml"
+    text = (repo / rel).read_text()
+    import tomllib
+    (entry,) = tomllib.loads(text)["divergence"]
+    assert entry["patches_dir"] == "buildroot-external/patches/libxml2/2.15.3", entry
+    assert entry["component"] == "libxml2" and entry["kind"] == "patch-set"
+    assert entry["closes"] == ["CVE-2026-86137", "CVE-2026-86144"], entry
+    for field in ("id", "carried_since", "expiry", "observe_source", "upstream_status"):
+        assert entry.get(field), (field, entry)
+    assert any(s["step"] == "divergence" and s["ok"] for s in result["journal"]), \
+        result["journal"]
+
+    patch = "buildroot-external/patches/libxml2/2.15.3/0001-a.patch"
+    with_patch = [g for g in _commit_files(repo) if patch in g[1]]
+    assert with_patch, [g[0] for g in _commit_files(repo)]
+    assert all(rel in g[1] for g in with_patch), (
+        f"an entry written in some later commit is not an entry for this change: "
+        f"{[g[1] for g in with_patch]}")
+    assert _dirty(repo) == ""
+
+
+def test_a_failed_batch_takes_the_ledger_entry_back(tmp_path):
+    """A bail restores main. An entry left behind on main for a patch set that is not
+    there fails the next gate - and reads as a divergence still being carried."""
+    import subprocess
+    result, fake, repo, site, state, cfg = _run(tmp_path, [_two_patch_action()],
+                                                fail=["release.sh"])
+    assert not result["published"]
+    led = repo / "divergence.toml"
+    # main never had this file in the fixture, so the bail removes it; when it did exist,
+    # the bail restores it from main. Same statement either way: no entry, no claim.
+    assert not led.exists() or "[[divergence]]" not in led.read_text()
+    assert _branch(repo) == "main" and _dirty(repo) == ""

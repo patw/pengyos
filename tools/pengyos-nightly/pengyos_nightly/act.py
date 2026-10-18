@@ -818,6 +818,11 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
             if decl:
                 print(f"    and, for the patches that survive the pre-flight, declares them "
                       f"to pkg-stats: {decl.note}")
+            led = E.ledger_edit(repo, a["component"],
+                                [e for e in a["edits"] if e["path"].endswith(".patch")],
+                                a["editions"], "(next release)", today.isoformat())
+            if led:
+                print(f"    and writes the divergence down: {led.note}")
         return result
     if not cfg["act_enabled"]:
         return bail("kill switch", "act_enabled = false in nightly.toml")
@@ -951,6 +956,23 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
                 declared.append(decl)
                 touched[a["id"]].append(decl.path)
                 step("declare", True, decl.note)
+            # The ledger's rule is that every divergence is written down before it lands,
+            # and that an entry with no expiry is not an approved divergence. The operator
+            # is the slowest part of this project, so the lane writes the entry itself,
+            # from the patches that survived - same terms as the declaration above. An
+            # entry a human wrote for the same patch set is updated, not replaced: `closes`
+            # is the part the lane owns, because the lane is what changes what the tree
+            # carries.
+            led = E.ledger_edit(repo, a["component"], carried, a["editions"], version,
+                                today.isoformat())
+            if led:
+                try:
+                    E.apply_edits(repo, [led])
+                except (OSError, ValueError) as exc:
+                    return bail("divergence-ledger", f"{a['component']}: {exc}")
+                declared.append(led)
+                touched[a["id"]].append(led.path)
+                step("divergence", True, led.note)
             live.append(a)
             continue        # Nothing this package can carry: the change is dropped, its edits are taken
         # back out of the tree, and the failure is recorded by name.

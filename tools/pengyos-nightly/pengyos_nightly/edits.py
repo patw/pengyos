@@ -853,6 +853,184 @@ def cve_declaration_edit(repo: Path, component: str, carried: list[dict]) -> Edi
                 new=new, note=note)
 
 
+# --- writing the divergence down ---------------------------------------------
+
+LEDGER = "divergence.toml"
+
+_LEDGER_NOTE = """# Written by pengyos-nightly when it lands a patch set. Same principle as
+# cve-declarations.mk: the tree may claim only what it carries, and a divergence with no
+# entry has no expiry. scripts/pengyos_gate.py:check_ledger_covers_patch_sets fails the
+# repo when a patch set is missing from here, so an unattended lane cannot skip it.
+"""
+
+_LEDGER_HEADER = """# PengyOS divergence ledger
+#
+# See the comment block at the top of the tracked file for the rule. This file was created
+# by pengyos-nightly, which owns the entries it writes here.
+
+schema = 1
+"""
+
+
+def _ledger_blocks(text: str) -> list[tuple[int, int, str]]:
+    """`[(start, end, block)]` for every `[[divergence]]` table, in file order."""
+    starts = [m.start() for m in re.finditer(r"^\[\[divergence\]\]", text, re.M)]
+    out = []
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else len(text)
+        out.append((start, end, text[start:end]))
+    return out
+
+
+def _render_closes(rows: list[tuple[str, str]]) -> str:
+    """The `closes` array, one CVE per line with the patch file that carries it.
+
+    The comment is the point: it is the only place in the ledger that says *which* patch
+    closes *which* CVE without cross-reading cve-declarations.mk.
+    """
+    if not rows:
+        return "closes = []\n"
+    return "\n".join(["closes = ["]
+                     + [f'  "{cve}",  # {name}' for cve, name in rows]
+                     + ["]", ""])
+
+
+def _closes_span(block: str) -> tuple[int, int] | None:
+    """Offsets of the `closes = ...` value inside one block, single- or multi-line."""
+    m = re.search(r"^closes\s*=\s*\[", block, re.M)
+    if not m:
+        return None
+    i = m.end()
+    single = re.match(r"[^\n]*\]\s*\n", block[i:])
+    if single:
+        return (m.start(), i + single.end())
+    close = re.search(r"^\]\s*\n", block[i:], re.M)
+    if not close:
+        return None
+    return (m.start(), i + close.end())
+
+
+def _patches_on_disk(repo: Path, patches_dir: str) -> list[str]:
+    d = repo / patches_dir
+    return sorted(p.name for p in d.glob("*.patch")) if d.is_dir() else []
+
+
+def _entry_patches_dir(block: str) -> str:
+    m = re.search(r'^patches_dir\s*=\s*"([^"]*)"', block, re.M)
+    return m.group(1) if m else ""
+
+
+def _entry_component(block: str) -> str:
+    m = re.search(r'^component\s*=\s*"([^"]*)"', block, re.M)
+    return m.group(1) if m else ""
+
+
+def ledger_edit(repo: Path, component: str, carried: list[dict],
+                editions: list[str], release: str, today: str) -> Edit | None:
+    """Write the patch set into `divergence.toml`, or take it back out.
+
+    The ledger's own rule: every divergence gets an entry *before* it lands, and an entry
+    with no expiry is not an approved divergence. Until 2026-10-18 that rule was the
+    operator's to keep, and the operator is the slowest part of the project - three patch
+    sets (ffmpeg, gst1-plugins-good, gst1-plugins-bad) sat in the tree with no entry for
+    eight days because writing them down was a human step after an unattended one.
+
+    So the lane writes it, on the same terms as the pkg-stats declaration: from what
+    survived pre-flight, whole, and regenerated rather than appended. Closes map to the
+    patch file that carries them. Everything else an entry can say (costs, natural fix
+    versions, what was learned) stays a human's to add - this writes the fields the gate
+    requires and leaves the prose alone.
+
+    An entry a human wrote is *updated*, not replaced: the closes array is the part the
+    lane owns, because the lane is what changes which patches the tree carries.
+    """
+    path = repo / LEDGER
+    original = path.read_text() if path.is_file() else _LEDGER_HEADER
+    text = original
+    blocks = _ledger_blocks(text)
+    notes: list[str] = []
+    changed = False
+
+    d = ""
+    rows: list[tuple[str, str]] = []
+    if carried:
+        d = Path(sorted(c["path"] for c in carried)[0]).parent.as_posix()
+        seen: set[str] = set()
+        for c in sorted(carried, key=lambda x: x["path"]):
+            name = Path(c["path"]).name
+            for cve in c.get("cves") or []:
+                if cve and cve not in seen:
+                    seen.add(cve)
+                    rows.append((cve, name))
+
+    hit = next((b for b in blocks if _entry_patches_dir(b[2]) == d), None) if d else None
+    if hit:
+        start, end, block = hit
+        span = _closes_span(block)
+        rendered = _render_closes(rows)
+        if span is not None:
+            current = block[span[0]:span[1]]
+            # Compare what the array *says*, not how it is written. A night that carries the
+            # same set must not reformat an entry a human annotated - the patch filename a
+            # generated line carries is poorer than the prose comment already there.
+            if re.findall(r'"(CVE-[^"]+)"', current) != [cve for cve, _ in rows]:
+                text = text[:start] + block[:span[0]] + rendered + block[span[1]:] + text[end:]
+                changed = True
+                notes.append(f"{len(rows)} CVE(s) closes")
+        else:
+            # An entry the gate would already reject (no closes field at all). Put one in
+            # after patches_dir rather than rewriting a block someone may be mid-editing.
+            m = re.search(r'^patches_dir\s*=\s*"[^"]*"\n', block, re.M)
+            if m:
+                new_block = block[:m.end()] + rendered + block[m.end():]
+                text = text[:start] + new_block + text[end:]
+                changed = True
+                notes.append(f"{len(rows)} CVE(s) closes")
+
+    if not hit:
+        if carried:
+            version = Path(d).name
+            entry = ("\n[[divergence]]\n"
+                     f'id        = "{component}-{version}-carried"\n'
+                     'kind      = "patch-set"\n'
+                     f'component = "{component}"\n'
+                     f'pinned_version = "{version}"\n'
+                     f'editions  = [{", ".join(chr(34) + e + chr(34) for e in editions)}]\n'
+                     f'carried_since = "{today}"\n'
+                     f'carried_in    = ["{release}"]\n'
+                     f'patches_dir   = "{d}"\n'
+                     + _render_closes(rows)
+                     + f'expiry = "Buildroot pins {component} outside the NVD range of the '
+                       f'CVEs this set closes; pkg-stats then reports the ignores as stale '
+                       f'and the patch set is deleted"\n'
+                     'observe_source = "pkg-stats"\n'
+                     'upstream_status = "merged"\n')
+            text = text.rstrip("\n") + "\n\n" + _LEDGER_NOTE + entry
+            changed = True
+            notes.append(f"write {component} {version} down: {len(rows)} CVE(s) from "
+                         f"{len(carried)} patch(es)")
+
+    # An entry whose patch set is no longer in the tree is worse than no entry: the gate
+    # fails on it, and it reads as a divergence we are still carrying.
+    stale = [b for b in _ledger_blocks(text)
+             if _entry_component(b[2]) == component
+             and _entry_patches_dir(b[2])
+             and _entry_patches_dir(b[2]) != d
+             and not _patches_on_disk(repo, _entry_patches_dir(b[2]))]
+    for start, end, block in reversed(stale):
+        text = text[:start] + text[end:]
+        changed = True
+        notes.append(f"retire {component}: {_entry_patches_dir(block)} carries no patch")
+
+    if not changed:
+        return None
+    text = re.sub(r"\n{3,}(?=\[\[divergence\]\])", "\n\n", text)
+    text = text.rstrip("\n") + "\n"
+    kind = "replace" if path.is_file() else "create"
+    return Edit(path=LEDGER, kind=kind, old=original, new=text,
+                note="; ".join(notes))
+
+
 def patch_slug(patch_text: str, sha: str) -> str:
     """A Buildroot-style patch name, from the commit's own Subject line.
 
