@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Icefloe 2048
+GenericName=Sliding tile puzzle
+Comment=Slide the ice floes, fuse equal floes, reach 2048
+Exec=pengy-merge
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;
+Keywords=game;puzzle;2048;merge;ice;floe;sliding;
+StartupWMClass=pengy-merge

@@ -1,0 +1,17 @@
+config BR2_PACKAGE_PENGY_MERGE
+	bool "pengy-merge"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Icefloe 2048: slide the ice floes, equal floes fuse into one bigger
+	  floe, reach 2048. A PengyOS pack-in game (the 2048 slot, next to
+	  floe, icefield, pong, breakout, invaders, lander, blocks, solitaire
+	  and rogue). Rust, std only, zero dependencies: the recipe is an
+	  offline cargo build and the game needs no libraries at run time.
+	  Terminal=true, so it runs in any terminal, over ssh, and on Core.
+
+	  hjkl or the arrow keys slide, u undoes one slide, r restarts, c
+	  keeps playing after a win, q quits. The best score is kept in
+	  $XDG_DATA_HOME/pengyos/games/pengy-merge/, under the player's home.
+
+	  https://github.com/pengyos/tree/main/tools/pengy-merge
