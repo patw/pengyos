@@ -15,6 +15,15 @@
 # Required for every entry: id, kind, component, carried_since, expiry,
 # observe_source, upstream_status.
 #
+# Both directions of that rule are enforced, not documented:
+#   - an entry must be declared to pkg-stats if it carries patches
+#     (scripts/pengyos_gate.py:check_patch_declarations);
+#   - every patch set in the tree must have an entry here
+#     (scripts/pengyos_gate.py:check_ledger_covers_patch_sets), because the entry is
+#     the only thing that carries an expiry. Added 2026-10-18: the tree carried five
+#     patch sets and only two were ledgered, so three divergences had no exit
+#     condition and nothing said so.
+#
 # `expiry` is the specific upstream event that ends the divergence. An entry with
 # no expiry condition is not an approved divergence.
 #
@@ -103,5 +112,93 @@ closes = []
 upstream_fixes = ["6bfe66a390cb"]
 natural_fix = "1.90.1"
 expiry = "Buildroot pins upower >= 1.90.1 (or we author a newer recipe); the patch set is deleted then"
+observe_source = "pkg-stats"
+upstream_status = "merged"
+
+[[divergence]]
+id        = "gst1-plugins-bad-1.24.13-cve-2026-2923"
+kind      = "patch-set"
+component = "gst1-plugins-bad"
+pinned_version = "1.24.13"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-08"
+carried_in    = ["26.10.14"]
+patches_dir   = "buildroot-external/patches/gst1-plugins-bad/1.24.13"
+# One bounds-check fix (dvbsuboverlay, CVE-2026-2923). NVD attributes the fix to
+# gstreamer1 - the monorepo - and pengyos-nightly attributes it to the package it lands
+# in: gst-plugins-bad/, which we ship as gst1-plugins-bad at the same 1.24.13 lockstep.
+# Same pin as gst1-plugins-good below; one GStreamer bump retires both.
+closes = ["CVE-2026-2923"]
+upstream_fixes = ["3b8253f447bc"]
+natural_fix = "1.28.1"
+# 1.28.1 is where NVD's affected range stops, so a Buildroot line pinning >= 1.28.1
+# closes this with no divergence at all.
+expiry = "Buildroot pins gst-plugins-bad at or above 1.28.1 (where NVD's range stops); the patch set is deleted then"
+observe_source = "pkg-stats"
+upstream_status = "merged"
+
+
+[[divergence]]
+id        = "ffmpeg-6.1.5-cve-2026"
+kind      = "patch-set"
+component = "ffmpeg"
+pinned_version = "6.1.5"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-10"
+carried_in    = ["26.10.21"]
+patches_dir   = "buildroot-external/patches/ffmpeg/6.1.5"
+# Twelve upstream fix backports onto Buildroot's pinned 6.1.5. Each was authored against
+# a newer series, so pengyos-nightly's per-patch pre-flight is what admits them: a fix
+# that does not apply is dropped by name and takes its CVE with it, and does not block
+# the other eleven. Patch numbers are not contiguous (0005, 0008, 0014 are absent): those
+# fixes were already in the pinned tarball or did not apply, and the tree carries only
+# what survived.
+closes = [
+  "CVE-2026-70628",  # 0001 dvbsub parser: signed overflow in the capacity computation
+  "CVE-2026-64834",  # 0002 rtpdec_asf: reject undersized ASF objects
+  "CVE-2026-64835",  # 0003 adx: sync channel state on new extradata
+  "CVE-2026-70631",  # 0004 tiff: reject short inflate output
+  "CVE-2026-64833",  # 0006 spdifenc: bound the DTS core size against the packet
+  "CVE-2026-70630",  # 0007 screenpresso: reject short deflate output
+  "CVE-2026-65706",  # 0009 vf_swaprect: size the temp row buffer for the widest plane
+  "CVE-2026-66039",  # 0010 mace: reject sample counts that overflow int
+  "CVE-2026-64830",  # 0011 vobsub: reuse subtitle streams, bound the stream count
+  "CVE-2026-65704",  # 0012 ty: don't let the Series2 AC3 trim underflow
+  "CVE-2026-66038",  # 0013 lcldec: zero the not-decoded tail
+  "CVE-2026-65703",  # 0015 tdsc: unref the reference frame before reallocating
+]
+upstream_fixes = [
+  "02fc47e13f90", "11d5f475be95", "1836ef968469", "2f234ea34c81",
+  "6f80e2765492", "705890061467", "a7e38b617b32", "aafb5c655edc",
+  "dbd495f066a8", "de771bd52774", "e7cbfd1c507b", "fd3ee52fab34",
+]
+# No single natural fix version is recorded: these twelve were authored across more than
+# one release series, so the expiry is anchored to the signal rather than to a guess.
+# pkg-stats flags an ignore as stale once the pinned version leaves the CVE's NVD range -
+# that flag is the expiry firing, and it is checked by machine on every scan.
+expiry = "Buildroot pins an ffmpeg version outside the NVD range of all twelve CVEs; pkg-stats then reports the ignores as stale and the patch set is deleted"
+observe_source = "pkg-stats"
+upstream_status = "merged"
+
+
+[[divergence]]
+id        = "gst1-plugins-good-1.24.13-cve-2026-73433"
+kind      = "patch-set"
+component = "gst1-plugins-good"
+pinned_version = "1.24.13"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-10"
+carried_in    = ["26.10.21"]
+patches_dir   = "buildroot-external/patches/gst1-plugins-good/1.24.13"
+# Six avidemux fixes for two CVEs: the pair is closed by the set together, which is why
+# every patch in cve-declarations.mk repeats both - the declaration is per patch file, and
+# the last one applied is what closes them.
+closes = ["CVE-2026-73433", "CVE-2026-73434"]
+upstream_fixes = [
+  "bb8fb5a9bf15", "ed6dcb332204", "c8383e484841",
+  "0bcc6564c7de", "30966f12aff2", "44383c6de722",
+]
+# Same GStreamer lockstep as gst1-plugins-bad above: one version bump retires both sets.
+expiry = "Buildroot pins gst-plugins-good outside the NVD range of CVE-2026-73433/73434; pkg-stats then reports the ignores as stale and the patch set is deleted"
 observe_source = "pkg-stats"
 upstream_status = "merged"

@@ -22,7 +22,11 @@ id = "libxml2-2.15.3-cve-2026"
 kind = "patch-set"
 component = "libxml2"
 pinned_version = "2.15.3"
+carried_since = "2026-10-05"
 patches_dir = "buildroot-external/patches/libxml2/2.15.3"
+expiry = "Buildroot pins libxml2 >= 2.15.4; the patch set is deleted then"
+observe_source = "pkg-stats"
+upstream_status = "not-offered"
 closes = ["CVE-2026-86137", "CVE-2026-86138"]
 '''
 

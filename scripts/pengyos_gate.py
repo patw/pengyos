@@ -260,6 +260,78 @@ def check_patch_declarations(repo: Path) -> list[Check]:
     return out
 
 
+LEDGER_KINDS = ("patch-set", "fork", "host-built")
+LEDGER_REQUIRED = ("id", "kind", "component", "carried_since", "expiry",
+                   "observe_source", "upstream_status")
+
+
+def check_ledger_covers_patch_sets(repo: Path) -> list[Check]:
+    """Every patch set in the tree must be a ledger entry, and every entry whole.
+
+    `check_patch_declarations` reads the ledger and asks whether the tree agrees. Nothing
+    asked that question backwards, so a patch set could appear in the tree with no entry
+    and no consequence: found 2026-10-18, five patch sets on disk and two entries in the
+    ledger (ffmpeg, gst1-plugins-bad and gst1-plugins-good were landed by pengyos-nightly
+    over three nights and never written down).
+
+    The entry is not paperwork. It is the only place a divergence carries an `expiry` -
+    the specific upstream event that ends it - and the only place it names an
+    `observe_source`. A patch set with neither rots silently: the PengyR case, where
+    images shipped 1.10.0 while upstream was at 1.11.1 and nothing noticed.
+
+    Both directions are needed for the rule in divergence.toml's header ("every
+    divergence gets an entry here BEFORE it lands") to mean anything. An entry missing a
+    required field fails too: an entry with no expiry is not an approved divergence,
+    whatever its presence suggests.
+    """
+    try:
+        ledger = tomllib.loads((repo / "divergence.toml").read_text())
+    except (OSError, ValueError) as exc:
+        return [Check("patch-set-ledger", False, f"divergence.toml unreadable: {exc}")]
+    entries = ledger.get("divergence", [])
+
+    claimed: dict[str, set[str]] = {}
+    for e in entries:
+        pdir = str(e.get("patches_dir") or "").strip().strip("/")
+        if pdir:
+            claimed.setdefault(pdir, set()).update(e.get("closes") or [])
+
+    root = repo / "buildroot-external" / "patches"
+    sets: dict[str, list[str]] = {}
+    for p in sorted(root.rglob("*.patch")) if root.is_dir() else []:
+        sets.setdefault(p.parent.relative_to(repo).as_posix(), []).append(p.name)
+
+    out: list[Check] = []
+    for d, patches in sorted(sets.items()):
+        if d in claimed:
+            out.append(Check(f"patch-set-ledgered:{d}", True,
+                             f"{len(patches)} patch(es), {len(claimed[d])} CVE(s) in the ledger"))
+            continue
+        out.append(Check(
+            f"patch-set-ledgered:{d}", False,
+            f"{len(patches)} patch(es) carried, no divergence.toml entry: nothing states "
+            f"when this divergence ends or who observes it. Add an entry with id, "
+            f"kind = \"patch-set\", component, carried_since, expiry, observe_source, "
+            f"upstream_status and patches_dir = \"{d}\""))
+    if not sets:
+        out.append(Check("patch-set-ledgered", True, "no patch set in the tree"))
+
+    for i, e in enumerate(entries):
+        name = e.get("id") or f"#{i}"
+        missing = [k for k in LEDGER_REQUIRED if not str(e.get(k) or "").strip()]
+        if missing:
+            out.append(Check(f"ledger-entry:{name}", False,
+                             f"missing {', '.join(missing)}: an entry without an expiry is "
+                             "not an approved divergence"))
+        elif e.get("kind") not in LEDGER_KINDS:
+            out.append(Check(f"ledger-entry:{name}", False,
+                             f"kind {e.get('kind')!r} is not one of "
+                             f"{', '.join(LEDGER_KINDS)}"))
+        else:
+            out.append(Check(f"ledger-entry:{name}", True, f"{e['kind']}, complete"))
+    return out
+
+
 def check_background_sources(repo: Path) -> list[Check]:
     """Every COSMIC background record must resolve inside its own overlay.
 
@@ -577,6 +649,7 @@ def main(argv: list[str] | None = None) -> int:
     rep.checks += check_wiring_lints(repo, changed)
     rep.checks += check_group_overlays(repo)
     rep.checks += check_patch_declarations(repo)
+    rep.checks += check_ledger_covers_patch_sets(repo)
     rep.checks += check_overlay_executables(repo)
     rep.checks += check_script_executables(repo)
     rep.checks += check_board_script_executables(repo)
