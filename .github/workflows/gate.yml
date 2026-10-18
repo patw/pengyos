@@ -23,7 +23,11 @@ jobs:
           python-version: "3.14"
 
       - name: Python test dependencies
-        run: python -m pip install pytest pyyaml cryptography
+        # flask is not optional either: pengyos-nightly's test_decisions_web.py does
+        # `pytest.importorskip("flask")`, so without it 19 web tests are skipped as a
+        # single 'skip' and the gate reports green over code it never ran
+        # (287 tests in CI vs 306 on a dev box).
+        run: python -m pip install pytest pyyaml cryptography flask
 
       # Disk-image tests use these when present and skip without them; the
       # QEMU/swtpm/OVMF integration tests are opt-in (PENGYOS_IT) and skip here.

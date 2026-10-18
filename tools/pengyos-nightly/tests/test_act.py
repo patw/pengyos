@@ -297,14 +297,27 @@ def test_failed_files_names_the_files_a_patch_failed_on():
     assert A._failed_files("make: *** Error 1") == "make: *** Error 1"
 
 
-def test_act_exit_codes_distinguish_a_quiet_night_from_a_broken_one(tmp_path, capsys):
+def test_act_exit_codes_distinguish_a_quiet_night_from_a_broken_one(tmp_path, capsys,
+                                                                   monkeypatch):
     """Most nights the right answer is 'nothing to do'. If that exits non-zero, a
     watchdog cannot tell a healthy loop from a dead one — the exact confusion
     `status` was built to remove.
 
     The failing half points --repo / --site / --build-root at empty temp paths, so a
     test can never reach a real build or a real feed.
+
+    The key is written here and pointed at with PENGYOS_RELEASE_KEY: the guards are
+    ordered, so without a key of its own this test bails at `key_present` instead of
+    `no-repo` and only passes on a machine that owns the signing key. It did exactly
+    that — red on the GitHub runner from 2026-10-16 to 10-18, green on the dev box.
+    The missing-key path is asserted by test_a_missing_key_refuses_rather_than_publishing.
     """
+    key = tmp_path / "release.key"
+    key.write_text("k\n")
+    monkeypatch.setenv("PENGYOS_RELEASE_KEY", str(key))
+    # The same is true one guard later: site_remote falls back to a secrets file under
+    # $HOME, so a box with no secrets file also fails before --repo is reached.
+    monkeypatch.setenv("PENGYOS_SITE_REMOTE", "test@nowhere:/no-site")
     state = tmp_path / "st"
     state.mkdir()
     common = ["--state-dir", str(state), "--repo", str(tmp_path / "no-repo"),
@@ -315,7 +328,9 @@ def test_act_exit_codes_distinguish_a_quiet_night_from_a_broken_one(tmp_path, ca
                                                  "refused": [{"id": "security-x-1",
                                                               "refused_by": ["cap"]}]}))
     assert cli.main(common + ["act", "--apply"]) == 0, "nothing allowed is a healthy night"
-    assert "nothing allowed" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "nothing allowed" in out
+    assert "key_present" not in out, "the key must not be what this test trips over"
 
     (state / "plan.json").write_text(json.dumps({"date": "2026-10-05", "actions": [
         {"id": "security-libxml2-2.15.3", "allowed": True, "component": "libxml2",
@@ -324,7 +339,10 @@ def test_act_exit_codes_distinguish_a_quiet_night_from_a_broken_one(tmp_path, ca
          "risks": [], "edits": []}], "refused": []}))
     assert cli.main(common + ["act", "--apply"]) == 1, \
         "an action that cannot be carried out is a real failure"
-    assert "no-repo" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "no-repo" in out
+    assert "key_present" not in out and "site_remote" not in out, \
+        "the supplied key and remote must get act as far as the --repo guard"
 
 
 def test_a_published_patch_action_records_the_fix_in_state(tmp_path):
