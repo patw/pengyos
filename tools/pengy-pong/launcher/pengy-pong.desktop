@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Penguin Pong
+GenericName=Pong
+Comment=Two paddles, one ball, first to eleven — the 1972 arcade original
+Exec=pengy-pong
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;
+Keywords=game;arcade;pong;ball;paddle;penguin;
+StartupWMClass=pengy-pong
