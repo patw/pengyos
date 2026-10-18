@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Flappy Pengy
+GenericName=Flappy game
+Comment=Flap a penguin through gaps in drifting ice pillars
+Exec=pengy-floe
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;
+Keywords=game;arcade;flappy;penguin;ice;reflex;
+StartupWMClass=pengy-floe

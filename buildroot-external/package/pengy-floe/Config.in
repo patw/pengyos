@@ -1,0 +1,16 @@
+config BR2_PACKAGE_PENGY_FLOE
+	bool "pengy-floe"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Flappy Pengy: a one-button penguin flapper for the terminal, in the
+	  PengyOS pack-in games set (the flappy-bird slot, next to merge,
+	  icefield, pong, breakout, invaders, lander, blocks, solitaire and
+	  rogue). Rust, std only, zero dependencies: the recipe is an offline
+	  cargo build and the game needs no libraries at run time.
+	  Terminal=true, so it runs in any terminal, over ssh, and on Core.
+
+	  Space flaps, p pauses, r restarts, q quits. The high score is kept
+	  in $XDG_DATA_HOME/pengyos/games/pengy-floe/, under the player's home.
+
+	  https://github.com/patw/pengyos/tree/main/tools/pengy-floe
