@@ -1,0 +1,26 @@
+config BR2_PACKAGE_PENGY_INVADERS
+	bool "pengy-invaders"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Thaw Invaders: something is melting the ice from above and you have
+	  one laser. The 1978 formation - 11 columns x 5 rows of aliens, 2
+	  cells wide, spaced 4 apart - marches across a 60x24 terminal field,
+	  stepping one column every N ticks, reversing and descending at each
+	  wall, dropping bombs. Three destructible 8x4 shields, three lives,
+	  one laser in flight, waves that start lower and faster. The PengyOS
+	  pack-in game in the invaders slot (next to pengy-pong, floe, merge,
+	  icefield, breakout, lander, blocks, solitaire and rogue). Rust, std
+	  only, zero dependencies: the recipe is an offline cargo build and the
+	  game needs no libraries at run time. Terminal=true, so it runs in any
+	  terminal, over ssh, and on Core.
+
+	  a/d (or the arrow keys) move the ship, space fires the laser, p
+	  pauses, r restarts, q quits. The high score is kept in
+	  $XDG_DATA_HOME/pengyos/games/pengy-invaders/, under the player's home.
+
+	  --headless and --replay prove the game with no terminal at all, which
+	  is how the repo gate and pengyos-qemu-verify run it; --mono draws with
+	  plain ASCII when the locale cannot render the box drawing characters.
+
+	  https://github.com/pengyos/tree/main/tools/pengy-invaders

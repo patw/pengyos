@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Thaw Invaders
+Name[de]=Thaw Invaders
+Comment=One laser, three shields, three lives: the 1978 formation over a 60x24 field
+Exec=pengy-invaders
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;
+Keywords=game;arcade;invaders;terminal;
+NoDisplay=false
+MimeType=
+X-KDE-Subshell=1
