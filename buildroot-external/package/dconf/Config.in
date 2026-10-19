@@ -1,0 +1,14 @@
+config BR2_PACKAGE_DCONF
+	bool "dconf"
+	depends on BR2_PACKAGE_LIBGLIB2
+	depends on BR2_PACKAGE_DBUS
+	help
+	  The GSettings backend GNOME, Pop!_OS and Ubuntu ship: a GIO
+	  module (libdconfsettings.so), the D-Bus activated dconf-service
+	  that applies every write in order, and the dconf CLI. Without
+	  it GLib falls back to its keyfile backend, where each writer
+	  rewrites the whole file and concurrent writes lose each other
+	  (cosmic-settings-daemon writes its GNOME keys as concurrent
+	  `gsettings set` processes).
+
+	  https://gitlab.gnome.org/GNOME/dconf

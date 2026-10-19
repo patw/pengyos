@@ -10,3 +10,18 @@
 #   gsettings set org.gnome.system.location enabled false
 [org.gnome.system.location]
 enabled=true
+
+# COSMIC's own defaults (libcosmic CosmicTk::default: show_minimize and
+# show_maximize on, icon theme Cosmic). A Flatpak GTK app (Firefox, Chrome,
+# VS Code) reads its titlebar buttons from button-layout through the Settings
+# portal; the schema default "appmenu:close" is a close-only titlebar.
+# cosmic-settings-daemon does write these at login, but as four concurrent
+# `gsettings set` processes, and without dconf GLib uses the keyfile backend,
+# where each writer rewrites the whole file: the writes race and some are
+# lost (beholaptop, fresh 26.10.32 install, lost button-layout and
+# icon-theme). With the defaults right here, a lost write changes nothing.
+[org.gnome.desktop.wm.preferences]
+button-layout=':minimize,maximize,close'
+
+[org.gnome.desktop.interface]
+icon-theme='Cosmic'

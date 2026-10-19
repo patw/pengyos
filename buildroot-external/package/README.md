@@ -24,6 +24,7 @@ in `../configs/layers/*.config`.
 | `xdg-desktop-portal/` | `xdg-desktop-portal` | The freedesktop portal broker COSMIC apps talk to. |
 | `cosmic-portal/` | COSMIC's portal backend | The COSMIC implementation of the portal interfaces. |
 | `xdg-desktop-portal-gtk/` | the GTK portal backend | The portals COSMIC's backend lacks (AppChooser → OpenURI, Print, Notification, Inhibit, …), as Pop!_OS ships it; `portals.conf` prefers COSMIC's where both exist. |
+| `dconf/` | the GSettings backend | Writes go through `dconf-service` in order; GLib's keyfile fallback lost cosmic-settings-daemon's concurrent `gsettings set` writes (close-only titlebars). Desktop's `pengyos-gsettings-keyfile-migrate` user unit loads an old keyfile into it. |
 | `font-fira/` | Fira Sans + Fira Mono | COSMIC's default interface and monospace fonts. |
 | `font-noto-color-emoji/` | Noto Color Emoji | Colour emoji (the single font file from the release tag). |
 | `xdg-user-dirs/` | `xdg-user-dirs-update` | Not a stock Buildroot package. Creates ~/Downloads, ~/Documents, …; run at every session start by `start-cosmic`. |

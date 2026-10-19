@@ -1,0 +1,28 @@
+#!/bin/sh
+# Move a user's GSettings from GLib's keyfile backend into dconf, once.
+#
+# Images before dconf had no GSettings backend module, so GLib stored settings
+# in ~/.config/glib-2.0/settings/keyfile. With dconf installed GLib reads dconf
+# instead and that file is ignored: anything set by hand (say
+# `gsettings set org.gnome.system.location enabled false`) would silently go
+# back to its default. The keyfile's groups and GVariant values are the format
+# `dconf load /` reads, so it is loaded as is and then renamed.
+#
+# pengyos-gsettings-keyfile-migrate.service runs this at user-manager start.
+# If it runs after cosmic-settings-daemon has written its keys, the load
+# rewrites them with the values the daemon wrote last time, from the same
+# COSMIC config. On a failed load the keyfile stays, and the next login
+# retries.
+set -u
+
+KEYFILE="${XDG_CONFIG_HOME:-$HOME/.config}/glib-2.0/settings/keyfile"
+
+[ -f "$KEYFILE" ] || exit 0
+
+if dconf load / < "$KEYFILE"; then
+    mv -f "$KEYFILE" "$KEYFILE.migrated-to-dconf"
+    echo "gsettings-keyfile-migrate: loaded $KEYFILE into dconf"
+else
+    echo "gsettings-keyfile-migrate: dconf load failed, keeping $KEYFILE" >&2
+    exit 1
+fi

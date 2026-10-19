@@ -98,6 +98,7 @@ Chosen once, inherited everywhere.
 > PulseAudio daemon), cosmic-osk (GPL-3.0), RealtimeKit (GPL-3.0+ daemon, MIT client;
 > Desktop), GeoClue (GPL-2.0+ service, LGPL-2.1+ libgeoclue; Desktop), v4l2loopback
 > (GPL-2.0+ kernel module; Desktop), glib-networking (LGPL-2.1+, GIO's TLS module;
+> Desktop), dconf (LGPL-2.1+, the GSettings backend: GIO module, `dconf-service`, CLI;
 > Desktop). Binary blobs: CPU **microcode** (Intel
 > `intel-microcode`, AMD `amd-ucode`; built into the kernel since 26.10.23) and device
 > **firmware** (`linux-firmware`, `sof-firmware`) in every edition, and the **NVIDIA

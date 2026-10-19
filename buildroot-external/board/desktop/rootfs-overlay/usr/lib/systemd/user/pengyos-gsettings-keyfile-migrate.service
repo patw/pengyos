@@ -1,0 +1,13 @@
+# Move GSettings saved by the keyfile backend (images before dconf) into dconf.
+# See /usr/libexec/pengyos/gsettings-keyfile-migrate.
+
+[Unit]
+Description=Move GSettings from the keyfile backend into dconf
+ConditionPathExists=%h/.config/glib-2.0/settings/keyfile
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/pengyos/gsettings-keyfile-migrate
+
+[Install]
+WantedBy=default.target

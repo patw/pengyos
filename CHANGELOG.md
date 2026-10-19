@@ -17,6 +17,37 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: Firefox and Chrome had a close button only, again (found on beholaptop, 26.10.32)
+
+The portal fix from 26.10.18 still works: xdg-desktop-portal-gtk serves
+`org.gnome.desktop.wm.preferences button-layout`. But on a fresh install it served
+the schema default, `appmenu:close`. `cosmic-settings-daemon` writes its four GNOME
+keys at login as four concurrent `gsettings set` processes. The image has no dconf,
+so GSettings uses its keyfile backend, where each writer rewrites the whole file,
+and the writes race: beholaptop's fresh Desktop NVIDIA install kept the two font
+keys and lost `button-layout` and `icon-theme` (reproduced on the build host: 6 of
+50 runs lose `button-layout`). Machines whose keyfile once got the key, like
+behoweather, were not affected.
+
+The Desktop's gschema override (`board/desktop/gsettings/90-pengyos.gschema.override`)
+now sets COSMIC's own values as the defaults: `button-layout=':minimize,maximize,close'`
+and `icon-theme='Cosmic'`. A lost write no longer changes anything. COSMIC Settings
+still writes the key when the user turns a button off. `scripts/tests/test_gsettings_defaults.py`
+compiles the override against the real schemas with `--strict` and reads the keys back
+(the 26.10.18 fix had no test). Existing installs pick it up on update; to fix a
+running session now: `gsettings set org.gnome.desktop.wm.preferences button-layout ':minimize,maximize,close'`.
+
+The override fixes only the defaults; the daemon also writes `color-scheme` and
+`gtk-theme` concurrently on every dark/light switch. So the Desktop editions now ship
+**dconf** (new recipe `package/dconf`, 51.0, LGPL-2.1+), the GSettings backend
+GNOME, Pop!_OS and Ubuntu use: `dconf-service` applies writes in order, and none are
+lost. `scripts/tests/test_gsettings_dconf.py` runs the daemon's six concurrent writes
+against dconf (the same test fails on the keyfile backend). With dconf installed,
+GLib stops reading the old keyfile. A new user unit,
+`pengyos-gsettings-keyfile-migrate.service`, loads it into dconf on the first login
+after the update and renames it `keyfile.migrated-to-dconf`, so settings made by hand
+(such as location services turned off) carry over.
+
 ### Added — eight pack-in games on the Desktop
 - **Frostbite Solitaire** (Klondike), **Icefloe 2048**, **Glacier Blocks** (falling
   blocks), **Flappy Pengy**, **Penguin Pong**, **Thaw Invaders**, **Ice Lander** and

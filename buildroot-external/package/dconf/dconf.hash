@@ -1,0 +1,4 @@
+# From https://download.gnome.org/sources/dconf/51/dconf-51.0.sha256sum
+sha256  e65c1b7867f836faad9f9ee04acf5c5a6cae2bbc784833fe093207e0cb590248  dconf-51.0.tar.xz
+# Locally computed
+sha256  a9bdde5616ecdd1e980b44f360600ee8783b1f99b8cc83a2beb163a0a390e861  COPYING
