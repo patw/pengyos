@@ -10,6 +10,24 @@ Phase 1 is **observe, triage, report**. Phase 2 is **plan, act**. Phase 3 is
 **batch, one release**. Phase 5 is **decide**: a page where the maintainer approves or
 denies what the report recommends. See [`spec.md`](spec.md), the contract for all of them.
 
+## What this tool needs from outside the repo
+
+Nothing here runs on its own. It needs a **schedule** (a crontab — the repo schedules
+nothing), a **policy file** (`<state-dir>/nightly.toml`, gitignored), a **state
+directory**, a **mailer** (`$PENGYOS_EMAIL_SCRIPT`), a **model gateway**
+(`$PENGY_SETTINGS`), a **release key**, and a **site remote**. Contracts, examples and
+the list of what cannot be reproduced: **[`../../docs/operations.md`](../../docs/operations.md)**.
+
+| Copy this | To | Gives you |
+|---|---|---|
+| [`nightly.toml.example`](nightly.toml.example) | `<state-dir>/nightly.toml` | every policy knob, incl. the `act_enabled` kill switch |
+| [`crontab.example`](crontab.example) | your crontab | the plan/act schedule, the status probe, and a crontab-content check |
+| [`pengyos-email.example`](pengyos-email.example) | `~/.local/bin/pengyos-email` | the mailer contract as a runnable spool stub |
+
+> **Schedule the act lane into a quiet window.** Its first guard is `clean_tree`: it
+> refuses to run on a checkout with uncommitted changes, so it is scheduled against your
+> own working hours. A 21:00 act run loses the night to whatever you were doing at 21:00.
+
 ## What it looks at
 
 | Source | How | Lane |

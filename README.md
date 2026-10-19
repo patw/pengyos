@@ -100,11 +100,17 @@ python3 -m pengyos_build build     pengyos-core --targets ../../targets.toml
 login prompt. The full recipe, including the COSMIC host build the Desktop needs, is
 in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+Building an image is the easy half. **Running the repo** — the nightly loop, the
+schedule, the policy file, the state dir, your own signing key, your own feed, the
+mailer, the monitoring — is described in [`docs/operations.md`](docs/operations.md).
+It is written for someone building their own OS with their own key, and it says plainly
+what cannot be reproduced from this repo at all.
+
 ## The repo
 
-`tools/` holds 68 directories, each a tested project with its own spec and test
-suite. `buildroot-external/` is our Buildroot tree: boards, defconfigs, authored
-recipes. `scripts/` has the host helpers, `docs/` the design record, and
+`tools/` holds 88 directories, each a tested project with its own spec and test
+suite (79 with tests). `buildroot-external/` is our Buildroot tree: boards, defconfigs,
+authored recipes. `scripts/` has the host helpers, `docs/` the design record, and
 `.github/workflows/` runs the whole gate on every push.
 
 ## Reading on
@@ -117,6 +123,9 @@ recipes. `scripts/` has the host helpers, `docs/` the design record, and
   criteria become our tests; when this file and SPEC disagree, this file wins.
 - [`docs/`](docs/) — install/update architecture, the on-disk state layout, the
   QEMU runbook, the replacement ladder, our AI-contribution stance.
+- [`docs/operations.md`](docs/operations.md) — what has to exist **around** the repo for
+  the repo to run itself: the signing key, the schedule, the policy, the state dir, the
+  mailer, the model gateway, the site host, the monitoring, and the human sign-off.
 - [`SECURITY.md`](SECURITY.md) — reporting a vulnerability, and how an update is
   trusted.
 - [`CHANGELOG.md`](CHANGELOG.md) — what has shipped.
