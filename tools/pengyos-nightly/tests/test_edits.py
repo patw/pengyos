@@ -95,6 +95,52 @@ def test_license_hashes_travel_with_the_tarball_hash():
     assert E.carry_license_hashes(hash_text, "1.2.16") == ["sha256  bbb  LICENSE"]
 
 
+def test_the_hash_anchor_is_a_real_slice_of_the_file():
+    """uutils-coreutils documents its hash in a comment paragraph - the cargo re-pack
+    note - and only two of those lines name the version. Joining the matching lines
+    produced an anchor with the paragraph's middle lines missing, i.e. text that does
+    not occur in the file, and `apply_edits` raised: the act lane bailed the whole
+    batch on 2026-10-16 and in rehearsal on 2026-10-19, and the message blamed the
+    recipe. Fixture is the real .hash, copied from the tree on 2026-10-19.
+    """
+    mk = (FIX / "uutils-coreutils.mk").read_text()
+    hash_text = (FIX / "uutils-coreutils.hash").read_text()
+    edits, hi = E.recipe_bump(Path("/repo"), "uutils-coreutils", mk, hash_text, "0.12.0",
+                              get=lambda url: b"tarball bytes")
+    hash_edit = next(e for e in edits if e.path.endswith(".hash"))
+    assert hash_edit.old in hash_text, "the anchor must be a real slice of the file"
+    assert "coreutils-0.11.0.tar.gz" in hash_edit.old
+    assert "raw upstream one" in hash_edit.old, "the paragraph about that hash travels"
+
+    # The replacement leaves exactly one LICENSE line: the extras are the licence
+    # hashes, and the anchor must not stop short of the tarball line they pair with.
+    updated = hash_text.replace(hash_edit.old, hash_edit.new, 1)
+    assert updated.count("LICENSE") == 1, updated
+    assert "coreutils-0.11.0" not in updated
+    assert "coreutils-0.12.0.tar.gz" in updated
+
+
+def test_a_bump_does_not_write_the_licence_hash_twice():
+    """The plain shape, as the control for the paragraph case above.
+
+    `_hash_block` re-emits the licence lines, so the anchor has to consume them; an
+    anchor that stops at the tarball line leaves the old line in place and the new block
+    adds another. That is not hypothetical: alsa-ucm-conf and libmtp each carry two
+    identical LICENSE / COPYING lines in the tree, written by the loop's own bumps on
+    2026-10-05 and 2026-10-06.
+    """
+    mk = (FIX / "alsa-ucm-conf.mk").read_text()
+    hash_text = (FIX / "alsa-ucm-conf.hash").read_text()
+    edits, hi = E.recipe_bump(Path("/repo"), "alsa-ucm-conf", mk, hash_text, "1.2.16.1",
+                              get=lambda url: b"tarball bytes")
+    hash_edit = next(e for e in edits if e.path.endswith(".hash"))
+    updated = hash_text.replace(hash_edit.old, hash_edit.new, 1)
+    assert updated.count("LICENSE") == 1, updated
+    assert updated.count("  alsa-ucm-conf-1.2.16.1.tar.gz") == 1, \
+        "one hash line (the `# From` comment naming the URL is not a hash line)"
+    assert "1.2.16.tar.gz" not in updated
+
+
 # --- patch naming ------------------------------------------------------------
 
 def test_patch_name_drops_the_git_subject_brackets():

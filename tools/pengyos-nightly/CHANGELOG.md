@@ -28,6 +28,18 @@ versions follow [SemVer](https://semver.org/).
   host's cron moved to 02:00 on 2026-10-19 — the same defect the decision page had that
   week, and the one the page's fix left behind. `act_time` now lives in `config.DEFAULTS`
   and both readers take it from there.
+- **`_tarball_lines` built an anchor that was not a slice of the file.** It joined every
+  line mentioning the version, which is only a slice when those lines are adjacent.
+  uutils-coreutils documents its hash in a comment paragraph whose middle lines name no
+  version, so the joined text existed nowhere and `apply_edits` raised — the act lane
+  bailed the whole batch on 2026-10-16, and rehearsal reproduced it on 2026-10-19. Two
+  nights, and the message blamed the recipe. The anchor is now the contiguous span.
+- **A bump wrote the licence hash twice.** `_hash_block` re-emits the licence lines, so
+  the anchor has to consume them; it stopped at the tarball line, leaving the old one in
+  the file. The tree carries the evidence: `alsa-ucm-conf.hash` and `libmtp.hash` each
+  have two identical LICENSE / COPYING lines, written by the loop's own bumps on
+  2026-10-05 and 2026-10-06. Anchor and re-emitted lines are now derived from one slice
+  (`_hash_entry`), in both `recipe_bump` and `generated_hash_edit`.
 - Tests: 6, each with its control — a working fetch on the same recipe/target is planned,
   a machine that says nothing about the schedule keeps 21:00, and the pre-flight must not
   disable the approvals that *can* be carried out. Reverting the guard reproduces the
