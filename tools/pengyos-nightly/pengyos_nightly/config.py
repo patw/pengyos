@@ -47,9 +47,19 @@ DEFAULTS = {
     # Where `pengyos_nightly web` is reachable, for the link at the top of the email.
     # Empty: no link.
     "web_url": "",
+    # When this machine's act run fires. The schedule is a crontab, so it is machine-local
+    # policy; the default is the historical 21:00. Both the report and the decision page
+    # quote it to the operator, so it is defined here, once - not in whichever module is
+    # printing it (2026-10-19: the page was made to read it, the report string was not).
+    "act_time": "21:00",
     "key_file": str(HOME / "Personal/pengyos-keys/release-2026.key"),
     "secrets": str(HOME / "Personal/.secrets"),
 }
+
+
+def act_time(cfg: dict) -> str:
+    """When tonight's act run fires, as this machine configures it."""
+    return str(cfg.get("act_time") or DEFAULTS["act_time"])
 
 
 def load(path: Path) -> dict:

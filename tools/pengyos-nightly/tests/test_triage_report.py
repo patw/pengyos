@@ -434,3 +434,16 @@ def test_the_report_links_the_decision_page_when_one_is_configured():
     assert "Approve or deny" not in report.render("2026-10-16", [], [], {})
     html = report.render("2026-10-16", [], [], {}, web_url="http://behoserver:5050/")
     assert 'href="http://behoserver:5050/"' in html and "Approve or deny" in html
+
+
+def test_the_report_names_the_act_time_this_machine_actually_runs():
+    """The act schedule is a crontab, so it is machine-local policy. The report hardcoded
+    21:00 while the reference host's cron moved to 02:00 on 2026-10-19 - the same defect
+    the decision page had that week, and the one the page's fix left behind. An approval
+    mailed at 19:00 read as if it had two hours to land when it had seven.
+    """
+    default = report.render("2026-10-19", [], [], {}, web_url="http://behoserver:5050/")
+    assert "21:00" in default, "a machine that says nothing keeps the historical value"
+    moved = report.render("2026-10-19", [], [], {}, web_url="http://behoserver:5050/",
+                          act_at="02:00")
+    assert "02:00 run" in moved and "21:00" not in moved, moved[:200]

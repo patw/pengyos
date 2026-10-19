@@ -207,7 +207,8 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
                          open_cves if show_open else None,
                          obs["findings"] if show_open else None, digest,
                          carried if show_open else None, acted if show_open else None,
-                         web_url=cfgmod.load(p["policy"]).get("web_url", ""))
+                         web_url=cfgmod.load(p["policy"]).get("web_url", ""),
+                         act_at=cfgmod.act_time(cfgmod.load(p["policy"])))
     subj = report.subject(today.isoformat(), new_cves, new_findings, errors, digest,
                           open_cves if show_open else None,
                           obs["findings"] if show_open else None)

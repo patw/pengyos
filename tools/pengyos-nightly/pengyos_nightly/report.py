@@ -6,6 +6,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from pengyos_nightly import config as cfgmod
+
 #: The mailer is machine-local and deliberately not part of this repository.
 #: $PENGYOS_EMAIL_SCRIPT names it; the default is the conventional per-user
 #: launcher. A machine with neither stays report-only - the HTML report is still
@@ -101,15 +103,16 @@ def _finding_list(items: list[dict]) -> str:
 def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: dict,
            all_cves: list[dict] | None = None, all_findings: list[dict] | None = None,
            digest: bool = False, carried: list[dict] | None = None,
-           acted: list[dict] | None = None, web_url: str = "") -> str:
+           acted: list[dict] | None = None, web_url: str = "",
+           act_at: str = cfgmod.DEFAULTS["act_time"]) -> str:
     serious = [c for c in new_cves if c["priority"] in ("P0", "P1")]
     minor = [c for c in new_cves if c["priority"] == "P2"]
     parts = [f"<h2>PengyOS nightly — {_e(date)}</h2>"]
     if web_url:
         # The email tells; the page is where the answer goes (pengyos_nightly web).
         parts.append(f'<p><a href="{_e(web_url)}"><b>Approve or deny</b></a> what this '
-                     "report recommends. An approval is built by the 21:00 run and "
-                     "published to testing.</p>")
+                     f"report recommends. An approval is built by the {_e(act_at)} run "
+                     "and published to testing.</p>")
     if errors:
         parts.append("<h3>Source errors</h3><ul>" + "".join(
             f"<li><b>{_e(k)}</b>: {_e(v)}</li>" for k, v in sorted(errors.items())) + "</ul>")
