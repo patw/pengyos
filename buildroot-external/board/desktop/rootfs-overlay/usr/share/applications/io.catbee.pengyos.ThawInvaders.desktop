@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Thaw Invaders
+GenericName=Space Shooter
+Comment=Something is melting the ice from above, and you have one laser
+Keywords=game;invaders;space;shooter;arcade;penguin;
+Icon=io.catbee.pengyos.ThawInvaders
+Exec=pengy-invaders
+Terminal=false
+Categories=Game;ArcadeGame;Shooter;
+StartupNotify=true

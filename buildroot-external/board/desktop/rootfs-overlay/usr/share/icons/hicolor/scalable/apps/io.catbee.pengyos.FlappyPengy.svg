@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Flappy Pengy: the penguin flapping between ice pillars at night. -->
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#07102a"/><stop offset="1" stop-color="#14566f"/></linearGradient></defs>
+  <circle cx="64" cy="64" r="60" fill="url(#sky)"/>
+  <rect x="84" y="4" width="20" height="40" fill="#bfe6f6"/><rect x="80" y="40" width="28" height="8" rx="3" fill="#eaf7fd"/>
+  <rect x="84" y="86" width="20" height="40" fill="#bfe6f6"/><rect x="80" y="82" width="28" height="8" rx="3" fill="#eaf7fd"/>
+  <g transform="rotate(-14 50 66)">
+    <ellipse cx="50" cy="66" rx="26" ry="20" fill="#1b2433"/>
+    <ellipse cx="55" cy="70" rx="17" ry="14" fill="#f6f8fb"/>
+    <path d="M40 64 L22 56 L42 74 Z" fill="#2a364a"/>
+    <path d="M71 60 L86 64 L71 68 Z" fill="#f49a2a"/>
+    <circle cx="63" cy="58" r="5" fill="#fff"/><circle cx="64.5" cy="58" r="2.4" fill="#1b2433"/>
+  </g>
+</svg>

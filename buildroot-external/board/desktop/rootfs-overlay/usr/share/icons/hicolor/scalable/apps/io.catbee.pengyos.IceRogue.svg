@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Ice Rogue: the penguin in a lit ice room, the stairs down. -->
+  <rect x="8" y="8" width="112" height="112" rx="18" fill="#05090f"/>
+  <rect x="18" y="26" width="92" height="76" fill="#5f8fb6"/><rect x="18" y="26" width="92" height="10" fill="#9cc9e6"/>
+  <rect x="26" y="40" width="76" height="56" fill="#e4eef5"/>
+  <g fill="#4a5d70"><rect x="76" y="70" width="20" height="5"/><rect x="80" y="77" width="16" height="5"/><rect x="84" y="84" width="12" height="5"/></g>
+  <ellipse cx="50" cy="68" rx="15" ry="20" fill="#1b2433"/>
+  <ellipse cx="50" cy="72" rx="10" ry="14" fill="#f6f8fb"/>
+  <circle cx="45" cy="58" r="3" fill="#fff"/><circle cx="55" cy="58" r="3" fill="#fff"/>
+  <circle cx="45" cy="58" r="1.5" fill="#1b2433"/><circle cx="55" cy="58" r="1.5" fill="#1b2433"/>
+  <path d="M46 62 h8 l-4 5 z" fill="#f49a2a"/>
+  <ellipse cx="44" cy="88" rx="5" ry="2" fill="#f49a2a"/><ellipse cx="56" cy="88" rx="5" ry="2" fill="#f49a2a"/>
+</svg>

@@ -250,6 +250,12 @@ if [ -d "${ZI}/posix" ] && [ ! -L "${ZI}/posix" ]; then
 fi
 [ -f "${ZI}/America/Toronto" ] && [ ! -L "${ZI}/America" ]
 
+# --- Intel Wi-Fi firmware: only what this kernel can load -----------------------
+# linux-firmware ships every API version of every iwlwifi device; the kernel
+# loads one per device family (the newest it supports). Keep that one: ~150 MB
+# on the Desktop. The rule and its safety margin are in the script.
+python3 "$(dirname "$0")/../common/prune-iwlwifi.py" "${TARGET_DIR}"
+
 # --- Last: every shared library the image needs is in it ------------------------
 # (the edition's later post-build runs this again over the finished tree)
 python3 "$(dirname "$0")/../common/check-needed-libs.py" "${TARGET_DIR}"

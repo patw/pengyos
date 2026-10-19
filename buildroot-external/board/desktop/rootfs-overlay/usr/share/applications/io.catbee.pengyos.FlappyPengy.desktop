@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Flappy Pengy
+GenericName=Flapping Game
+Comment=Flap a penguin through the gaps in the ice
+Keywords=game;flappy;bird;penguin;arcade;one-button;
+Icon=io.catbee.pengyos.FlappyPengy
+Exec=pengy-floe
+Terminal=false
+Categories=Game;ArcadeGame;
+StartupNotify=true

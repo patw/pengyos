@@ -46,9 +46,25 @@ def _app_list() -> list[str]:
 
 
 def _installed_bins() -> set[str]:
-    """Every /usr/bin/<name> the Desktop post-build installs."""
+    """Every /usr/bin/<name> the Desktop post-build installs.
+
+    A name built from a loop variable (the games' symlinks:
+    `for game in a b; do ln … "${TARGET_DIR}/usr/bin/pengy-${game}"; done`) is
+    expanded over the loop's list, so each symlink counts as installed.
+    """
     text = POST_BUILD.read_text(encoding="utf-8")
-    return set(re.findall(r"\$\{TARGET_DIR\}/usr/bin/([\w.-]+)", text))
+    out = set()
+    for m in re.finditer(r"\$\{TARGET_DIR\}/usr/bin/([\w.-]+)(\$\{(\w+)\})?", text):
+        prefix, var = m.group(1), m.group(3)
+        if var is None:
+            out.add(prefix)
+            continue
+        loop = None
+        for lm in re.finditer(r"for " + var + r" in ([^;]+); do", text[: m.start()]):
+            loop = lm
+        assert loop, f"post-build.sh: ${{{var}}} in /usr/bin/{prefix}${{{var}}} is not a loop variable"
+        out.update(prefix + item for item in loop.group(1).split())
+    return out
 
 
 def _launchers() -> dict[str, str]:
@@ -175,3 +191,18 @@ def test_the_firmware_app_is_wired_end_to_end():
     rules = (overlay / "etc/polkit-1/rules.d/60-pengyos-firmware.rules").read_text()
     assert '"pengyos-firmware-check.service"' in rules
     assert '"pengyos-firmware-update@"' in rules
+
+
+def test_the_games_are_one_binary_and_eight_symlinks():
+    """tools/pengy-games carries every game: it alone is built and installed,
+    and each game's launcher runs a /usr/bin/pengy-<game> symlink to it."""
+    assert "pengy-games" in _app_list()
+    installed = _installed_bins()
+    assert "pengy-games" in installed
+    post = POST_BUILD.read_text(encoding="utf-8")
+    assert 'ln -sfn pengy-games "${TARGET_DIR}/usr/bin/pengy-${game}"' in post
+    games = [p for p in _launchers().values() if p.startswith("pengy-") and p != "pengy-games"]
+    assert len(games) == 8, games
+    for prog in games:
+        assert prog in installed, f"{prog} is not linked"
+        assert prog not in _app_list(), f"{prog} is built on its own as well"

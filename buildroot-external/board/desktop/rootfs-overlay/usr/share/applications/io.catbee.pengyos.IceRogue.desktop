@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ice Rogue
+GenericName=Dungeon Crawl
+Comment=Rogue (1980): five floors down to The Thaw
+Keywords=game;rogue;roguelike;dungeon;rpg;penguin;
+Icon=io.catbee.pengyos.IceRogue
+Exec=pengy-rogue
+Terminal=false
+Categories=Game;RolePlaying;
+StartupNotify=true

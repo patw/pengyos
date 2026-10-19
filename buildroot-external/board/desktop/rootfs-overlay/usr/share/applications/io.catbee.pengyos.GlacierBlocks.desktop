@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Glacier Blocks
+GenericName=Falling Blocks
+Comment=Ten columns, twenty rows, seven pieces
+Keywords=game;tetris;blocks;falling;puzzle;arcade;penguin;
+Icon=io.catbee.pengyos.GlacierBlocks
+Exec=pengy-blocks
+Terminal=false
+Categories=Game;BlocksGame;
+StartupNotify=true

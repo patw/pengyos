@@ -1,0 +1,17 @@
+# pengy-solitaire state fixture (Frostbite Solitaire, Klondike draw 3).
+# One move from winning: every card is on its foundation except the King of
+# Diamonds, which is sitting on top of the waste.
+# Cards are ids 0..51 (suit*13+rank); a leading '-' is face down.
+# Piles are bottom..top, separated by '|'; the last card is the top.
+# Play it with: pengy-solitaire --state fixtures/near-win.state --replay fixtures/win.replay
+seed=1
+score=690
+moves=120
+ticks=1500
+ms=90000
+redeals=2
+state=play
+stock=
+waste=51
+foundations=0,1,2,3,4,5,6,7,8,9,10,11,12|13,14,15,16,17,18,19,20,21,22,23,24,25|26,27,28,29,30,31,32,33,34,35,36,37,38|39,40,41,42,43,44,45,46,47,48,49,50
+tableau=||||||

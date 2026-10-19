@@ -1,0 +1,14 @@
+# pengy-solitaire replay fixture (Frostbite Solitaire, Klondike draw 3).
+# The winning script for fixtures/near-win.state: walk the cursor to the waste,
+# take the King of Diamonds, walk it to the Diamonds foundation, drop it.
+# One line of input per tick; blank = no input; '#' = comment; '_' = the space key.
+# Play it back with:
+#   pengy-solitaire --state fixtures/near-win.state --replay fixtures/win.replay --seed 1
+# Expected: state=win, foundations=52, score=700, moves=121.
+l
+_
+l
+l
+l
+l
+_

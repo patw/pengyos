@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Penguin Pong
+GenericName=Pong
+Comment=Two paddles, one puck, first to eleven
+Keywords=game;pong;arcade;paddle;hockey;penguin;two-player;
+Icon=io.catbee.pengyos.PenguinPong
+Exec=pengy-pong
+Terminal=false
+Categories=Game;ArcadeGame;SportsGame;
+StartupNotify=true

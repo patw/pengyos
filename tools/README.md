@@ -52,7 +52,16 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | Tool | What it is |
 |---|---|
 | [`pengy-agent-package`](pengy-agent-package/) | A Buildroot external package for PengyOS that builds the PengyR agent's pengy-cli and pengy-web (Rust, headless — n… |
+| [`pengy-blocks`](pengy-blocks/) | *Glacier Blocks*: ten columns, twenty rows, seven pieces — falling blocks with a 7-bag, wall kicks, hold and a ghost (Rust, libcosmic). |
+| [`pengy-floe`](pengy-floe/) | *Flappy Pengy*: flap a penguin through the gaps in drifting ice pillars, under an aurora (Rust, libcosmic). |
+| [`pengy-games`](pengy-games/) | The eight Desktop games in one binary: `pengy-games GAME`, or `pengy-GAME` as a symlink to it — one libcosmic for all eight (Rust). |
+| [`pengy-invaders`](pengy-invaders/) | *Thaw Invaders*: Space Invaders (1978) — the formation, three ice shields, one laser (Rust, libcosmic). |
+| [`pengy-lander`](pengy-lander/) | *Ice Lander*: Lunar Lander (1979) — land the probe slow and level on a pad, moon or asteroid (Rust, libcosmic). |
+| [`pengy-merge`](pengy-merge/) | *Icefloe 2048*: slide the ice floes, fuse equal ones, reach 2048 (Rust, libcosmic). |
 | [`pengy-panel`](pengy-panel/) | A fast, low-memory status bar for Wayland, written in pure Rust on top of layer-shell — no GTK, no C++ bindings, no… |
+| [`pengy-pong`](pengy-pong/) | *Penguin Pong*: Pong (1972) on an ice rink, against the penguin at three levels or a friend (Rust, libcosmic). |
+| [`pengy-rogue`](pengy-rogue/) | *Ice Rogue*: Rogue (1980) — five floors down to The Thaw, permadeath (Rust, libcosmic). |
+| [`pengy-solitaire`](pengy-solitaire/) | *Frostbite Solitaire*: Klondike, draw three, drag and drop (Rust, libcosmic). |
 | [`pengy-theme`](pengy-theme/) | Minimal, modern theme & desktop-defaults packager/validator for PengyOS. |
 | [`pengyos-apparmor`](pengyos-apparmor/) | Minimal, strict-by-default AppArmor profiles for PengyOS core components (including the pengy agent) plus a validat… |
 | [`pengyos-appimage`](pengyos-appimage/) | Inspect, extract, integrate, and sandbox AppImages under PengyOS. |

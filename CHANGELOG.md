@@ -17,6 +17,27 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — eight pack-in games on the Desktop
+- **Frostbite Solitaire** (Klondike), **Icefloe 2048**, **Glacier Blocks** (falling
+  blocks), **Flappy Pengy**, **Penguin Pong**, **Thaw Invaders**, **Ice Lander** and
+  **Ice Rogue**, in the App Library under Games on Desktop and Desktop NVIDIA. Each
+  is a libcosmic app (`tools/pengy-*`); the image carries all eight in one binary,
+  `tools/pengy-games` (host-built by `scripts/build-cosmic.sh`, installed by the
+  Desktop post-build with a `/usr/bin/pengy-<game>` symlink per game), because eight
+  separate binaries would carry eight copies of libcosmic: ~250 MB of the 4000 MB
+  Desktop root, against ~37 MB for the shared one (fat LTO folds the duplicated iced
+  runtimes). Launchers and icons are in the Desktop overlay, named by app id. The rules are `std`-only libraries
+  with a headless replay harness, so `cargo test` and the gate need no display.
+- They started as terminal games with Buildroot recipes; on the hardware they drew
+  badly in COSMIC Terminal (`stty raw` turns off output processing, so every frame
+  staircased), and a windowed game is what a Desktop wants. The terminal front-ends
+  and the recipes are gone; Core and Server ship no games.
+- Found while integrating them, fixed in the rules: Invaders' laser was hitscan
+  (it killed through your own shields), Rogue dug stray corridors (a swapped
+  argument), 2048's blocked slides wiped the undo, Klondike could not move part of
+  a run, a crashed Lander run could fly on, and every game quit itself two seconds
+  after game over and counted one game as two in its record.
+
 ### Changed (26.10.33) — no split-lock stall on the Desktops
 - On Intel CPUs with split-lock detection the kernel stalls a thread ~10 ms on every
   split-lock trap. Steam's client traps (behoweather's N100 logged `steam`,
