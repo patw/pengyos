@@ -22,16 +22,15 @@ from pengyos_nightly import guards as G
 from pengyos_nightly.versions import vkey
 
 #: When this machine's act run happens. The schedule is a crontab, so it is machine-local
-#: policy and lives in nightly.toml as `act_time = "02:00"`; the default is the historical
-#: 21:00. Hardcoding it here made the page tell the operator a time that was wrong on the
-#: machine the page was running on, after that machine moved its act cron to 02:00
-#: (2026-10-19). See ../../docs/operations.md §3.
-DEFAULT_ACT_TIME = "21:00"
+#: policy and lives in nightly.toml as `act_time = "02:00"`. It used to be hardcoded here,
+#: which made the page tell the operator a time that was wrong on the machine the page ran
+#: on, after that machine moved its act cron to 02:00 (2026-10-19). The report hardcoded
+#: the same string the same week; both now read it from `config`, where policy is defined.
+#: See ../../docs/operations.md §3.
+DEFAULT_ACT_TIME = cfgmod.DEFAULTS["act_time"]
 
-
-def act_time(cfg: dict) -> str:
-    """When tonight's act run fires, as this machine configures it."""
-    return str(cfg.get("act_time") or DEFAULT_ACT_TIME)
+#: Kept as a module-level name: `_status`'s default argument and existing callers.
+act_time = cfgmod.act_time
 
 
 def _read(path: Path, default):
@@ -60,13 +59,40 @@ def _plan_entry(plan: dict, component: str, lanes: tuple[str, ...]) -> dict | No
     return None
 
 
-def _cannot_act(component: str, pkg: dict | None) -> str:
+#: The plan's guard name for "the target version's artifact does not resolve upstream".
+UNREACHABLE = "artifact_unreachable"
+
+
+def _unreachable(plan: dict, component: str) -> str:
+    """What the plan already proved about this target's artifact, or "".
+
+    The observer's `latest` comes from pkg-stats' release-monitoring data, and that
+    names releases upstream never tagged: bolt's newest tag is 0.9.11 (it offered
+    1.3.1), rtkit's is v0.13 (it offered 0.14), and libqalculate 5.13.2's release
+    ships only Windows assets. All three were offered here as approvals and approved
+    on 2026-10-16; the act lane could only refuse them, and the refusal was labelled
+    as a recipe it could not read. Once the plan has proved the artifact unreachable,
+    the page says so and the Approve button is disabled - an approval that cannot be
+    executed is a decision the operator should not have to re-make every night.
+    """
+    for a in plan.get("actions", []) + plan.get("refused", []):
+        if a.get("component") == component and UNREACHABLE in (a.get("refused_by") or []):
+            return _first_line("; ".join(a.get("refused_reason") or []))
+    return ""
+
+
+def _cannot_act(component: str, pkg: dict | None, plan: dict | None = None) -> str:
     """Why an approval could not be carried out, or "" when it could."""
     if component in G.DENIED:
         return f"The nightly can't do this one: {G.DENIED[component]}."
     if pkg and pkg.get("tree") == "BUILDROOT":
         return ("A stock Buildroot package moves with a Buildroot release, not on its own; "
                 "the nightly only bumps recipes we author.")
+    unreachable = _unreachable(plan or {}, component)
+    if unreachable:
+        return (f"The nightly can't fetch {component} at the version offered "
+                f"({unreachable}). Nothing was published; check the target against "
+                "upstream's own tags before approving it.")
     return ""
 
 
@@ -105,7 +131,8 @@ def view(paths: dict, repo: Path, run=subprocess.run, now: dt.datetime | None = 
                 "current": f.get("current") or (pkg or {}).get("current", ""),
                 "target": available, "note": f.get("note", ""),
                 "editions": (pkg or {}).get("editions", []),
-                "cannot_act": _cannot_act(name, pkg), "decision": entry if verdict else None}
+                "cannot_act": _cannot_act(name, pkg, plan),
+                "decision": entry if verdict else None}
         if verdict == D.APPROVED:
             item["status"] = _status(_plan_entry(plan, name, ("approved",)), plan_new, entry,
                                       at=act_time(cfg))
@@ -326,7 +353,7 @@ def create_app(paths: dict, repo: Path, run=subprocess.run):
             abort(400)      # nothing to approve: the security lane runs on its own guards
         if decision == D.APPROVED:
             pkg = _read(paths["obs"], {}).get("packages", {}).get(component)
-            if _cannot_act(component, pkg):
+            if _cannot_act(component, pkg, _read(paths["plan"], {})):
                 abort(400)
         D.decide(paths["decisions"], kind, component, decision, target)
         return redirect(url_for("index"))

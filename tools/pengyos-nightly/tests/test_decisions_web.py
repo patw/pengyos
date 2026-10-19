@@ -237,3 +237,39 @@ def test_act_does_not_replan_for_an_older_decision(tmp_path, monkeypatch):
                               max=0, apply=False)
     cli.do_act(args, today=dt.date(2026, 10, 16))
     assert calls == []
+
+
+#: The plan's own record of libqalculate 5.13.2, as measured on 2026-10-19: the release
+#: ships only qalculate-5.13.2-x64.msi/.zip, so the SITE archive the recipe builds is a 404.
+_UNREACHABLE_PLAN = {"date": "2026-10-19", "actions": [], "refused": [
+    {"id": "approved-libqalculate-5.13.2", "component": "libqalculate", "lane": "approved",
+     "current": "5.12.0", "target": "5.13.2", "allowed": False,
+     "refused_by": ["artifact_unreachable"],
+     "refused_reason": ["libqalculate-5.13.2.tar.gz is not fetchable at "
+                        "https://github.com/Qalculate/libqalculate/releases/download/"
+                        "v5.13.2 (HTTP Error 404: Not Found)"]}]}
+
+
+def test_a_target_the_plan_proved_unfetchable_is_not_offered_for_approval(tmp_path):
+    """Three bumps were approved on this page on 2026-10-16 and refused by the act lane
+    every night since, because the versions the observer named do not exist upstream
+    (bolt's newest tag is 0.9.11, rtkit's is v0.13) or ship no source tarball. An
+    approval that cannot be executed is a decision the operator re-makes every night
+    without being told it can never land.
+    """
+    paths = _state(tmp_path, plan=_UNREACHABLE_PLAN)
+    v = web.view(paths, tmp_path, run=_clean)
+    item = next(i for i in v["waiting"] if i["component"] == "libqalculate")
+    assert "not fetchable" in item["cannot_act"], item["cannot_act"]
+    assert "5.13.2" in item["cannot_act"]
+    assert not next(i for i in v["waiting"] if i["component"] == "pengy")["cannot_act"], \
+        "the pre-flight must not disable the approvals that can be carried out"
+
+
+def test_approving_an_unfetchable_target_is_refused_at_the_form(tmp_path):
+    paths = _state(tmp_path, plan=_UNREACHABLE_PLAN)
+    r = _client(paths, tmp_path).post("/decide", data={
+        "kind": "update", "component": "libqalculate", "target": "5.13.2",
+        "decision": "approved"})
+    assert r.status_code == 400
+    assert D.load(paths["decisions"]) == {}, "no decision is recorded for a phantom version"
