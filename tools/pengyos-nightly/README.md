@@ -128,7 +128,7 @@ python3 -m pengyos_nightly web --host 0.0.0.0 --port 5050   # needs Flask
 It lists every recommendation from the last run: version updates waiting for you (a
 new series first), security fixes the loop handles itself, what you decided earlier,
 and the last few act runs. **Approve** writes your yes into `decisions.json` next to
-the plan; the 21:00 `act` re-plans if a decision is newer than the plan, and builds the
+the plan; the `act` run re-plans if a decision is newer than the plan, and builds the
 approved bump as the `approved` lane, through every other guard, into **testing**.
 **Deny** (or **Hold** for a security fix) keeps it out until upstream offers a new
 series. Things no act path can carry out (the kernel, the NVIDIA driver, COSMIC,
