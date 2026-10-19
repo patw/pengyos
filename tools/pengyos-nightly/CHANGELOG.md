@@ -6,6 +6,33 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — a 404 on the target tarball is named as what it is (0.15.0)
+- **`artifact_unreachable` is its own guard.** `recipe_bump` fetches the new tarball's
+  hash over the network, and urllib's `HTTPError` is an `OSError`, so every fetch failure
+  landed in the planner's recipe-read handler and was reported as
+  `recipe_unreadable: could not read the recipe to edit: HTTP Error 404`. The recipes read
+  fine. Three approved bumps were refused every night from 2026-10-16 that way, and the
+  message pointed at a broken tree that was not broken.
+- **What was actually upstream, measured 2026-10-19:** bolt's newest tag is `0.9.11`
+  (the observer offered 1.3.1) and rtkit's is `v0.13` (offered 0.14) — release-monitoring
+  names releases upstream never tagged. libqalculate 5.13.2 exists, but its GitHub release
+  ships only `qalculate-5.13.2-x64.msi/.zip`, so the SITE archive the recipe builds is a
+  404; the tag archive resolves.
+- **The plan records the URL it tried** (`action.unreachable`), so the next night can tell
+  a phantom version from a SITE pattern that moved.
+- **The decision page refuses an approval it cannot execute.** Once the plan has proved a
+  target unfetchable, `_cannot_act` says so, the Approve button is disabled, and the form
+  rejects the POST. An approval that can never land was a decision the operator re-made
+  every night without being told.
+- **The report names this machine's act time.** It hardcoded 21:00 while the reference
+  host's cron moved to 02:00 on 2026-10-19 — the same defect the decision page had that
+  week, and the one the page's fix left behind. `act_time` now lives in `config.DEFAULTS`
+  and both readers take it from there.
+- Tests: 6, each with its control — a working fetch on the same recipe/target is planned,
+  a machine that says nothing about the schedule keeps 21:00, and the pre-flight must not
+  disable the approvals that *can* be carried out. Reverting the guard reproduces the
+  original symptom exactly (`refused_by == ['recipe_unreadable']`).
+
 ### Added — the act lane tells you when it refused (0.14.0)
 - **A refusal now sends one mail.** `pengyos-nightly act --apply` mails the maintainer
   when the batch is refused: the subject names the step (`clean_tree`, `kill switch`,

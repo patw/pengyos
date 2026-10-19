@@ -135,6 +135,8 @@ max_releases = 1                # signed images published per night — delibera
 cooldown_days = 7               # per component
 allow_patch_shape = true        # the shape the build proved (see Shapes)
 skip_cosmic  = true             # a package change does not need COSMIC rebuilt
+act_time     = "21:00"          # when this machine's act run fires; the report and the
+                                # decision page quote it, so it is policy, not a literal
 ```
 
 **Why the two caps are different numbers (decided 2026-10-06).** Measured on
@@ -327,6 +329,8 @@ does not publish more than `max_releases` images a night, and it never reaches
 | `evidence_required` | NVD must place the shipped version inside the affected range (patch shape) or prove the target closes the CVE (bump shape) |
 | `fix_commits_available` | a patch is carried per CVE, and only for a CVE NVD names a **fetchable** upstream fix for (a commit, or a pull/merge request on a host that serves `.patch`); a component with nothing fetchable is refused, and one with a mix ships the fetchable part and names the rest as still open |
 | `no_fix_for_this_package` | a fetched patch must be a fix **for this package**: not a document that only adds new files, not a fix for a sibling component of a monorepo, not one spanning several components. Each refusal is recorded with its reason and the commit subject |
+| `artifact_unreachable` | a `recipe_bump`'s target artifact does not resolve at the recipe's SITE, so its hash cannot be taken. The plan records the URL it tried (`action.unreachable`). Named apart from `recipe_unreadable` because the answers are opposite: a phantom version (release-monitoring naming a release upstream never tagged) means the finding is dropped, a SITE pattern that moved means the recipe is fixed, and only a read error means the tree is broken. The decision page will not accept an approval for a target the plan proved unfetchable |
+| `recipe_unreadable` | the recipe the act lane must edit cannot be read — a tree defect, and only that |
 | `patch_does_not_apply` | a **specific upstream fix** proved not to apply is not retried: the record is `patch_failures[<pkg>]["fixes"]`, the list of upstream fix URLs that failed, and a candidate is refused only when it wants one of them. A cherry-pick authored against a newer series says nothing about a fix that would apply cleanly, so the package stays open. A record with no fix list predates per-fix tracking and is honoured as a component-wide block until a human clears it |
 | `confirmed_only` | pkg-stats `unsure_cves` are never actionable |
 | `not_host_only` | a build-host package is not a security update to an image |
