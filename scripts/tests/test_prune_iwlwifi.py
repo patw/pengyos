@@ -61,5 +61,15 @@ def test_an_unreadable_module_refuses_to_guess(tmp_path):
     assert (fw / "iwlwifi-cc-a0-77.ucode").exists()
 
 
+def test_a_module_that_names_no_firmware_keeps_everything(tmp_path):
+    # Core and Server build iwlwifi without IWLMVM: the module loads, its
+    # .modinfo names no firmware, and the prune has nothing to reason from.
+    # Keeping every file costs space and can never cost a device, so it must not
+    # fail the edition's build (it did, on the first 26.10.33 core build).
+    fw = tree(tmp_path, [], ["iwlwifi-cc-a0-77.ucode", "iwlwifi-cc-a0-74.ucode"])
+    r = run(tmp_path)
+    assert r.returncode == 0
+    assert "names no firmware" in r.stdout
+    assert sorted(f.name for f in fw.iterdir()) == ["iwlwifi-cc-a0-74.ucode", "iwlwifi-cc-a0-77.ucode"]
 def test_no_iwlwifi_firmware_is_nothing_to_do(tmp_path):
     assert run(tmp_path).returncode == 0

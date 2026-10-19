@@ -70,8 +70,13 @@ def main() -> int:
         return 1
     top = maxima(text)
     if not top:
-        print("prune-iwlwifi: iwlwifi.ko names no firmware", file=sys.stderr)
-        return 1
+        # The module declares no firmware names: either its device configs are
+        # not built in (Core and Server ship iwlwifi without IWLMVM, so this
+        # module drives nothing modern) or the names are built at runtime. The
+        # prune only ever saves space, so skipping it costs space, never a
+        # device — say so and carry on instead of failing the edition's build.
+        print("prune-iwlwifi: iwlwifi.ko names no firmware — keeping all firmware")
+        return 0
 
     groups: dict[tuple[str, str], list[tuple[int, pathlib.Path]]] = {}
     for f in fw.iterdir():
