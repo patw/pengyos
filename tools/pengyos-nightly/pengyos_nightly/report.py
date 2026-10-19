@@ -181,6 +181,88 @@ def subject(date: str, new_cves: list[dict], new_findings: list[dict], errors: d
     return f"{'[P0] ' if p0 else ''}{head} {date}: " + (", ".join(bits) or "nothing new")
 
 
+# --- the act lane's refusal notice --------------------------------------------------
+# "Nothing to do" is a healthy night and stays silent. "Refused" is not, and it used to
+# be silent too: the act lane's refusals landed in the cron log, in actions.json and in
+# `status`, and reaching them meant asking. On 2026-10-18 a 6-change batch closing 11 CVE
+# matches was refused at clean_tree by a PengyTasker job holding the shared checkout
+# dirty, and the operator's question the next morning was "did the act loop run?".
+
+#: Refusals that mean "tonight's work is blocked", the ones worth a mail.
+#: `nothing_allowed` is deliberately absent: most nights the correct answer is that
+#: there is nothing to do, and mailing it nightly would train everyone to ignore this.
+ACT_NOTIFY_STEPS = ("guard", "clean_tree", "key_present", "site_remote", "kill switch",
+                    "no plan", "build", "boot", "sign", "publish", "gate", "pre-flight",
+                    "compose-defconfigs", "VERSION", "edits", "branch", "merge")
+
+
+def act_failure_step(result: dict) -> str:
+    """The step that refused the batch, from `error` ("clean_tree: the tree ...").
+
+    A bail writes `f"{name}: {detail}"`, and a guard's own detail repeats its name
+    ("clean_tree: clean_tree: the working tree has ..."), so the text before the first
+    colon is the step. Multi-word names ("kill switch") stay whole.
+    """
+    err = (result.get("error") or "").strip()
+    if not err:
+        for j in reversed(result.get("journal") or []):
+            if not j.get("ok"):
+                return str(j.get("step", ""))
+        return ""
+    return err.split(":", 1)[0].strip()
+
+
+def act_subject(date: str, result: dict) -> str:
+    step = act_failure_step(result) or "refused"
+    n = len(result.get("planned") or [])
+    cves = len(result.get("cves") or [])
+    return (f"[act lane] {step}: {n} change(s) published nothing"
+            + (f", {cves} CVE match(es) left open" if cves else "")
+            + f" ({date})")
+
+
+def render_act_failure(date: str, result: dict, web_url: str = "") -> str:
+    """The mail an act refusal sends: what was planned, what stopped it, what it cost."""
+    step = act_failure_step(result) or "refused"
+    planned = result.get("planned") or []
+    editions = result.get("editions") or []
+    cves = result.get("cves") or []
+    parts = [f"<h2>PengyOS act lane refused tonight — {_e(date)}</h2>",
+             f'<p style="color:#b00020"><b>{_e(step)}</b> — {_e(result.get("error", ""))}</p>']
+    if web_url:
+        parts.append(f'<p><a href="{_e(web_url)}"><b>Open the decision page</b></a> '
+                     "to see the batch and approve or deny what is waiting.</p>")
+    parts.append(f"<h3>What was planned ({len(planned)} change(s))</h3>")
+    parts.append("<ul>" + ("".join(f"<li>{_e(a)}</li>" for a in planned)
+                           or "<li><i>nothing</i></li>") + "</ul>")
+    if editions:
+        parts.append(f"<p>Editions the image would have covered: <b>{_e(', '.join(editions))}</b></p>")
+    parts.append(f"<h3>What it cost</h3>")
+    parts.append(f"<p><b>{len(cves)}</b> CVE match(es) the batch would have closed are "
+                 "still open on the testing channel. Nothing was built, signed or "
+                 "published; the tree was left exactly as the run found it.</p>")
+    dropped = result.get("dropped") or []
+    if dropped:
+        # Batch-level drops are action ids; a per-patch drop carries a dict. Render both.
+        def _drop(d):
+            if isinstance(d, dict):
+                return (f"<li><b>{_e(d.get('package') or d.get('patch') or d.get('id') or '?')}</b>: "
+                        f"{_e(d.get('why') or d.get('reason') or '')}</li>")
+            return f"<li><b>{_e(d)}</b></li>"
+        parts.append(f"<h3>Dropped from the batch ({len(dropped)})</h3><ul>"
+                     + "".join(_drop(d) for d in dropped) + "</ul>")
+    journal = result.get("journal") or []
+    if journal:
+        parts.append(f"<h3>The run's steps</h3><ul>" + "".join(
+            f'<li>{"&#10003;" if j.get("ok") else "<b>&#10007;</b>"} {_e(j.get("step", ""))}'
+            f'{" — " + _e(j.get("detail")) if j.get("detail") else ""}</li>' for j in journal)
+            + "</ul>")
+    parts.append("<p><small>The act lane publishes to <b>testing</b> only. Stable is a "
+                 "human decision and this tool has no path to it. A refusal is the "
+                 "guard doing its job: it refuses to act on a tree it does not own.</small></p>")
+    return "<html><body style=\"font-family:sans-serif\">" + "\n".join(parts) + "</body></html>"
+
+
 def send(subject_line: str, html_body: str, body_file: Path, to: str | None = None,
          script: Path | None = None, run=subprocess.run) -> bool:
     """Deliver the report; True only when it was actually sent.

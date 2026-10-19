@@ -6,6 +6,26 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — the act lane tells you when it refused (0.14.0)
+- **A refusal now sends one mail.** `pengyos-nightly act --apply` mails the maintainer
+  when the batch is refused: the subject names the step (`clean_tree`, `kill switch`,
+  `pre-flight`, `release`…), and the body lists the changes it blocked, the editions the
+  image would have covered, the CVE matches left open, anything dropped by pre-flight,
+  and the run's own step journal.
+- **Why it was a defect, not a style choice.** Silence is the right signal for *"nothing
+  to do"* and `nothing_allowed` still sends nothing. A **refusal** was being folded into
+  that silence: it landed only in the cron log, `actions.json` and `status`, all of which
+  require asking. On 2026-10-18 a 6-change batch closing 11 CVE matches was refused at
+  `clean_tree` by a PengyTasker job holding `/data/PengyOS` dirty, and the operator's
+  morning question was "did the act loop run at all?" — the loop had run, and was
+  indistinguishable from a loop that had not.
+- **The notice is written before the mailer runs** (`reports/<date>-act.html`), so a
+  broken mailer loses the delivery and not the notice; and a mailer failure never changes
+  the act result or the exit code, same rule as the nightly report.
+- **`act --no-email` / `act --to ADDR`** — suppress it, or aim it.
+- Tests: `tests/test_act_notify.py` (12), with the negative controls that matter — a
+  healthy night, a dry run, a published night and `--no-email` all send nothing.
+
 ### Added — a page to approve or deny what the report recommends (0.13.0)
 - **`pengyos_nightly web`** (Flask, optional extra `web`): every recommendation from the
   last run on one page — version updates waiting for a decision, the security fixes

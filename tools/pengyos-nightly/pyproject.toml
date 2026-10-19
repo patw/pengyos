@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-nightly"
-version = "0.13.0"
+version = "0.14.0"
 description = "The PengyOS nightly maintenance loop: observe upstream, triage CVEs with the local model, email a report, and act on one change into the testing channel."
 readme = "README.md"
 requires-python = ">=3.11"
