@@ -313,6 +313,14 @@ BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux ext2 fat part_msdos part_gpt no
 BR2_PACKAGE_HOST_DOSFSTOOLS=y
 BR2_PACKAGE_HOST_GENIMAGE=y
 BR2_PACKAGE_HOST_MTOOLS=y
+# The core post-build prunes linux-firmware's iwlwifi API versions
+# (board/common/prune-iwlwifi.py), and that script imports lzma to read the .xz
+# firmware files. Buildroot pulls host Python's xz support in only when this is
+# set: the Desktop got it by accident through fwupd-efi's `uswid` (see the
+# desktop layer), Core and Server never did, so the first build after the prune
+# landed died in post-build with "No module named '_lzma'" (26.10.33). Same
+# reason and same symbol as the Desktop's.
+BR2_PACKAGE_HOST_PYTHON3_XZ=y
 # post-image.sh stamps the rootfs UUID into grub.cfg + genimage.cfg and
 # assembles the GPT disk image with genimage.
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/post-image.sh"
