@@ -136,6 +136,35 @@ if [ -f "${PENGYOS_TOOLS}/pengyos-server-toolset/shell/tmux.conf" ]; then
     install -Dm0644 "${PENGYOS_TOOLS}/pengyos-server-toolset/shell/tmux.conf" "${TARGET_DIR}/etc/tmux.conf"
 fi
 
+# --- QEMU: guest firmware for x86 guests only ----------------------------------
+# BR2_PACKAGE_QEMU_BLOBS installs every architecture's guest firmware, but the
+# only system emulator built is qemu-system-x86_64. The ARM, RISC-V and
+# LoongArch EDK2 images alone are ~290 MB (each .fd is padded to its flash
+# size), so everything no x86 guest can boot goes, with the firmware
+# descriptors that point at it. Kept: SeaBIOS, qboot, EDK2 x86_64/i386 (with
+# Secure Boot), the NIC option ROMs, the VGA BIOSes and the keymaps.
+QEMU_SHARE="${TARGET_DIR}/usr/share/qemu"
+if [ -d "${QEMU_SHARE}" ]; then
+    before=$(du -sm "${QEMU_SHARE}" | cut -f1)
+    ( cd "${QEMU_SHARE}" && rm -rf -- \
+        dtb edk2-aarch64-* edk2-arm-* edk2-riscv-* edk2-loongarch64-* \
+        'QEMU,cgthree.bin' 'QEMU,tcx.bin' ast27x0_bootrom.bin npcm7xx_bootrom.bin npcm8xx_bootrom.bin \
+        hppa-firmware.img hppa-firmware64.img openbios-ppc openbios-sparc32 openbios-sparc64 \
+        opensbi-riscv32-generic-fw_dynamic.bin opensbi-riscv64-generic-fw_dynamic.bin \
+        palcode-clipper pnv-pnor.bin qemu_vga.ndrv s390-ccw.img skiboot.lid slof.bin \
+        u-boot-sam460.bin u-boot.e500 vof-nvram.bin vof.bin qemu-nsis.bmp \
+        firmware/60-edk2-aarch64.json firmware/60-edk2-arm.json \
+        firmware/60-edk2-loongarch64.json firmware/60-edk2-riscv64.json )
+    # Every descriptor left must name an image that is still here.
+    for json in "${QEMU_SHARE}"/firmware/*.json; do
+        [ -e "${json}" ] || continue
+        for fd in $(grep -o '/usr/share/qemu/[^"]*' "${json}"); do
+            [ -e "${TARGET_DIR}${fd}" ] || { echo "post-build: ${json##*/} names a missing ${fd}" >&2; exit 1; }
+        done
+    done
+    echo "post-build: QEMU guest firmware trimmed to x86 (${before} -> $(du -sm "${QEMU_SHARE}" | cut -f1) MB)"
+fi
+
 # --- Last: every shared library the image needs is in it ------------------------
 # (the edition's later post-build runs this again over the finished tree)
 python3 "$(dirname "$0")/../common/check-needed-libs.py" "${TARGET_DIR}"

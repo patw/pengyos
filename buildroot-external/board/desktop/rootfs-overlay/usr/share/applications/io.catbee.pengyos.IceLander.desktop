@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ice Lander
+GenericName=Lunar Lander
+Comment=Land the probe on a pad: slow, level, and with fuel left
+Keywords=game;lander;lunar;moon;arcade;physics;penguin;
+Icon=io.catbee.pengyos.IceLander
+Exec=pengy-lander
+Terminal=false
+Categories=Game;ArcadeGame;
+StartupNotify=true

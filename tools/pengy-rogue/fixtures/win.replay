@@ -1,0 +1,7 @@
+# pengy-rogue replay fixture — Ice Rogue, the boss floor one swing from the win.
+# Play it back with:
+#   pengy-rogue --state fixtures/boss.state --replay fixtures/win.replay --seed 1 --no-save
+# One line of input per tick; blank = no input; '#' = comment.
+# fixtures/boss.state is floor 5: The Thaw wounded to 1 hp, directly below the
+# penguin. One 1d4+1 roll kills it, so this wins: state=win, kills=8, score=517.
+j

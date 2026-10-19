@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Frostbite Solitaire
+GenericName=Solitaire
+Comment=Klondike, draw three, unlimited redeals
+Keywords=game;solitaire;klondike;cards;patience;frostbite;penguin;
+Icon=io.catbee.pengyos.Solitaire
+Exec=pengy-solitaire
+Terminal=false
+Categories=Game;CardGame;
+StartupNotify=true

@@ -1,0 +1,46 @@
+# pengy-rogue — a PengyOS Desktop game.
+#
+# The rules (src/lib.rs) are std only and fully `cargo test`-able with no
+# display. The window is behind `cosmic` (libcosmic), off by default — the same
+# shape as pengyos-usage and pengyos-gamepads. Built on the build host by
+# scripts/build-cosmic.sh, like the other PengyOS libcosmic apps.
+[package]
+name = "pengy-rogue"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+license = "MIT"
+description = "Ice Rogue: Rogue (1980), five floors and The Thaw, on the COSMIC desktop."
+authors = ["Pat Wendorf <dungeons@gmail.com>"]
+repository = "https://github.com/patw/pengyos"
+homepage = "https://github.com/patw/pengyos/tree/main/tools/pengy-rogue"
+keywords = ["game", "cosmic", "rogue", "dungeon", "pengyos"]
+categories = ["games"]
+publish = false
+
+[features]
+default = []
+cosmic = ["dep:libcosmic"]
+
+# The game binary. `src/lib.rs` holds every rule; `src/main.rs` opens the
+# window (`src/app.rs`) or runs the headless replay harness. Tests live in
+# `tests/` and drive the library directly.
+[[bin]]
+name = "pengy-rogue"
+path = "src/main.rs"
+
+[lib]
+name = "pengy_rogue"
+path = "src/lib.rs"
+
+# No dependencies without `cosmic`: the rules and the replay harness are std only.
+[dependencies]
+
+# Same pinned libcosmic and feature set as the other PengyOS apps, so all of
+# them build from one cache (CARGO_TARGET_DIR=$PENGYOS_COSMIC_BUILD/install-gui).
+# `qr_code` is what turns on iced's canvas, which draws the game.
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
+features = ["about", "single-instance", "markdown", "qr_code", "wgpu", "xdg-portal"]

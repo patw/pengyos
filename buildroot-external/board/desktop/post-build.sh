@@ -186,6 +186,22 @@ else
     echo "post-build: ${FIRMWARE_GUI} not built — no Firmware app (firmware updates need a terminal)"
 fi
 
+# --- The pack-in games (one binary, eight games) -----------------------------
+# tools/pengy-games links every tools/pengy-<game> crate and runs the one it is
+# called as: /usr/bin/pengy-<game> is a symlink to it, so each launcher's
+# `Exec=pengy-<game>` (overlay, with the icons) and `pengy-<game> --headless`
+# both work. One copy of libcosmic for all eight instead of eight copies.
+GAMES_GUI="${COSMIC_BUILD}/install-gui/release/pengy-games"
+if [ -x "${GAMES_GUI}" ]; then
+    install -Dm0755 "${GAMES_GUI}" "${TARGET_DIR}/usr/bin/pengy-games"
+    for game in solitaire merge blocks floe pong invaders lander rogue; do
+        ln -sfn pengy-games "${TARGET_DIR}/usr/bin/pengy-${game}"
+    done
+    echo "post-build: installed pengy-games (8 games)"
+else
+    echo "post-build: ${GAMES_GUI} not built — no games"
+fi
+
 # --- Strip the host-built binaries ---------------------------------------------
 # Buildroot strips target binaries before post-build runs, so everything copied in
 # above (COSMIC, pop-launcher, the installer GUI) arrived with its symbol tables.
@@ -195,7 +211,8 @@ if [ -n "${STRIP_BIN}" ]; then
              "${TARGET_DIR}"/usr/bin/pengyos-install-gui "${TARGET_DIR}"/usr/bin/pengyos-updates \
              "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-usage \
              "${TARGET_DIR}"/usr/bin/pengyos-gamepads \
-             "${TARGET_DIR}"/usr/bin/pengyos-printers "${TARGET_DIR}"/usr/bin/pengyos-firmware; do
+             "${TARGET_DIR}"/usr/bin/pengyos-printers "${TARGET_DIR}"/usr/bin/pengyos-firmware \
+             "${TARGET_DIR}"/usr/bin/pengy-games; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
     echo "post-build: stripped host-built binaries"

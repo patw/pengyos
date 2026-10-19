@@ -1,0 +1,57 @@
+# pengy-games — the eight PengyOS Desktop games in one binary.
+#
+# Every game is its own crate (tools/pengy-<game>), and each one's whole
+# program is its library's `cli::main`. This crate links all eight and calls
+# the one it was asked for, so the image carries one copy of libcosmic instead
+# of eight: /usr/bin/pengy-games, with /usr/bin/pengy-<game> symlinks to it.
+#
+# The window is behind `cosmic`, off by default, which turns on each game's own
+# `cosmic` feature: without it the dispatcher and every game's headless harness
+# still build and test with no display and no network.
+[package]
+name = "pengy-games"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "The PengyOS Desktop games in one binary: pengy-games GAME, or pengy-GAME as a symlink to it."
+authors = ["Pat Wendorf <dungeons@gmail.com>"]
+repository = "https://github.com/patw/pengyos"
+homepage = "https://github.com/patw/pengyos/tree/main/tools/pengy-games"
+publish = false
+
+[features]
+default = []
+cosmic = [
+    "pengy-blocks/cosmic",
+    "pengy-floe/cosmic",
+    "pengy-invaders/cosmic",
+    "pengy-lander/cosmic",
+    "pengy-merge/cosmic",
+    "pengy-pong/cosmic",
+    "pengy-rogue/cosmic",
+    "pengy-solitaire/cosmic",
+]
+
+[[bin]]
+name = "pengy-games"
+path = "src/main.rs"
+
+[lib]
+name = "pengy_games"
+path = "src/lib.rs"
+
+[dependencies]
+pengy-blocks = { path = "../pengy-blocks" }
+pengy-floe = { path = "../pengy-floe" }
+pengy-invaders = { path = "../pengy-invaders" }
+pengy-lander = { path = "../pengy-lander" }
+pengy-merge = { path = "../pengy-merge" }
+pengy-pong = { path = "../pengy-pong" }
+pengy-rogue = { path = "../pengy-rogue" }
+pengy-solitaire = { path = "../pengy-solitaire" }
+
+# One binary for eight apps: link-time optimisation folds what the eight
+# copies of the iced runtime have in common.
+[profile.release]
+lto = "fat"
+codegen-units = 1

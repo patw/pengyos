@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Frostbite Solitaire: two cards fanned on a felt disc. -->
+  <circle cx="64" cy="64" r="60" fill="#1f6e3e"/>
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#ffffff" stroke-opacity="0.25" stroke-width="3"/>
+  <g transform="rotate(-14 64 70)">
+    <rect x="26" y="24" width="50" height="72" rx="6" fill="#2b5c9a" stroke="#000" stroke-opacity="0.3"/>
+    <rect x="31" y="29" width="40" height="62" rx="4" fill="#346db3" stroke="#fff" stroke-opacity="0.85" stroke-width="1.5"/>
+    <g fill="#fff" fill-opacity="0.3">
+      <path d="M41 39l4 4-4 4-4-4z"/><path d="M51 39l4 4-4 4-4-4z"/><path d="M61 39l4 4-4 4-4-4z"/>
+      <path d="M41 53l4 4-4 4-4-4z"/><path d="M51 53l4 4-4 4-4-4z"/><path d="M61 53l4 4-4 4-4-4z"/>
+      <path d="M41 67l4 4-4 4-4-4z"/><path d="M51 67l4 4-4 4-4-4z"/><path d="M61 67l4 4-4 4-4-4z"/>
+    </g>
+  </g>
+  <g transform="rotate(12 64 70)">
+    <rect x="50" y="26" width="50" height="72" rx="6" fill="#fdfdfb" stroke="#000" stroke-opacity="0.3"/>
+    <path d="M58 46 L64 32 L70 46 M60.5 41 H67.5" fill="none" stroke="#c62128" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M75 86c-1-2-12-8-12-16 0-6 7-8 12-3 5-5 12-3 12 3 0 8-11 14-12 16z" fill="#c62128"/>
+  </g>
+</svg>

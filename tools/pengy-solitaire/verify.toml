@@ -1,0 +1,8 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# Rust crate: cargo test in this tool's directory.
+[[check]]
+name = "cargo test"
+run = ["cargo", "test", "--quiet"]
+cwd = "tools/pengy-solitaire"
+expect = "exit0"
+timeout = 900

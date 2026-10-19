@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Icefloe 2048
+GenericName=Sliding Puzzle
+Comment=Slide the ice floes and fuse them up to 2048
+Keywords=game;2048;puzzle;sliding;tiles;numbers;penguin;
+Icon=io.catbee.pengyos.Icefloe
+Exec=pengy-merge
+Terminal=false
+Categories=Game;LogicGame;
+StartupNotify=true

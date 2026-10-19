@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Icefloe 2048: four floes on the sea. -->
+  <rect x="8" y="8" width="112" height="112" rx="22" fill="#1e3a52"/>
+  <rect x="18" y="18" width="43" height="43" rx="7" fill="#eef4fa"/>
+  <rect x="67" y="18" width="43" height="43" rx="7" fill="#92cbec"/>
+  <rect x="18" y="67" width="43" height="43" rx="7" fill="#489dd8"/>
+  <rect x="67" y="67" width="43" height="43" rx="7" fill="#14346c"/>
+  <g font-family="sans-serif" font-weight="bold" text-anchor="middle">
+    <text x="39.5" y="49" font-size="26" fill="#1d3b58">2</text>
+    <text x="88.5" y="49" font-size="26" fill="#fff">16</text>
+    <text x="39.5" y="98" font-size="22" fill="#fff">128</text>
+    <text x="88.5" y="96" font-size="15" fill="#fff">2048</text>
+  </g>
+</svg>
