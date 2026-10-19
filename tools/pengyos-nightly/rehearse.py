@@ -55,6 +55,30 @@ def git(*args, check=True) -> str:
     return r.stdout.strip()
 
 
+def _generated_hash(a: dict, edition: str, tree: str) -> E.Edit | None:
+    """The act lane's generated-hash step, run the same way: build the archive, read the
+    digest Buildroot produced, write it, and prove the download step passes with it.
+
+    Returns the edit so the caller can append it to the action's edits and the restore
+    path takes it back out with the rest. Returns None and prints the failure when the
+    build cannot produce the archive - a rehearsal result, not a crash.
+    """
+    want = (a.get("hash") or {}).get("filename") or ""
+    hash_path = REPO / f"buildroot-external/package/{a['component']}/{a['component']}.hash"
+    try:
+        hi = E.generated_hash(subprocess.run, BUILD_ROOT, BR, tree, edition,
+                              a["component"], want)
+        he = E.generated_hash_edit(a["component"], hash_path.read_text(),
+                                   a.get("current") or "", hi)
+        E.apply_edits(REPO, [he])
+        E.verify_source(subprocess.run, BUILD_ROOT, BR, tree, edition, a["component"])
+    except (E.GeneratedHashError, RuntimeError, OSError, ValueError) as exc:
+        print(f"    generated hash FAILED for {a['component']}: {str(exc)[:200]}", flush=True)
+        return None
+    print(f"    generated hash {a['component']}: {hi.sha256[:16]}... verified", flush=True)
+    return he
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("components", nargs="*", help="only rehearse these components")
@@ -97,8 +121,16 @@ def main() -> int:
     restore_bad = False
     try:
         for a in actions:
-            for e in a["edits"]:
-                E.apply_edits(REPO, [E.Edit(**e)])
+            E.apply_edits(REPO, [E.Edit(**e) for e in a["edits"]])
+            # A generated archive's hash can only be read from the build, and the act lane
+            # takes it BEFORE the pre-flight (act.run_batch's generated-hash step). A
+            # harness that skips that step reports every cargo recipe as a failure - which
+            # is what this file did to pengy, starship and uutils-coreutils on 2026-10-19,
+            # three of the six actions in the night's batch, on a night the lane was fine.
+            if a.get("hash_generated"):
+                he = _generated_hash(a, args.edition, tree)
+                if he is not None:
+                    a["edits"].append(vars(he))
             r = A.triage_package(subprocess.run, REPO, BUILD_ROOT, BR, tree,
                                  [args.edition], a)
             A.shrink_action(a, r["carried"], r["dropped"])
