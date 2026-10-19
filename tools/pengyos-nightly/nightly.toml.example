@@ -1,0 +1,75 @@
+# Machine-local policy for pengyos-nightly.  COPY THIS, DO NOT COMMIT IT.
+#
+#   cp tools/pengyos-nightly/nightly.toml.example <state-dir>/nightly.toml
+#
+# `<state-dir>/nightly.toml` is policy for THIS machine — which key, how much to
+# do per night, when the act run fires — so it is gitignored and never in the
+# repo. Every key below has a default in pengyos_nightly/config.py; the file only
+# needs to say what differs from the defaults. It is shown fully spelled out here
+# so you know what the knobs are.
+#
+# See ../docs/operations.md §4.
+
+# ─── the kill switch ───────────────────────────────────────────────────────────
+# false = the loop observes, triages, reports and plans, and NEVER acts.
+# Start here. Watch a full dry run (`act` without --apply) before arming it.
+act_enabled  = false
+
+# rsync the site dir to $PENGYOS_SITE_REMOTE after publishing.
+push         = true
+
+# ─── what the loop is allowed to act on ────────────────────────────────────────
+lanes        = ["security", "routine"]   # "major" needs your approval on the web page
+priorities   = ["P0", "P1"]              # which triaged CVEs may trigger an action
+
+# ─── the batch and the blast radius ────────────────────────────────────────────
+# The batch is the unit of WORK; the signed image is the unit of RISK.
+# max_actions is how much the loop may prepare and verify in a night (build time).
+# max_releases is how many signed images may reach the feed in a night. Keep it 1:
+# twelve changes in one image is still one image your hardware check has to accept.
+max_actions  = 12
+max_releases = 1
+
+# Per component, consumed only by a *published* action. Too small and the loop
+# re-attacks a component it just changed on the very next night.
+cooldown_days = 7
+
+# ─── shapes ────────────────────────────────────────────────────────────────────
+# A stock Buildroot package cannot be version-bumped from a br2-external tree, so
+# the security lane carries upstream fix commits as patches. This is the shape the
+# build proved; turning it off leaves only bumps of recipes you author.
+allow_patch_shape = true
+skip_cosmic  = true          # a package change does not need COSMIC rebuilt
+
+# ─── the Buildroot release-bump lane ───────────────────────────────────────────
+# Empty = inert: a newer Buildroot series stays a finding and nothing moves.
+# Naming a target is YOU scheduling that event. The loop never decides a series
+# move from a tag alone.
+bump_buildroot = ""
+
+# ─── the decision page ─────────────────────────────────────────────────────────
+# Where `pengyos_nightly web` is reachable; the report email links it. Empty = no link.
+web_url = "http://build-host.home.lab:5050/"
+
+# ─── when THIS machine's act run fires ─────────────────────────────────────────
+# Must match your crontab entry. The decision page prints it, so you know how long
+# an approval has to land. See crontab.example for why the window matters.
+# (Read by pengyos_nightly/web.py via act_time(cfg), not by config.DEFAULTS — it has
+# no default in config.py, so grepping there will not find it.)
+act_time = "02:00"
+
+# ─── secrets: paths only, never values ─────────────────────────────────────────
+# The compiled defaults in config.py are the UPSTREAM AUTHOR's paths. Override both.
+# The release key is Tier 2 (SECURITY.md): a human owns it. chmod 600, never commit,
+# never print, never email.
+key_file  = "/home/YOU/keys/myrelease.key"
+secrets   = "/home/YOU/.secrets"
+
+# Resolution order, for reference:
+#   release key   : $PENGYOS_RELEASE_KEY (env, a path)  →  key_file above
+#   site remote   : $PENGYOS_SITE_REMOTE (env)          →  PENGYOS_SITE_REMOTE in `secrets`
+# Missing key  → the act lane refuses and the loop stays report-only (reported, not a crash).
+# Missing remote → the act lane refuses to push.
+#
+# PENGYOS_AUTHORIZED_KEYS_FILE must be UNSET: `release.sh --publish` refuses when it
+# is set. That is the test-key guard, not a knob.

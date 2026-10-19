@@ -1,0 +1,55 @@
+# The nightly loop's schedule.  COPY THIS, EDIT IT, INSTALL IT.
+#
+#   crontab -l > crontab.before                      # back up first
+#   crontab tools/pengyos-nightly/crontab.example    # installs THIS file wholesale
+#   diff crontab.before <(crontab -l)                # verify the WHOLE file
+#
+# ⚠ `crontab <file>` REPLACES your entire crontab. If you already have jobs, merge
+#   this file into `crontab -l` output and install the merged result. Verify a
+#   crontab edit by diffing the whole file — never by grepping for the lines you
+#   care about. On 2026-10-17 a REPLACE silently dropped two nightly lines, both
+#   loops stopped for a day, and the staleness alarm fired ~15 h late naming the
+#   wrong cause. See ../docs/operations.md §9.
+#
+# Replace <repo>, <build-root>, <state-dir> and <site-dir> with your paths.
+# Set act_time in <state-dir>/nightly.toml to match the act line below.
+
+# ─── environment the tooling expects ──────────────────────────────────────────
+HOME=/home/YOU
+PATH=/home/YOU/.local/bin:/usr/local/bin:/usr/bin:/bin
+PENGYOS_REPO=<repo>
+PENGYOS_BUILD_ROOT=<build-root>
+PENGYOS_SITE=<site-dir>
+
+# ─── PLAN: observe, triage, report, write plan.json ────────────────────────────
+# Read-only against the tree, so it is safe to run while you are working.
+0 19 * * * cd <repo>/tools/pengyos-nightly && /usr/bin/env python3 -m pengyos_nightly --repo <repo> --build-root <build-root> --state-dir <state-dir> --site <site-dir> run >> $HOME/logs/cron/pengyos-nightly.log 2>&1
+
+# ─── ACT: apply the night's batch into the TESTING channel ─────────────────────
+# PUT THIS IN A WINDOW WHERE NOTHING ELSE TOUCHES THE CHECKOUT.
+#
+# The act lane's first guard is clean_tree: it refuses to run on a checkout with
+# uncommitted changes, because a refusal once destroyed an agent job's uncommitted
+# work. So the act lane is scheduled against your own working hours — schedule it
+# at 21:00, be working at 21:00, and the guard refuses and the night is lost.
+#
+# Pick a quiet window and check three things:
+#   - no agent job, build, or interactive session touches <repo> at that hour
+#   - the machine does not suspend at that hour (systemctl is-suspend-target)
+#   - the plan is hours older, on the next calendar day. That is fine:
+#     release_cap counts releases published *today*, and `act` re-plans when
+#     decisions.json is newer than plan.json, so a wider gap gives approvals
+#     MORE time to land, not less.
+0 2 * * * cd <repo>/tools/pengyos-nightly && /usr/bin/env python3 -m pengyos_nightly --repo <repo> --build-root <build-root> --state-dir <state-dir> --site <site-dir> act --apply >> $HOME/logs/cron/pengyos-nightly-act.log 2>&1
+
+# ─── the probe: silence is a design feature, so probe it ───────────────────────
+# "Nothing new" and "nothing allowed" are HEALTHY and silent, and indistinguishable
+# from a loop that is broken, removed from the crontab, or on a machine that is off.
+# status exits 1 when the loop is actually stuck, so a watchdog can use it.
+30 * * * * cd <repo>/tools/pengyos-nightly && /usr/bin/env python3 -m pengyos_nightly --repo <repo> --build-root <build-root> --state-dir <state-dir> --site <site-dir> status >> $HOME/logs/cron/pengyos-nightly-status.log 2>&1
+
+# ─── assert the crontab's CONTENT, not just the log's age ──────────────────────
+# A cadence check that ages a log goes red only after the cadence window, and cannot
+# say "the entry was removed" — a removed entry has no log to age. This fires within
+# an hour of an edit that drops the nightly lines.
+15 * * * * crontab -l | grep -c 'pengyos_nightly .* run' | grep -qx 1 && crontab -l | grep -c 'pengyos_nightly .* act --apply' | grep -qx 1 || echo "CRON LEDGER: a pengyos-nightly entry is MISSING from the crontab" >> $HOME/logs/cron/cron-ledger.log

@@ -10,6 +10,14 @@ Never auto commit to this repo, the user will always do that themselves.  Also t
 
 PengyOS is a from-source Linux distribution built with **Buildroot 2026.08**, in three nested editions: **Core ⊆ Server ⊆ Desktop** (plus opt-in Server NVIDIA and Desktop NVIDIA variants). The Desktop runs COSMIC behind greetd. Installed machines use an A/B layout (two read-only ext4 root slots chosen by GRUB, plus a btrfs `data` partition) and update from a signed feed. `README.md` is the user-facing front page (editions, install, what isn't ready); `docs/principles.md` holds the *why* (principles, the maintenance loop, the component rubric, the failure modes); `SPEC.md` the *what* (component decisions and rejected alternatives); `USE-CASES.md` the user stories. When `USE-CASES.md` and the spec disagree, `USE-CASES.md` wins.
 
+**Before automating anything here, read `docs/operations.md`.** The repo is a complete
+*build* system and deliberately an incomplete *operations* system: the schedule, the
+policy file, the state dir, the mailer, the model gateway, the site host and the signing
+key all live outside it, by design. That doc gives every contract, and the list of things
+that cannot be reproduced. Do not infer the operational layer from the tool source, and
+do not invent a schedule — the act lane's `clean_tree` guard refuses on a dirty tree, so a
+bad schedule silently loses nights.
+
 ## Commands
 
 ```sh

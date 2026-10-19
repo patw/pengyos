@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# pengyos-email — the mailer pengyos-nightly calls on THIS machine.
+#
+#   cp tools/pengyos-nightly/pengyos-email.example ~/.local/bin/pengyos-email
+#   chmod +x ~/.local/bin/pengyos-email
+#   export PENGYOS_EMAIL_SCRIPT=~/.local/bin/pengyos-email
+#
+# No mail setup is in this repo, by design: the distro tooling carries nobody's
+# mail configuration. This file is the CONTRACT, implemented as a spool stub so
+# you can prove the pipeline before wiring real mail into it.
+#
+# The contract, exactly (see ../docs/operations.md §6):
+#
+#   <mailer> --quiet --html --subject "<line>" --body-file <file.html> [--to <addr>]
+#
+# Three things that will bite you:
+#   1. It is invoked via its SHEBANG. If the file is executable the kernel reads the
+#      shebang; the tool only falls back to `python3 <mailer>` when it is not. A
+#      shell wrapper invoked as `python3` becomes a SyntaxError and takes the whole
+#      nightly run down with it. So: keep the shebang, keep it executable.
+#   2. Exit non-zero to signal a delivery failure. The tool treats that as a
+#      delivery failure, NOT a reason to abandon the run — the plan step still
+#      happens. Write your error to stderr; the last line becomes the reason in
+#      the cron log and in `status`.
+#   3. With no mailer configured nothing goes out and the report queue is NOT
+#      marked reported. A report nobody received has not been reported.
+set -euo pipefail
+
+TO="operator@example.com"
+SPOOL="${PENGYOS_MAIL_SPOOL:-$HOME/.local/state/pengyos-mail/spool}"
+
+SUBJECT=""
+BODY=""
+HTML=0
+QUIET=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --quiet)    QUIET=1 ;;
+        --html)     HTML=1 ;;
+        --subject)  SUBJECT="$2"; shift ;;
+        --body-file) BODY="$2"; shift ;;
+        --to)       TO="$2"; shift ;;
+        *) : ;;
+    esac
+    shift
+done
+
+[ -n "$SUBJECT" ] && [ -n "$BODY" ] && [ -f "$BODY" ] \
+    || { echo "pengyos-email: --subject and a readable --body-file are required" >&2; exit 2; }
+
+# --- the stub: spool it, send nothing -------------------------------------------
+# Replace everything below this point with your real send (a SMTP app key, a
+# local sendmail, a provider CLI). Keep the argv contract and the exit codes.
+mkdir -p "$SPOOL"
+out="$SPOOL/$(date -u +%Y%m%dT%H%M%SZ).html"
+{ echo "To: $TO"; echo "Subject: $SUBJECT"; echo "Content-Type: text/html"; echo; cat "$BODY"; } > "$out"
+[ "$QUIET" = 1 ] || echo "pengyos-email: spooled '$SUBJECT' -> $out"
+exit 0
+
+# --- a real send looks like this (uncomment, delete the stub above) -------------
+# SECRETS="${PENGYOS_SECRETS:-$HOME/.secrets}"   # never inline a key here
+# exec python3 /path/to/your/send_mail.py --to "$TO" --html "$([ "$HTML" = 1 ] && echo yes)" \
+#      --subject "$SUBJECT" --body-file "$BODY"
