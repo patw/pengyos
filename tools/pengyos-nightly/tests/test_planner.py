@@ -12,6 +12,7 @@ one. The libxml2 record is the real one (copied from the live fkie-cad clone on
 
 import datetime as dt
 import json
+import urllib.error
 from pathlib import Path
 
 from pengyos_nightly import evidence, planner, sources
@@ -981,3 +982,53 @@ def test_a_held_security_action_is_not_acted_on(tmp_path):
                               decisions=_decided("security", "libxml2", "denied", "2.15.3"))
     assert plan["actions"] == []
     assert _by_id(plan, "security-libxml2-2.15.3")["refused_by"] == ["operator_denied"]
+
+# --- the artifact the recipe points at does not exist -------------------------
+
+def _alsa_obs():
+    obs = _obs(**{"alsa-ucm-conf": _pkg(
+        current="1.2.16", latest="1.2.16.1", tree="PENGYOS",
+        pkg_path="package/alsa-ucm-conf",
+        mk_path="package/alsa-ucm-conf/alsa-ucm-conf.mk",
+        url="https://github.com/alsa-project/alsa-ucm-conf")})
+    obs["findings"] = [{"lane": "routine", "component": "alsa-ucm-conf",
+                        "current": "1.2.16", "available": "1.2.16.1",
+                        "note": "authored recipe"}]
+    return obs
+
+
+def _alsa_plan(tmp_path, get):
+    return planner.build_plan(_alsa_obs(), _st(), {"act_enabled": True, "push": True,
+                                                   "lanes": ["security", "routine"],
+                                                   "priorities": ["P0", "P1"],
+                                                   "max_actions": 1, "cooldown_days": 7,
+                                                   "allow_patch_shape": True,
+                                                   "skip_cosmic": True},
+                              TODAY, _repo(tmp_path), tmp_path,
+                              lambda cve: sources.nvd_raw(tmp_path / "nvd", cve), get)
+
+
+def test_a_bump_whose_tarball_downloads_is_planned(tmp_path):
+    """Positive control for the test below: same recipe, same target, working fetch."""
+    a = _by_id(_alsa_plan(tmp_path, fake_get), "routine-alsa-ucm-conf-1.2.16.1")
+    assert a["allowed"], [g for g in a["guards"] if not g["ok"]]
+
+
+def test_an_unreachable_tarball_is_named_as_such_not_as_a_broken_recipe(tmp_path):
+    """2026-10-19: three approved bumps were refused every night with
+    `recipe_unreadable: could not read the recipe to edit: HTTP Error 404`. The recipes
+    read fine - the URL the recipe builds for the NEW version is a 404, because
+    release-monitoring names releases upstream never tagged. urllib's HTTPError is an
+    OSError, so an unlabelled fetch failure landed in the recipe-read handler. The two
+    need opposite answers (fix the tree vs. drop the finding), so the plan names them
+    apart and records the URL it tried.
+    """
+    def dead(url):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+    a = _by_id(_alsa_plan(tmp_path, dead), "routine-alsa-ucm-conf-1.2.16.1")
+    assert not a["allowed"]
+    assert a["refused_by"] == ["artifact_unreachable"], a["refused_reason"]
+    assert "recipe_unreadable" not in a["refused_by"], "the tree is not the problem"
+    assert a["unreachable"]["url"].endswith("alsa-ucm-conf-1.2.16.1.tar.gz"), a["unreachable"]
+    assert "404" in a["refused_reason"][0]

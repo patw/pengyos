@@ -308,6 +308,25 @@ def carry_license_hashes(hash_text: str, version: str) -> list[str]:
     return keep
 
 
+class ArtifactUnreachable(Exception):
+    """The target version's artifact does not resolve at the recipe's SITE.
+
+    Named apart from a recipe that cannot be read, because the operator's fix is
+    different and the tree is not the problem: the .mk and .hash parsed fine, the URL
+    the recipe builds for the NEW version is a 404. A phantom version (release-monitoring
+    naming a release upstream never tagged) means the finding should be dropped; a SITE
+    pattern that moved upstream means the recipe needs fixing. Found 2026-10-19: bolt
+    1.3.1 and rtkit 0.14 have no upstream tag at all, and libqalculate 5.13.2's release
+    ships only Windows assets - all three reported as "could not read the recipe to
+    edit: HTTP Error 404", which pointed at a broken tree that was not broken.
+    """
+
+    def __init__(self, url: str, filename: str, detail: str = ""):
+        self.url, self.filename, self.detail = url, filename, detail
+        super().__init__(f"{filename} is not fetchable at {url}"
+                         + (f" ({detail})" if detail else ""))
+
+
 def upstream_hash(hash_text: str, old_version: str, new_version: str, filename: str,
                   get=fetch_bytes) -> HashInfo | None:
     """Follow the stock .hash's own '# From <url>' to upstream's checksum file."""
@@ -332,8 +351,18 @@ def upstream_hash(hash_text: str, old_version: str, new_version: str, filename: 
 
 
 def download_hash(url: str, filename: str, get=fetch_bytes) -> HashInfo:
-    """Hash the artifact ourselves. Honest about what that means."""
-    return HashInfo(sha256=sha256_of(get(url)), filename=filename,
+    """Hash the artifact ourselves. Honest about what that means.
+
+    Raises ArtifactUnreachable when the URL does not resolve. That is the only way
+    the planner learns the difference between "no such release" and "no recipe":
+    urllib's HTTPError is an OSError, so an unlabelled fetch failure arrives at the
+    planner's recipe-read handler and gets reported as one.
+    """
+    try:
+        data = get(url)
+    except Exception as exc:
+        raise ArtifactUnreachable(url, filename, str(exc)) from exc
+    return HashInfo(sha256=sha256_of(data), filename=filename,
                     source="self-attested (downloaded here)", url=url)
 
 

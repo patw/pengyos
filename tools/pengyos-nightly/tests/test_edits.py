@@ -69,6 +69,26 @@ def test_a_hash_computed_here_is_labelled_self_attested():
     assert got.source == "self-attested (downloaded here)"
 
 
+def test_a_404_on_the_target_artifact_is_named_as_an_unreachable_artifact():
+    """urllib's HTTPError is an OSError. Left unlabelled it arrives at the planner's
+    recipe-read handler and is reported as "could not read the recipe to edit", which is
+    a tree defect pointing away from the real cause: the release does not exist upstream.
+    Measured 2026-10-19 on bolt 1.3.1 and rtkit 0.14 (no such upstream tag) and on
+    libqalculate 5.13.2 (the release ships only Windows assets).
+    """
+    import urllib.error
+
+    def dead(url):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+    with pytest.raises(E.ArtifactUnreachable) as exc:
+        E.download_hash("https://github.com/heftig/rtkit/archive/refs/tags/v0.14.tar.gz",
+                        "v0.14.tar.gz", get=dead)
+    assert exc.value.url.endswith("v0.14.tar.gz")
+    assert exc.value.filename == "v0.14.tar.gz"
+    assert "404" in str(exc.value)
+
+
 def test_license_hashes_travel_with_the_tarball_hash():
     hash_text = ("sha256  aaa  alsa-ucm-conf-1.2.16.tar.gz\n"
                  "sha256  bbb  LICENSE\n")

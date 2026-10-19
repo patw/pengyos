@@ -301,6 +301,19 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
                                            "reason": str(exc)}]
         action["allowed"] = False
         return action
+    except E.ArtifactUnreachable as exc:
+        # The recipe read fine; the URL it builds for the NEW version is a 404. Named
+        # apart from `recipe_unreadable` because the two need opposite answers - one is
+        # a tree problem, this one is an upstream problem - and because the decision
+        # page disables an approval whose artifact cannot be fetched (web._cannot_act).
+        action["edits"] = []
+        action["risks"] = []
+        action["unreachable"] = {"url": exc.url, "filename": exc.filename,
+                                 "detail": exc.detail}
+        action["guards"] = guards_done + [{"guard": "artifact_unreachable", "ok": False,
+                                           "reason": str(exc)}]
+        action["allowed"] = False
+        return action
     except (OSError, ValueError) as exc:
         action["edits"] = []
         action["risks"] = []
