@@ -57,6 +57,20 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   so `su` worked. The core post-build now removes it from `/etc/pam.d/su` and `su-l` in
   every edition; `su` does not need lastlog, and Debian's and Fedora's have none.
 
+### Fixed (26.10.33) — laptop panel backlight: the driver the firmware asks for was not built
+- On a hybrid laptop whose firmware reports brightness as EC-controlled over the NVIDIA WMI
+  interface, the kernel resolves the backlight type to `nvidia_wmi_ec` — a branch decided before
+  both the ACPI-video and the native ones. With `CONFIG_NVIDIA_WMI_EC_BACKLIGHT` unset, nothing
+  registered a backlight: `/sys/class/backlight` stayed empty, brightness keys did nothing, and
+  `cosmic-settings-daemon` fell back to probing DDC/CI on every `/dev/i2c-*` bus — **3.0 s of
+  kernel time per brightness keypress**, inside its single D-Bus loop, so the volume keys stalled
+  behind it too. Seen on beholaptop (Lenovo Legion 5 15ARH7H, Radeon 680M + RTX 3070 Ti,
+  26.10.32): one press measured 2.99-3.08 s; with the driver built in, the same call returns in
+  0.00 s and the keys adjust the panel. Desktop and Desktop NVIDIA now build it (`=y`: no
+  firmware, and the device must exist before `cosmic-osd` reads `MaxDisplayBrightness` at
+  startup). No kernel command line involved: `acpi_backlight=native` would override what the
+  firmware explicitly reports.
+
 ### Changed (26.10.32) — the kernel gets what a distro kernel has, and the build checks it
 - Our kernel is `x86_64_defconfig` plus three fragments, so anything nobody added
   was off, silently. A diff against Ubuntu 26.04's config found 7,514 options it

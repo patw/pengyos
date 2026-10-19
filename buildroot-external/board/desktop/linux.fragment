@@ -59,6 +59,23 @@ CONFIG_VGA_SWITCHEROO=y
 # The dGPU then reached D3hot, but not D3cold: that also needs native PCIe
 # hotplug (CONFIG_HOTPLUG_PCI_PCIE, in the core fragment).
 
+# --- Panel backlight, for laptops whose EC owns it ---------------------------
+# On a hybrid laptop whose firmware answers "brightness is EC-controlled" over
+# the NVIDIA WMI interface (GUID 603E9613-EF25-4338-A3D0-C46177516DB7), the
+# kernel resolves the backlight type to acpi_backlight_nvidia_wmi_ec. That
+# branch is decided BEFORE the ACPI-video and native ones, so amdgpu prints
+# "Skipping amdgpu DM backlight registration" (it defers to acpi_video) and
+# acpi_video declines because the type is not "video". If this driver is absent
+# NOTHING registers a backlight and /sys/class/backlight stays empty: the
+# brightness keys do nothing, and cosmic-settings-daemon falls back to probing
+# DDC/CI on every /dev/i2c-* bus - ~3 s of kernel time per keypress inside its
+# single D-Bus loop, so volume keys queue behind it (beholaptop, Legion 5
+# 15ARH7H 82RD, 26.10.32: 2.99-3.08 s measured; with this driver, 0.00 s).
+# Built in, not a module: no firmware, and the device must exist before the
+# session starts (cosmic-osd takes MaxDisplayBrightness once at startup and
+# would cache "no backlight" if the driver loaded late).
+CONFIG_NVIDIA_WMI_EC_BACKLIGHT=y
+
 # --- Framebuffer console ----------------------------------------------------
 # No fbcon on the Desktop: boot text never reaches the screen (the serial
 # console still has it) and the display goes straight to the greeter/session.
