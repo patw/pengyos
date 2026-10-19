@@ -27,6 +27,8 @@ in `../configs/layers/*.config`.
 | `dconf/` | the GSettings backend | Writes go through `dconf-service` in order; GLib's keyfile fallback lost cosmic-settings-daemon's concurrent `gsettings set` writes (close-only titlebars). Desktop's `pengyos-gsettings-keyfile-migrate` user unit loads an old keyfile into it. |
 | `font-fira/` | Fira Sans + Fira Mono | COSMIC's default interface and monospace fonts. |
 | `font-noto-color-emoji/` | Noto Color Emoji | Colour emoji (the single font file from the release tag). |
+| `font-noto-symbols2/` | Noto Sans Symbols 2 | Unicode symbols no other shipped font has (U+23F5 media triangles, U+1FB00 legacy-computing graph cells). |
+| `font-symbols-nerd/` | Symbols Nerd Font (+ Mono) | The Nerd Fonts icons only (starship's default prompt, powerline, `eza --icons`), found by per-glyph fallback under any terminal font. Upstream's fontconfig file is not installed. |
 | `xdg-user-dirs/` | `xdg-user-dirs-update` | Not a stock Buildroot package. Creates ~/Downloads, ~/Documents, …; run at every session start by `start-cosmic`. |
 | `flatpak/` | Flatpak 1.18 (CLI, system helper, portal) | Not a stock Buildroot package. The Desktop's app lane (SPEC §2.5); uses the image's bwrap, xdg-dbus-proxy and fusermount3, `wheel` as the admin group. Replaced the build host's copy. |
 | `appstream/` | AppStream 1.2 (library + `appstreamcli`) | Not a stock Buildroot package; Flatpak requires it. Patched so a cross build doesn't need a native AppStream. |

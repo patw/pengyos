@@ -17,7 +17,28 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Fixed: Firefox and Chrome had a close button only, again (found on beholaptop, 26.10.32)
+### Fixed — no icons in GTK3 dialogs; boxes in the terminal (found on beholaptop, 26.10.32)
+
+**Icons.** gdk-pixbuf had no SVG loader: Buildroot builds librsvg without it
+(`--disable-pixbuf-loader`), and the image did not build librsvg at all. The Cosmic
+icon theme is SVG only (704 icons, no PNGs), so a GTK3 window running on the host
+could load none of them ("Couldn't recognize the image file format"). These are
+xdg-desktop-portal-gtk's dialogs: the app chooser a Flatpak app gets when it opens a
+file, and Print. The Desktops now build librsvg with its pixbuf loader (an override
+in `external.mk`), and the target's `loaders.cache` is regenerated after it so it
+lists SVG. Flatpak and COSMIC apps render SVG themselves and were not affected.
+
+**Terminal boxes.** The starship prompt's default icons (U+E0A0 git branch, U+E718
+Node.js) are Nerd Fonts glyphs in the Private Use Area, and no shipped font had them.
+Claude Code's mode line uses U+23F5, a standard Unicode symbol that DejaVu, Fira and
+Noto Color Emoji also lack. Two new font recipes: `font-symbols-nerd` (the icon-only
+Symbols Nerd Font, MIT) and `font-noto-symbols2` (Noto Sans Symbols 2, OFL, as in
+Ubuntu's fonts-noto-core). fontconfig's per-glyph fallback finds them under any
+terminal font, so the default `monospace` font is unchanged (upstream's
+`10-nerd-font-symbols.conf`, which makes the icon font the preferred `monospace`, is
+not installed). Over SSH the client draws the glyphs, so Server is unchanged.
+
+### Fixed (26.10.34) — Firefox and Chrome had a close button only, again (found on beholaptop, 26.10.32)
 
 The portal fix from 26.10.18 still works: xdg-desktop-portal-gtk serves
 `org.gnome.desktop.wm.preferences button-layout`. But on a fresh install it served

@@ -606,6 +606,10 @@ BR2_PACKAGE_XDG_DESKTOP_PORTAL_GTK=y
 # 26.10.32). dconf-service applies writes in order. The user unit
 # pengyos-gsettings-keyfile-migrate.service moves an existing keyfile into it.
 BR2_PACKAGE_DCONF=y
+# librsvg, for its gdk-pixbuf SVG loader (enabled in external.mk): host GTK3
+# windows (the portal's app chooser, print dialog) could not load a single
+# icon of the SVG-only Cosmic theme.
+BR2_PACKAGE_LIBRSVG=y
 
 # --- Mesa hardware drivers ---------------------------------------------------
 # Without a hardware driver Mesa falls back to software GL, which has no
@@ -1089,6 +1093,11 @@ BR2_PACKAGE_COSMIC_SOUND_THEME=y
 # wide-coverage fallback.
 BR2_PACKAGE_FONT_FIRA=y
 BR2_PACKAGE_FONT_NOTO_COLOR_EMOJI=y
+# Terminal glyphs no other font has (boxes on beholaptop, 26.10.32): the Nerd
+# Fonts icons starship's default prompt draws (U+E0A0 git branch, U+E718
+# Node.js), and Unicode symbols like U+23F5 (Claude Code's mode line).
+BR2_PACKAGE_FONT_SYMBOLS_NERD=y
+BR2_PACKAGE_FONT_NOTO_SYMBOLS2=y
 # Pengy desktop app (package/pengy; CLI from Core, web UI from Server): Qt6
 # Widgets/Network/Svg, native on Wayland (qt6wayland), pinned first in the
 # dock (post-build favorites). Qt's text/image stack uses the system fontconfig,

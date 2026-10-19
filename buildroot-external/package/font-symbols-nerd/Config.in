@@ -1,0 +1,14 @@
+config BR2_PACKAGE_FONT_SYMBOLS_NERD
+	bool "font-symbols-nerd"
+	depends on BR2_PACKAGE_FONTCONFIG
+	help
+	  Symbols Nerd Font (and its Mono variant): the Nerd Fonts icon
+	  glyphs alone, in the Private Use Area, with no letters.
+	  starship's default prompt (the comfort shell), powerline
+	  prompts, eza --icons and lazygit draw these; without a font
+	  that has them every icon is a box. fontconfig's per-glyph
+	  fallback finds them under any terminal font. Upstream's
+	  10-nerd-font-symbols.conf is not installed: it makes this font
+	  the preferred "monospace", which fallback does not need.
+
+	  https://github.com/ryanoasis/nerd-fonts

@@ -1,0 +1,10 @@
+config BR2_PACKAGE_FONT_NOTO_SYMBOLS2
+	bool "font-noto-symbols2"
+	help
+	  Noto Sans Symbols 2: the Unicode symbol blocks no other
+	  shipped font covers, e.g. the media-control triangles
+	  (U+23F5, Claude Code's mode line) and Symbols for Legacy
+	  Computing (U+1FB00, terminal graphs). Ubuntu ships it in
+	  fonts-noto-core.
+
+	  https://github.com/notofonts/symbols

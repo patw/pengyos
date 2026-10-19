@@ -805,6 +805,23 @@ for icon in help-info-symbolic link-symbolic view-grid-symbolic view-list-symbol
 done
 echo "post-build: COSMIC's theme icons are all present"
 
+# --- gdk-pixbuf can load those icons ---------------------------------------------
+# The themes are SVG only. Until 26.10.35 gdk-pixbuf had no SVG loader, so a
+# host GTK3 window (the portal's app chooser and print dialog) loaded none of
+# them, silently. librsvg's loader is enabled in external.mk; this checks it
+# landed in loaders.cache and that the loader the cache names is installed.
+PIXBUF_CACHE="${TARGET_DIR}/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+if ! grep -q '^"svg" ' "${PIXBUF_CACHE}" 2>/dev/null; then
+    echo "post-build: ERROR: gdk-pixbuf's loaders.cache lists no SVG loader (GTK3 icons will not load)" >&2
+    exit 1
+fi
+_svg_loader="$(grep -B1 '^"svg" ' "${PIXBUF_CACHE}" | head -1 | tr -d '"')"
+if [ ! -f "${TARGET_DIR}${_svg_loader}" ]; then
+    echo "post-build: ERROR: loaders.cache names ${_svg_loader}, which is not installed" >&2
+    exit 1
+fi
+echo "post-build: gdk-pixbuf loads SVG (${_svg_loader})"
+
 # --- The MIME index: which installed app opens which file type ------------------
 # (update-desktop-database -> /usr/share/applications/mimeinfo.cache.) Without
 # it, "Open with" lists stayed empty ("No registered applications"); the

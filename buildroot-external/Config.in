@@ -10,6 +10,8 @@ menu "PengyOS (external tree)"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/dconf/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-fira/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-noto-color-emoji/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-noto-symbols2/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-symbols-nerd/Config.in"
 
 	# Desktop hardware control Buildroot 2026.08 does not ship.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/power-profiles-daemon/Config.in"
