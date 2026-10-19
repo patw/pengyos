@@ -4,7 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Warning
 
-Never auto commit to this repo, the user will always do that themselves.  Also the machine is tight on memory use /data/tmp not /tmp for temporary stuff.
+**Never auto commit to this repo, the user will always do that themselves.** This is aimed
+at Claude Code, which tends to commit and push constantly. It is a standing instruction for
+that tool.
+
+Pengy is a separate case: **Pengy may commit and push whenever it wants** (operator's
+standing instruction, 2026-10-19). Pengy's commits still follow the rules below — one logical
+change per commit, a message that says *why*, and the repo gate run before landing.
+
+Also the machine is tight on memory use /data/tmp not /tmp for temporary stuff.
 
 ## What this is
 

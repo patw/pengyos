@@ -495,8 +495,9 @@ host listing everything the loop recommends, each with **Approve** and **Deny**.
   page's waiting list, over the same span as an approval.
 - **When it counts.** `act` re-plans when `decisions.json` is newer than `plan.json`, so an
   answer given after the plan is written still counts in the same night's act run. The
-  plan/act schedule is machine-local (a crontab), not the tool's: behoserver plans at 19:00
-  and acts at 02:00 since 2026-10-19, so an approval has a 7-hour window to land.
+  plan/act schedule is machine-local (a crontab), not the tool's: the reference build host
+  plans at 19:00 and acts at 02:00 since 2026-10-19, so an approval has a 7-hour window to
+  land.
 - **The email links it** when `web_url` is set in `nightly.toml`.
 
 ### Acceptance criteria (phase 5)

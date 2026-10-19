@@ -23,8 +23,9 @@ from pengyos_nightly.versions import vkey
 
 #: When this machine's act run happens. The schedule is a crontab, so it is machine-local
 #: policy and lives in nightly.toml as `act_time = "02:00"`; the default is the historical
-#: behoserver value. Hardcoding it here made the page tell the operator a time that was
-#: wrong on the machine the page was running on (behoserver moved to 02:00 on 2026-10-19).
+#: 21:00. Hardcoding it here made the page tell the operator a time that was wrong on the
+#: machine the page was running on, after that machine moved its act cron to 02:00
+#: (2026-10-19). See ../../docs/operations.md §3.
 DEFAULT_ACT_TIME = "21:00"
 
 

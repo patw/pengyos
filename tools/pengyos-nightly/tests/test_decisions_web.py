@@ -135,8 +135,8 @@ def test_approving_writes_the_decision_the_planner_reads(tmp_path):
 def test_the_page_states_the_act_time_this_machine_actually_uses(tmp_path):
     """The act schedule is a crontab, so it is machine-local policy. The page used to
     print a hardcoded 21:00, which told the operator a time that was wrong on any machine
-    that moved the cron (behoserver moved to 02:00 on 2026-10-19) — an approval looked
-    like it had 2 hours to land when it had 7.
+    that moved the cron (the reference host moved to 02:00 on 2026-10-19) — an approval
+    looked like it had 2 hours to land when it had 7.
     """
     paths = _state(tmp_path)
     _client(paths, tmp_path).post("/decide", data={

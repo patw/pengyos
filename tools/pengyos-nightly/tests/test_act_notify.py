@@ -41,7 +41,7 @@ def _seed(tmp_path, actions, *, cfg=None):
     state_dir.mkdir(parents=True, exist_ok=True)
     (state_dir / "nightly.toml").write_text(cfg or (
         f'act_enabled = true\npush = false\nmax_actions = 12\nmax_releases = 1\n'
-        f'key_file = "{B._key(tmp_path)}"\nweb_url = "http://10.0.23.6:5050/"\n'))
+        f'key_file = "{B._key(tmp_path)}"\nweb_url = "http://build-host.home.lab:5050/"\n'))
     (state_dir / "plan.json").write_text(json.dumps(
         {"date": TODAY.isoformat(), "actions": actions, "refused": []}, sort_keys=True))
     (state_dir / "state.json").write_text(json.dumps({}))
@@ -76,7 +76,7 @@ def test_a_clean_tree_refusal_mails_the_operator(tmp_path, capsys):
     assert "clean_tree" in subj and "1 change(s) published nothing" in subj, subj
     assert "2026-10-18" in subj, subj
     assert action["id"] in body, "the mail names the change the guard blocked"
-    assert "http://10.0.23.6:5050/" in body, "the mail links the decision page"
+    assert "http://build-host.home.lab:5050/" in body, "the mail links the decision page"
     assert "refusal notice sent" in out, out
     assert _sent(tmp_path), "the notice is on disk whether the mailer worked or not"
 
