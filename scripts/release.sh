@@ -31,6 +31,13 @@
 # BUILD_ID from the commit.
 set -euo pipefail
 
+# Published artifacts must stay world-readable: the site is served by another
+# user (nginx on miniserv), so a restrictive umask here silently 403s the whole
+# feed. It happened: an agent-run release under umask 0077 published every
+# 26.10.33 file as -rw------- and -rwx------, the --push copied those modes, and
+# `pengyos-update check` got 403 from the live feed until they were chmodded.
+umask 022
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TARGETS_FILE="${REPO}/targets.toml"
 BUILD_ROOT="${PENGYOS_BUILD_ROOT:-$HOME/build/pengyos}"
