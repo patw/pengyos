@@ -132,6 +132,28 @@ def test_approving_writes_the_decision_the_planner_reads(tmp_path):
     assert "21:00" in v["approved"][0]["status"]
 
 
+def test_the_page_states_the_act_time_this_machine_actually_uses(tmp_path):
+    """The act schedule is a crontab, so it is machine-local policy. The page used to
+    print a hardcoded 21:00, which told the operator a time that was wrong on any machine
+    that moved the cron (behoserver moved to 02:00 on 2026-10-19) — an approval looked
+    like it had 2 hours to land when it had 7.
+    """
+    paths = _state(tmp_path)
+    _client(paths, tmp_path).post("/decide", data={
+        "kind": "update", "component": "pengy", "target": "1.12.2", "decision": "approved"})
+
+    # Default: a machine that says nothing about the schedule gets the historical value.
+    assert web.view(paths, tmp_path, run=_clean)["act_time"] == "21:00"
+
+    (paths["policy"]).write_text('act_enabled = true\nact_time = "02:00"\n')
+    v = web.view(paths, tmp_path, run=_clean)
+    assert v["act_time"] == "02:00", v["act_time"]
+    assert "02:00" in v["approved"][0]["status"], v["approved"][0]["status"]
+    assert "21:00" not in v["approved"][0]["status"], "the stale default must not leak"
+    page = _client(paths, tmp_path).get("/")
+    assert b"02:00" in page.data, "the page the operator reads says the real time"
+
+
 def test_what_no_act_path_can_carry_out_cannot_be_approved(tmp_path):
     paths = _state(tmp_path)
     c = _client(paths, tmp_path)

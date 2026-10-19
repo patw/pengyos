@@ -322,7 +322,7 @@ does not publish more than `max_releases` images a night, and it never reaches
 |---|---|
 | `channel_locked` | the publish channel is the constant `testing`; `update-promote` and `--channel stable` are unreachable — asserted on the argv before anything runs |
 | `major_never` | a bump that changes the release series is never acted on unless the operator approved that version (the `approved` lane). A `tree_move` is exempt: crossing to a new Buildroot series **is** the scheduled event, and `major_never` guards package pins, not the tree |
-| `tree_move_not_executable` | a `tree_move` is planned, guarded and accounted for, then refused **by name**: the act lane has no full-rebuild path yet, so publishing a plan that looks executable would hand a tree move to a lane that cannot run it and turn a design gap into a 21:00 build error |
+| `tree_move_not_executable` | a `tree_move` is planned, guarded and accounted for, then refused **by name**: the act lane has no full-rebuild path yet, so publishing a plan that looks executable would hand a tree move to a lane that cannot run it and turn a design gap into an act-time build error |
 | `stock_version_immovable` | the routine lane may only bump pins we own; a stock package moves with a Buildroot release, not with a nightly |
 | `evidence_required` | NVD must place the shipped version inside the affected range (patch shape) or prove the target closes the CVE (bump shape) |
 | `fix_commits_available` | a patch is carried per CVE, and only for a CVE NVD names a **fetchable** upstream fix for (a commit, or a pull/merge request on a host that serves `.patch`); a component with nothing fetchable is refused, and one with a mix ships the fetchable part and names the rest as still open |
@@ -494,7 +494,9 @@ host listing everything the loop recommends, each with **Approve** and **Deny**.
 - **What a denial means.** The item is not considered (`operator_denied`) and leaves the
   page's waiting list, over the same span as an approval.
 - **When it counts.** `act` re-plans when `decisions.json` is newer than `plan.json`, so an
-  answer given after the 19:00 plan still counts at 21:00.
+  answer given after the plan is written still counts in the same night's act run. The
+  plan/act schedule is machine-local (a crontab), not the tool's: behoserver plans at 19:00
+  and acts at 02:00 since 2026-10-19, so an approval has a 7-hour window to land.
 - **The email links it** when `web_url` is set in `nightly.toml`.
 
 ### Acceptance criteria (phase 5)

@@ -21,7 +21,16 @@ from pengyos_nightly import decisions as D
 from pengyos_nightly import guards as G
 from pengyos_nightly.versions import vkey
 
-ACT_TIME = "21:00"
+#: When this machine's act run happens. The schedule is a crontab, so it is machine-local
+#: policy and lives in nightly.toml as `act_time = "02:00"`; the default is the historical
+#: behoserver value. Hardcoding it here made the page tell the operator a time that was
+#: wrong on the machine the page was running on (behoserver moved to 02:00 on 2026-10-19).
+DEFAULT_ACT_TIME = "21:00"
+
+
+def act_time(cfg: dict) -> str:
+    """When tonight's act run fires, as this machine configures it."""
+    return str(cfg.get("act_time") or DEFAULT_ACT_TIME)
 
 
 def _read(path: Path, default):
@@ -60,14 +69,15 @@ def _cannot_act(component: str, pkg: dict | None) -> str:
     return ""
 
 
-def _status(entry: dict | None, plan_new: bool, decided: dict | None) -> str:
+def _status(entry: dict | None, plan_new: bool, decided: dict | None,
+            at: str = DEFAULT_ACT_TIME) -> str:
     """One sentence on what tonight's run will do with an approved item."""
     if decided is None:
         return ""
     if not plan_new or entry is None:
-        return f"Approved. The {ACT_TIME} run plans it and builds it if every check passes."
+        return f"Approved. The {at} run plans it and builds it if every check passes."
     if entry.get("allowed"):
-        return (f"Approved and planned: the {ACT_TIME} run builds "
+        return (f"Approved and planned: the {at} run builds "
                 f"{entry['current']} → {entry['target']}, boot-checks it and publishes to testing.")
     return "Approved, but the plan refused it: " + "; ".join(entry.get("refused_reason") or [])
 
@@ -96,7 +106,8 @@ def view(paths: dict, repo: Path, run=subprocess.run, now: dt.datetime | None = 
                 "editions": (pkg or {}).get("editions", []),
                 "cannot_act": _cannot_act(name, pkg), "decision": entry if verdict else None}
         if verdict == D.APPROVED:
-            item["status"] = _status(_plan_entry(plan, name, ("approved",)), plan_new, entry)
+            item["status"] = _status(_plan_entry(plan, name, ("approved",)), plan_new, entry,
+                                      at=act_time(cfg))
             approved.append(item)
         elif verdict == D.DENIED:
             denied.append(item)
@@ -150,7 +161,7 @@ def view(paths: dict, repo: Path, run=subprocess.run, now: dt.datetime | None = 
     return {"now": (now or dt.datetime.now()).strftime("%Y-%m-%d %H:%M"),
             "observed": obs.get("date", "never"), "planned": plan.get("date", "never"),
             "act_enabled": bool(cfg.get("act_enabled")), "clean_tree": ok_tree,
-            "repo": str(repo), "act_time": ACT_TIME,
+            "repo": str(repo), "act_time": act_time(cfg),
             # What can be approved first, a new series before an update; what no act path
             # can carry out last.
             "waiting": sorted(waiting, key=lambda i: (bool(i["cannot_act"]),
