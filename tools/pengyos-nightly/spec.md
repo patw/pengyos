@@ -292,7 +292,17 @@ release**: the batch is the unit of work, the signed image is the unit of risk.
 6. **merges the branch into `main` only after a successful publish**;
 7. **records** the batch: one `actions.json` entry per action plus a batch entry, a
    `pengyos-attest` record for the batch and one per action, the report, and the
-   cooldown / `patched_by` entries in `state.json`.
+   cooldown / `patched_by` entries in `state.json`;
+8. **tells the maintainer** when it refused: one mail naming the step that refused, the
+   changes it blocked, the editions the image would have covered and the CVE matches
+   left open (added 0.14.0). Silence is the correct signal for *"nothing to do"* and
+   `nothing_allowed` sends nothing; a **refusal** is not, and until now it was silent
+   too — it landed only in the cron log, `actions.json` and `status`. On 2026-10-18 a
+   6-change batch closing 11 CVE matches was refused at `clean_tree` by a PengyTasker
+   job holding the shared checkout dirty, and the maintainer's morning question was
+   *"did the act loop run at all?"*. `--no-email` suppresses it; the notice is written
+   to `reports/<date>-act.html` before the mailer runs, and a mailer that fails never
+   changes the act result or the exit code.
 
 Any step failing stops the run **before anything is published**, restores main's
 working tree, leaves the branch for inspection, and reports the failure. A build or

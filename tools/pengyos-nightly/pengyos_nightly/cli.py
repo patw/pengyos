@@ -4,6 +4,8 @@
     pengyos-nightly observe
     pengyos-nightly triage  [--max-triage N] [--jobs N] [--model ALIAS]
     pengyos-nightly report  [--no-email] [--force-email] [--mark-reported]
+    pengyos-nightly plan    [--json]
+    pengyos-nightly act     [--only ID] [--max N] [--apply] [--no-email] [--to ADDR]
     pengyos-nightly status          # is the loop alive? read-only, exit 1 if not
     pengyos-nightly web             # the decision page: approve or deny (needs Flask)
 
@@ -278,7 +280,44 @@ def do_plan(args, today: dt.date | None = None, get=None) -> dict:
     return plan
 
 
-def do_act(args, today: dt.date | None = None, run=subprocess.run) -> dict:
+def notify_act(args, result: dict, batch: list[dict], today: dt.date,
+               send=report.send) -> bool:
+    """Tell the operator about a night the act lane refused. Fail-soft.
+
+    Silence is right for "nothing to do" and was being used for "refused". The refusal
+    landed in the cron log, in actions.json and in `status`; the operator's only way to
+    find out was to ask. On 2026-10-18 a 6-change batch closing 11 CVE matches was
+    refused at clean_tree by a PengyTasker job holding /data/PengyOS dirty, and the
+    night went missing with no signal at all.
+
+    A mailer that fails must not change the act result or the exit code: the refusal is
+    already recorded, and a broken mailer must not turn a reported failure into a
+    different one.
+    """
+    p = _paths(args)
+    payload = dict(result)
+    payload.setdefault("planned", [a["id"] for a in batch])
+    payload.setdefault("editions", sorted({e for a in batch for e in a["editions"]}))
+    payload.setdefault("cves", sorted({c for a in batch for c in (a.get("closes") or [])}))
+    web_url = cfgmod.load(p["policy"]).get("web_url", "")
+    body = report.render_act_failure(today.isoformat(), payload, web_url=web_url)
+    subj = report.act_subject(today.isoformat(), payload)
+    p["reports"].mkdir(parents=True, exist_ok=True)
+    out = p["reports"] / f"{today.isoformat()}-act.html"
+    out.write_text(body)          # on disk first: the mailer may fail, the notice may not
+    try:
+        sent = send(subj, body, out, to=getattr(args, "to", None))
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip().splitlines()
+        why = f"{exc.cmd[0]} exited {exc.returncode}" + (f": {detail[-1]}" if detail else "")
+        print(f"act: refusal notice NOT delivered ({why}); the report is at {out}")
+        return False
+    print(f"act: refusal notice sent -> {out}")
+    return sent
+
+
+def do_act(args, today: dt.date | None = None, run=subprocess.run,
+           send=report.send) -> dict:
     """Run the night's batch of allowed actions end to end, as ONE release.
 
     Dry run unless --apply. The batch is the unit of work; the signed image is the
@@ -332,6 +371,9 @@ def do_act(args, today: dt.date | None = None, run=subprocess.run) -> dict:
             # not the one before it: otherwise status keeps advertising the changes it
             # just published as the next thing to do.
             do_plan(args, today=today)
+        elif result.get("error") and not getattr(args, "no_email", False):
+            # A refusal is the guard doing its job, and the guard is silent. Say so.
+            notify_act(args, result, batch, today or dt.date.today(), send=send)
     return result
 
 
@@ -567,6 +609,12 @@ def main(argv=None) -> int:
             sp.add_argument("--apply", action="store_true",
                             help="really branch, build, sign and publish; without this the "
                                  "run is a dry run that changes nothing")
+            # A refusal mails the operator (see notify_act). --no-email is the dev
+            # escape hatch; --to aims it, same as `report`.
+            sp.add_argument("--no-email", action="store_true",
+                            help="do not send the refusal notice; the refusal is still "
+                                 "recorded in actions.json and reported by `status`")
+            sp.add_argument("--to", default=None)
         if name == "web":
             sp.add_argument("--host", default="127.0.0.1",
                             help="address to listen on (0.0.0.0 for the LAN)")
