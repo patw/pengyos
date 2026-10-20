@@ -104,9 +104,17 @@ them.
 
 **The budget.** PengyOS carries at most **10 maintained forks** (a fork = a
 component we build from our own tree or our own pinned source with our own changes,
-outside a stock Buildroot recipe) at any time. Current count: **0**. Host-built
+outside a stock Buildroot recipe) at any time. Current count: **1** —
+`openssh-pengyos`, pinned at 10.6p1, carried from 2026-10-19 with the operator's
+sign-off (the Tier-2 rule below); ledger entry `openssh-10.6p1-fork`. Host-built
 COSMIC is *not* a fork under this definition — it is an unbuilt dependency, and it
 is the thing Band 2/3 work should convert into recipes.
+
+> **Enforcement, stated honestly (2026-10-19).** The budget is written as a hard
+> gate, and `scripts/pengyos_gate.py` does not implement one: it validates every
+> ledger entry's required fields and every patch set's entry, and has no fork count.
+> Until it does, the count above is maintained by hand. `divergence.toml`'s header
+> says the same thing.
 
 Rules:
 

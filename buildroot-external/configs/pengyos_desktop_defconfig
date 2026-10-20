@@ -164,16 +164,20 @@ BR2_PACKAGE_OPENSSL=y
 BR2_PACKAGE_TAR=y
 
 # --- SSH (US-CORE-2: reach a headless node over the network) ----------------
-# openssh-server, enabled at boot by the overlay symlink
-# etc/systemd/system/multi-user.target.wants/sshd.service. KEY_UTILS ships
-# ssh-keygen, which sshd.service runs (ssh-keygen -A) to mint host keys on
-# first boot. Root login is key-only (PasswordAuthentication no in the overlay
-# sshd_config); inject a public key at build time via PENGYOS_AUTHORIZED_KEYS_FILE
-# (see board/core/post-build.sh).
-BR2_PACKAGE_OPENSSH=y
-BR2_PACKAGE_OPENSSH_SERVER=y
-BR2_PACKAGE_OPENSSH_CLIENT=y
-BR2_PACKAGE_OPENSSH_KEY_UTILS=y
+# openssh-pengyos (our fork of openssh, pinned at 10.6p1), enabled at boot by the
+# overlay symlink etc/systemd/system/multi-user.target.wants/sshd.service.
+# KEY_UTILS ships ssh-keygen, which sshd.service runs (ssh-keygen -A) to mint host
+# keys on first boot. Root login is key-only (PasswordAuthentication no in the
+# overlay sshd_config); inject a public key at build time via
+# PENGYOS_AUTHORIZED_KEYS_FILE (see board/core/post-build.sh).
+# The fork exists because 10.5p1 carries remote unauthenticated sshd CVEs fixed
+# upstream in 10.6 and a br2-external tree cannot move a stock version: see
+# divergence.toml -> openssh-10.6p1-fork, which carries the expiry that ends it.
+BR2_PACKAGE_OPENSSH=n
+BR2_PACKAGE_OPENSSH_PENGYOS=y
+BR2_PACKAGE_OPENSSH_PENGYOS_SERVER=y
+BR2_PACKAGE_OPENSSH_PENGYOS_CLIENT=y
+BR2_PACKAGE_OPENSSH_PENGYOS_KEY_UTILS=y
 
 # --- Groups systemd expects (board/core/users.table) --------------------------
 # No systemd-sysusers in the image, so groups its sysusers.d would create are
@@ -363,7 +367,7 @@ BR2_TOOLCHAIN_BUILDROOT_CXX=y
 # tmux — persistent terminal sessions for servers/remote admin.
 BR2_PACKAGE_TMUX=y
 # mosh — remote shell with roaming/handoff (works across NAT and flaky links).
-BR2_PACKAGE_MOSH=y
+# BR2_PACKAGE_MOSH=y  # probe: mosh selects BR2_PACKAGE_OPENSSH (package/mosh/Config.in:20), which forces stock openssh 10.5p1 back into the image
 # ripgrep — server-side text search.
 BR2_PACKAGE_RIPGREP=y
 # jq — JSON on the command line (config/data wrangling, backup manifests).

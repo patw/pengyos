@@ -1,0 +1,8 @@
+# From https://www.openssh.com/txt/release-10.6
+# Upstream publishes SHA256 base64-encoded: qdyVZd/+hkD2TYY80poyvEo9vewFZqf8RMXW7nZ9Xzk=
+# decoded to the hex below, and confirmed against the tarball downloaded here on
+# 2026-10-19. Upstream gives no plain-text checksum file, so the provenance is
+# the release notes plus the GPG signature openssh-10.6p1.tar.gz.sig.
+sha256  a9dc9565dffe8640f64d863cd29a32bc4a3dbdec0566a7fc44c5d6ee767d5f39  openssh-10.6p1.tar.gz
+# Locally calculated
+sha256  5bb5b160726ef5756e4f32fe95b35249c294962419650f48d05134b486d27ccb  LICENCE
