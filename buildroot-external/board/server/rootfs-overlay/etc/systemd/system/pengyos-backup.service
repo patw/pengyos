@@ -6,6 +6,10 @@
 # service is Type=oneshot so systemd treats each backup as a finite, completed
 # job.
 #
+# No RemainAfterExit=. With it, the first run leaves this unit "active (exited)"
+# for the rest of the boot, and a timer cannot start a unit that is already
+# active, so the backup ran once per boot instead of nightly.
+#
 # ExecStart references two shipped targets, both staged in the overlay:
 #   * /usr/libexec/pengyos/pengyos-backup.sh  — the executable (the routine itself)
 #   * /etc/pengyos/backup.conf          — its configuration
@@ -29,4 +33,3 @@ Wants=network.target
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/pengyos/pengyos-backup.sh /etc/pengyos/backup.conf
-RemainAfterExit=yes

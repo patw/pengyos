@@ -6,6 +6,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The emitted `pengyos-backup.service` no longer sets `RemainAfterExit=yes`. A
+  timer-driven oneshot with it stays "active (exited)" after its first run, and
+  the timer cannot start an active unit, so only the first scheduled backup of
+  each boot ran. `test_service_is_oneshot` now asserts the option is absent.
+
 ### Added
 - **GitHub-ready contract** (`tests/test_repo.py`): the repo must ship the
   required docs/metadata files AND have a full green test suite (spec.md

@@ -157,7 +157,9 @@ def test_timer_deterministic():
 def test_service_is_oneshot():
     sections = _parse_unit(render_service(_valid_plan(), "restic"))
     assert _option(sections, "Service", "Type") == "oneshot"
-    assert _option(sections, "Service", "RemainAfterExit") == "yes"
+    # RemainAfterExit=yes would keep the unit active after one run, so the
+    # timer could never start it again until the next boot.
+    assert _option(sections, "Service", "RemainAfterExit") is None
 
 
 def test_service_onfailure_points_at_alert():

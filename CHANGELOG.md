@@ -17,6 +17,19 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — Server metrics ran once per boot, not hourly; backups once per boot, not nightly (found on beholaptop, 26.10.35)
+
+`pengyos-monitor.service` and `pengyos-backup.service` are `Type=oneshot` units
+started by timers, and both set `RemainAfterExit=yes`. After the first run the
+unit stays "active (exited)" until shutdown, and a timer does not start a unit
+that is already active: `systemctl list-timers` showed `pengyos-monitor.timer`
+with no next run, and `/var/log/pengyos-monitor.log` had one line per boot
+(two in 21 hours). The backup timer (off by default) had the same flaw, so a
+machine that turned it on got one backup per boot and nothing after. Both
+units drop the option; the `pengyos-server-backup` tool's generated unit did
+the same and is fixed too. Every Server-based edition (Server, Desktop and
+their NVIDIA variants) has this since the overlay was first written.
+
 ### Fixed — no icons in GTK3 dialogs; boxes in the terminal (found on beholaptop, 26.10.32)
 
 **Icons.** gdk-pixbuf had no SVG loader: Buildroot builds librsvg without it

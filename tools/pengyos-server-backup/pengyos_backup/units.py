@@ -223,8 +223,9 @@ def render_timer(plan: BackupPlan, binary: str) -> str:
 def render_service(plan: BackupPlan, binary: str) -> str:
     """Render the ``pengyos-backup.service`` unit for *plan* / *binary*.
 
-    ``Type=oneshot`` + ``RemainAfterExit=yes`` so systemd treats each backup as a
-    finite, completed job. The golden argv (see :func:`service_exec_starts`)
+    ``Type=oneshot`` so systemd treats each backup as a finite, completed job.
+    Deliberately no ``RemainAfterExit=yes``: it would leave the unit active
+    after the first run, and the timer could not start it again that boot. The golden argv (see :func:`service_exec_starts`)
     runs one backup + one forget+prune per target. ``OnFailure`` points at the
     alert hook.
     """
@@ -239,7 +240,6 @@ def render_service(plan: BackupPlan, binary: str) -> str:
     lines.append("")
     lines.append("[Service]")
     lines.append("Type=oneshot")
-    lines.append("RemainAfterExit=yes")
     for start in starts:
         lines.append(start.render())
     lines.append(f"OnFailure={ALERT_SERVICE_NAME}")

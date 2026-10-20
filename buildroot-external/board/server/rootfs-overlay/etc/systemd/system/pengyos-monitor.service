@@ -6,6 +6,10 @@
 # service is Type=oneshot so systemd treats each collected sample as a finite,
 # completed job.
 #
+# No RemainAfterExit=. With it, the first run leaves this unit "active (exited)"
+# for the rest of the boot, and a timer cannot start a unit that is already
+# active, so the metrics collection ran once per boot instead of hourly.
+#
 # ExecStart references two shipped targets, both staged in the overlay:
 #   * /usr/libexec/pengyos/pengyos-monitor.sh  — the executable (the collector itself)
 #   * /etc/pengyos/monitor.conf          — its configuration
@@ -28,4 +32,3 @@ Wants=network.target
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/pengyos/pengyos-monitor.sh /etc/pengyos/monitor.conf
-RemainAfterExit=yes
