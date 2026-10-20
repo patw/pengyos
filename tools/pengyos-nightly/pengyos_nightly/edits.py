@@ -222,10 +222,16 @@ def hash_is_generated(mk_text: str, raw: dict, coords: dict) -> bool:
     download: Buildroot clones the repo and re-tars it. Hashing the SITE archive here
     produces a real digest of the wrong file - measured 2026-10-12, fzf 0.74.5's generated
     archive is 45fa3fb8..., GitHub's own tarball at the SITE URL is 5529d088...
-    An explicit *_SOURCE means the recipe names a real file, so it stays downloadable.
+    An explicit *_SOURCE does not make a golang/cargo archive downloadable. Buildroot
+    downloads to that name, then the infra vendors the crates and re-packs under the same
+    name, and check-hash runs on the re-packed file. Four authored recipes are that shape
+    - cosmic-portal, greetd, uutils-coreutils, zram-generator - and greetd's own .hash
+    says it in words: "the hash below is therefore of the POST-PROCESSED tarball".
+    Treating uutils-coreutils as downloadable made the plan write the raw GitHub digest,
+    a true digest of the wrong file, and the rehearsal of 2026-10-19 died on its download
+    step: the fzf 0.74.5 failure of 2026-10-12 in a different recipe. This short-circuit
+    was added in 0.12.1 for cosmic-portal and outlived the case it was drawn from.
     """
-    if (raw.get("SOURCE") or "").strip():
-        return False
     post = (raw.get("DOWNLOAD_POST_PROCESS") or "").strip() or infra_post_process(mk_text)
     return post in ("go", "cargo")
 
