@@ -56,11 +56,12 @@ copy of it.
 | gst1-plugins-bad | 1.24.13 | 1 | `gst1-plugins-bad-1.24.13-cve-2026-2923` | CVE-2026-2923 (attributed here from gstreamer1 by the fix's own paths) |
 | gst1-libav-pengyos | 1.24.13 | 1 | `gst1-libav-pengyos-1.24.13-ffmpeg9` | nothing — a build fix that follows from the ffmpeg 9 fork, not a CVE |
 | podman | v5.7.0 | 1 | `podman-v5.7.0-cve-2026-55686` | CVE-2026-55686 |
-| upower | 0.99.19 | 1 | `upower-0.99.19-capacity-level` | nothing — a functional fix, not a CVE |
 
-Two of these are not CVE fixes, and that is allowed by rule 1 for the same reason the
-ffmpeg and hplip fork patches are: they are carried on a recipe we author
-(`gst1-libav-pengyos`) or on a package where the change is ours to make (`upower`).
+One of these is not a CVE fix, and that is allowed by rule 1 for the same reason the
+ffmpeg and hplip fork patches are: it is carried on a recipe we author
+(`gst1-libav-pengyos`). The upower capacity_level set that used to sit here was deleted
+on 2026-10-20 when upower became a fork at 1.91.5, which carries the fix itself
+(`divergence.toml` -> `upower-1.91.5-fork`).
 
 Patches a recipe carries in its **own** directory are not listed here, because they
 are not delivered through `BR2_GLOBAL_PATCH_DIR`. `package/hplip-pengyos/` carries four

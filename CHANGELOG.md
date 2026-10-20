@@ -17,6 +17,22 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: the battery reading froze after suspend — UPower 1.91.5 as a fork (found on beholaptop, 26.10.35)
+
+- After resume, the panel and Settings → Power kept the battery reading from the
+  moment of wake-up: 75% and "7.1 hours left" for 83 minutes while the kernel read
+  48% and 1.7 h. UPower 0.99.19 (Buildroot 2026.08's pin, a recipe Buildroot has not
+  touched since 2022) pauses polling for sleep; a poll that fires while paused never
+  re-arms, and resume only clears the flag. About one suspend in five, measured. A
+  restart of `upower.service` or an AC plug/unplug brought it back. UPower 1.91.5
+  re-arms the poll on resume.
+- **`upower-pengyos` 1.91.5** replaces stock upower in the Desktop editions. It also
+  carries the capacity_level fix, so the `patches/upower/0.99.19` set is deleted.
+  **`thermald-pengyos`** is stock thermald 2.5.6 rebuilt against it: stock thermald
+  selects stock upower, which would otherwise be built beside the fork.
+  power-profiles-daemon now depends on the fork. Ledger entry `upower-1.91.5-fork`
+  (fork 4 of 10); pengyos-nightly watches upstream tags (`upower-fork`).
+
 ### Fixed — Server metrics ran once per boot, not hourly; backups once per boot, not nightly (found on beholaptop, 26.10.35)
 
 `pengyos-monitor.service` and `pengyos-backup.service` are `Type=oneshot` units

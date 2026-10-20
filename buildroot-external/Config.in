@@ -72,6 +72,14 @@ menu "PengyOS (external tree)"
 	# divergence.toml -> hplip-3.26.4-fork.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/hplip-pengyos/Config.in"
 
+	# Power: our fork of Buildroot's upower, pinned at 1.91.5 (Buildroot pins
+	# 0.99.19 and has not touched the recipe since 2022; 0.99.19's battery
+	# reading freezes after suspend). thermald links libupower-glib and selects
+	# the stock symbol, so it is rebuilt against the fork.
+	# divergence.toml -> upower-1.91.5-fork.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/upower-pengyos/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/thermald-pengyos/Config.in"
+
 	# Flatpak (the Desktop's app lane) and the two libraries it needs that
 	# Buildroot 2026.08 does not ship. Built here instead of copied from the
 	# build host.
