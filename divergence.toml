@@ -256,3 +256,39 @@ provenance = "https://www.openssh.com/txt/release-10.6 + openssh-10.6p1.tar.gz.s
 expiry = "Buildroot releases with openssh >= 10.6p1: delete buildroot-external/package/openssh-pengyos, restore the BR2_PACKAGE_OPENSSH lines in configs/layers/core.config, re-enable BR2_PACKAGE_MOSH in configs/layers/server.config, and remove the openssh-fork observe source from pengyos-nightly"
 observe_source = "pengyos-nightly observe, source id openssh-fork: git ls-remote --tags https://github.com/openssh/openssh-portable compared to OPENSSH_PENGYOS_VERSION (sources.openssh_fork_findings, added 2026-10-19 with the fixture tests/fixtures/ls-remote-openssh.txt). pkg-stats cannot see a fork - it scans the stock recipe, and the stock recipe is switched off."
 upstream_status = "released"
+
+
+[[divergence]]
+id        = "podman-v5.7.0-cve-2026-55686"
+kind      = "patch-set"
+component = "podman"
+pinned_version = "v5.7.0"
+editions  = ["pengyos-server", "pengyos-server-nvidia", "pengyos-desktop",
+             "pengyos-desktop-nvidia"]
+carried_since = "2026-10-19"
+patches_dir   = "buildroot-external/patches/podman/v5.7.0"
+
+# CVE-2026-55686: a container started with a volume mounted at the workdir is not
+# detected as such, so the workdir is treated as not existing and `podman run -w`
+# fails. Upstream's fix is d18e44e9abb3 ("libpod: simplify resolveWorkDir()"), named
+# in the CVE's own description. NVD names no commit for it, so the loop's patch lane
+# refuses the CVE (fix_commits_available) and this set is carried by hand.
+closes = ["CVE-2026-55686"]
+
+# The deviation, stated. The upstream commit is a source change plus a test change.
+# Buildroot applies patches to the extracted source tree, the test hunk does not apply
+# to v5.7.0 (the file it patches references podman/v6), and the loop's own record of
+# this fix as known-bad was that failure - not a problem with the fix. The carried
+# file is the upstream commit with the test hunk removed; the source hunk is
+# byte-for-byte upstream's. Recorded because a patch that is not the whole commit the
+# CVE names is exactly what this ledger exists to make visible, and because a future
+# pay-down must be able to tell what was carried.
+cost = "the carried patch drops the upstream commit's test/e2e hunk; the source hunk is unmodified"
+
+# The version-dir name is part of the contract, and getting it wrong is silent:
+# Buildroot resolves global patches at <global-patch-dir>/<rawname>/<VERSION>
+# (package/pkg-utils.mk:166), and podman's VERSION is v5.7.0 with the v. A directory
+# named 5.7.0 is not found, the patch is not applied, and nothing says so.
+expiry = "Buildroot releases with podman >= 6.0 containing d18e44e9abb3: delete buildroot-external/patches/podman, drop PODMAN_IGNORE_CVES, and pkg-stats reports the truth on its own"
+observe_source = "pkg-stats"
+upstream_status = "merged"
