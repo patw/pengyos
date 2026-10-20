@@ -42,9 +42,31 @@ patches/<package>/<version>/<NNNN>-<short-description>.patch
 
 ## Currently carried
 
+Regenerated from `divergence.toml` against the tree on 2026-10-19. The table listed
+only libxml2 for a while, which was stale: five more sets were carried and none of
+them appeared here. If you add a patch set, this table and the ledger move together —
+`scripts/pengyos_gate.py:check_ledger_covers_patch_sets` fails a patch directory with
+no ledger entry, so the ledger cannot drift from the tree; this table is the human
+copy of it.
+
 | Package | Version | Patches | Ledger entry | Closes |
 |---|---|---|---|---|
 | libxml2 | 2.15.3 | 7 | `libxml2-2.15.3-cve-2026` | CVE-2026-86137, -86138, -86139, -86140, -86142, -86143, -86144 |
+| gst1-plugins-good | 1.24.13 | 6 | `gst1-plugins-good-1.24.13-cve-2026-73433` | CVE-2026-73433, CVE-2026-73434 (avidemux; 4 of the 6 are the upstream series the two fixes sit in) |
+| gst1-plugins-bad | 1.24.13 | 1 | `gst1-plugins-bad-1.24.13-cve-2026-2923` | CVE-2026-2923 (attributed here from gstreamer1 by the fix's own paths) |
+| gst1-libav-pengyos | 1.24.13 | 1 | `gst1-libav-pengyos-1.24.13-ffmpeg9` | nothing — a build fix that follows from the ffmpeg 9 fork, not a CVE |
+| podman | v5.7.0 | 1 | `podman-v5.7.0-cve-2026-55686` | CVE-2026-55686 |
+| upower | 0.99.19 | 1 | `upower-0.99.19-capacity-level` | nothing — a functional fix, not a CVE |
 
-Expiry for that entry: a Buildroot point release (2026.08.1 or newer) that pins
-libxml2 ≥ 2.15.4, at which point the patch set is deleted.
+Two of these are not CVE fixes, and that is allowed by rule 1 for the same reason the
+ffmpeg and hplip fork patches are: they are carried on a recipe we author
+(`gst1-libav-pengyos`) or on a package where the change is ours to make (`upower`).
+
+Patches a recipe carries in its **own** directory are not listed here, because they
+are not delivered through `BR2_GLOBAL_PATCH_DIR`. `package/hplip-pengyos/` carries four
+(2 regenerated from Buildroot's, 2 authored here) and
+`package/openssh-pengyos/` carries none.
+
+Expiry for the libxml2 entry: a Buildroot point release (2026.08.1 or newer) that pins
+libxml2 ≥ 2.15.4, at which point the patch set is deleted. Each other entry names its
+own expiry in the ledger.

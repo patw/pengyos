@@ -363,6 +363,28 @@ define PYTHON3_CREATE_PYC_FILES
 endef
 endif
 
+# CVE-2013-7381 is not our libnotify. NVD's description reads "libnotify before 1.0.4
+# for Node.js", its CPE is cpe:2.3:a:libnotify_project:libnotify:*:*:*:*:*:node.js:*:*
+# (targetSoftware = node.js), and the commit it names as the fix is
+# mytrile/node-libnotify/commit/dfe7801d73a0 - the npm package, a Node.js binding.
+# PengyOS ships the GNOME C library (package/libnotify, 0.8.8) and ships no Node.js at
+# all: BR2_PACKAGE_NODEJS is off in every edition, so there is no npm package here for
+# the CVE to describe.
+#
+# It is reported against us because pkg-stats has no CPE for this recipe
+# (pkgstats-pengyos-desktop.json: "cpeid": null, cpe: error) and falls back to matching
+# the package *name* against NVD's CPE name. Both are called "libnotify".
+#
+# Suppressing it is not cosmetic. It is the only P0/P1 match on libnotify and it is a
+# 2014 command-injection finding in a JavaScript API; it has been sitting in the open
+# set, in the nightly report, and in the count the operator triages against, for as long
+# as the package has been scanned. Bumping libnotify to 0.8.9 - the version pkg-stats
+# reports as latest - closes nothing, because 0.8.9 is not the npm package either.
+#
+# Hand-written here rather than in patches/cve-declarations.mk: there is no patch
+# behind it. The loop does not duplicate a declaration written here.
+LIBNOTIFY_IGNORE_CVES += CVE-2013-7381
+
 # mke2fs picks a random filesystem UUID and directory hash seed, and post-image
 # reuses the UUID as the root PARTUUID (grub.cfg) and derives the disk images'
 # other IDs from it (board/common/image-ids.sh). Derive it from the finished

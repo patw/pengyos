@@ -183,6 +183,16 @@ def do_triage(args, complete=None) -> list[dict]:
             # that has already been acted on.
             if rec is None or (rec.get("resolved") and not rec.get("patched_by")):
                 todo.append((cve, name, {**pkg, "unsure": cve in pkg["unsure_cves"]}))
+            elif rec.get("version") != pkg["current"]:
+                # The recorded version is the version at first triage, and nothing
+                # moved it since. CVE-2022-38096|linux read `version: 7.2.5` while every
+                # tree built 7.2.11: the triage verdict ("P1, plausibly applies") was
+                # made against 7.2.5, and a reader of the record cannot tell which
+                # version it describes. Refresh the version the record claims so it
+                # names the tree it is about; the verdict itself is not re-derived,
+                # which is the model call this loop is trying not to spend twice.
+                rec["version"] = pkg["current"]
+                rec["version_refreshed"] = obs["date"]
     # Mark matches that disappeared (the package moved past them) as resolved.
     for key, rec in st["cves"].items():
         if key not in present and not rec.get("resolved"):
