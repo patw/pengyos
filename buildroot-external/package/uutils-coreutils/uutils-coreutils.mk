@@ -39,7 +39,7 @@
 # and we want the multicall binary placed by $(INSTALL) plus a symlink per
 # utility - the same shape every other PengyOS multicall install uses.
 
-UUTILS_COREUTILS_VERSION = 0.11.0
+UUTILS_COREUTILS_VERSION = 0.12.0
 UUTILS_COREUTILS_SOURCE = coreutils-$(UUTILS_COREUTILS_VERSION).tar.gz
 UUTILS_COREUTILS_SITE = $(call github,uutils,coreutils,$(UUTILS_COREUTILS_VERSION))
 UUTILS_COREUTILS_LICENSE = MIT
