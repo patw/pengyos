@@ -15,12 +15,21 @@
 #
 ################################################################################
 
-OPENSSH_PENGYOS_VERSION_MAJOR = 10.6
-OPENSSH_PENGYOS_VERSION_MINOR = p1
-OPENSSH_PENGYOS_VERSION = $(OPENSSH_PENGYOS_VERSION_MAJOR)$(OPENSSH_PENGYOS_VERSION_MINOR)
+OPENSSH_PENGYOS_VERSION = 10.6p1
+# A literal, not MAJOR/MINOR composed from two variables: the nightly reads this line to
+# observe the pin (sources.mk_value does not expand references), and a composed value
+# reached the observer as the literal string "$(OPENSSH_PENGYOS_VERSION_MAJOR)...", which
+# compared as a version and produced a phantom "new OpenSSH series" finding on the first
+# run after the fork landed.
 OPENSSH_PENGYOS_CPE_ID_VENDOR = openbsd
-OPENSSH_PENGYOS_CPE_ID_VERSION = $(OPENSSH_PENGYOS_VERSION_MAJOR)
-OPENSSH_PENGYOS_CPE_ID_UPDATE = $(OPENSSH_PENGYOS_VERSION_MINOR)
+# The upstream product name, not our package name. pkg-stats builds the CPE from
+# VENDOR:PRODUCT:VERSION:UPDATE (package/pkg-generic.mk:745) and defaults PRODUCT to the
+# recipe's RAWNAME; left at the default this package is
+# cpe:2.3:a:openbsd:openssh-pengyos:10.6:p1, which matches nothing in NVD - so the fork
+# would carry OpenSSH and be told it has no CVEs, forever, including the next one.
+OPENSSH_PENGYOS_CPE_ID_PRODUCT = openssh
+OPENSSH_PENGYOS_CPE_ID_VERSION = 10.6
+OPENSSH_PENGYOS_CPE_ID_UPDATE = p1
 OPENSSH_PENGYOS_SITE = https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable
 # Buildroot's default SOURCE is <pkg>-<version>.tar.gz, i.e. openssh-pengyos-10.6p1.tar.gz,
 # which upstream does not publish: the tarball is named openssh-10.6p1.tar.gz. Naming it
