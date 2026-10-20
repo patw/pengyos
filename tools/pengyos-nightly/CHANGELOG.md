@@ -28,7 +28,21 @@ versions follow [SemVer](https://semver.org/).
   host's cron moved to 02:00 on 2026-10-19 — the same defect the decision page had that
   week, and the one the page's fix left behind. `act_time` now lives in `config.DEFAULTS`
   and both readers take it from there.
-- **`_tarball_lines` built an anchor that was not a slice of the file.** It joined every
+- **A cargo recipe's hash is generated, whatever its `*_SOURCE` says.**
+  `hash_is_generated` short-circuited to "downloadable" when a recipe set an explicit
+  `*_SOURCE`. `package/pkg-cargo.mk:190` sets `_DOWNLOAD_POST_PROCESS = cargo`
+  unconditionally inside `inner-cargo-package`, so Buildroot vendors the crates and
+  re-packs under the SOURCE name and checks the hash of the re-packed file. Four
+  authored recipes are that shape — cosmic-portal, greetd, uutils-coreutils,
+  zram-generator — and greetd's and uutils-coreutils' own `.hash` files record the
+  post-processed digest by hand and say so. The plan wrote the raw GitHub digest for
+  uutils-coreutils 0.12.0: a true digest of the wrong file, dying on the download step.
+  The 0.12.1 test that asserted the old rule is corrected with the Buildroot line quoted.
+- **`rehearse.py` skipped the generated-hash step the act lane runs before pre-flight**,
+  so it reported pengy, starship and uutils-coreutils as failures — three of the six
+  actions in tonight's batch, on a night the lane handled all three. The harness is what
+  the README says to run before leaving the act lane armed, so a false failure there
+  reads as "disarm the loop", not as a harness gap.
   line mentioning the version, which is only a slice when those lines are adjacent.
   uutils-coreutils documents its hash in a comment paragraph whose middle lines name no
   version, so the joined text existed nowhere and `apply_edits` raised — the act lane
