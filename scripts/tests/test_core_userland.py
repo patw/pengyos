@@ -190,10 +190,17 @@ def _layer_symbols(text: str) -> list[str]:
 
 
 def _external_symbols() -> set[str]:
-    """Symbols this external tree declares itself (its own Config.in files)."""
+    """Symbols this external tree declares itself (its own Config.in files).
+
+    `menuconfig` counts as well as `config`: a package whose main symbol opens a
+    submenu is declared with `menuconfig`, and Buildroot defines it exactly the
+    same way. Missing it makes the layer-symbol test fail a legitimate fork -
+    package/ffmpeg-pengyos declares `menuconfig BR2_PACKAGE_FFMPEG_PENGYOS`, the
+    same shape Buildroot's own package/ffmpeg/Config.in uses.
+    """
     out: set[str] = set()
     for cin in EXT.rglob("Config.in*"):
-        for m in re.finditer(r"^\s*config\s+(BR2_[A-Z0-9_]+)\s*$", cin.read_text(), re.M):
+        for m in re.finditer(r"^\s*(?:menu)?config\s+(BR2_[A-Z0-9_]+)\s*$", cin.read_text(), re.M):
             out.add(m.group(1))
     return out
 

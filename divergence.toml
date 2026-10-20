@@ -158,66 +158,72 @@ editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
 carried_since = "2026-10-19"
 recipe        = "buildroot-external/package/ffmpeg-pengyos"
 
-# 25 P0/P1 CVE matches sat on Buildroot 2026.08's ffmpeg 6.1.5. Seventeen of them
-# name no upstream fix commit at all, so no cherry-pick set reaches them; the patch
-# lane closed 4 of 25 (measured by rehearsal on 2026-10-19: 5 of 10 patches apply,
-# and Buildroot applies the set in series, so a per-patch dry-run overstates it).
-# The fix is the version, and a stock version cannot be moved from a br2-external
-# tree. Same shape and same discipline as openssh-10.6p1-fork.
+# 37 P0/P1 CVE matches sit on Buildroot 2026.08's ffmpeg 6.1.5 (25 of them were in
+# the nightly's state when this fork was landed; the re-observe after it added the
+# rest). Seventeen name no upstream fix commit at all, so no cherry-pick set reaches
+# them; the patch lane closed 4 of 25 (measured by rehearsal on 2026-10-19: 5 of 10
+# patches apply, and Buildroot applies the set in series, so a per-patch dry-run
+# overstates it). The fix is the version, and a stock version cannot be moved from a
+# br2-external tree. Same shape and same discipline as openssh-10.6p1-fork.
 #
-# Measured against NVD's own ranges, 9.0.2 closes 22 of the 25. The three below are
-# named as affected *through* 9.0.2 - it is the last affected release, not the fix -
-# and 9.0.2 is the newest ffmpeg published, so no version closes them today. They
-# stay open in the ledger and are not claimed here.
+# Measured against what pkg-stats reports against the fork, not against my own
+# range arithmetic: 9.0.2 closes 32 of the 37 P0/P1 matches Buildroot's 6.1.5
+# carries, and 5 remain. The five are listed in `still_open`.
+#
+# The first two are a trap worth naming. NVD bounds CVE-2025-25468 and
+# CVE-2025-25469 with versionEndExcluding = "2025-01-13" - a DATE, ffmpeg's
+# snapshot numbering, not a release version. Comparing 9.0.2 against it as a
+# version tuple reads 9.0.2 < 2025.01.13, i.e. closed, and an earlier version of
+# this entry claimed exactly that. pkg-stats, which is the tool the ledger has to
+# agree with, reports both against 9.0.2. They are affected.
+#
+# The other three name 9.0.2 as the LAST affected release, and 9.0.2 is the newest
+# ffmpeg published, so no version closes them today.
 closes = [
-  "CVE-2023-50009",   # range ends before 7.0
-  "CVE-2024-31582",   # range ends before 7.0
-  "CVE-2025-1373",    # range ends at 7.1
-  "CVE-2025-1594",    # range ends at 7.1
-  "CVE-2025-25468",   # range ends 2025-01-13
-  "CVE-2025-25469",   # range ends 2025-01-13
-  "CVE-2026-30754",   # range ends before 8.1
-  "CVE-2026-30997",   # range ends at 8.0.1
-  "CVE-2026-40962",   # range ends before 8.1
-  "CVE-2026-64832",   # NVDEC double-free, CVSS 8.7; range ends at 8.1.2
-  "CVE-2026-65705",   # floodfill; range ends at 8.1.2
-  "CVE-2026-66036",   # avfilter; range ends at 8.1.2
-  "CVE-2026-66037",   # IAMF; range ends at 8.1.2 - the file does not exist in 6.1.5
-  "CVE-2026-66040",   # pngenc; range ends at 8.1.2
-  "CVE-2026-70629",   # RSCC; range ends before 9
-  "CVE-2026-70632",   # CFHD; range ends before 9
-  "CVE-2026-96611",   # mov ispe; range ends before 9.0
-  "CVE-2026-52296",   # range ends before 9.0
-  "CVE-2026-52297",   # range ends before 9.0
-  "CVE-2026-107660",  # avstring; range ends before 9.0.2
-  "CVE-2026-107695",  # hls; range ends before 8.1.3
-  "CVE-2026-107698",  # mov pssh; range ends before 8.0.2
+  "CVE-2023-50009",
+  "CVE-2024-31582",
+  "CVE-2025-1373",
+  "CVE-2025-1594",
+  "CVE-2026-107660",
+  "CVE-2026-107695",
+  "CVE-2026-107698",
+  "CVE-2026-30754",
+  "CVE-2026-30997",
+  "CVE-2026-40962",
+  "CVE-2026-52296",
+  "CVE-2026-52297",
+  "CVE-2026-64830",
+  "CVE-2026-64832",
+  "CVE-2026-64833",
+  "CVE-2026-64834",
+  "CVE-2026-64835",
+  "CVE-2026-65703",
+  "CVE-2026-65704",
+  "CVE-2026-65705",
+  "CVE-2026-65706",
+  "CVE-2026-66036",
+  "CVE-2026-66037",
+  "CVE-2026-66038",
+  "CVE-2026-66039",
+  "CVE-2026-66040",
+  "CVE-2026-70628",
+  "CVE-2026-70629",
+  "CVE-2026-70630",
+  "CVE-2026-70631",
+  "CVE-2026-70632",
+  "CVE-2026-96611",
 ]
 
-# 22 closed, 3 left. These three name 9.0.2 as the LAST affected release, and 9.0.2
-# is the newest ffmpeg published, so no version closes them today - they need a
-# 9.0.3, or a patch carried on the fork (allowed: this recipe is ours, so
-# patches/README.md rule 1 does not bar it). Counted as 22, not 25.
+# 32 closed, 5 left. Counted from pkg-stats' own report against
+# package/ffmpeg-pengyos at 9.0.2, measured 2026-10-19.
 still_open = [
-  "CVE-2026-107677",  # ed27bfcbbbc0 - named commit, applies to a tree newer than 9.0.2
-  "CVE-2026-107678",  # code.ffmpeg.org pull 24593
-  "CVE-2026-107696",  # code.ffmpeg.org pull 24902
+  "CVE-2025-25468",
+  "CVE-2025-25469",
+  "CVE-2026-107677",
+  "CVE-2026-107678",
+  "CVE-2026-107696",
 ]
 
-# The cost, stated rather than discovered. ffmpeg is a library, not only a command,
-# so forking it moves its dependents:
-#   - gst1-libav `select`s BR2_PACKAGE_FFMPEG (package/gstreamer1/gst1-libav/Config.in:5).
-#     A Kconfig select outranks a defconfig line, so with it in the config the
-#     vulnerable 6.1.5 is built beside the fork - two packages writing the same
-#     libavcodec, and pkg-stats reporting the vulnerable version as present. That is
-#     the mosh pattern from the openssh fork, one level deeper. Resolved by shipping
-#     our own copy of the plugin (package/gst1-libav-pengyos, same 1.24.13 source,
-#     same hash) linked against the fork, so the desktop keeps ffmpeg-backed decoding.
-#   - pipewire gates its ffmpeg scale filter on BR2_PACKAGE_FFMPEG and lists ffmpeg
-#     in DEPENDENCIES; redirected in external.mk, with the configure step ordered
-#     after the fork's staging install.
-#   - ffmpegthumbnailer is our own recipe; its dependency and its `depends on` moved
-#     to the fork.
 cost = "three recipes carry the fork's dependency redirect (gst1-libav-pengyos, ffmpegthumbnailer, pipewire via external.mk); the 12 patches carried on 6.1.5 are deleted, being upstream at 9.0.2; and gst1-libav needs one build patch, recorded at gst1-libav-pengyos-1.24.13-ffmpeg9, because ffmpeg 9 removed three codec IDs the plugin names"
 
 # The tarball's digest is not published as plain text by upstream
