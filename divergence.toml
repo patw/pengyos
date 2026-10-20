@@ -34,12 +34,19 @@
 
 schema = 1
 
+# The fork budget, as a value the gate can read (not prose it has to trust).
+# scripts/pengyos_gate.py:check_fork_budget counts kind = "fork" entries against this
+# and fails the repo past it. Raising it is a written decision in this file.
+fork_budget = 10
+
 # Budget: at most 10 maintained forks (kind = "fork") at any time.
 # Current fork count: 1 (openssh-pengyos, 2026-10-19).
-# NOT enforced by the gate as of 2026-10-19: scripts/pengyos_gate.py checks every entry's
-# fields and every patch set's ledger entry, and has no fork-count check. The line above
-# used to say "Enforced by the gate, not by good intentions", which is what the ledger's
-# own header promises and the gate does not do. Counted by hand until it is.
+# Enforced by the gate from 2026-10-19: scripts/pengyos_gate.py:check_fork_budget counts
+# kind = "fork" entries against `fork_budget` above and fails past it. It also fails a
+# fork whose observe_source is pkg-stats, because pkg-stats cannot see a fork at all -
+# it scans the stock recipe, and the stock recipe is switched off.
+# Before that the count was by hand, and this file claimed the gate enforced it — which
+# is what its own header promises and the gate did not do.
 
 [[divergence]]
 id        = "libxml2-2.15.3-cve-2026"

@@ -332,6 +332,86 @@ def check_ledger_covers_patch_sets(repo: Path) -> list[Check]:
     return out
 
 
+#: The fork budget. Read from `fork_budget` in divergence.toml; this is the fallback
+#: when the ledger states the budget only in prose.
+DEFAULT_FORK_BUDGET = 10
+
+
+def check_fork_budget(repo: Path) -> list[Check]:
+    """Count the maintained forks, and make sure each one can be seen going stale.
+
+    Two things the ledger promises and nothing enforced, both found 2026-10-19:
+
+    1. **The budget.** `divergence.toml` opens with "Budget: at most 10 maintained forks"
+       and, honestly, with the note that the gate has no fork-count check. A budget that
+       is counted by hand is a budget that drifts: forks are landed on a security clock
+       (openssh 2026-10-19, ffmpeg and hplip queued behind them) and nothing in the path
+       makes the number visible at the moment it grows.
+
+    2. **A fork's observability.** A fork is invisible to `pkg-stats`: it scans the stock
+       recipe, and the stock recipe is switched off. The ledger requires every entry to
+       name an `observe_source` for exactly this reason (the PengyR case — images shipped
+       1.10.0 while upstream was at 1.11.1 and nothing noticed), and `check_ledger_covers_
+       patch_sets` only checks that the field is *non-empty*. A fork that names
+       `observe_source = "pkg-stats"` satisfies that and is still blind: the pin rots and
+       the scanner reports a clean tree forever. OpenSSH nearly shipped exactly that, with
+       an exposed sshd attached — the fork first got CPE product `openssh-pengyos`, which
+       matches nothing in NVD, so pkg-stats reported zero CVEs for a package carrying
+       OpenSSH.
+
+    So a fork must name a source that is not pkg-stats, and must name the recipe it
+    ships: the recipe is what the nightly compares upstream tags against, and a fork
+    whose recipe path does not exist has no pin to go stale.
+    """
+    try:
+        ledger = tomllib.loads((repo / "divergence.toml").read_text())
+    except (OSError, ValueError) as exc:
+        return [Check("fork-budget", False, f"divergence.toml unreadable: {exc}")]
+
+    entries = ledger.get("divergence", [])
+    forks = [e for e in entries if e.get("kind") == "fork"]
+    budget = int(ledger.get("fork_budget") or DEFAULT_FORK_BUDGET)
+
+    out: list[Check] = []
+    if len(forks) > budget:
+        out.append(Check(
+            "fork-budget", False,
+            f"{len(forks)} maintained forks, budget is {budget}: {', '.join(f.get('id', '?') for f in forks)}. "
+            "Pay one down (the expiry names the upstream event that ends it) before landing "
+            "another, or raise `fork_budget` in divergence.toml as a written decision."))
+    else:
+        out.append(Check("fork-budget", True,
+                         f"{len(forks)} of {budget} forks: {', '.join(f.get('id', '?') for f in forks) or 'none'}"))
+
+    for e in forks:
+        name = e.get("id") or "?"
+        observe = str(e.get("observe_source") or "").strip()
+        recipe = str(e.get("recipe") or "").strip().strip("/")
+        if not recipe:
+            out.append(Check(f"fork-observable:{name}", False,
+                             "a fork entry must name `recipe` — the nightly compares upstream "
+                             "tags against the version in that recipe, and with no recipe there "
+                             "is no pin that can be seen going stale"))
+        elif not (repo / recipe).is_dir():
+            out.append(Check(f"fork-observable:{name}", False,
+                             f"`recipe = {recipe}` does not exist in the tree: the fork ships "
+                             "nothing, so its observe source compares a version that is not built"))
+        elif observe.lower().replace("-", "_") == "pkg_stats" or observe == "pkg-stats":
+            out.append(Check(
+                f"fork-observable:{name}", False,
+                f"observe_source is pkg-stats, which cannot see a fork: it scans the stock "
+                f"recipe and the stock recipe is switched off. The pin rots silently. Name the "
+                f"pengyos-nightly observe source that watches {recipe}'s version."))
+        elif not observe:
+            out.append(Check(f"fork-observable:{name}", False,
+                             "no observe_source: a fork invisible to pkg-stats with no source of "
+                             "its own has nothing to tell it the pin went stale"))
+        else:
+            out.append(Check(f"fork-observable:{name}", True,
+                             f"{recipe}, observed by pengyos-nightly (pkg-stats cannot see a fork)"))
+    return out
+
+
 def check_background_sources(repo: Path) -> list[Check]:
     """Every COSMIC background record must resolve inside its own overlay.
 
@@ -650,6 +730,7 @@ def main(argv: list[str] | None = None) -> int:
     rep.checks += check_group_overlays(repo)
     rep.checks += check_patch_declarations(repo)
     rep.checks += check_ledger_covers_patch_sets(repo)
+    rep.checks += check_fork_budget(repo)
     rep.checks += check_overlay_executables(repo)
     rep.checks += check_script_executables(repo)
     rep.checks += check_board_script_executables(repo)
