@@ -6,6 +6,26 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — a "known-bad" record now says what it says about *one* fix
+- **The aggregate was the defect.** `patch_failures.where` is the union of every file
+  named anywhere in one `make` output, and the planner put it in every skipped fix's
+  `failed_on`. All ten ffmpeg known-bad entries therefore carried one identical string,
+  and reading it as evidence about a fix is unfalsifiable. The 2026-10-19 report had to
+  re-test each fix by hand against the real 6.1.5 tree to find five different shapes:
+  three fixes already in 6.1.5, one that applies in isolation and fails in series, three
+  partial hunks, two new-file feature commits, and one whose file 6.1.5 does not have.
+- **`_per_fix` (act) keys the evidence by the fix URL NVD names** — patch file, the files
+  it failed on, and Buildroot's own reason — and writes it as `patch_failures.per_fix`.
+  `record_batch` merges it across nights, so a night that records only an aggregate
+  cannot wipe the per-fix evidence an earlier night paid a pre-flight for.
+- **`_fix_evidence` (planner) answers per fix.** A record with `per_fix` yields that fix's
+  own files and reason; a record from before per-fix tracking yields the aggregate **and
+  labels it** — "shared by every fix skipped against this component, so not evidence about
+  this one; test the fix on its own before acting on it". The old records stay readable,
+  they just stop pretending.
+- 11 new tests, positive and negative controls. 9 mutations on the new behaviour, 0
+  survived. 355 pass.
+
 ### Fixed — a 404 on the target tarball is named as what it is (0.15.0)
 - **`artifact_unreachable` is its own guard.** `recipe_bump` fetches the new tarball's
   hash over the network, and urllib's `HTTPError` is an `OSError`, so every fetch failure

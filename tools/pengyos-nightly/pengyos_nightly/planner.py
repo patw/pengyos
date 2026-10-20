@@ -182,6 +182,35 @@ def _attribution(obs: dict, st: dict, cfg: dict, packages: dict, nvd_of, get) ->
     return out
 
 
+def _fix_evidence(failure: dict, fix_url: str) -> dict:
+    """What the record says about *this* fix, as opposed to about the component.
+
+    `patch_failures.where` is the union of every file named anywhere in one `make`
+    output, so every fix skipped against one component quotes the identical string. On
+    2026-10-19 that made the ten ffmpeg known-bad records indistinguishable from each
+    other, and the truth turned out to be five different shapes: three fixes already in
+    6.1.5, one that applies in isolation and fails in series, three partial hunks, two
+    new-file feature commits, and one whose file does not exist in 6.1.5 at all. Reading
+    the aggregate as evidence about a fix is how a known-bad record becomes unfalsifiable.
+
+    A record written by the current batch lane carries `per_fix`, keyed by the fix URL
+    NVD names, and the answer is that fix's own files, reason and patch name. A record
+    from before per-fix tracking has only the aggregate — so it says so, in the field a
+    human reads.
+    """
+    per = (failure.get("per_fix") or {}).get(fix_url)
+    if per:
+        return {"failed_on": str(per.get("where") or ""),
+                "reason": str(per.get("reason") or ""),
+                "patch": str(per.get("patch") or ""),
+                "evidence": "per-fix"}
+    return {"failed_on": str(failure.get("where") or ""),
+            "reason": "", "patch": "",
+            "evidence": ("component-wide aggregate: this string is shared by every fix skipped "
+                         "against this component, so it is not evidence about this one — test "
+                         "the fix on its own before acting on it")}
+
+
 def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
                target: str, today: dt.date, repo: Path, build_root: Path, br_version: str,
                nvd_of, index: int, get, packages: dict | None = None,
@@ -238,7 +267,7 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
                   if shape == "patch_dir" else [])
     skipped = [{"cve": c["cve"], "fix": (c.get("fix_commit") or {}).get("url", ""),
                 "recorded": str(failure.get("date") or ""),
-                "failed_on": str(failure.get("where") or "")}
+                **_fix_evidence(failure, (c.get("fix_commit") or {}).get("url", ""))}
                for c in cves
                if c.get("affected") and (c.get("fix_commit") or {}).get("url", "") in known_bad]
     action = {"id": f"{lane}-{name}-{target}", "lane": lane, "component": name,

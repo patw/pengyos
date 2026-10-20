@@ -352,6 +352,26 @@ def _failed_patch(detail: str) -> str:
     return names[-1] if names else ""
 
 
+def _per_fix(dropped: list[dict]) -> dict[str, dict]:
+    """The failure evidence, keyed by the fix URL the CVE names.
+
+    `where` and `detail` describe the whole patch set: `where` is the union of every file
+    named anywhere in one `make` output, so ten CVEs skipped against one component all
+    quote the same string. On 2026-10-19 that made ten ffmpeg known-bad records
+    indistinguishable — the report's table had to re-test each fix against the real 6.1.5
+    tree to find that three were already present, one applies in isolation and fails in
+    series, three are partial hunks, two are new-file features and one patches a file
+    6.1.5 does not have. The evidence for each fix existed in `dropped` and was thrown
+    away by the aggregation.
+
+    Keyed by fix URL because that is the handle the CVE carries: the planner matches a
+    skipped CVE to its record by the fix URL NVD names.
+    """
+    return {d["fix_url"]: {"patch": Path(d["patch"]).name, "reason": d["reason"],
+                           "where": d["where"]}
+            for d in dropped if d.get("fix_url")}
+
+
 def _patch_reason(detail: str) -> str:
     """Why Buildroot rejected a patch, in the two forms a reader can act on.
 
@@ -930,6 +950,8 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
                     "detail": "; ".join(f"{Path(d['patch']).name}: {d['reason']}"
                                         for d in dropped)[:400],
                     "fixes": sorted({d["fix_url"] for d in dropped if d.get("fix_url")}),
+                    # Per fix, not per component: see _per_fix.
+                    "per_fix": _per_fix(dropped),
                     # The verdict is about *this* pin. Without it, "does not apply to
                     # ffmpeg 6.1.5" becomes a permanent block once the pin moves.
                     "version": a.get("current") or "",
@@ -980,6 +1002,7 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
         result.setdefault("patch_failures", {})[a["component"]] = {
             "date": today.isoformat(), "where": _failed_files(error), "detail": error[:400],
             "fixes": sorted({d["fix_url"] for d in dropped if d.get("fix_url")}),
+            "per_fix": _per_fix(dropped),
             "version": a.get("current") or ""}
         step("pre-flight", False, f"{a['component']} dropped from the batch: {error}")
         try:
@@ -1089,6 +1112,9 @@ def record_batch(result: dict, actions: list[dict], state_dir: Path, st: dict,
         cur = (st.get("patch_failures") or {}).get(component) or {}
         merged = {**cur, **bad}
         merged["fixes"] = sorted({*(cur.get("fixes") or []), *(bad.get("fixes") or [])})
+        # Per-fix evidence accumulates with the fix list. A fix proved bad on one night
+        # keeps its own reason; a later night's aggregate must not overwrite it.
+        merged["per_fix"] = {**(cur.get("per_fix") or {}), **(bad.get("per_fix") or {})}
         st.setdefault("patch_failures", {})[component] = merged
 
     entry = {"kind": "batch", "date": today.isoformat(),
