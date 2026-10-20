@@ -58,8 +58,16 @@ def test_a_new_series_is_major():
 
 def test_signatures_and_alternates_are_not_releases():
     """The listing carries .asc/.sig for every release and .tar.gz/.tar.bz2
-    alternates. Counting those as versions would report a finding every night."""
+    alternates. Counting those as versions would report a finding every night.
+
+    The .asc case is the one that actually bites: an unanchored
+    `ffmpeg-<ver>.tar.xz` regex matches inside `ffmpeg-<ver>.tar.xz.asc`, so the
+    signature is read as a release and the fork reports a bump to a version that
+    does not exist. Measured on this parser before the lookahead was added.
+    """
     listing = ('<a href="ffmpeg-9.0.2.tar.xz.asc">a</a>\n'
+               '<a href="ffmpeg-9.0.2.tar.xz.pq.asc">q</a>\n'
+               '<a href="ffmpeg-9.9.9.tar.xz.asc">newer-as-signature</a>\n'
                '<a href="ffmpeg-9.0.2.tar.gz">g</a>\n'
                '<a href="ffmpeg-9.0.2.tar.bz2">b</a>\n'
                '<a href="ffmpeg-9.1.0.tar.gz">newer-series-as-gz</a>')

@@ -1,0 +1,36 @@
+From: Thomas Petazzoni <thomas.petazzoni@free-electrons.com>
+Subject: [PATCH] configure.in: fix AM_INIT_AUTOMAKE call
+
+Uncomment the appropriate call to AM_INIT_AUTOMAKE so that the
+"foreign" option is passed, which avoids the need for creating various
+unneeded files when autoreconfiguring.
+
+Add the subdir-objects options since the main Makefile.am references
+files in subdirectories. This allows to silence a huge amount of
+warning when autoreconfiguring.
+
+[Regenerated for hplip 3.26.6 by PengyOS, 2026-10-19. Buildroot's original
+ (a2de7e834417) quotes `AC_INIT([HP Linux Imaging and Printing], [3.17.10], ...)`
+ as the context line above the change; every hplip release carries its own
+ version there, so the context does not match and the patch fails outright.
+ Same change, the 3.26.6 context. Carried on our own recipe
+ (divergence.toml -> hplip-3.26.6-fork).]
+
+Signed-off-by: Thomas Petazzoni <thomas.petazzoni@free-electrons.com>
+---
+ configure.in | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/configure.in b/configure.in
+--- a/configure.in
++++ b/configure.in
+@@ -31,8 +31,7 @@
+ AC_INIT([HP Linux Imaging and Printing], [3.26.6], [3.26.6], [hplip])
+ 
+ 
+-#AM_INIT_AUTOMAKE([1.9 foreign])
+-AM_INIT_AUTOMAKE
++AM_INIT_AUTOMAKE([1.9 foreign subdir-objects])
+ AC_DISABLE_STATIC
+ 
+ # Checks for programs.

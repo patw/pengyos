@@ -1,0 +1,53 @@
+From: Thomas Petazzoni <thomas.petazzoni@free-electrons.com>
+Subject: [PATCH] build: use pkg-config to discover libusb
+
+This allows to remove hardcoded paths to libusb headers.
+
+[Regenerated for hplip 3.26.6 by PengyOS, 2026-10-19. Buildroot's original
+ (1eed2b65eff4, carried at package/hplip/0001-...patch) targets Makefile.am
+ line 92; the hardcoded -I/usr/include/libusb-1.0 is at line 125 in 3.26.6 with
+ different surrounding lines, so the original hunk fails outright
+ ("Hunk #1 FAILED at 92"). Same change, the 3.26.6 context.
+
+ Both hunks are needed, and that is worth stating because dropping the
+ configure.in half looks harmless and is not: Makefile.am references
+ $(LIBUSB_CFLAGS)/$(LIBUSB_LIBS), and automake only emits those assignments
+ when configure AC_SUBSTs them, which is PKG_CHECK_MODULES that does it. With
+ the configure.in hunk dropped the variables expand to nothing, the -I for
+ libusb is lost, and the build dies with
+   io/hpmud/musb.h:33:10: fatal error: libusb.h: No such file or directory
+ Carried on our own recipe (divergence.toml -> hplip-3.26.6-fork).]
+
+Signed-off-by: Thomas Petazzoni <thomas.petazzoni@free-electrons.com>
+---
+ Makefile.am  | 4 ++--
+ configure.in | 3 +--
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile.am b/Makefile.am
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -122,8 +122,8 @@
+ libhpmud_la_LDFLAGS += -lusb
+ else
+ libhpmud_la_SOURCES += io/hpmud/musb.c 
+-libhpmud_la_CFLAGS  += -I/usr/include/libusb-1.0
+-libhpmud_la_LDFLAGS += -lusb-1.0
++libhpmud_la_CFLAGS  += $(LIBUSB_CFLAGS)
++libhpmud_la_LDFLAGS += $(LIBUSB_LIBS)
+ endif
+ 
+ 
+diff --git a/configure.in b/configure.in
+--- a/configure.in
++++ b/configure.in
+@@ -617,8 +617,7 @@
+       AC_CHECK_LIB([usb], [usb_init], [LIBS="$LIBS"], [AC_MSG_ERROR([cannot find libusb support], 2)])
+       AC_CHECK_HEADERS(usb.h, ,[AC_MSG_ERROR([cannot find libusb-devel support], 11)])
+    else
+-      AC_CHECK_LIB([usb-1.0], [libusb_init], [LIBS="$LIBS"], [AC_MSG_ERROR([cannot find libusb 1.0 support], 2)])
+-      AC_CHECK_HEADERS(libusb-1.0/libusb.h, ,[AC_MSG_ERROR([cannot find libusb-1.0-devel support], 11)])
++      PKG_CHECK_MODULES([LIBUSB], [libusb-1.0])
+    fi
+ fi
+ 

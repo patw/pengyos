@@ -1172,7 +1172,11 @@ BR2_PACKAGE_NETWORK_MANAGER_MODEM_MANAGER=y
 # that aren't driverless: Gutenprint (Canon, Epson, …) and HPLIP (HP).
 BR2_PACKAGE_IPP_USB=y
 BR2_PACKAGE_GUTENPRINT=y
-BR2_PACKAGE_HPLIP=y
+# hplip-pengyos, not hplip: the fork is what ships. The stock symbol is
+# switched off explicitly so nothing can bring 3.17.10 back beside it.
+# divergence.toml -> hplip-3.26.4-fork.
+BR2_PACKAGE_HPLIP=n
+BR2_PACKAGE_HPLIP_PENGYOS=y
 # Chinese, Japanese and Korean text (our package: Noto Sans CJK, variable).
 BR2_PACKAGE_FONT_NOTO_CJK=y
 # Thumbnails in COSMIC Files for videos (ffmpegthumbnailer, our package) and

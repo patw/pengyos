@@ -67,6 +67,11 @@ menu "PengyOS (external tree)"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ffmpeg-pengyos/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/gst1-libav-pengyos/Config.in"
 
+	# Printing: our fork of Buildroot's hplip, pinned at 3.26.4 (9 P1 CVE matches
+	# sit in 3.17.10 from 2018 and NVD names no fix commit for any of them).
+	# divergence.toml -> hplip-3.26.4-fork.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/hplip-pengyos/Config.in"
+
 	# Flatpak (the Desktop's app lane) and the two libraries it needs that
 	# Buildroot 2026.08 does not ship. Built here instead of copied from the
 	# build host.

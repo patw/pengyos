@@ -204,7 +204,11 @@ def ffmpeg_fork_findings(html: str, current: str) -> list[dict]:
     A new series (9.0 -> 9.1) is major: ffmpeg is the Desktop's media path, and a
     series change is a human decision.
     """
-    versions = re.findall(r"ffmpeg-([0-9]+(?:\.[0-9]+)*)\.tar\.xz", html)
+    # The negative lookahead is not decoration: without it `ffmpeg-9.0.2.tar.xz.asc`
+    # matches, and a signature file is read as a release - the fork would report a
+    # bump to a version that does not exist, every night. ffmpeg publishes .asc and
+    # .pq.asc next to every tarball, so this is the normal shape of the page.
+    versions = re.findall(r"ffmpeg-([0-9]+(?:\.[0-9]+)*)\.tar\.xz(?![A-Za-z0-9.])", html)
     versions = {v for v in versions if not is_prerelease(v)}
     newer = [v for v in versions if vkey(v) > vkey(current)]
     if not newer:
@@ -216,6 +220,39 @@ def ffmpeg_fork_findings(html: str, current: str) -> list[dict]:
              "note": (f"ffmpeg point release (fork: {current} -> {best})"
                       if kind == "routine"
                       else f"new ffmpeg series ({current} -> {best})")}]
+
+
+def hplip_fork_findings(html: str, current: str) -> list[dict]:
+    """hplip, observed for the fork that ships it (`hplip-pengyos`).
+
+    Same reason as `openssh_fork_findings` and `ffmpeg_fork_findings`: pkg-stats
+    scans the stock recipe, the stock recipe is switched off, so nothing in the
+    toolchain notices our 3.26.6 pin going stale while hplip publishes a release
+    that closes a CVE we carry the fork for. divergence.toml -> hplip-3.26.6-fork
+    names this as the fork's `observe_source`.
+
+    hplip has no git tags and no plain-text checksum index; the SourceForge files
+    page for the project is the index, and it lists the current release. Only
+    `hplip-<version>.tar.gz` counts - the `.asc` signatures, the `.run`/`.sh`
+    self-extracters and the `.sig` files are not releases of a version.
+
+    Every hplip release here is routine: hplip ships point releases on a stable
+    3.x line, and this fork exists to be deleted when Buildroot catches up, not to
+    be carried forward through a redesign. A new 3.2x series is therefore routine
+    for the loop, and the ledger's expiry - not the lane - is what ends the fork.
+    """
+    # The negative lookahead is not decoration. Without it `hplip-3.99.0.tar.gz.asc`
+    # matches and the fork reports a release that does not exist - a signature file
+    # read as a version, every night, forever.
+    versions = re.findall(r"hplip-([0-9]+(?:\.[0-9]+)*)\.tar\.gz(?![A-Za-z0-9.])", html)
+    versions = {v for v in versions if not is_prerelease(v)}
+    newer = [v for v in versions if vkey(v) > vkey(current)]
+    if not newer:
+        return []
+    best = max(newer, key=vkey)
+    return [{"lane": "routine", "component": "hplip-pengyos", "current": current,
+             "available": best,
+             "note": f"hplip release newer than the fork (hplip-pengyos: {current} -> {best})"}]
 
 
 def cosmic_findings(components: list[dict], tags_by_repo: dict[str, dict[str, str]]) -> list[dict]:

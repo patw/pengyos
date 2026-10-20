@@ -236,6 +236,73 @@ upstream_status = "released"
 
 
 [[divergence]]
+id        = "hplip-3.26.6-fork"
+kind      = "fork"
+component = "hplip-pengyos"
+pinned_version = "3.26.6"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-19"
+recipe        = "buildroot-external/package/hplip-pengyos"
+
+# 9 P1 CVE matches sit on Buildroot 2026.08's hplip 3.17.10, released in 2018.
+# NVD names no fix commit for any of them, so the patch shape is inadmissible
+# (patches/README.md rule 1: a carried patch must be a real upstream fix commit),
+# and a stock version cannot be moved from a br2-external tree. The fix is the
+# version, so the shape left is a named fork with an expiry.
+#
+# Measured against NVD's own ranges, not assumed: 3.26.4 closes 2 of the 9 and
+# 3.26.5 closes 2, because seven of the nine name 3.26.6 as the first unaffected
+# release. 3.26.6 closes all 9, including the two at CVSS 9.3 (CVE-2026-8631,
+# CVE-2026-91104). The pin is the lowest release that clears the whole set.
+closes = [
+  "CVE-2026-8631",    # CVSS 9.3, local; range ends before 3.26.4
+  "CVE-2026-8632",    # CVSS 8.5, local; range ends before 3.26.4
+  "CVE-2026-91097",   # CVSS 7.0, file; range ends before 3.26.6
+  "CVE-2026-91098",   # CVSS 8.6, file; range ends before 3.26.6
+  "CVE-2026-91100",   # CVSS 6.8, local; range ends before 3.26.6
+  "CVE-2026-91102",   # CVSS 8.4, local; range ends before 3.26.6
+  "CVE-2026-91104",   # CVSS 9.3, local; range ends before 3.26.6
+  "CVE-2026-91105",   # CVSS 8.6, file; range ends before 3.26.6
+  "CVE-2026-91106",   # CVSS 9.3, local; range ends before 3.26.6
+]
+
+# The cost, stated. Eight minor releases of hplip are crossed, on a Python +
+# CUPS + sane stack, and Buildroot's two build-system patches no longer apply
+# to any of it - both quote context that moved (Makefile.am line 92 -> 125,
+# configure.in's AC_INIT version line), so they are carried here regenerated
+# against 3.26.6. Three more patches are ours, each one a defect in hplip's own
+# build that the 3.17.10 recipe never met:
+#   0001  libusb through pkg-config (both hunks; dropping the configure.in half
+#         makes $(LIBUSB_CFLAGS) expand to nothing and the build dies on libusb.h)
+#   0002  AM_INIT_AUTOMAKE, the 3.26.6 context
+#   0003  configure.in restores `CFLAGS="$save_CFLAGS"` before save_CFLAGS is
+#         ever assigned, blanking every flag the toolchain passed - which is what
+#         makes -std=gnu17 unpassable, and gcc 15.3's C23 implicit-int permerror
+#         then stops the build on prnt/hpps/pserror.c:27
+#   0004  install-data-hook writes to $(libdir) and /usr/share/ipp-usb/quirks/
+#         with no $(DESTDIR): in a cross build it installs into the build host
+#         (permission denied here; silently into the host's /usr/lib where the
+#         host is writable), and the sane.d lines in the same hook already use
+#         $(DESTDIR), so the hook is internally inconsistent
+# The CPE is named by the stock recipe (vendor hp, product
+# linux_imaging_and_printing), so pkg-stats sees this package's CVEs; the
+# openssh fork's blind-CPE failure does not apply.
+cost = "four patches carried on the fork (two regenerated from Buildroot's, two authored here); -std=gnu17 -fpermissive carried in CONF_ENV, because TARGET_CONFIGURE_OPTS carries no CFLAGS and a <PKG>_CFLAGS line is never read"
+
+# Upstream publishes no plain-text checksum (hplip-3.26.6.tar.gz.sha256 is a
+# 404), so the provenance is the GPG signature: hplip-3.26.6.tar.gz.asc, signed
+# by "HPLIP (HP Linux Imaging and Printing) <hplip@hp.com>", RSA subkey
+# 1E3D9B4E44475F51EC0845AB5E4E4D24A34ECD57, signature dated 2026-09-11.
+# `gpg --verify` reports Good signature for the file whose sha256 is recorded in
+# hplip-pengyos.hash. Verified on behoserver 2026-10-19.
+provenance = "https://prdownloads.sourceforge.net/hplip/hplip/hplip-3.26.6.tar.gz + hplip-3.26.6.tar.gz.asc, GPG-verified against 1E3D9B4E44475F51EC0845AB5E4E4D24A34ECD57"
+
+expiry = "Buildroot releases with hplip >= 3.26.6: delete buildroot-external/package/hplip-pengyos (and its four patches), restore BR2_PACKAGE_HPLIP in configs/layers/desktop.config, and remove the hplip-fork observe source from pengyos-nightly"
+observe_source = "pengyos-nightly observe, source id hplip-fork: https://prdownloads.sourceforge.net/hplip/hplip/ release listing compared to HPLIP_PENGYOS_VERSION. pkg-stats cannot see a fork - it scans the stock recipe, and the stock recipe is switched off."
+upstream_status = "released"
+
+
+[[divergence]]
 id        = "gst1-libav-pengyos-1.24.13-ffmpeg9"
 kind      = "patch-set"
 component = "gst1-libav-pengyos"

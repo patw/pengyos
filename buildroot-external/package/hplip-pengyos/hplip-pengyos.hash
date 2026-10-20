@@ -1,0 +1,11 @@
+# From the download at
+# https://prdownloads.sourceforge.net/hplip/hplip/hplip-3.26.6.tar.gz on 2026-10-19,
+# verified against upstream's own GPG signature: hplip-3.26.6.tar.gz.asc, signed by
+# "HPLIP (HP Linux Imaging and Printing) <hplip@hp.com>", RSA subkey
+# 1E3D9B4E44475F51EC0845AB5E4E4D24A34ECD57 (primary 82FFA7C6AA7411D934BDE173AC69536A2CF3A243),
+# signature dated 2026-09-11. `gpg --verify` reports Good signature for this exact
+# file. hplip publishes no plain-text checksum file, so the provenance is the
+# signature: the hex below is the sha256 of the signed download.
+sha256  5fb2235a9cb6ec07cb4786c4066b151359c301324d54aaabf69ae7eef35606b3  hplip-3.26.6.tar.gz
+# Locally calculated
+sha256  8af0e85fc6b88aec25200bcb4f604d886818482bd2c5cc81038f4c6a311c913a  COPYING

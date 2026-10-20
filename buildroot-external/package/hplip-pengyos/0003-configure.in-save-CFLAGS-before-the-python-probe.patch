@@ -1,0 +1,32 @@
+From: PengyOS <https://pengyos.catbee.ca>
+Subject: [PATCH] configure.in: save CFLAGS before the python header probe
+
+configure.in ends its python-devel probe with
+
+    CFLAGS="$save_CFLAGS"
+
+and at that point `save_CFLAGS` has not been assigned yet - the file's only
+assignment is far below, at the stack-hardening block. So the restore sets
+CFLAGS to the empty string and every flag the toolchain passed to configure is
+discarded: the generated Makefile compiles with no -O2 and no way to pass a
+dialect. Under Buildroot 2026.08's gcc 15.3 that is what makes `-std=gnu17`
+unpassable, and hplip's K&R-era code then hits C23's implicit-int permerror:
+
+    prnt/hpps/pserror.c:27:10: error: type defaults to 'int' in declaration of 'column' [-Wimplicit-int]
+
+Saving CFLAGS before the probe makes the existing restore do what it reads as.
+One added line; the probe's behaviour is untouched, since it overwrites CFLAGS
+only to test for python headers and then restores.
+
+Carried on our own recipe (divergence.toml -> hplip-3.26.6-fork).
+
+--- a/configure.in
++++ b/configure.in
+@@ -623,6 +623,7 @@
+ fi
+ 
+ SAVE_CPPFLAGS="$CPPFLAGS"
++save_CFLAGS="$CFLAGS"
+ CFLAGS=`python-config --includes`
+ if [ $? -eq 0 ] 
+ then

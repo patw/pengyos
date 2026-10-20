@@ -126,6 +126,17 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
         findings += guard("ffmpeg-fork", lambda: sources.ffmpeg_fork_findings(
             sources.http_get("https://ffmpeg.org/releases/"), fver))
 
+    # hplip: our fork (package/hplip-pengyos) is what ships and the stock recipe is
+    # switched off, so pkg-stats never sees it. divergence.toml -> hplip-3.26.6-fork
+    # names this as its observe_source. hplip publishes no git tags; the SourceForge
+    # files page is the index.
+    hplip_mk = repo / "buildroot-external/package/hplip-pengyos/hplip-pengyos.mk"
+    hver = sources.mk_value(hplip_mk.read_text(), "HPLIP_PENGYOS_VERSION") \
+        if hplip_mk.exists() else None
+    if hver:
+        findings += guard("hplip-fork", lambda: sources.hplip_fork_findings(
+            sources.http_get("https://sourceforge.net/projects/hplip/files/hplip/"), hver))
+
     def cosmic():
         comps = sources.read_cosmic_components((repo / "scripts/cosmic-components.tsv").read_text())
         tags = {}
