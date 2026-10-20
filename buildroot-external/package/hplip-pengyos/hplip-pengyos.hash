@@ -7,5 +7,9 @@
 # file. hplip publishes no plain-text checksum file, so the provenance is the
 # signature: the hex below is the sha256 of the signed download.
 sha256  5fb2235a9cb6ec07cb4786c4066b151359c301324d54aaabf69ae7eef35606b3  hplip-3.26.6.tar.gz
-# Locally calculated
-sha256  8af0e85fc6b88aec25200bcb4f604d886818482bd2c5cc81038f4c6a311c913a  COPYING
+# Locally calculated. Re-derived from the extracted 3.26.6 source on 2026-10-20:
+# the 3.26.6 tarball is the GPG-verified one above, and its COPYING differs from
+# 3.26.4's, so the hash carried over from the older fork pin made `make
+# hplip-pengyos-legal-info` fail with "COPYING has wrong sha256 hash" - which
+# killed the SBOM step of the 2026-10-20 act run.
+sha256  c624a9d1f66743ace8d4253cb24e1ee795b53b168d5688e66f62a77297ef53af  COPYING
