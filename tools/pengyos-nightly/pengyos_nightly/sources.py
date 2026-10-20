@@ -153,6 +153,38 @@ def pengyr_findings(tags: Iterable[str], current: str) -> list[dict]:
              "note": note}]
 
 
+def openssh_fork_findings(tags: Iterable[str], current: str) -> list[dict]:
+    """OpenSSH portable, observed for the fork that ships it (`openssh-pengyos`).
+
+    A fork is invisible to Buildroot's pkg-stats: it scans the stock recipe, and the
+    stock recipe is switched off. So nothing in the toolchain notices our pin going
+    stale - the PengyR case (images shipped 1.10.0 while upstream was at 1.11.1 and
+    nothing said so), which is exactly the failure `divergence.toml` requires an
+    `observe_source` to prevent. For OpenSSH the cost of that silence is a remote
+    unauthenticated sshd CVE sitting in every image with no signal.
+
+    Upstream tags portable releases `V_10_6_P1`; the recipe pins `10.6p1`, so the tag
+    is normalized to the string the recipe would carry. A new patch release (10.6p2)
+    is routine - the loop may bump it; a new minor is major, because sshd is the
+    exposed service of every edition and a series change is a human decision.
+    """
+    def normalize(tag: str) -> str | None:
+        m = re.fullmatch(r"V_(\d+)_(\d+)_P(\d+)", tag)
+        return f"{m.group(1)}.{m.group(2)}p{m.group(3)}" if m else None
+
+    versions = [v for v in (normalize(t) for t in tags) if v]
+    newer = [v for v in versions if vkey(v) > vkey(current)]
+    if not newer:
+        return []
+    best = max(newer, key=vkey)
+    kind = bump_kind(current, best)
+    return [{"lane": kind, "component": "openssh-pengyos", "current": current,
+             "available": best,
+             "note": (f"OpenSSH patch release (fork: {current} -> {best})"
+                      if kind == "routine"
+                      else f"new OpenSSH series ({current} -> {best})")}]
+
+
 def cosmic_findings(components: list[dict], tags_by_repo: dict[str, dict[str, str]]) -> list[dict]:
     """For each COSMIC repo: the newest epoch-* tag, and whether the pinned
     commit is that tag. Repos behind the newest epoch are grouped into one

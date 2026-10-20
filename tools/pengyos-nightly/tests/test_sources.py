@@ -116,6 +116,42 @@ def test_pengyr_handles_tags_without_the_v_prefix():
     f = sources.pengyr_findings(["1.0.0", "1.0.1", "v1.11.1"], "1.0.0")
     assert f and f[0]["available"] == "1.11.1"
 
+# --- the OpenSSH fork (package/openssh-pengyos) -------------------------------
+
+def test_openssh_fork_names_the_series_the_fork_is_behind():
+    """Captured 2026-10-19 from github.com/openssh/openssh-portable, the same day the
+    fork was pinned at 10.6p1. Asked at Buildroot's own pin (10.5p1) it must name 10.6p1
+    as a new series - that is the whole reason the fork exists, and it is the answer a
+    future Buildroot release will make.
+
+    Frozen fixture, same rule as the PengyR one: the comparison is what is tested, not
+    whatever upstream ships next.
+    """
+    tags = sources.parse_ls_remote((FIX / "ls-remote-openssh.txt").read_text())
+    f = sources.openssh_fork_findings(tags, "10.5p1")
+    assert lanes(f) == [("major", "openssh-pengyos", "10.6p1")], f
+
+
+def test_openssh_fork_patch_release_is_routine():
+    f = sources.openssh_fork_findings(["V_10_6_P1", "V_10_6_P2"], "10.6p1")
+    assert lanes(f) == [("routine", "openssh-pengyos", "10.6p2")], f
+    assert "patch" in f[0]["note"]
+
+
+def test_openssh_fork_silent_when_the_pin_is_current():
+    """The negative control: at 10.6p1 the captured tags yield nothing. A source that
+    always reports a finding is a source the operator learns to ignore."""
+    tags = sources.parse_ls_remote((FIX / "ls-remote-openssh.txt").read_text())
+    assert sources.openssh_fork_findings(tags, "10.6p1") == []
+
+
+def test_openssh_fork_ignores_the_hundred_tags_that_are_not_releases():
+    """Upstream's tag soup is mostly non-releases (ABOUT_TO_ADD_INET_ATON, AFTER_FREEBSD_PAM_MERGE,
+    V_10_6_S, sign-compat). Only V_<maj>_<min>_P<patch> is a portable release."""
+    tags = ["V_10_6_S", "V_10_6_P1", "V_9_8_P1", "sign-compat", "refs/heads/master"]
+    f = sources.openssh_fork_findings(tags, "10.5p1")
+    assert lanes(f) == [("major", "openssh-pengyos", "10.6p1")], f
+
 
 def test_buildroot_no_point_release_yet():
     tags = sources.parse_ls_remote((FIX / "ls-remote-buildroot.txt").read_text())
