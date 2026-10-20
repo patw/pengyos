@@ -114,6 +114,18 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
                                              "https://github.com/openssh/openssh-portable"])),
             over))
 
+    # ffmpeg: our fork (package/ffmpeg-pengyos) is what ships and the stock recipe is
+    # switched off, so pkg-stats never sees it - the same blindness the openssh fork
+    # has, on the Desktop's media path. divergence.toml -> ffmpeg-9.0.2-fork names
+    # this as its observe_source. ffmpeg publishes no git tags, so the source is the
+    # release directory listing.
+    ffmpeg_mk = repo / "buildroot-external/package/ffmpeg-pengyos/ffmpeg-pengyos.mk"
+    fver = sources.mk_value(ffmpeg_mk.read_text(), "FFMPEG_PENGYOS_VERSION") \
+        if ffmpeg_mk.exists() else None
+    if fver:
+        findings += guard("ffmpeg-fork", lambda: sources.ffmpeg_fork_findings(
+            sources.http_get("https://ffmpeg.org/releases/"), fver))
+
     def cosmic():
         comps = sources.read_cosmic_components((repo / "scripts/cosmic-components.tsv").read_text())
         tags = {}

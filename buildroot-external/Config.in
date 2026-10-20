@@ -59,6 +59,14 @@ menu "PengyOS (external tree)"
 	# the reason and the expiry that ends it.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/openssh-pengyos/Config.in"
 
+	# Media: our fork of Buildroot's ffmpeg, pinned at 9.0.2 (25 P0/P1 CVE
+	# matches sit in 6.1.5 and seventeen name no upstream commit). ffmpeg is a
+	# library, so the plugins that link it are redirected to the fork too:
+	# gst1-libav-pengyos below, plus pipewire and our ffmpegthumbnailer.
+	# divergence.toml -> ffmpeg-9.0.2-fork.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ffmpeg-pengyos/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/gst1-libav-pengyos/Config.in"
+
 	# Flatpak (the Desktop's app lane) and the two libraries it needs that
 	# Buildroot 2026.08 does not ship. Built here instead of copied from the
 	# build host.

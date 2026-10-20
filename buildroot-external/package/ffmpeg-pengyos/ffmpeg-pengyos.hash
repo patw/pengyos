@@ -1,0 +1,12 @@
+# From the download at https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz on 2026-10-19,
+# verified against upstream's own GPG signature: ffmpeg-9.0.2.tar.xz.asc is signed by
+# the "FFmpeg release signing key" <ffmpeg-devel@ffmpeg.org>, RSA key
+# FCF986EA15E6E293A5644F10B4322F04D67658D8, signature dated 2026-09-17. `gpg --verify`
+# reports "Good signature" for this exact file. ffmpeg publishes no plain-text checksum
+# file (releases/ffmpeg-9.0.2.tar.xz.sha256 is a 404), so the provenance is the
+# signature, not a published digest: the hex below is the sha256 of the signed download.
+sha256  8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e  ffmpeg-9.0.2.tar.xz
+# Locally calculated
+sha256  2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af  LICENSE.md
+sha256  246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30  COPYING.LGPLv2.1
+sha256  8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643  COPYING.GPLv2

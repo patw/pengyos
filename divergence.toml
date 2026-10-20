@@ -150,46 +150,124 @@ upstream_status = "merged"
 
 
 [[divergence]]
-id        = "ffmpeg-6.1.5-cve-2026"
-kind      = "patch-set"
-component = "ffmpeg"
-pinned_version = "6.1.5"
+id        = "ffmpeg-9.0.2-fork"
+kind      = "fork"
+component = "ffmpeg-pengyos"
+pinned_version = "9.0.2"
 editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
-carried_since = "2026-10-10"
-carried_in    = ["26.10.21"]
-patches_dir   = "buildroot-external/patches/ffmpeg/6.1.5"
-# Twelve upstream fix backports onto Buildroot's pinned 6.1.5. Each was authored against
-# a newer series, so pengyos-nightly's per-patch pre-flight is what admits them: a fix
-# that does not apply is dropped by name and takes its CVE with it, and does not block
-# the other eleven. Patch numbers are not contiguous (0005, 0008, 0014 are absent): those
-# fixes were already in the pinned tarball or did not apply, and the tree carries only
-# what survived.
+carried_since = "2026-10-19"
+recipe        = "buildroot-external/package/ffmpeg-pengyos"
+
+# 25 P0/P1 CVE matches sat on Buildroot 2026.08's ffmpeg 6.1.5. Seventeen of them
+# name no upstream fix commit at all, so no cherry-pick set reaches them; the patch
+# lane closed 4 of 25 (measured by rehearsal on 2026-10-19: 5 of 10 patches apply,
+# and Buildroot applies the set in series, so a per-patch dry-run overstates it).
+# The fix is the version, and a stock version cannot be moved from a br2-external
+# tree. Same shape and same discipline as openssh-10.6p1-fork.
+#
+# Measured against NVD's own ranges, 9.0.2 closes 22 of the 25. The three below are
+# named as affected *through* 9.0.2 - it is the last affected release, not the fix -
+# and 9.0.2 is the newest ffmpeg published, so no version closes them today. They
+# stay open in the ledger and are not claimed here.
 closes = [
-  "CVE-2026-70628",  # 0001 dvbsub parser: signed overflow in the capacity computation
-  "CVE-2026-64834",  # 0002 rtpdec_asf: reject undersized ASF objects
-  "CVE-2026-64835",  # 0003 adx: sync channel state on new extradata
-  "CVE-2026-70631",  # 0004 tiff: reject short inflate output
-  "CVE-2026-64833",  # 0006 spdifenc: bound the DTS core size against the packet
-  "CVE-2026-70630",  # 0007 screenpresso: reject short deflate output
-  "CVE-2026-65706",  # 0009 vf_swaprect: size the temp row buffer for the widest plane
-  "CVE-2026-66039",  # 0010 mace: reject sample counts that overflow int
-  "CVE-2026-64830",  # 0011 vobsub: reuse subtitle streams, bound the stream count
-  "CVE-2026-65704",  # 0012 ty: don't let the Series2 AC3 trim underflow
-  "CVE-2026-66038",  # 0013 lcldec: zero the not-decoded tail
-  "CVE-2026-65703",  # 0015 tdsc: unref the reference frame before reallocating
+  "CVE-2023-50009",   # range ends before 7.0
+  "CVE-2024-31582",   # range ends before 7.0
+  "CVE-2025-1373",    # range ends at 7.1
+  "CVE-2025-1594",    # range ends at 7.1
+  "CVE-2025-25468",   # range ends 2025-01-13
+  "CVE-2025-25469",   # range ends 2025-01-13
+  "CVE-2026-30754",   # range ends before 8.1
+  "CVE-2026-30997",   # range ends at 8.0.1
+  "CVE-2026-40962",   # range ends before 8.1
+  "CVE-2026-64832",   # NVDEC double-free, CVSS 8.7; range ends at 8.1.2
+  "CVE-2026-65705",   # floodfill; range ends at 8.1.2
+  "CVE-2026-66036",   # avfilter; range ends at 8.1.2
+  "CVE-2026-66037",   # IAMF; range ends at 8.1.2 - the file does not exist in 6.1.5
+  "CVE-2026-66040",   # pngenc; range ends at 8.1.2
+  "CVE-2026-70629",   # RSCC; range ends before 9
+  "CVE-2026-70632",   # CFHD; range ends before 9
+  "CVE-2026-96611",   # mov ispe; range ends before 9.0
+  "CVE-2026-52296",   # range ends before 9.0
+  "CVE-2026-52297",   # range ends before 9.0
+  "CVE-2026-107660",  # avstring; range ends before 9.0.2
+  "CVE-2026-107695",  # hls; range ends before 8.1.3
+  "CVE-2026-107698",  # mov pssh; range ends before 8.0.2
 ]
-upstream_fixes = [
-  "02fc47e13f90", "11d5f475be95", "1836ef968469", "2f234ea34c81",
-  "6f80e2765492", "705890061467", "a7e38b617b32", "aafb5c655edc",
-  "dbd495f066a8", "de771bd52774", "e7cbfd1c507b", "fd3ee52fab34",
+
+# 22 closed, 3 left. These three name 9.0.2 as the LAST affected release, and 9.0.2
+# is the newest ffmpeg published, so no version closes them today - they need a
+# 9.0.3, or a patch carried on the fork (allowed: this recipe is ours, so
+# patches/README.md rule 1 does not bar it). Counted as 22, not 25.
+still_open = [
+  "CVE-2026-107677",  # ed27bfcbbbc0 - named commit, applies to a tree newer than 9.0.2
+  "CVE-2026-107678",  # code.ffmpeg.org pull 24593
+  "CVE-2026-107696",  # code.ffmpeg.org pull 24902
 ]
-# No single natural fix version is recorded: these twelve were authored across more than
-# one release series, so the expiry is anchored to the signal rather than to a guess.
-# pkg-stats flags an ignore as stale once the pinned version leaves the CVE's NVD range -
-# that flag is the expiry firing, and it is checked by machine on every scan.
-expiry = "Buildroot pins an ffmpeg version outside the NVD range of all twelve CVEs; pkg-stats then reports the ignores as stale and the patch set is deleted"
+
+# The cost, stated rather than discovered. ffmpeg is a library, not only a command,
+# so forking it moves its dependents:
+#   - gst1-libav `select`s BR2_PACKAGE_FFMPEG (package/gstreamer1/gst1-libav/Config.in:5).
+#     A Kconfig select outranks a defconfig line, so with it in the config the
+#     vulnerable 6.1.5 is built beside the fork - two packages writing the same
+#     libavcodec, and pkg-stats reporting the vulnerable version as present. That is
+#     the mosh pattern from the openssh fork, one level deeper. Resolved by shipping
+#     our own copy of the plugin (package/gst1-libav-pengyos, same 1.24.13 source,
+#     same hash) linked against the fork, so the desktop keeps ffmpeg-backed decoding.
+#   - pipewire gates its ffmpeg scale filter on BR2_PACKAGE_FFMPEG and lists ffmpeg
+#     in DEPENDENCIES; redirected in external.mk, with the configure step ordered
+#     after the fork's staging install.
+#   - ffmpegthumbnailer is our own recipe; its dependency and its `depends on` moved
+#     to the fork.
+cost = "three recipes carry the fork's dependency redirect (gst1-libav-pengyos, ffmpegthumbnailer, pipewire via external.mk); the 12 patches carried on 6.1.5 are deleted, being upstream at 9.0.2; and gst1-libav needs one build patch, recorded at gst1-libav-pengyos-1.24.13-ffmpeg9, because ffmpeg 9 removed three codec IDs the plugin names"
+
+# The tarball's digest is not published as plain text by upstream
+# (releases/ffmpeg-9.0.2.tar.xz.sha256 is a 404), so the provenance is the GPG
+# signature: ffmpeg-9.0.2.tar.xz.asc, signed by the "FFmpeg release signing key"
+# <ffmpeg-devel@ffmpeg.org>, RSA FCF986EA15E6E293A5644F10B4322F04D67658D8, signature
+# dated 2026-09-17. `gpg --verify` reports Good signature for the file whose sha256
+# is recorded in ffmpeg-pengyos.hash. Verified on behoserver 2026-10-19.
+provenance = "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz + ffmpeg-9.0.2.tar.xz.asc, GPG-verified against FCF986EA15E6E293A5644F10B4322F04D67658D8"
+
+# The expiry is a Buildroot release, not a date, same as openssh: the fork ends the
+# moment Buildroot ships a version that closes these CVEs.
+expiry = "Buildroot releases with ffmpeg >= 9.0.3 (the first version past NVD's last-affected bound for CVE-2026-107677/-107678/-107696): delete buildroot-external/package/ffmpeg-pengyos and package/gst1-libav-pengyos, restore BR2_PACKAGE_FFMPEG and BR2_PACKAGE_GST1_LIBAV in configs/layers/desktop.config, drop the pipewire redirect from external.mk, restore ffmpegthumbnailer's dependency, and remove the ffmpeg-fork observe source from pengyos-nightly"
+observe_source = "pengyos-nightly observe, source id ffmpeg-fork: https://ffmpeg.org/releases/ directory listing compared to FFMPEG_PENGYOS_VERSION. pkg-stats cannot see a fork - it scans the stock recipe, and the stock recipe is switched off."
+upstream_status = "released"
+
+
+[[divergence]]
+id        = "gst1-libav-pengyos-1.24.13-ffmpeg9"
+kind      = "patch-set"
+component = "gst1-libav-pengyos"
+pinned_version = "1.24.13"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-19"
+patches_dir   = "buildroot-external/patches/gst1-libav-pengyos/1.24.13"
+
+# Not a CVE: a build fix that follows from ffmpeg-9.0.2-fork. gst-libav 1.24.13
+# names AV_CODEC_ID_V308/V408/V410 in its "no quasi codecs, please" filter in both
+# gstavviddec.c and gstavvidenc.c, and ffmpeg 9 removed those three IDs (present in
+# 6.1.5's codec_id.h, absent from 9.0.2's), so the plugin does not compile:
+#   gstavvidenc.c:1031:26: error: 'AV_CODEC_ID_V308' undeclared
+# Checked against gst-libav 1.24.13, 1.26.0 and 1.28.8 - all three name them, so no
+# gst-libav release builds against ffmpeg 9 as shipped. Dropping gst1-libav instead
+# would take ffmpeg-backed decoding out of the Desktop's media path, which is what
+# the plugin is for.
+#
+# Guarded with `#if LIBAVCODEC_VERSION_MAJOR < 63`, the file's own existing pattern
+# for the same problem (LIBAVCODEC_VERSION_MAJOR < 61 guards AV_CODEC_ID_AYUV a few
+# lines below). Carried on our own recipe, so patches/README.md rule 1 is not
+# engaged: this is a fix in a recipe we author.
+#
+# Verified in the real flow, not by dry-run: gst1-libav-pengyos-dirclean + patch
+# applies it, .applied_patches_list records it, and `make gst1-libav-pengyos` builds
+# and installs libgstlibav.so, linked against libavcodec.so.63 (the fork).
+closes = []
+upstream_fixes = []
+natural_fix = "whenever gst-libav drops the three removed codec IDs upstream; the guard is version-conditional, so a newer gst-libav that names them makes this patch fail loudly rather than silently"
+expiry = "upstream gst-libav stops naming AV_CODEC_ID_V308/V408/V410 (check the filter in ext/libav/gstavvid{dec,enc}.c); the patch is deleted then. Ends sooner if ffmpeg re-adds the IDs, which makes the guard a no-op and the patch reversible"
 observe_source = "pkg-stats"
-upstream_status = "merged"
+upstream_status = "not-offered"
 
 
 [[divergence]]

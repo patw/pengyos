@@ -1,0 +1,54 @@
+From: PengyOS <https://pengyos.catbee.ca>
+Subject: [PATCH] ext/libav: do not name the codec IDs ffmpeg 9 removed
+
+gst-libav 1.24.13 lists AV_CODEC_ID_V308, AV_CODEC_ID_V408 and AV_CODEC_ID_V410 in
+its "no quasi codecs, please" filter, in both gstavviddec.c and gstavvidenc.c.
+ffmpeg 9.0 removed those three IDs (they are present in 6.1.5's libavcodec/codec_id.h
+at lines 209/260/261 and absent from 9.0.2's), so the plugin does not compile:
+
+  gstavvidenc.c:1031:26: error: 'AV_CODEC_ID_V308' undeclared (first use in this function)
+
+Checked against gst-libav 1.24.13, 1.26.0 and 1.28.8: all three releases name them,
+so no gst-libav version builds against ffmpeg 9 as shipped.
+
+Guarded with `#if LIBAVCODEC_VERSION_MAJOR < 63`, which is the file's own existing
+pattern for the same problem (LIBAVCODEC_VERSION_MAJOR < 61 guards AV_CODEC_ID_AYUV
+a few lines below). libavcodec is 60 in ffmpeg 6.x, 61/62 in 8.x, 63 in 9.0.
+
+Carried on our own gst1-libav-pengyos recipe (divergence.toml -> ffmpeg-9.0.2-fork):
+the recipe is ours, so this is a fix in a recipe we author, not a fix written into
+somebody else's package. Effect: the three QuickTime graphics codecs are not offered
+by the libav plugin; every other ffmpeg-backed codec gstreamer uses is unaffected.
+
+--- a/ext/libav/gstavviddec.c
++++ b/ext/libav/gstavviddec.c
+@@ -2680,9 +2680,12 @@
+     if (in_plugin->id == AV_CODEC_ID_RAWVIDEO ||
+         in_plugin->id == AV_CODEC_ID_V210 ||
+         in_plugin->id == AV_CODEC_ID_V210X ||
++#if LIBAVCODEC_VERSION_MAJOR < 63
+         in_plugin->id == AV_CODEC_ID_V308 ||
+         in_plugin->id == AV_CODEC_ID_V408 ||
+-        in_plugin->id == AV_CODEC_ID_V410 || in_plugin->id == AV_CODEC_ID_R210
++        in_plugin->id == AV_CODEC_ID_V410 ||
++#endif
++        in_plugin->id == AV_CODEC_ID_R210
+ #if LIBAVCODEC_VERSION_MAJOR < 61
+         || in_plugin->id == AV_CODEC_ID_AYUV
+ #endif
+--- a/ext/libav/gstavvidenc.c
++++ b/ext/libav/gstavvidenc.c
+@@ -1028,9 +1028,12 @@
+     if (in_plugin->id == AV_CODEC_ID_RAWVIDEO ||
+         in_plugin->id == AV_CODEC_ID_V210 ||
+         in_plugin->id == AV_CODEC_ID_V210X ||
++#if LIBAVCODEC_VERSION_MAJOR < 63
+         in_plugin->id == AV_CODEC_ID_V308 ||
+         in_plugin->id == AV_CODEC_ID_V408 ||
+-        in_plugin->id == AV_CODEC_ID_V410 || in_plugin->id == AV_CODEC_ID_R210
++        in_plugin->id == AV_CODEC_ID_V410 ||
++#endif
++        in_plugin->id == AV_CODEC_ID_R210
+ #if LIBAVCODEC_VERSION_MAJOR < 61
+         || in_plugin->id == AV_CODEC_ID_AYUV
+ #endif

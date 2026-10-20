@@ -248,6 +248,19 @@ $(LIBRSVG_TARGET_CONFIGURE): $(HOST_LIBRSVG_TARGET_INSTALL_HOST)
 LIBRSVG_POST_INSTALL_TARGET_HOOKS += GDK_PIXBUF_UPDATE_CACHE
 endif
 
+# PipeWire's ffmpeg scale filter: Buildroot gates it on the stock package
+# (`ifeq ($(BR2_PACKAGE_FFMPEG),y)` in package/pipewire/pipewire.mk, which adds
+# `-Dffmpeg=enabled -Dpw-cat-ffmpeg=enabled` and `DEPENDENCIES += ffmpeg`). With
+# the fork shipping ffmpeg and the stock symbol off, that gate takes the
+# `disabled` branch and pipewire silently loses libswscale scaling. Point the
+# gate at the fork. DEPENDENCIES is read when pipewire.mk is evaluated, so
+# order the configure step after the fork's staging install, as polkit/gvfs do.
+ifeq ($(BR2_PACKAGE_FFMPEG_PENGYOS),y)
+PIPEWIRE_CONF_OPTS += -Dffmpeg=enabled -Dpw-cat-ffmpeg=enabled
+PIPEWIRE_DEPENDENCIES := $(filter-out ffmpeg,$(PIPEWIRE_DEPENDENCIES)) ffmpeg-pengyos
+$(PIPEWIRE_TARGET_CONFIGURE): $(FFMPEG_PENGYOS_TARGET_INSTALL_STAGING)
+endif
+
 # PipeWire's aptX / aptX HD and LDAC Bluetooth codecs: Buildroot's recipe has
 # no switches for them (meson "auto" would race the libraries' build).
 ifeq ($(BR2_PACKAGE_PIPEWIRE)$(BR2_PACKAGE_BLUEZ5_UTILS)$(BR2_PACKAGE_LIBFREEAPTX),yyy)

@@ -185,6 +185,39 @@ def openssh_fork_findings(tags: Iterable[str], current: str) -> list[dict]:
                       else f"new OpenSSH series ({current} -> {best})")}]
 
 
+def ffmpeg_fork_findings(html: str, current: str) -> list[dict]:
+    """ffmpeg, observed for the fork that ships it (`ffmpeg-pengyos`).
+
+    Same reason as `openssh_fork_findings`: pkg-stats scans the stock recipe, the
+    stock recipe is switched off, so nothing in the toolchain notices our 9.0.2 pin
+    going stale while ffmpeg publishes a release that closes a CVE we carry the fork
+    for. The ledger names this as the fork's `observe_source`.
+
+    ffmpeg publishes no tag list a `git ls-remote` can read; the release directory at
+    https://ffmpeg.org/releases/ is the index, so the source is the directory listing
+    and the parse is of `ffmpeg-<version>.tar.xz` hrefs. Signatures (`.asc`, `.sig`),
+    snapshots and the `.tar.gz`/`.tar.bz2` alternates are not releases of a version,
+    so only the exact `.tar.xz` name counts.
+
+    A point release (9.0.2 -> 9.0.3) is routine: it is the version the fork's own
+    expiry names, and it closes the three CVEs NVD says are affected *through* 9.0.2.
+    A new series (9.0 -> 9.1) is major: ffmpeg is the Desktop's media path, and a
+    series change is a human decision.
+    """
+    versions = re.findall(r"ffmpeg-([0-9]+(?:\.[0-9]+)*)\.tar\.xz", html)
+    versions = {v for v in versions if not is_prerelease(v)}
+    newer = [v for v in versions if vkey(v) > vkey(current)]
+    if not newer:
+        return []
+    best = max(newer, key=vkey)
+    kind = bump_kind(current, best)
+    return [{"lane": kind, "component": "ffmpeg-pengyos", "current": current,
+             "available": best,
+             "note": (f"ffmpeg point release (fork: {current} -> {best})"
+                      if kind == "routine"
+                      else f"new ffmpeg series ({current} -> {best})")}]
+
+
 def cosmic_findings(components: list[dict], tags_by_repo: dict[str, dict[str, str]]) -> list[dict]:
     """For each COSMIC repo: the newest epoch-* tag, and whether the pinned
     commit is that tag. Repos behind the newest epoch are grouped into one
