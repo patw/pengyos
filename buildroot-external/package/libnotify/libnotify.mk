@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-LIBNOTIFY_VERSION = 0.8.8
+LIBNOTIFY_VERSION = 0.8.9
 LIBNOTIFY_SOURCE = libnotify-$(LIBNOTIFY_VERSION).tar.xz
 LIBNOTIFY_SITE = https://download.gnome.org/sources/libnotify/0.8
 LIBNOTIFY_LICENSE = LGPL-2.1+
