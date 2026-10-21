@@ -1,0 +1,45 @@
+From 3564405b6919469427750f6b89d4abbe43534fa2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Mon, 12 Jan 2026 13:22:03 +0200
+Subject: [PATCH 2/5] wavparse: Use unsigned integers for data sizes
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/10903>
+---
+ subprojects/gst-plugins-good/gst/wavparse/gstwavparse.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/gst/wavparse/gstwavparse.c b/gst/wavparse/gstwavparse.c
+index 767e723db12..30c7098c9e9 100644
+--- a/gst/wavparse/gstwavparse.c
++++ b/gst/wavparse/gstwavparse.c
+@@ -1535,7 +1535,7 @@ gst_wavparse_stream_headers (GstWavParse * wav)
+         }
+         switch (ltag) {
+           case GST_RIFF_LIST_INFO:{
+-            const gint data_size = size - 4;
++            const guint data_size = size - 4;
+             GstTagList *new;
+ 
+             GST_INFO_OBJECT (wav, "Have LIST chunk INFO size %u", data_size);
+@@ -1581,7 +1581,7 @@ gst_wavparse_stream_headers (GstWavParse * wav)
+             break;
+           }
+           case GST_RIFF_LIST_adtl:{
+-            const gint data_size = size - 4;
++            const guint data_size = size - 4;
+ 
+             GST_INFO_OBJECT (wav, "Have 'adtl' LIST, size %u", data_size);
+             if (wav->streaming) {
+@@ -1670,7 +1670,7 @@ gst_wavparse_stream_headers (GstWavParse * wav)
+         break;
+       }
+       case GST_RIFF_TAG_smpl:{
+-        const gint data_size = size;
++        const guint data_size = size;
+ 
+         GST_DEBUG_OBJECT (wav, "Have 'smpl' TAG, size : %u", data_size);
+         if (wav->streaming) {
+-- 
+GitLab
+
+

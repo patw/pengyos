@@ -385,6 +385,14 @@ endif
 # behind it. The loop does not duplicate a declaration written here.
 LIBNOTIFY_IGNORE_CVES += CVE-2013-7381
 
+# libsndfile: no MPEG, by decision rather than by luck. configure enables MPEG on its
+# own when it finds both LAME and mpg123, and the stock recipe neither lists them as
+# dependencies nor passes --disable-mpeg. mpg123 is already in the Desktop, so turning on
+# BR2_PACKAGE_LAME for anything would silently compile in mpeg_l3_encode.c, which holds
+# CVE-2024-50613 (no upstream fix). Built today with HAVE_MPEG 0; this keeps it so.
+# MP3 decoding in the desktop goes through GStreamer and ffmpeg, not libsndfile.
+LIBSNDFILE_CONF_OPTS += --disable-mpeg
+
 # mke2fs picks a random filesystem UUID and directory hash seed, and post-image
 # reuses the UUID as the root PARTUUID (grub.cfg) and derives the disk images'
 # other IDs from it (board/common/image-ids.sh). Derive it from the finished

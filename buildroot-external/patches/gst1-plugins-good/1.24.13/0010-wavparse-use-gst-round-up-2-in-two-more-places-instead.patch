@@ -1,0 +1,37 @@
+From c73a1f4427ecb2e77d00fdd9576bd9864cfaba97 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Mon, 12 Jan 2026 13:41:31 +0200
+Subject: [PATCH 3/5] wavparse: Use GST_ROUND_UP_2() in two more places instead
+ of a manual implementation
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/10903>
+---
+ subprojects/gst-plugins-good/gst/wavparse/gstwavparse.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/gst/wavparse/gstwavparse.c b/gst/wavparse/gstwavparse.c
+index 30c7098c9e9..d4f65b23b19 100644
+--- a/gst/wavparse/gstwavparse.c
++++ b/gst/wavparse/gstwavparse.c
+@@ -701,7 +701,7 @@ gst_wavparse_peek_chunk (GstWavParse * wav, guint32 * tag, guint32 * size)
+     wav->abort_buffering = TRUE;
+     return FALSE;
+   }
+-  peek_size = (*size + 1) & ~1;
++  peek_size = GST_ROUND_UP_2 (*size);
+   available = gst_adapter_available (wav->adapter);
+ 
+   if (available >= (8 + peek_size)) {
+@@ -757,7 +757,7 @@ gst_waveparse_ignore_chunk (GstWavParse * wav, GstBuffer * buf, guint32 tag,
+   }
+   GST_DEBUG_OBJECT (wav, "Ignoring tag %" GST_FOURCC_FORMAT,
+       GST_FOURCC_ARGS (tag));
+-  flush = 8 + ((size + 1) & ~1);
++  flush = 8 + GST_ROUND_UP_2 (size);
+   wav->offset += flush;
+   if (wav->streaming) {
+     gst_adapter_flush (wav->adapter, flush);
+-- 
+GitLab
+
+

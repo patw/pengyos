@@ -44,6 +44,15 @@ FFMPEG_PENGYOS_CPE_ID_VENDOR = ffmpeg
 # The openssh fork hit exactly this on its first landing.
 FFMPEG_PENGYOS_CPE_ID_PRODUCT = ffmpeg
 
+# Two upstream master fixes carried on 9.0.2 (ffmpeg 9.0.3 is not released). Both are
+# NVD's own fix references and apply unmodified; recorded in divergence.toml
+# (ffmpeg-9.0.2-fork). Declared here because a fork's patches live in its recipe
+# directory, not under BR2_GLOBAL_PATCH_DIR.
+# 0001-avutil-encryption_info-avoid-stack-exhaustion-freeing-init-info-list.patch
+FFMPEG_PENGYOS_IGNORE_CVES += CVE-2026-107678
+# 0002-avformat-rtsp-limit-the-number-of-redirects.patch
+FFMPEG_PENGYOS_IGNORE_CVES += CVE-2026-107696
+
 FFMPEG_PENGYOS_CONF_OPTS = \
 	--prefix=/usr \
 	--enable-avfilter \

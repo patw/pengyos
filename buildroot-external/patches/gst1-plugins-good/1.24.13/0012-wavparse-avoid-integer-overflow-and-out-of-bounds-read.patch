@@ -1,0 +1,52 @@
+From 081484ec99aa75fe24b3286d88e1f1280deea56a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Mon, 12 Jan 2026 14:26:19 +0200
+Subject: [PATCH 5/5] wavparse: Avoid integer overflow and out-of-bounds read
+ when parsing adtl chunks
+
+Fixes GST-SA-2026-0001, CVE-2026-1940.
+
+Fixes https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/4854
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/10903>
+---
+ subprojects/gst-plugins-good/gst/wavparse/gstwavparse.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/gst/wavparse/gstwavparse.c b/gst/wavparse/gstwavparse.c
+index fb11af82e17..ce6915cf38a 100644
+--- a/gst/wavparse/gstwavparse.c
++++ b/gst/wavparse/gstwavparse.c
+@@ -760,6 +760,8 @@ gst_waveparse_ignore_chunk (GstWavParse * wav, GstBuffer * buf, guint32 tag,
+   }
+   GST_DEBUG_OBJECT (wav, "Ignoring tag %" GST_FOURCC_FORMAT,
+       GST_FOURCC_ARGS (tag));
++  /* Checked in all callers */
++  g_assert (size < MAX_CHUNK_SIZE);
+   flush = 8 + GST_ROUND_UP_2 (size);
+   wav->offset += flush;
+   if (wav->streaming) {
+@@ -940,7 +942,7 @@ gst_wavparse_adtl_chunk (GstWavParse * wav, const guint8 * data, guint32 size)
+     ltag = GST_READ_UINT32_LE (data + offset);
+     lsize = GST_READ_UINT32_LE (data + offset + 4);
+ 
+-    if (lsize > (G_MAXUINT - 8) || lsize + 8 > size) {
++    if (lsize > MAX_CHUNK_SIZE || GST_ROUND_UP_2 (lsize) + 8 > size) {
+       GST_WARNING_OBJECT (wav, "Invalid adtl size: %u + 8 > %u", lsize, size);
+       return FALSE;
+     }
+@@ -958,8 +960,9 @@ gst_wavparse_adtl_chunk (GstWavParse * wav, const guint8 * data, guint32 size)
+         GST_MEMDUMP_OBJECT (wav, "Unknowm adtl", &data[offset], lsize);
+         break;
+     }
+-    offset += 8 + GST_ROUND_UP_2 (lsize);
+-    size -= 8 + GST_ROUND_UP_2 (lsize);
++    lsize = GST_ROUND_UP_2 (lsize);
++    offset += 8 + lsize;
++    size -= 8 + lsize;
+   }
+ 
+   return TRUE;
+-- 
+GitLab
+

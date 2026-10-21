@@ -17,6 +17,64 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Kernel 7.2.12 (26.10.38)
+
+- Linux 7.2.11 → 7.2.12, the stable point release of 2026-10-21, per SPEC §1.6 (take
+  point releases continuously). All five editions; nvidia-open rebuilds against it.
+
+### Security: six more media-file holes closed by carried upstream fixes (26.10.38)
+
+- **ffmpeg 9.0.2** (`package/ffmpeg-pengyos/0001`, `0002`): a crafted MP4 with a long
+  chain of `pssh` boxes exhausted the stack when freed (CVE-2026-107678), and an RTSP
+  server answering every request with a redirect pinned a CPU forever (CVE-2026-107696,
+  now at most 8 redirects). ffmpeg 9.0.3 is not out; both are upstream master commits.
+- **gst-plugins-good 1.24.13** (`patches/gst1-plugins-good/1.24.13/0007`-`0012`): an
+  MP4 declaring 0 audio channels crashed `qtdemux` with a division by zero
+  (CVE-2026-46469, CVE-2026-46470), and a WAV `adtl` chunk with an odd size read out of
+  bounds (CVE-2026-1940). The nightly had recorded the qtdemux fix as not applying:
+  most of upstream's change is for channel-layout code 1.24 does not have, which also
+  means the advisory's third CVE (CVE-2026-46472) does not affect us.
+- **gst-plugins-base 1.24.13** (`patches/gst1-plugins-base/1.24.13/0001`, new): an Ogg
+  Opus stream declaring more than 64 channels overflowed `opusdec`'s buffers
+  (CVE-2026-18297, ZDI-26-465).
+- Found while checking what else was open: six GStreamer P1s the scanner reports
+  (CVE-2025-3887, -47183, -47219, -47806, -47807, -47808) are already fixed in 1.24.13
+  itself (upstream's advisory patches reverse-apply to our source); NVD's ranges skip
+  the 1.24 branch. CVE-2026-18298 and -18299 are in plugins we do not build
+  (`gdkpixbufdec`, `rtp`).
+
+### Security: a container image could read the host's environment (podman, CVE-2026-57231)
+
+- Podman v5.7.0 read an image's `Env` entries with the same parser as `podman run
+  --env VAR*`, so an image carrying a bare key (`HOST`) or `*` got the matching host
+  variables, or all of them, copied in from the session that started it. Server and
+  Desktop ship rootless podman (and distrobox on top of it), so a shell's tokens and
+  keys were one `podman run` of an untrusted image away.
+- Fixed by carrying upstream's fix (6c431b73dbf8, as backported to v5.8.4) on v5.7.0
+  as `patches/podman/v5.7.0/0002`. An image with a malformed env entry now fails to
+  start with `invalid image env variable`, for `podman run` and `podman kube play`.
+  The ledger entry is renamed `podman-v5.7.0-cve-2026` and now expires when Buildroot
+  pins podman v5.8.4, which carries both of the set's fixes.
+
+### Security: two malformed-audio-file holes in libsndfile (CVE-2026-37555, CVE-2025-52194)
+
+- libsndfile 1.2.2 is the newest release, so there was no version to bump to and the
+  set sat open. A WAV or W64 file with IMA ADPCM and a large enough block count
+  overflowed the frame count (heap overflow or crash), and an IRCAM file with an
+  out-of-range sample rate hit undefined behaviour. Both are reachable by opening
+  or previewing an audio file on the Desktop: libsndfile sits under `pw-cat`,
+  `libpulse` (so `pactl`) and ffmpeg's PulseAudio input.
+- Fixed by carrying the two upstream master commits (3d63704f6654, 7ff854d1e0bd)
+  as `patches/libsndfile/1.2.2/`. The nightly's earlier attempt failed because it
+  tried NVD's named fix, which Buildroot already carries; the CVE needed the later
+  commit that finishes it.
+- libsndfile is now built with `--disable-mpeg` explicitly. It already had no MPEG
+  support, so CVE-2024-50613 (MP3 encoder) is not in the image, but configure would
+  have switched it on silently the day LAME was enabled.
+- Dropping libsndfile was considered and is not possible: PulseAudio's client
+  library needs it, and `pactl` is how cosmic-settings-daemon sets Mono Audio and
+  default devices.
+
 ### Fixed: the battery reading froze after suspend — UPower 1.91.5 as a fork (found on beholaptop, 26.10.35)
 
 - After resume, the panel and Settings → Power kept the battery reading from the

@@ -1,0 +1,47 @@
+From ea7ac498e3f3f6cd4f41bc5d1c8af1a3bb68d44c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Thu, 19 Mar 2026 10:25:22 +0200
+Subject: [PATCH] qtdemux: Avoid division by zero if 0 audio channels are
+ signalled
+
+Fixes https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/4977
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/11243>
+---
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 8e7eb89..c7ae7ad 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -13333,20 +13333,20 @@ qtdemux_parse_trak (GstQTDemux * qtdemux, GNode * trak, guint32 * mvhd_matrix)
+           /* Sometimes these are set to 0 in the sound sample descriptions so
+            * let's try to infer useful values from the other information we
+            * have available */
+-          if (entry->bytes_per_sample == 0)
++          if (entry->bytes_per_sample == 0 && entry->n_channels > 0)
+             entry->bytes_per_sample =
+                 entry->bytes_per_frame / entry->n_channels;
+           if (entry->bytes_per_sample == 0)
+             entry->bytes_per_sample = samplesize / 8;
+ 
+-          if (entry->bytes_per_frame == 0)
++          if (entry->bytes_per_frame == 0 && entry->n_channels > 0)
+             entry->bytes_per_frame =
+                 entry->bytes_per_sample * entry->n_channels;
+ 
+           if (entry->bytes_per_packet == 0)
+             entry->bytes_per_packet = entry->bytes_per_sample;
+ 
+-          if (entry->samples_per_frame == 0)
++          if (entry->samples_per_frame == 0 && entry->n_channels > 0)
+             entry->samples_per_frame = entry->n_channels;
+ 
+           if (entry->samples_per_packet == 0)
+@@ -16274,7 +16274,7 @@ qtdemux_audio_caps (GstQTDemux * qtdemux, QtDemuxStream * stream,
+       };
+       _codec ("Raw LPCM audio");
+ 
+-      if (data && len >= 36) {
++      if (data && len >= 36 && entry->n_channels > 0) {
+         depth = QT_UINT32 (data + 24);
+         flags = QT_UINT32 (data + 28);
+         width = QT_UINT32 (data + 32) * 8 / entry->n_channels;

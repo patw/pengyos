@@ -249,19 +249,27 @@ closes = [
   "CVE-2026-70631",
   "CVE-2026-70632",
   "CVE-2026-96611",
-]
-
-# 32 closed, 5 left. Counted from pkg-stats' own report against
-# package/ffmpeg-pengyos at 9.0.2, measured 2026-10-19.
-still_open = [
-  "CVE-2025-25468",
-  "CVE-2025-25469",
-  "CVE-2026-107677",
+  # Carried as patches in the recipe directory from 2026-10-21 (26.10.38), because 9.0.3
+  # has not shipped. Both are upstream master commits NVD names, carried unmodified,
+  # and declared as FFMPEG_PENGYOS_IGNORE_CVES next to the CPE in ffmpeg-pengyos.mk:
+  #   0001 969c7eb09198 avutil/encryption_info: iterative free of the pssh init-info
+  #        list (a crafted MP4 with many pssh boxes exhausted the stack on free). Only
+  #        the fix commit of its PR (code.ffmpeg.org #24593) is carried: the other two
+  #        add a public libavutil API and bump version.h, which a fork should not.
+  #   0002 f5d4fd186c68 avformat/rtsp: at most 8 redirects (a 302 loop pinned a CPU).
   "CVE-2026-107678",
   "CVE-2026-107696",
 ]
 
-cost = "three recipes carry the fork's dependency redirect (gst1-libav-pengyos, ffmpegthumbnailer, pipewire via external.mk); the 12 patches carried on 6.1.5 are deleted, being upstream at 9.0.2; and gst1-libav needs one build patch, recorded at gst1-libav-pengyos-1.24.13-ffmpeg9, because ffmpeg 9 removed three codec IDs the plugin names"
+# 32 closed by the version, 2 by patches, 3 left. Counted from pkg-stats' own report
+# against package/ffmpeg-pengyos at 9.0.2, measured 2026-10-19.
+still_open = [
+  "CVE-2025-25468",
+  "CVE-2025-25469",
+  "CVE-2026-107677",
+]
+
+cost = "three recipes carry the fork's dependency redirect (gst1-libav-pengyos, ffmpegthumbnailer, pipewire via external.mk); the 12 patches carried on 6.1.5 are deleted, being upstream at 9.0.2; and gst1-libav needs one build patch, recorded at gst1-libav-pengyos-1.24.13-ffmpeg9, because ffmpeg 9 removed three codec IDs the plugin names; and the recipe carries two upstream fixes on 9.0.2 (0001, 0002, with FFMPEG_PENGYOS_IGNORE_CVES), to be deleted with their declarations when the fork moves to 9.0.3"
 
 # The tarball's digest is not published as plain text by upstream
 # (releases/ffmpeg-9.0.2.tar.xz.sha256 is a 404), so the provenance is the GPG
@@ -392,11 +400,35 @@ patches_dir   = "buildroot-external/patches/gst1-plugins-good/1.24.13"
 # Six avidemux fixes for two CVEs: the pair is closed by the set together, which is why
 # every patch in cve-declarations.mk repeats both - the declaration is per patch file, and
 # the last one applied is what closes them.
-closes = ["CVE-2026-73433", "CVE-2026-73434"]
+closes = ["CVE-2026-73433", "CVE-2026-73434",
+          "CVE-2026-46469", "CVE-2026-46470", "CVE-2026-1940"]
 upstream_fixes = [
   "bb8fb5a9bf15", "ed6dcb332204", "c8383e484841",
   "0bcc6564c7de", "30966f12aff2", "44383c6de722",
+  "ea7ac498e3f3",
+  "1171ae8ac218", "3564405b6919", "c73a1f4427ec", "8822ee3b2397", "081484ec99aa",
 ]
+
+# Added by hand 2026-10-21 (26.10.38):
+#
+# 0007, CVE-2026-46469 / CVE-2026-46470 (GStreamer-SA-2026-0018): qtdemux divides by
+# n_channels in qtdemux_parse_trak and in qtdemux_audio_caps' raw-LPCM branch, and an MP4
+# can signal 0 channels. The fix is ea7ac498e3f3, patch 1 of MR 11243. The nightly tried
+# the whole MR on 2026-10-08 and recorded patch_does_not_apply: its other three patches
+# and one hunk of this one are in qtdemux_parse_chnl/_chan, which 1.24.13 does not have
+# (the chnl box arrived in 1.26), so CVE-2026-46472 from the same advisory does not apply
+# to us at all. Carried: the parse_trak hunk byte-for-byte, and the audio_caps guard
+# re-rooted - upstream adds "&& entry->n_channels > 0" to a v2 sound-description
+# condition 1.24.13 does not have; the carried hunk adds the same term to 1.24.13's
+# condition over the same division ("if (data && len >= 36)").
+#
+# 0008-0012, CVE-2026-1940 (GStreamer-SA-2026-0001): wavparse's adtl check did not
+# account for GST_ROUND_UP_2, an incomplete fix of CVE-2024-47778. MR 10903 is five
+# commits and only the series applies (0012 depends on MAX_CHUNK_SIZE from 0011); all
+# five are carried unmodified.
+#
+# Checked against the real 1.24.13 tarball with 0001-0006 applied first: 0007-0012 apply
+# in series. Declared by hand in cve-declarations.mk.
 # Same GStreamer lockstep as gst1-plugins-bad above: one version bump retires both sets.
 expiry = "Buildroot pins gst-plugins-good outside the NVD range of CVE-2026-73433/73434; pkg-stats then reports the ignores as stale and the patch set is deleted"
 observe_source = "pkg-stats"
@@ -454,7 +486,7 @@ upstream_status = "released"
 
 
 [[divergence]]
-id        = "podman-v5.7.0-cve-2026-55686"
+id        = "podman-v5.7.0-cve-2026"
 kind      = "patch-set"
 component = "podman"
 pinned_version = "v5.7.0"
@@ -468,9 +500,29 @@ patches_dir   = "buildroot-external/patches/podman/v5.7.0"
 # fails. Upstream's fix is d18e44e9abb3 ("libpod: simplify resolveWorkDir()"), named
 # in the CVE's own description. NVD names no commit for it, so the loop's patch lane
 # refuses the CVE (fix_commits_available) and this set is carried by hand.
-closes = ["CVE-2026-55686"]
+#
+# CVE-2026-57231 (CVSS 7.5, P1, added 2026-10-21): an image whose config Env holds a
+# bare key ("HOST") or a glob ("*") was parsed with the same code as `podman run --env
+# VAR*`, so podman copied the matching host variables - every one, for "*" - into the
+# container. A malicious image could read the launching session's environment
+# (tokens, keys). Upstream's fix is 6c431b73dbf8 ("fix image host env leak", named by
+# NVD), backported to v5.8 as 85832029d537 and first released in v5.8.4: image envs
+# must be key=value or the container refuses to start, for `podman run` and `podman
+# kube play` alike. Carried rather than bumped because a stock version cannot move
+# from br2-external, and a podman fork would cost a fork slot for one 20-line fix.
+closes = ["CVE-2026-55686", "CVE-2026-57231"]
 
-# The deviation, stated. The upstream commit is a source change plus a test change.
+# The deviations, stated.
+#
+# 0002 is the v5.8 backport (85832029d537) with one context line changed. Its kube.go
+# hunk ends on "// Process envFrom first (lower precedence)", a block v5.7.0 does not
+# have; the carried hunk ends on v5.7.0's next line ("for _, env := range
+# opts.Container.Env {") instead. Every removed and added line is upstream's, and all
+# four files of the commit are carried, tests included. Checked 2026-10-21 against the
+# real v5.7.0 tarball with 0001 applied: applies with no offset, `go vet` is clean on
+# pkg/specgen/generate{,/kube}, and upstream's TestParseImageEnvs passes (6/6).
+#
+# 0001: the upstream commit is a source change plus a test change.
 # Buildroot applies patches to the extracted source tree, the test hunk does not apply
 # to v5.7.0 (the file it patches references podman/v6), and the loop's own record of
 # this fix as known-bad was that failure - not a problem with the fix. The carried
@@ -478,12 +530,79 @@ closes = ["CVE-2026-55686"]
 # byte-for-byte upstream's. Recorded because a patch that is not the whole commit the
 # CVE names is exactly what this ledger exists to make visible, and because a future
 # pay-down must be able to tell what was carried.
-cost = "the carried patch drops the upstream commit's test/e2e hunk; the source hunk is unmodified"
+cost = "0001 drops the upstream commit's test/e2e hunk; 0002 re-roots one trailing context line of its kube.go hunk; every source line carried is upstream's"
 
 # The version-dir name is part of the contract, and getting it wrong is silent:
 # Buildroot resolves global patches at <global-patch-dir>/<rawname>/<VERSION>
 # (package/pkg-utils.mk:166), and podman's VERSION is v5.7.0 with the v. A directory
 # named 5.7.0 is not found, the patch is not applied, and nothing says so.
-expiry = "Buildroot releases with podman >= 6.0 containing d18e44e9abb3: delete buildroot-external/patches/podman, drop PODMAN_IGNORE_CVES, and pkg-stats reports the truth on its own"
+# v5.8.4 carries both fixes (its resolveWorkDir no longer has isWorkDirSymlink, and it
+# is 57231's own fixed version), so the set ends at v5.8.4, not at 6.0.
+expiry = "Buildroot pins podman >= v5.8.4: delete buildroot-external/patches/podman, drop PODMAN_IGNORE_CVES, and pkg-stats reports the truth on its own"
+observe_source = "pkg-stats"
+upstream_status = "merged"
+
+[[divergence]]
+id        = "libsndfile-1.2.2-cve-2026"
+kind      = "patch-set"
+component = "libsndfile"
+pinned_version = "1.2.2"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-21"
+patches_dir   = "buildroot-external/patches/libsndfile/1.2.2"
+
+# 1.2.2 (2023-08) is libsndfile's newest release, so no version bump exists to take: the
+# fixes are on master only. Both are upstream commits carried byte-for-byte, and both
+# apply on top of Buildroot's own 14 libsndfile patches (package/libsndfile/0001-0014).
+#
+# CVE-2026-37555 (7.5, P1): IMA ADPCM in WAV/W64 computes sf.frames as int * int, so a
+# header with samplesperblock * blocks > INT_MAX overflows before the widening store.
+# It is the incomplete half of CVE-2022-33065: Buildroot's 0013 (upstream 9a829113c88a)
+# cast only the AIFF branch. Fixed by 3d63704f6654, which casts the other two.
+#
+# CVE-2025-52194 (7.5, P1): ircam_read_header converts the header's float sample rate
+# with a bare (int) cast, undefined for an out-of-range or non-finite value. The
+# report's "SIGILL" is UBSan's float-cast-overflow trap (ud1), so the evidence is UB,
+# not demonstrated heap corruption; the fix is still upstream's and one line.
+# Fixed by 7ff854d1e0bd (psf_lrintf, as mat4/mat5 already do).
+#
+# Why this was "stuck": the nightly (2026-10-08) tried NVD's named fix for 37555,
+# 9a829113c88a, and recorded patch_does_not_apply. That commit is already in the tree
+# as Buildroot's 0013 - it did not apply because it was applied. The fix that closes the
+# CVE is the later one, which NVD does not name.
+closes = ["CVE-2026-37555", "CVE-2025-52194"]
+upstream_fixes = ["3d63704f6654", "7ff854d1e0bd"]
+
+# Not closed here, and not reachable: CVE-2024-50613 (6.5, an assertion in
+# mpeg_l3_encoder_close). Our libsndfile is built with HAVE_MPEG 0 - BR2_PACKAGE_LAME is
+# off - so mpeg_l3_encode.c compiles to a stub that only refuses to initialise.
+# external.mk now passes --disable-mpeg, because configure otherwise turns MPEG on by
+# itself the day LAME is enabled (mpg123 already is). Triage scores it reachable:file;
+# that judgement is wrong, and it is left open in pkg-stats rather than declared,
+# because a declaration in this set has to be a fix this set carries.
+
+expiry = "libsndfile releases a version containing 3d63704f6654 and 7ff854d1e0bd and Buildroot pins it: delete buildroot-external/patches/libsndfile and its LIBSNDFILE_IGNORE_CVES lines"
+observe_source = "pkg-stats"
+upstream_status = "merged"
+
+[[divergence]]
+id        = "gst1-plugins-base-1.24.13-cve-2026-18297"
+kind      = "patch-set"
+component = "gst1-plugins-base"
+pinned_version = "1.24.13"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-21"
+patches_dir   = "buildroot-external/patches/gst1-plugins-base/1.24.13"
+
+# CVE-2026-18297 (7.8, ZDI-26-465, GStreamer-SA-2026-0053): an Ogg Opus stream declaring
+# more than 64 channels overflows the channel-position arrays in opusdec (shipped:
+# BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_OPUS, libgstopus.so). NVD files it under gstreamer1
+# as "OGG file parsing"; the advisory's own patch, MR 12044 (178ae5ac20db), touches only
+# gst-plugins-base/ext/opus. One hunk, carried unmodified, applies to 1.24.13 cleanly.
+closes = ["CVE-2026-18297"]
+upstream_fixes = ["178ae5ac20db"]
+
+# Same GStreamer lockstep as gst1-plugins-good/-bad: the stack bump retires all three.
+expiry = "Buildroot pins gst-plugins-base >= 1.28.5 (the advisory's fixed version): delete buildroot-external/patches/gst1-plugins-base and its GST1_PLUGINS_BASE_IGNORE_CVES line"
 observe_source = "pkg-stats"
 upstream_status = "merged"
