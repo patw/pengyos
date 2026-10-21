@@ -6,6 +6,37 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — the leftovers guard could not see a leftover an aging had touched
+- **The guard's own mitigation defeated it.** `prepare_rebuild` ages the mtime of
+  every file of every package it is about to rebuild, so a reinstall rewrites and
+  re-listes them. Buildroot's `.files-list.txt` is a `find` before/after compared on
+  mtime, so every package installed *after* an aging absorbs every aged file it can
+  see. Measured on the Desktop tree, 2026-10-20: `ldacbt`, which installs four files,
+  lists **13544**; `libfreeaptx` 13551; `libmtp` 25707. A file is reported only when
+  *all* its owners are disabled, so an aged file with any enabled absorber among its
+  owners became unreportable — the rule was unsatisfiable for exactly the files the
+  aging touched.
+- **What shipped because of it.** The published 26.10.37 Desktop images carry
+  `usr/lib/libupower-glib.so.3.1.0`, the library of the disabled stock `upower`,
+  beside the fork's `.3.1.2`. The guard reported "no leftovers". Functionally the
+  image is right (`libupower-glib.so.3` → `.3.1.2`, `upowerd` is the fork's, the SBOM
+  lists only `upower-pengyos 1.91.5`); the orphan is 137 KB of dead weight and an
+  artifact the ledger says is no longer shipped. The same mechanism hid **14 ffmpeg
+  6.1.5 libraries (~17 MB) in every NVIDIA image since the ffmpeg fork landed** —
+  `libavcodec.so.60.31.102` and `libavcodec.so.63.1.102` ship together in 26.10.36.
+- **The rule now:** a claim on an aged path counts only if it is the claim of a
+  package the path was aged *for*, or the claim of a package installed by the current
+  round while no package the path was aged for was installed by that round. The
+  aging records what it aged and for whom (`<out>/.pengyos-aged.txt`); `configure`
+  stamps the round (`<out>/.pengyos-configured`) so `installed_packages` can say
+  which file lists are this round's. Everything else is an absorption artifact.
+- **Verified on the real tree:** the shipped rule names **0** leftovers on the
+  26.10.37 Desktop tree; the fixed rule names **1** — `libupower-glib.so.3.1.0`, the
+  file found in the published rootfs — and correctly keeps `upowerd` and the other
+  paths the fork reinstalled at the same names. 9 new tests, positive and negative
+  controls, including the 188-file systemd false leftover the aging exists to prevent.
+  Report only, as before: nothing is deleted and exit codes are unchanged.
+
 ### Added
 - **`build` names files in `target/` that no package installs any more**
   (`pengyos_build/leftovers.py`). Buildroot never deletes from `target/`, so
