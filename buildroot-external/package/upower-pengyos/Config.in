@@ -1,0 +1,35 @@
+config BR2_PACKAGE_UPOWER_PENGYOS
+	bool "upower-pengyos (fork of upower)"
+	depends on BR2_PACKAGE_HAS_UDEV
+	depends on BR2_TOOLCHAIN_HAS_THREADS # libgudev
+	depends on BR2_USE_MMU # libgudev
+	depends on BR2_USE_WCHAR # libgudev
+	select BR2_PACKAGE_LIBGUDEV
+	help
+	  PengyOS's fork of UPower, pinned at a version newer than
+	  the one Buildroot ships. It exists because Buildroot
+	  2026.08 pins upower 0.99.19, whose battery reading freezes
+	  after resume from suspend, and a br2-external tree cannot
+	  move a stock package's version.
+	  See divergence.toml: upower-1.91.5-fork.
+
+	  Say no to upower (BR2_PACKAGE_UPOWER) when you say yes to
+	  this: both install the same files, and the image must
+	  carry one UPower. thermald selects the stock symbol, so
+	  use thermald-pengyos.
+
+	  UPower is an abstraction for enumerating power devices,
+	  listening to device events and querying history and
+	  statistics. Any application or service on the system can
+	  access the org.freedesktop.UPower service via the system
+	  message bus.
+
+	  https://upower.freedesktop.org/
+
+comment "upower-pengyos needs udev /dev management"
+	depends on BR2_USE_MMU
+	depends on !BR2_PACKAGE_HAS_UDEV
+
+comment "upower-pengyos needs a toolchain w/ threads, wchar"
+	depends on BR2_USE_MMU
+	depends on !BR2_USE_WCHAR || !BR2_TOOLCHAIN_HAS_THREADS

@@ -1,0 +1,7 @@
+# Locally calculated, 2026-10-20. gitlab's archive is generated from the tag and
+# upstream publishes no checksum or signature for it, so the provenance is the
+# tag: the tarball was extracted and compared with `diff -r` against a clone of
+# tag v1.91.5 (commit 233615a1505166ef4a28c959836fe8c7781f5697) - identical.
+sha256  c465a1c7fc05d00ac2bc7321c19b9b7e479410d8392bd7eb3e714275729629fd  upower-v1.91.5.tar.bz2
+# Locally calculated (unchanged from the stock 0.99.19 recipe)
+sha256  c1753877db41d798d63369a825ad9225bbeb5e10a407be5fcd8de96182f1c50d  COPYING

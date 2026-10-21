@@ -137,6 +137,19 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
         findings += guard("hplip-fork", lambda: sources.hplip_fork_findings(
             sources.http_get("https://sourceforge.net/projects/hplip/files/hplip/"), hver))
 
+    # upower: our fork (package/upower-pengyos) is what ships and the stock recipe is
+    # switched off, so pkg-stats never sees it - and NVD has no upower CPE, so this is
+    # the fork's only observer. divergence.toml -> upower-1.91.5-fork names it as the
+    # observe_source. gitlab.freedesktop.org's bot wall blocks the web UI, not git.
+    upower_mk = repo / "buildroot-external/package/upower-pengyos/upower-pengyos.mk"
+    uver = sources.mk_value(upower_mk.read_text(), "UPOWER_PENGYOS_VERSION") \
+        if upower_mk.exists() else None
+    if uver:
+        findings += guard("upower-fork", lambda: sources.upower_fork_findings(
+            sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags",
+                                             "https://gitlab.freedesktop.org/upower/upower.git"])),
+            uver))
+
     def cosmic():
         comps = sources.read_cosmic_components((repo / "scripts/cosmic-components.tsv").read_text())
         tags = {}

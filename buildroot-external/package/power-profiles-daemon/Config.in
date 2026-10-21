@@ -4,7 +4,7 @@ config BR2_PACKAGE_POWER_PROFILES_DAEMON
 	depends on BR2_PACKAGE_POLKIT
 	select BR2_PACKAGE_LIBGLIB2
 	select BR2_PACKAGE_LIBGUDEV
-	select BR2_PACKAGE_UPOWER
+	select BR2_PACKAGE_UPOWER_PENGYOS # fork; divergence.toml -> upower-1.91.5-fork
 	help
 	  Power profiles (performance / balanced / power-saver) over
 	  D-Bus (org.freedesktop.UPower.PowerProfiles) — what COSMIC's

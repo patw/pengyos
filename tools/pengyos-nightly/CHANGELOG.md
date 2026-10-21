@@ -6,6 +6,17 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — an observe source for the upower fork
+- **`upower-fork`** (`sources.upower_fork_findings`, wired in `cli.py`): `git ls-remote
+  --tags` of gitlab.freedesktop.org/upower/upower compared with
+  `UPOWER_PENGYOS_VERSION`. divergence.toml -> upower-1.91.5-fork names it as the fork's
+  `observe_source`. pkg-stats cannot see a fork, and NVD lists no upower CPE, so this is
+  the only thing that sees the 1.91.5 pin age. Only `vX.Y.Z` tags count (the
+  `UPOWER_0_99_N` and `DeviceKit-power-NNN` schemes are older history); a point release
+  is routine, a new series major.
+- 7 tests with a frozen tag listing (`fixtures/ls-remote-upower.txt`), positive and
+  negative controls.
+
 ### Fixed — a "known-bad" record now says what it says about *one* fix
 - **The aggregate was the defect.** `patch_failures.where` is the union of every file
   named anywhere in one `make` output, and the planner put it in every skipped fix's

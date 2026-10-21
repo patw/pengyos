@@ -255,6 +255,35 @@ def hplip_fork_findings(html: str, current: str) -> list[dict]:
              "note": f"hplip release newer than the fork (hplip-pengyos: {current} -> {best})"}]
 
 
+def upower_fork_findings(tags: Iterable[str], current: str) -> list[dict]:
+    """UPower, observed for the fork that ships it (`upower-pengyos`).
+
+    Same reason as `openssh_fork_findings`: pkg-stats scans the stock recipe, the
+    stock recipe is switched off, so nothing in the toolchain notices our 1.91.5 pin
+    going stale. For upower the stock recipe is no help even when it is on - Buildroot
+    has not touched it since 2022 - and NVD lists no CPE for upower, so there is no
+    CVE feed either. This source is the only thing that sees the pin age.
+    divergence.toml -> upower-1.91.5-fork names it as the fork's `observe_source`.
+
+    Upstream tags releases `v1.91.5`. The `UPOWER_0_99_x` and `DeviceKit-power-*`
+    tags are pre-2022 history in the other naming scheme and are all older than any
+    pin this fork can carry, so only `vX.Y.Z` counts. A point release (1.91.6) is
+    routine; a new series (1.92) is major, because upowerd's D-Bus API is what the
+    panel, Settings and power-profiles-daemon read.
+    """
+    versions = [t[1:] for t in tags if re.fullmatch(r"v\d+\.\d+\.\d+", t)]
+    newer = [v for v in versions if vkey(v) > vkey(current)]
+    if not newer:
+        return []
+    best = max(newer, key=vkey)
+    kind = bump_kind(current, best)
+    return [{"lane": kind, "component": "upower-pengyos", "current": current,
+             "available": best,
+             "note": (f"UPower point release (fork: {current} -> {best})"
+                      if kind == "routine"
+                      else f"new UPower series ({current} -> {best})")}]
+
+
 def cosmic_findings(components: list[dict], tags_by_repo: dict[str, dict[str, str]]) -> list[dict]:
     """For each COSMIC repo: the newest epoch-* tag, and whether the pinned
     commit is that tag. Repos behind the newest epoch are grouped into one
