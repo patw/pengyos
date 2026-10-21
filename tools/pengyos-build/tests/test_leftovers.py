@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -129,6 +130,155 @@ def test_prepare_rebuild_ages_only_the_rebuilt_packages_files(tmp_path: Path) ->
 
 def test_prepare_rebuild_skips_missing_files_and_lists(tmp_path: Path) -> None:
     assert leftovers.prepare_rebuild(tmp_path, (tmp_path / "build" / "systemd-258.7",)) == 0
+
+
+# --- absorption: the aging makes every later file list untrustworthy -------------
+#
+# Measured on the Desktop tree, 2026-10-20. prepare_rebuild ages the mtime of every
+# file of every package it is about to rebuild, and Buildroot's .files-list.txt is a
+# find before/after compared on mtime - so every package installed *after* an aging
+# absorbs every aged file it can see. ldacbt, which installs four files, listed 13544;
+# libfreeaptx 13551; libmtp 25707. The published 26.10.37 Desktop image shipped
+# libupower-glib.so.3.1.0, a file of the disabled stock upower, and the guard reported
+# "no leftovers", because those three enabled packages all claimed the file.
+
+UPOWER_STALE = "./usr/lib/libupower-glib.so.3.1.0"
+UPOWER_FORK = "./usr/lib/libupower-glib.so.3.1.2"
+ABSORBERS = ("ldacbt", "libfreeaptx", "libmtp")
+
+
+def test_an_aged_file_of_a_disabled_package_is_named_despite_absorption(tmp_path: Path) -> None:
+    # POSITIVE CONTROL - the 26.10.37 case. The stale library was aged for `upower`,
+    # three enabled packages installed after the aging absorbed it, and `upower` is
+    # off. Only the claim of the package it was aged for counts, so the file is named.
+    _touch(tmp_path, UPOWER_STALE)
+    now = leftovers.parse_file_list(
+        _list(*[(a, UPOWER_STALE) for a in ABSORBERS], ("upower", UPOWER_STALE))
+    )
+    found = leftovers.find_leftovers(
+        now, now, {"upower"}, tmp_path, aged={UPOWER_STALE: {"upower"}}
+    )
+    assert found == {UPOWER_STALE: "upower"}
+
+
+def test_an_aged_file_an_enabled_package_still_claims_is_not_reported(tmp_path: Path) -> None:
+    # NEGATIVE CONTROL - the 188-file systemd case the aging exists to prevent. The
+    # aging touched systemd's files and enabled packages absorbed them; systemd is on
+    # and still claims them, so nothing is reported.
+    _touch(tmp_path, *SYSTEMD_NOW)
+    aged = {p: {"systemd"} for p in SYSTEMD_NOW}
+    now = leftovers.parse_file_list(
+        _list(
+            *[(a, p) for a in ABSORBERS for p in SYSTEMD_NOW],
+            *[("systemd", p) for p in SYSTEMD_NOW],
+        )
+    )
+    assert not leftovers.find_leftovers(now, now, set(), tmp_path, aged=aged)
+
+
+def test_an_aged_file_its_package_dropped_is_named_despite_absorption(tmp_path: Path) -> None:
+    # POSITIVE CONTROL - the timesyncd case with absorption: systemd rebuilt without
+    # timesyncd, and the unit file is now claimed only by absorbers.
+    _touch(tmp_path, *TIMESYNCD, *SYSTEMD_NOW)
+    aged = {p: {"systemd"} for p in TIMESYNCD + SYSTEMD_NOW}
+    before = leftovers.parse_file_list(
+        _list(*[("systemd", p) for p in TIMESYNCD + SYSTEMD_NOW])
+    )
+    now = leftovers.parse_file_list(
+        _list(
+            *[(a, TIMESYNCD[0]) for a in ABSORBERS],
+            *[("systemd", p) for p in SYSTEMD_NOW],
+        )
+    )
+    found = leftovers.find_leftovers(before, now, set(), tmp_path, aged=aged)
+    assert TIMESYNCD[0] in found
+    assert TIMESYNCD[1] in found  # dropped by the rebuild, claimed by nobody
+    assert SYSTEMD_NOW[0] not in found
+
+
+def test_prepare_rebuild_records_who_each_aged_file_belonged_to(tmp_path: Path) -> None:
+    out = tmp_path
+    (out / "build").mkdir()
+    (out / leftovers.FILE_LIST).write_text(
+        _list(("systemd", SYSTEMD_NOW[0]), ("upower", UPOWER_STALE))
+    )
+    _touch(out / "target", SYSTEMD_NOW[0], UPOWER_STALE)
+    leftovers.prepare_rebuild(
+        out, (out / "build" / "systemd-258.7", out / "build" / "upower-0.99.19")
+    )
+    aged = leftovers.load_aged(out)
+    assert aged[SYSTEMD_NOW[0]] == {"systemd"}
+    assert aged[UPOWER_STALE] == {"upower"}
+
+
+def test_the_aged_record_accumulates_across_rounds(tmp_path: Path) -> None:
+    # The record has to outlive the round that wrote it: the absorption that hid the
+    # stale upower library happened in an earlier build than the one that reported it.
+    out = tmp_path
+    (out / "build").mkdir()
+    _touch(out / "target", SYSTEMD_NOW[0], UPOWER_STALE)
+    (out / leftovers.FILE_LIST).write_text(_list(("systemd", SYSTEMD_NOW[0])))
+    leftovers.prepare_rebuild(out, (out / "build" / "systemd-258.7",))
+    (out / leftovers.FILE_LIST).write_text(_list(("upower", UPOWER_STALE)))
+    leftovers.prepare_rebuild(out, (out / "build" / "upower-0.99.19",))
+    assert leftovers.load_aged(out) == {
+        SYSTEMD_NOW[0]: {"systemd"},
+        UPOWER_STALE: {"upower"},
+    }
+
+
+def test_no_aged_record_keeps_the_old_behaviour(tmp_path: Path) -> None:
+    # Negative control on the new parameter: with nothing aged, the rules are the
+    # original ones - a file two enabled packages claim is never a leftover.
+    _touch(tmp_path, "./usr/bin/shared")
+    now = leftovers.parse_file_list(_list(("swayimg", "./usr/bin/shared"), ("bash", "./usr/bin/shared")))
+    assert not leftovers.find_leftovers(now, now, set(), tmp_path)
+
+
+def test_installed_packages_names_packages_not_paths(tmp_path: Path) -> None:
+    # parse_file_list is keyed by PATH, so the package set has to come from the
+    # values. Getting this wrong makes _package_of_dir match nothing and the round
+    # looks like it installed nothing - which reports every file the round's fork
+    # reinstalled at the same path (21 files for the upower fork, 1 real).
+    out = tmp_path
+    (out / "build" / "upower-pengyos-1.91.5").mkdir(parents=True)
+    (out / "build" / "ldacbt-2.0.2.6").mkdir(parents=True)
+    (out / leftovers.FILE_LIST).write_text(
+        _list(("upower-pengyos", UPOWER_FORK), ("ldacbt", "./usr/bin/pw"))
+    )
+    (out / leftovers.CONFIGURED).write_text("0\n")
+    assert leftovers.installed_packages(out) == {"upower-pengyos", "ldacbt"}
+
+
+def test_installed_packages_excludes_rounds_before_the_stamp(tmp_path: Path) -> None:
+    out = tmp_path
+    (out / "build" / "upower-pengyos-1.91.5").mkdir(parents=True)
+    (out / "build" / "ldacbt-2.0.2.6").mkdir(parents=True)
+    (out / leftovers.FILE_LIST).write_text(
+        _list(("upower-pengyos", UPOWER_FORK), ("ldacbt", "./usr/bin/pw"))
+    )
+    os.utime(out / "build" / "ldacbt-2.0.2.6", (1_000_000_000, 1_000_000_000))
+    (out / leftovers.CONFIGURED).write_text("1500000000\n")
+    assert leftovers.installed_packages(out) == {"upower-pengyos"}
+
+
+def test_a_fork_reinstalling_a_disabled_packages_path_is_not_reported(tmp_path: Path) -> None:
+    # POSITIVE CONTROL against over-reporting. upower-pengyos writes upowerd at the
+    # same path stock upower used. The aging touched that path for upower, so the
+    # fork's claim has to survive - the real tree reported 1 leftover, not 21.
+    _touch(tmp_path, "./usr/libexec/upowerd")
+    now = leftovers.parse_file_list(
+        _list(
+            *[(a, "./usr/libexec/upowerd") for a in ABSORBERS],
+            ("upower", "./usr/libexec/upowerd"),
+            ("upower-pengyos", "./usr/libexec/upowerd"),
+        )
+    )
+    aged = {"./usr/libexec/upowerd": {"upower"}}
+    found = leftovers.find_leftovers(
+        now, now, {"upower"}, tmp_path, aged=aged, installed={"upower-pengyos"}
+    )
+    assert not found
     (tmp_path / "build").mkdir()
     (tmp_path / leftovers.FILE_LIST).write_text(_list(("systemd", TIMESYNCD[0])))
     assert leftovers.prepare_rebuild(tmp_path, (tmp_path / "build" / "systemd-258.7",)) == 0

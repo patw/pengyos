@@ -256,6 +256,10 @@ def configure_target(
     if rebuild:
         leftovers.prepare_rebuild(output, rebuild)
         stale.remove_build_dirs(rebuild)
+    # Stamp the round, so the leftovers check can tell which file lists are this
+    # round's (leftovers.installed_packages) and discount the absorption claims the
+    # aging above creates.
+    leftovers.mark_configured(output)
     left = leftovers.current(output)
     if left:
         notes = notes + (str(left),)
