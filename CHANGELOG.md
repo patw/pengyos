@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — Wi-Fi crawled on Realtek rtw88 cards (found on behocraptop, 2026-10-13)
+
+- With power save on, rtw88 puts the card into its low-power state and the firmware
+  stops acknowledging the driver: behocraptop's RTL8821CE logged 5759 `failed to send
+  h2c command` and 1104 `firmware failed to leave lps state` in 41 minutes, and Wi-Fi
+  crawled. NetworkManager's default (`ignore`) leaves the driver's power save on.
+- The fix applied by hand was per connection profile, so the next network joined
+  (a hotspot, a hotel) would have brought it back; a global `[wifi] powersave=` file
+  added beside it is not a key NetworkManager has (`unknown key` at every boot).
+- The Desktop now ships `/usr/lib/NetworkManager/conf.d/70-pengyos-rtw88-powersave.conf`:
+  `wifi.powersave=2` (off) for devices bound to any of the 17 rtw88 PCIe/SDIO/USB
+  drivers in Linux 7.2, listed by name because `driver:` matches do not glob. Other
+  cards keep their driver's default, so their battery life does not change. A
+  profile's own `802-11-wireless.powersave` still wins.
+- On behocraptop, `/etc/NetworkManager/conf.d/70-wifi-powersave.conf` can be deleted
+  once this is installed.
+
 ### Kernel 7.2.12 (26.10.38)
 
 - Linux 7.2.11 → 7.2.12, the stable point release of 2026-10-21, per SPEC §1.6 (take
