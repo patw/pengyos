@@ -606,3 +606,36 @@ upstream_fixes = ["178ae5ac20db"]
 expiry = "Buildroot pins gst-plugins-base >= 1.28.5 (the advisory's fixed version): delete buildroot-external/patches/gst1-plugins-base and its GST1_PLUGINS_BASE_IGNORE_CVES line"
 observe_source = "pkg-stats"
 upstream_status = "merged"
+
+
+[[divergence]]
+id        = "ca-certificates-20260223-emudhra-blacklist"
+kind      = "patch-set"
+component = "ca-certificates"
+pinned_version = "20260223"
+editions  = ["pengyos-core", "pengyos-server", "pengyos-server-nvidia", "pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-22"
+patches_dir   = "buildroot-external/patches/ca-certificates/20260223"
+
+# Not a CVE: a trust-store removal. Compromised eMudhra/emSign intermediates chain to
+# "emSign ECC Root CA - G3", which 20260223 exports into /etc/ssl/certs. Debian's NMU
+# 20260816+nmu1 (Closes: #1151413) blacklists that root and "Comodo AAA Services root";
+# the patch is that upload's whole blacklist.txt hunk, so the file matches Debian's
+# byte for byte. Debian's blacklist rather than our own wording, so rule 1 of
+# patches/README.md holds: it is the upstream fix.
+#
+# Verified by building the package's own `make all` on the pinned tarball with and
+# without the patch: 144 -> 143 exported roots, the one removed being
+# emSign_ECC_Root_CA_-_G3.crt. "Comodo AAA Services root" was already not exported
+# (Mozilla withdrew its TLS trust bit, and certdata2pem.py exports server-auth roots
+# only), so that line changes nothing today; it is kept to match Debian. The other
+# emSign roots (G1, C1, C3) stay, as they do in Debian and in certifi 2026.10.19.
+#
+# The global patch dir is keyed by version, so a Buildroot bump past 20260223 stops
+# applying this silently rather than failing: the expiry check is that the new pin
+# carries the blacklist line itself.
+closes = []
+upstream_fixes = ["Debian ca-certificates 20260816+nmu1"]
+expiry = "Buildroot pins ca-certificates >= 20260816+nmu1 (check its mozilla/blacklist.txt names \"emSign ECC Root CA - G3\"): delete buildroot-external/patches/ca-certificates"
+observe_source = "pkg-stats"
+upstream_status = "merged"

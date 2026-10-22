@@ -84,6 +84,36 @@ endef
 PODMAN_POST_INSTALL_TARGET_HOOKS += PENGYOS_PODMAN_INSTALL_ROOTLESSPORT
 endif
 
+# ca-certificates: the bundle (/etc/ssl/certs/ca-certificates.crt) is built at
+# finalize from every *.crt under target/usr/share/ca-certificates, and Buildroot
+# never deletes from target/. So a root the new build no longer exports stays
+# trusted in a rebuilt tree: found 2026-10-22, when the emSign ECC Root CA - G3
+# blacklist (divergence.toml -> ca-certificates-20260223-emudhra-blacklist) was
+# applied and built, and the old .crt was still in target/ after
+# ca-certificates-dirclean. Mozilla removes roots in most releases, so a version
+# bump has the same hole. Clear the directory only this package installs into
+# before every install, so the bundle is exactly what this build exports.
+define PENGYOS_CA_CERTIFICATES_CLEAR_TARGET
+	rm -rf $(TARGET_DIR)/usr/share/ca-certificates/mozilla
+endef
+CA_CERTIFICATES_PRE_INSTALL_TARGET_HOOKS += PENGYOS_CA_CERTIFICATES_CLEAR_TARGET
+
+# python-pip: pip vendors certifi, its own copy of the Mozilla roots, frozen at
+# whatever pip release Buildroot pins (26.1: certifi 2026.02.25, which still
+# trusts emSign ECC Root CA - G3). pip's default path verifies through the system
+# store (truststore, on since 24.2), but --use-deprecated=legacy-certs and anything
+# importing pip._vendor.certifi read the vendored file. Point it at the system
+# bundle, as Debian's pip does, so the image has one trust store and a root
+# removed from ca-certificates is removed from pip too. Chosen over forking pip to
+# 26.2.2 (2026-10-22): that only swaps one frozen copy for a newer frozen copy.
+ifeq ($(BR2_PACKAGE_CA_CERTIFICATES),y)
+define PENGYOS_PYTHON_PIP_SYSTEM_CERTS
+	ln -sf /etc/ssl/certs/ca-certificates.crt \
+		$(TARGET_DIR)/usr/lib/python$(PYTHON3_VERSION_MAJOR)/site-packages/pip/_vendor/certifi/cacert.pem
+endef
+PYTHON_PIP_POST_INSTALL_TARGET_HOOKS += PENGYOS_PYTHON_PIP_SYSTEM_CERTS
+endif
+
 # polkit: Buildroot hardcodes -Dsession_tracking=ConsoleKit, so polkit could not
 # see logind sessions — every user counted as "not in an active local session"
 # and NetworkManager, Settings, Flatpak asked for admin auth (or refused) even

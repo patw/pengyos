@@ -17,6 +17,28 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Security — distrust "emSign ECC Root CA - G3" (eMudhra compromise, 2026-10-22)
+
+- Compromised eMudhra/emSign intermediates chain to "emSign ECC Root CA - G3", which
+  every edition's system bundle (`/etc/ssl/certs/ca-certificates.crt`, ca-certificates
+  20260223) trusted. All five editions now carry Debian's fix from 20260816+nmu1
+  (#1151413) as a patch on 20260223: it blacklists that root and "Comodo AAA Services
+  root". The built bundle loses exactly one root (144 → 143); the Comodo root was
+  already not exported. The emSign G1, C1 and C3 roots stay, as in Debian and certifi.
+- pip (Server and Desktop): its default path already verifies through the system store
+  (truststore, since 24.2), so the bundle fix covers it. Its vendored certifi
+  (2026.02.25 in pip 26.1, still carrying the root), read with
+  `--use-deprecated=legacy-certs` or by anything importing `pip._vendor.certifi`, is now
+  a symlink to `/etc/ssl/certs/ca-certificates.crt`, as in Debian's pip: one trust store,
+  and a root removed from ca-certificates leaves pip too. Chosen over forking pip to
+  26.2.2, whose certifi 2026.10.19 is just a newer frozen copy.
+- A rebuilt tree would have shipped the root anyway: the bundle is concatenated from
+  every `.crt` left in `target/`, and Buildroot never deletes from `target/`, so the
+  removed root's file survived `ca-certificates-dirclean`. `external.mk` now clears
+  `/usr/share/ca-certificates/mozilla` before ca-certificates installs, which also
+  covers every future version bump that drops a root.
+- Ledger: `divergence.toml` → `ca-certificates-20260223-emudhra-blacklist`.
+
 ### Fixed — Wi-Fi crawled on Realtek rtw88 cards (found on behocraptop, 2026-10-13)
 
 - With power save on, rtw88 puts the card into its low-power state and the firmware

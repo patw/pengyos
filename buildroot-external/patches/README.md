@@ -58,10 +58,13 @@ copy of it.
 | gst1-libav-pengyos | 1.24.13 | 1 | `gst1-libav-pengyos-1.24.13-ffmpeg9` | nothing — a build fix that follows from the ffmpeg 9 fork, not a CVE |
 | podman | v5.7.0 | 2 | `podman-v5.7.0-cve-2026` | CVE-2026-55686, CVE-2026-57231 (image env host leak) |
 | libsndfile | 1.2.2 | 2 | `libsndfile-1.2.2-cve-2026` | CVE-2026-37555 (IMA ADPCM WAV), CVE-2025-52194 (IRCAM); applied after Buildroot's own 14 |
+| ca-certificates | 20260223 | 1 | `ca-certificates-20260223-emudhra-blacklist` | nothing — a trust-store removal, not a CVE: blacklists "emSign ECC Root CA - G3" and "Comodo AAA Services root" (Debian 20260816+nmu1, #1151413) |
 
-One of these is not a CVE fix, and that is allowed by rule 1 for the same reason the
-ffmpeg and hplip fork patches are: it is carried on a recipe we author
-(`gst1-libav-pengyos`). The upower capacity_level set that used to sit here was deleted
+Two of these are not CVE fixes. The gst1-libav-pengyos one is allowed by rule 1 for the
+same reason the ffmpeg and hplip fork patches are: it is carried on a recipe we author.
+The ca-certificates one is Debian's own upload (20260816+nmu1) carried unchanged on the
+pinned 20260223, so it is the upstream fix; it declares nothing to pkg-stats because it
+closes no CVE. The upower capacity_level set that used to sit here was deleted
 on 2026-10-20 when upower became a fork at 1.91.5, which carries the fix itself
 (`divergence.toml` -> `upower-1.91.5-fork`).
 
