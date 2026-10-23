@@ -17,6 +17,38 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Pengy 1.13.0 — the agent stops carrying its own trust store (2026-10-23)
+
+- `package/pengy` pin 1.12.4 → 1.13.0, which covers 1.12.5 on the way.
+- **1.12.5 is the security half, and it is the one the ca-certificates fix below
+  cannot reach.** PengyR built reqwest with `rustls-tls`, which compiles a *frozen
+  copy* of the Mozilla root list (webpki-roots) into `pengy-cli`, `pengy-web` and
+  `libpengy_core.a`. That copy kept trusting "emSign ECC Root CA - G3" after the
+  eMudhra compromise had it removed from every distro bundle — so blacklisting it in
+  `/etc/ssl/certs` did nothing for the agent, which never looked there. The three
+  crates now use `rustls-tls-native-roots`: Pengy verifies against the system store
+  like every other program in the image, and a root removed by a future
+  ca-certificates update leaves Pengy too. primp (web search) cannot be limited to
+  native roots, so `Cargo.lock` moves webpki-roots 1.0.8 → 1.0.10, the first release
+  without that root.
+- **1.13.0 is the feature half:** opt-in proactive context compaction and bounded
+  reply recovery. Defaults stay off, so a machine that sets no `context_window`
+  behaves exactly as it did.
+- Nothing in the recipe had to change: `Cargo.lock` is 405 packages before and after
+  (only webpki-roots moved), the workspace members and the two shipped binaries are
+  the same, and the `LICENSE` file is byte-identical between the tags — so its hash
+  line stays.
+- Checked on the artifact, not the release notes: `make pengy-install-target` on the
+  Desktop tree builds all three front ends (`pengy-cli --version` → `Pengy v1.13.0`), and
+  `strings pengy-cli | grep -i emsign` now lists only `Root CA - C1`, `- G1` and
+  `ECC Root CA - C3` — the compromised **G3** root is gone from the shipped binary,
+  while `rustls-native-certs` is vendored and `/etc/ssl/certs` appears in it.
+- The hash is `pengy-1.13.0-cargo6.tar.gz`, the archive Buildroot generates with
+  `cargo vendor` — not the GitHub tarball. Digest read from the archive
+  `make pengy-source` produced, then proved by re-running the download step from a
+  clean stamp (`OK (sha256 390b9bf9…)`); negative control: one corrupted hex char
+  makes that step fail.
+
 ### Security — distrust "emSign ECC Root CA - G3" (eMudhra compromise, 2026-10-22)
 
 - Compromised eMudhra/emSign intermediates chain to "emSign ECC Root CA - G3", which
