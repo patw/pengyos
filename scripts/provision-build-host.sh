@@ -41,9 +41,9 @@ DESKTOP_PKGS=(
   libexpat1-dev libfontconfig-dev libfreetype-dev libpixman-1-dev libglib2.0-dev
   libflatpak-dev libostree-dev
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdav1d-dev
-  # Copied from the host into the Desktop image by post-build.sh
-  libdisplay-info3 libgudev-1.0-0 libmtdev1t64 libwacom9
-  libpipewire-0.3-0t64 libdav1d7 libssl3t64 libcurl4t64
+  # Nothing is copied from the host into the image any more (post-build used to
+  # copy libdisplay-info, OpenSSL, curl and more; 2026-10-23). The -dev packages
+  # above pull in the runtime libraries cargo links against.
 )
 [ "${DESKTOP}" = 1 ] && PKGS+=("${DESKTOP_PKGS[@]}")
 

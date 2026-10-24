@@ -6,6 +6,19 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — an observe source for the libdisplay-info fork
+- **`libdisplay-info-fork`** (`sources.libdisplay_info_fork_findings`, wired in
+  `cli.py`): `git ls-remote --tags` of gitlab.freedesktop.org/emersion/libdisplay-info
+  compared with `LIBDISPLAY_INFO_PENGYOS_VERSION`. divergence.toml ->
+  libdisplay-info-0.3.0-fork names it as the fork's `observe_source`. The fork pins 0.3.0
+  below Buildroot's 0.4.0 (cosmic-comp's crate rejects 0.4); pkg-stats cannot see it, and
+  NVD lists no libdisplay-info CPE, which is how CVE-2026-112271 went unmatched.
+- A point release in the pinned series (0.3.1) is routine and wins over a newer series,
+  because it is the one the fork can take and the likeliest carrier of a fix; otherwise
+  the newest series is major, with a note that cosmic-comp's crate must move first.
+- 7 tests with a frozen tag listing (`fixtures/ls-remote-libdisplay-info.txt`), positive
+  and negative controls; the precedence test was checked to fail with the rule removed.
+
 ### Added — an observe source for the upower fork
 - **`upower-fork`** (`sources.upower_fork_findings`, wired in `cli.py`): `git ls-remote
   --tags` of gitlab.freedesktop.org/upower/upower compared with

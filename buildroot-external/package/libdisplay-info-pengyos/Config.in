@@ -1,0 +1,20 @@
+config BR2_PACKAGE_LIBDISPLAY_INFO_PENGYOS
+	bool "libdisplay-info-pengyos (fork of libdisplay-info)"
+	depends on !BR2_PACKAGE_LIBDISPLAY_INFO
+	select BR2_PACKAGE_HWDATA
+	select BR2_PACKAGE_HWDATA_PNP_IDS
+	help
+	  PengyOS's fork of libdisplay-info, pinned at 0.3.0, OLDER
+	  than the 0.4.0 Buildroot ships. cosmic-comp parses every
+	  monitor's EDID with it and links libdisplay-info.so.3; its
+	  libdisplay-info-sys crate accepts only >= 0.1.0, < 0.4.0, and
+	  0.4.0 is soversion 4. Until this recipe the image carried the
+	  build host's Ubuntu copy instead.
+	  See divergence.toml: libdisplay-info-0.3.0-fork.
+
+	  Say no to libdisplay-info (BR2_PACKAGE_LIBDISPLAY_INFO): both
+	  install the same headers and pkg-config file.
+
+	  EDID and DisplayID library.
+
+	  https://gitlab.freedesktop.org/emersion/libdisplay-info

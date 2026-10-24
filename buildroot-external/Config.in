@@ -79,6 +79,10 @@ menu "PengyOS (external tree)"
 	# divergence.toml -> upower-1.91.5-fork.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/upower-pengyos/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/thermald-pengyos/Config.in"
+	# libdisplay-info pinned BELOW Buildroot's 0.4.0: cosmic-comp links
+	# libdisplay-info.so.3 and its crate rejects 0.4. Replaces the build
+	# host's Ubuntu copy. divergence.toml -> libdisplay-info-0.3.0-fork.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libdisplay-info-pengyos/Config.in"
 
 	# Flatpak (the Desktop's app lane) and the two libraries it needs that
 	# Buildroot 2026.08 does not ship. Built here instead of copied from the

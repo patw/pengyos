@@ -150,6 +150,18 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
                                              "https://gitlab.freedesktop.org/upower/upower.git"])),
             uver))
 
+    # libdisplay-info: our fork pins 0.3.0 below Buildroot's 0.4.0 (cosmic-comp's
+    # crate rejects 0.4), the stock recipe is off, and NVD has no CPE for it, so this
+    # is the fork's only observer. divergence.toml -> libdisplay-info-0.3.0-fork.
+    ldi_mk = repo / "buildroot-external/package/libdisplay-info-pengyos/libdisplay-info-pengyos.mk"
+    ldiver = sources.mk_value(ldi_mk.read_text(), "LIBDISPLAY_INFO_PENGYOS_VERSION") \
+        if ldi_mk.exists() else None
+    if ldiver:
+        findings += guard("libdisplay-info-fork", lambda: sources.libdisplay_info_fork_findings(
+            sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags",
+                                             "https://gitlab.freedesktop.org/emersion/libdisplay-info.git"])),
+            ldiver))
+
     def cosmic():
         comps = sources.read_cosmic_components((repo / "scripts/cosmic-components.tsv").read_text())
         tags = {}

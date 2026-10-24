@@ -284,6 +284,36 @@ def upower_fork_findings(tags: Iterable[str], current: str) -> list[dict]:
                       else f"new UPower series ({current} -> {best})")}]
 
 
+def libdisplay_info_fork_findings(tags: Iterable[str], current: str) -> list[dict]:
+    """libdisplay-info, observed for the fork that ships it (`libdisplay-info-pengyos`).
+
+    The fork pins 0.3.0, BELOW the 0.4.0 Buildroot ships: cosmic-comp links
+    libdisplay-info.so.3 and its libdisplay-info-sys crate accepts only < 0.4.0.
+    pkg-stats scans the stock recipe, which is switched off, and NVD lists no CPE for
+    libdisplay-info, so its CVEs never match either. divergence.toml ->
+    libdisplay-info-0.3.0-fork names this as the fork's `observe_source`.
+
+    Upstream tags releases `0.3.0`, with no `v`. A point release in the pinned series
+    (0.3.1) is routine and wins over a newer series: it is the one the fork can take
+    without moving cosmic-comp, and the likeliest carrier of a security fix. Without
+    one, the newest series is major - a newer series needs cosmic-comp's crate to move
+    first, so it is reported, never something the loop can bump on its own.
+    """
+    versions = [t for t in tags if re.fullmatch(r"\d+\.\d+\.\d+", t)]
+    newer = [v for v in versions if vkey(v) > vkey(current)]
+    if not newer:
+        return []
+    series = [v for v in newer if bump_kind(current, v) == "routine"]
+    best = max(series or newer, key=vkey)
+    kind = bump_kind(current, best)
+    return [{"lane": kind, "component": "libdisplay-info-pengyos", "current": current,
+             "available": best,
+             "note": (f"libdisplay-info point release (fork: {current} -> {best})"
+                      if kind == "routine"
+                      else f"new libdisplay-info series ({current} -> {best}); "
+                           "cosmic-comp's libdisplay-info-sys must accept it first")}]
+
+
 def cosmic_findings(components: list[dict], tags_by_repo: dict[str, dict[str, str]]) -> list[dict]:
     """For each COSMIC repo: the newest epoch-* tag, and whether the pinned
     commit is that tag. Repos behind the newest epoch are grouped into one

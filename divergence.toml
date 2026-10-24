@@ -40,8 +40,9 @@ schema = 1
 fork_budget = 10
 
 # Budget: at most 10 maintained forks (kind = "fork") at any time.
-# Current fork count: 4 (openssh-pengyos, ffmpeg-pengyos, hplip-pengyos 2026-10-19;
-# upower-pengyos 2026-10-20). The gate's count is authoritative; this line is the human copy.
+# Current fork count: 5 (openssh-pengyos, ffmpeg-pengyos, hplip-pengyos 2026-10-19;
+# upower-pengyos 2026-10-20; libdisplay-info-pengyos 2026-10-23). The gate's count is
+# authoritative; this line is the human copy.
 # Enforced by the gate from 2026-10-19: scripts/pengyos_gate.py:check_fork_budget counts
 # kind = "fork" entries against `fork_budget` above and fails past it. It also fails a
 # fork whose observe_source is pkg-stats, because pkg-stats cannot see a fork at all -
@@ -639,3 +640,59 @@ upstream_fixes = ["Debian ca-certificates 20260816+nmu1"]
 expiry = "Buildroot pins ca-certificates >= 20260816+nmu1 (check its mozilla/blacklist.txt names \"emSign ECC Root CA - G3\"): delete buildroot-external/patches/ca-certificates"
 observe_source = "pkg-stats"
 upstream_status = "merged"
+
+
+[[divergence]]
+id        = "libdisplay-info-0.3.0-fork"
+kind      = "fork"
+component = "libdisplay-info-pengyos"
+pinned_version = "0.3.0"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-23"
+recipe        = "buildroot-external/package/libdisplay-info-pengyos"
+
+# Not a fix: a version pinned BELOW Buildroot's. cosmic-comp parses every monitor's EDID
+# with libdisplay-info and links libdisplay-info.so.3, through the libdisplay-info-sys
+# 0.3.0 crate, whose system-deps range is ">= 0.1.0, < 0.4.0". Buildroot 2026.08 ships
+# 0.4.0, which is soversion 4 (meson.build: soversion = the minor version). Until this
+# recipe, board/desktop/post-build.sh copied the build host's Ubuntu libdisplay-info3
+# (0.3.0-1) into the image: invisible to pkg-stats, the nightly's observe and the SBOM,
+# at whatever state the host was in. The fork replaces that copy with a Buildroot build
+# of the same upstream release, so this is a provenance fix, not a behaviour change.
+#
+# CARRIES OUR OWN FIX for CVE-2026-112271 (DisplayID v1, displayid.c), published
+# 2026-10-19, CVSS 5.5/6.8: a DisplayID data block whose length byte exceeds the section
+# makes parse_data_block return the over-long length, the caller's cursor steps past the
+# section, and the trailing is_all_zeroes() padding check, still sized for the previous
+# cursor, reads past the EDID buffer. An out-of-bounds read (crash), reachable from any
+# monitor, KVM or capture device through cosmic-comp. 0.3.0's displayid.c:697 is the same
+# loop as 0.4.0's. No upstream fix exists (no commit or MR on 2026-10-23; last commit
+# 2026-08-31), so patches/README.md rule 1 puts our own fix here, in a recipe we author:
+# 0001-displayid-check-padding-only-over-the-bytes-the-section-has-left.patch recomputes the
+# remaining size from the final cursor and skips the check when nothing remains.
+# Reproduced and verified 2026-10-23 with AddressSanitizer, through di_info_parse_edid on
+# an EDID in a heap buffer of its own size (as a compositor holds one): unpatched gives a
+# heap-buffer-overflow READ 135 bytes past a 256-byte EDID at displayid.c:697; patched
+# gives none and still reports the over-long block. The same stale size also gave a false
+# "Padding: Contains non-zero bytes" when a block exactly fills the section; fixed with it.
+# Upstream meson test: 64/64 before and after (3 test EDIDs have a DisplayID extension).
+# Reproducer: behoserver:/data/tmp/ldi/repro/ (mkedid.py, harness.c).
+#
+# CVE-2026-112272 (DisplayID v2, displayid2.c) does NOT apply: 0.3.0's displayid2.c parses
+# only the section header; data block parsing arrived in 0.4.0.
+#
+# NVD lists no CPE for libdisplay-info, so pkg-stats never matched either CVE - the same
+# blind spot that hid the host copy.
+closes = ["CVE-2026-112271"]
+upstream_fixes = []
+patches_dir = "buildroot-external/package/libdisplay-info-pengyos"
+
+# The tarball is upstream's release asset; its detached signature verified on 2026-10-23
+# against Simon Ser's key 34FF9526CFEF0E97A340E2E40FDE7BE0E88F5E48, the key published on
+# gitlab.freedesktop.org/emersion.gpg. The .hash line is that tarball's sha256.
+provenance = "upstream release 0.3.0 (tag 0.3.0 = 47a5590e9c4eb35d67651b8c05a55f1a48259329), signature verified"
+
+cost = "none beyond the recipe: no other package selects libdisplay-info, and the stock symbol is set to n in configs/layers/desktop.config"
+expiry = "cosmic-comp's pinned commit (scripts/cosmic-components.tsv) depends on a libdisplay-info-sys that accepts the libdisplay-info Buildroot ships: delete buildroot-external/package/libdisplay-info-pengyos, set BR2_PACKAGE_LIBDISPLAY_INFO=y in configs/layers/desktop.config, and remove the libdisplay-info-fork observe source from pengyos-nightly"
+observe_source = "pengyos-nightly observe, source id libdisplay-info-fork: git ls-remote --tags https://gitlab.freedesktop.org/emersion/libdisplay-info.git compared to LIBDISPLAY_INFO_PENGYOS_VERSION (sources.libdisplay_info_fork_findings, added 2026-10-23 with the fixture tests/fixtures/ls-remote-libdisplay-info.txt). A 0.3.x point release is routine and wins over a newer series. pkg-stats cannot see a fork, and NVD lists no libdisplay-info CPE, so this is the only observer."
+upstream_status = "not-offered"

@@ -17,6 +17,37 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Security — Desktop images stop carrying the build host's Ubuntu libraries (2026-10-23)
+
+- Desktop images shipped 25 libraries copied unchanged from the build host's Ubuntu
+  packages, at whatever patch level the host had that day. The nightly's observe, the
+  CVE match and the SBOM could see none of them. Now there are none: every library the
+  host-built COSMIC binaries link comes from a Buildroot package.
+- **cosmic-store** had a private `/usr/lib/compat` with Ubuntu's OpenSSL 3.5.5 and curl
+  8.18.0 behind a wrapper, "for ENGINE". That no longer held: nothing in the Store's
+  library closure imports an `ENGINE_` symbol, and it links only the image's own
+  libflatpak, built against the image's curl 8.22.0 and OpenSSL 3.6.4. The Store now runs
+  on those; a Flathub install through it was verified in QEMU.
+- **The `ldd` copy loop** (cosmic-store, cosmic-player, cosmic-app-library) is gone. `ldd`
+  resolved against the host's libraries, so it copied the host's flatpak/ostree/gstreamer
+  dependencies (krb5, OpenLDAP, SASL, libssh2, brotli, rtmpdump, libselinux, liborc and
+  more) that nothing in the image loads.
+- **libdisplay-info**, which cosmic-comp uses to parse every monitor's EDID, is built by
+  the new `package/libdisplay-info-pengyos`: upstream 0.3.0, signature-checked. Stock
+  0.4.0 is soversion 4 and cosmic-comp's crate rejects it. Ledger:
+  `divergence.toml` → `libdisplay-info-0.3.0-fork`; pengyos-nightly gains the
+  `libdisplay-info-fork` observe source. `libmtdev` and `libwacom` were copied for
+  cosmic-comp but nothing links them.
+- **CVE-2026-112271 fixed** (our own patch; upstream has none yet). A crafted EDID from
+  a monitor, KVM or capture device made libdisplay-info's DisplayID parser read past the
+  EDID buffer inside cosmic-comp; the fix also drops a false "Padding" failure. Checked
+  with AddressSanitizer and upstream's tests (64/64). CVE-2026-112272 is in parsing that
+  0.3.0 does not have. NVD lists no CPE for libdisplay-info, so nothing had matched
+  either.
+- `post-build.sh` removes the old copies from rebuilt trees, skipping any a package
+  installs. `provision-build-host.sh --desktop` no longer installs runtime packages
+  for copying.
+
 ### Pengy 1.13.0 — the agent stops carrying its own trust store (2026-10-23)
 
 - `package/pengy` pin 1.12.4 → 1.13.0, which covers 1.12.5 on the way.

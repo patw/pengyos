@@ -1,0 +1,7 @@
+# Locally calculated, 2026-10-23, after checking upstream's detached signature
+# (libdisplay-info-0.3.0.tar.xz.sig, same release page): good signature from
+# Simon Ser <contact@emersion.fr>, key 34FF9526CFEF0E97A340E2E40FDE7BE0E88F5E48,
+# the key published on gitlab.freedesktop.org/emersion.gpg.
+sha256  6ae77cd937f9cf7d1321d35c116062c4911e8447010a6a713ac4286f7a9d5987  libdisplay-info-0.3.0.tar.xz
+# Locally calculated (identical to the stock 0.4.0 recipe's)
+sha256  15b396244e58830c5614b9394f4deccfe684970cd507f299383ab57ad339eedd  LICENSE

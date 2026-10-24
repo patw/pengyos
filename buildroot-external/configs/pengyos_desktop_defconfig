@@ -703,6 +703,14 @@ BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_WCN7850=y
 # check-needed-libs.py now fails the build on any unresolved library.)
 BR2_PACKAGE_LIBINPUT=y
 
+# --- EDID parsing: libdisplay-info ---------------------------------------------
+# cosmic-comp links libdisplay-info.so.3 to parse every monitor's EDID. Stock
+# 0.4.0 is soversion 4 and cosmic-comp's libdisplay-info-sys accepts < 0.4.0, so
+# the image builds a 0.3.0 fork; post-build used to copy the build host's Ubuntu
+# copy instead. divergence.toml -> libdisplay-info-0.3.0-fork.
+BR2_PACKAGE_LIBDISPLAY_INFO=n
+BR2_PACKAGE_LIBDISPLAY_INFO_PENGYOS=y
+
 # --- Seat management (libseat) -----------------------------------------------
 # cosmic-comp acquires the DRM device through smithay's libseat backend and
 # must become DRM *master* to drive the scanout. Buildroot auto-selects

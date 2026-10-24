@@ -72,7 +72,7 @@ accidentally automate past it.
 ## 2. Build host
 
 Already handled; do not re-derive it. See **SPEC §7** and
-`scripts/provision-build-host.sh` (`--desktop` for the COSMIC host libraries). It installs
+`scripts/provision-build-host.sh` (`--desktop` for COSMIC's build dependencies). It installs
 the apt packages, the rustup toolchain, checks `/dev/kvm`, and prints versions. The
 verified host is Ubuntu 26.04; a Desktop build is only as reproducible as its host, and
 SPEC §7 says so openly.

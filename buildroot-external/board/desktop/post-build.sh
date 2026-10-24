@@ -84,24 +84,6 @@ else
     echo "post-build: pop-launcher not built (${COSMIC_REL}/pop-launcher-bin) — the launcher will NOT open"
 fi
 
-# Host runtime libs cosmic-comp needs that the image doesn't build (until COSMIC
-# has recipes, which will provide them). Copying the host copies
-# guarantees the SONAME the host-built binaries were linked against.
-for so in libdisplay-info.so.3 libgudev-1.0.so.0 libmtdev.so.1 libwacom.so.9 libpipewire-0.3.so.0 libdav1d.so.7; do
-    # Skip when a Buildroot package already provided it (avoid a stale copy).
-    if [ -e "${TARGET_DIR}/usr/lib/${so}" ]; then
-        continue
-    fi
-    src=""
-    for d in /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib; do
-        [ -e "${d}/${so}" ] && { src="${d}/${so}"; break; }
-    done
-    if [ -n "${src}" ]; then
-        cp -fL "${src}" "${TARGET_DIR}/usr/lib/${so}"
-        echo "post-build: copied host lib ${so}"
-    fi
-done
-
 # --- The graphical installer ----------------------------------------------------
 # The engine + console installer come from Server's post-build. The libcosmic
 # GUI is host-built like the COSMIC apps (tools/pengyos-install-gui: cargo build
@@ -536,38 +518,34 @@ WSEOF
 fi
 echo "post-build: installed App Library entry + Workspaces stub"
 
-# --- host libraries the COSMIC apps need ---------------------------------------
-# cosmic-store/cosmic-player/cosmic-app-library are host-built and link host
-# libraries the image doesn't build (flatpak + ostree for store, gstreamer for
-# player). Copy each binary's ldd closure into the target, skipping anything the
-# image already provides. cosmic-store additionally needs an OpenSSL with ENGINE
-# (its libcurl), which the Buildroot libcrypto lacks, so give store a PRIVATE
-# /usr/lib/compat (openssl+curl) + a wrapper rather than touching the image's
-# libcrypto (that would risk systemd/sshd).
-for _b in cosmic-store cosmic-player cosmic-app-library; do
-    [ -x "${TARGET_DIR}/usr/bin/${_b}" ] || continue
-    ldd "${TARGET_DIR}/usr/bin/${_b}" 2>/dev/null | awk '/=> \//{print $3}' | while IFS= read -r _lib; do
-        [ -n "${_lib}" ] || continue
-        _base="$(basename "${_lib}")"
-        [ -e "${TARGET_DIR}/usr/lib/${_base}" ] && continue
-        cp -fL "${_lib}" "${TARGET_DIR}/usr/lib/${_base}" 2>/dev/null || true
-    done
+# --- No host libraries ---------------------------------------------------------
+# Every library the host-built COSMIC binaries link comes from a Buildroot
+# package; check-needed-libs.py (end of this script) fails the build if one
+# does not resolve. Post-build used to copy 25 libraries from the build host's
+# Ubuntu (a fixed list for cosmic-comp, the ldd closure of cosmic-store,
+# cosmic-player and cosmic-app-library, and a private /usr/lib/compat with
+# Ubuntu's OpenSSL + libcurl behind a cosmic-store wrapper), at whatever patch
+# level the host had, where no observe, CVE match or SBOM could see them. ldd
+# resolved against the HOST's libraries, so most were never loaded at all.
+# libdisplay-info now comes from package/libdisplay-info-pengyos; the Store
+# runs on the image's curl and OpenSSL (Flatpak install verified in QEMU,
+# 2026-10-23).
+#
+# Clear what the copies left in TARGET_DIR (Buildroot never deletes target
+# files). A library is removed only if no package lists it, so a package that
+# provides one of these SONAMEs keeps its file.
+rm -rf "${TARGET_DIR}/usr/lib/compat"
+rm -f "${TARGET_DIR}/usr/libexec/cosmic-store.bin"
+for _so in libaccountsservice.so.0 libbrotlicommon.so.1 libbrotlidec.so.1 \
+           libcomposefs.so.1 libcrypt.so.1 libdisplay-info.so.3 libgpgme.so.45 \
+           libgssapi_krb5.so.2 libk5crypto.so.3 libkrb5.so.3 libkrb5support.so.0 \
+           liblber.so.2 libldap.so.2 libmalcontent-0.so.0 libmtdev.so.1 \
+           liborc-0.4.so.0 librtmp.so.1 libsasl2.so.2 libselinux.so.1 \
+           libssh2.so.1 libwacom.so.9 libxxhash.so.0; do
+    grep -q ",\./usr/lib/${_so}\$" "${BUILD_DIR}/packages-file-list.txt" 2>/dev/null && continue
+    rm -f "${TARGET_DIR}/usr/lib/${_so}"
 done
-if [ -x "${TARGET_DIR}/usr/bin/cosmic-store" ]; then
-    mkdir -p "${TARGET_DIR}/usr/lib/compat" "${TARGET_DIR}/usr/libexec"
-    for _so in libcrypto.so.3 libssl.so.3 libcurl.so.4; do
-        for _d in /usr/lib/x86_64-linux-gnu /usr/lib; do
-            [ -e "${_d}/${_so}" ] && { cp -fL "${_d}/${_so}" "${TARGET_DIR}/usr/lib/compat/${_so}"; break; }
-        done
-    done
-    mv -f "${TARGET_DIR}/usr/bin/cosmic-store" "${TARGET_DIR}/usr/libexec/cosmic-store.bin"
-    cat > "${TARGET_DIR}/usr/bin/cosmic-store" <<'STOREEOF'
-#!/bin/sh
-LD_LIBRARY_PATH=/usr/lib/compat${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} exec /usr/libexec/cosmic-store.bin "$@"
-STOREEOF
-    chmod 755 "${TARGET_DIR}/usr/bin/cosmic-store"
-fi
-echo "post-build: copied COSMIC app host libs + store compat wrapper"
+echo "post-build: cleared host-library copies left by older builds"
 
 # --- Flatpak: CLI + system helper + Flathub (so cosmic-store can INSTALL) ----
 # Flatpak is built by package/flatpak (CLI, system helper, portal, D-Bus and

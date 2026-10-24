@@ -1,0 +1,65 @@
+From 66302f45d2f21200069e09aff17f8a08dd24b25f Mon Sep 17 00:00:00 2001
+From: Pat Wendorf <dungeons@gmail.com>
+Date: Fri, 23 Oct 2026 21:18:33 -0400
+Subject: [PATCH] displayid: check padding only over the bytes the section has
+ left
+
+_di_displayid_parse() walks the section's data blocks and then checks
+that the bytes after the last one are zero. It passed that check the
+size it computed for the cursor *before* the last data block, not after
+it:
+
+- A data block whose declared length runs past the section is reported
+  and skipped, but parse_data_block() returns the declared length, so
+  the cursor ends up beyond the section. With a length byte of 0xFF in
+  a 126-byte section, is_all_zeroes() then reads from 135 to 256 bytes
+  past the end of a 256-byte EDID (CVE-2026-112271).
+- A data block that exactly fills the section leaves the cursor at the
+  section's end, and the stale size made the check read past it: a
+  false "Padding: Contains non-zero bytes" failure.
+
+Recompute the remaining size from the final cursor, and skip the check
+when nothing remains.
+
+Reproduced with AddressSanitizer: an EDID copied into a heap buffer of
+its own size and given to di_info_parse_edid() gives a
+heap-buffer-overflow READ in is_all_zeroes (displayid.c:42) called from
+_di_displayid_parse (displayid.c:697). With this change: no report,
+the over-long block is still reported, and the exactly-filled section
+no longer reports padding. meson test: 64/64 before and after.
+
+DisplayID v2 sections have no data block parsing in 0.3.0, so
+CVE-2026-112272 (displayid2.c, 0.4.0) does not apply to this version.
+
+Upstream: not yet offered (no upstream fix as of 2026-10-23)
+CVE: CVE-2026-112271
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ displayid.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/displayid.c b/displayid.c
+index 2ea63be..072207a 100644
+--- a/displayid.c
++++ b/displayid.c
+@@ -694,7 +694,18 @@ _di_displayid_parse(struct di_displayid *displayid, const uint8_t *data,
+ 		assert(data_block_size > 0);
+ 		i += (size_t) data_block_size;
+ 	}
+-	if (!is_all_zeroes(&data[i], max_data_block_size)) {
++	/* max_data_block_size still describes the cursor before the last data
++	 * block. A block whose declared length ran past the section (skipped
++	 * above with a failure) left i beyond the section's end, and one that
++	 * exactly filled it left i at the end: in both cases nothing remains to
++	 * check, and the old size made is_all_zeroes() read past the section,
++	 * and past the EDID buffer for a long enough block (CVE-2026-112271). */
++	if (i < section_size - 1)
++		max_data_block_size = section_size - 1 - i;
++	else
++		max_data_block_size = 0;
++	if (max_data_block_size > 0 &&
++	    !is_all_zeroes(&data[i], max_data_block_size)) {
+ 		if (max_data_block_size < DISPLAYID_DATA_BLOCK_HEADER_SIZE)
+ 			add_failure(displayid,
+ 				    "Not enough bytes remain (%zu) for a DisplayID data block and the DisplayID filler is non-0.",
