@@ -1,0 +1,46 @@
+# Daemon-feature claims for the Desktop image.
+#
+# The kernel has board/<layer>/kernel-required.txt: options an edition depends
+# on that no fragment sets, checked by scripts/check-kernel-fragments.py from the
+# CORE post-build. This file is the userspace twin, and it exists because of the
+# same shape of bug. Buildroot makes every optional daemon capability an opt-in
+# sub-option, so an image can ship a daemon that answers every handshake and
+# implements half its protocols. Until 26.10.4x, bluez5_utils was built
+# --disable-hid --disable-hog: a gamepad paired, bonded, resolved its GATT HID
+# service, showed a battery percentage, and never became an input device. The
+# build said nothing, and nothing on the machine could show it either.
+#
+# Checked by scripts/check-daemon-features.py from the DESKTOP post-build.
+#
+# Format: `kind  argument...`  then an optional `  # why`
+#   contains <path> <needle>  file exists under / and contains the literal text
+#   exec     <path>           file exists under / and is executable
+#   exec-any <basename>       an executable of that name is in bin, sbin,
+#                             usr/bin, usr/sbin or usr/libexec/*
+#   exists   <path>           file exists under / (data: udev rules, ...)
+#
+# Put the Buildroot symbol in `why`, so a failure is one line away from its fix.
+
+# --- Bluetooth input: the devices, and the tools to explain a failure ----------
+# A HID-less bluetoothd pairs, connects, resolves GATT 1812 and creates no input
+# node (blinky LED, bogus battery). The daemon names uhid nowhere else.
+contains  usr/libexec/bluetooth/bluetoothd  uhid   # BLE HID + classic HID profile — BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_HID
+contains  usr/libexec/bluetooth/bluetoothd  sixaxis  # DualShock 3 pairs to nothing without it — BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_SIXAXIS
+exec-any  bluetoothctl                             # pair/trust/info verbs — BR2_PACKAGE_BLUEZ5_UTILS_CLIENT
+exec-any  btmon                                    # the HCI trace — BR2_PACKAGE_BLUEZ5_UTILS_MONITOR
+exec-any  l2ping                                   # BR2_PACKAGE_BLUEZ5_UTILS_TOOLS
+exec-any  btattach                                 # UART/SPI-attached adapters — BR2_PACKAGE_BLUEZ5_UTILS_TOOLS
+exec-any  hcitool                                  # the tools every BT guide starts with — BR2_PACKAGE_BLUEZ5_UTILS_DEPRECATED
+exec-any  sdptool                                  # "what is this device?" without pairing — BR2_PACKAGE_BLUEZ5_UTILS_DEPRECATED
+
+# --- Controllers on the kernel side -------------------------------------------
+exists    usr/lib/modules-load.d/steam-uinput.conf  # /dev/uinput for Steam Input — BR2_PACKAGE_STEAM_DEVICES
+exists    usr/lib/udev/rules.d/90-pengyos-joystick.rules  # /dev/input/jsN readable by the seat — board/desktop overlay
+
+# --- RGB lighting that is installed later (OpenRGB as a Flatpak/AppImage) ------
+# /dev/i2c-* is root:root 0600 without this, so OpenRGB finds no motherboard.
+exists    usr/lib/udev/rules.d/70-pengyos-rgb.rules  # SMBus + Super I/O access for the seat — board/desktop overlay
+
+# --- Printing: the two paths a home printer actually arrives by ---------------
+exec-any  cupsd                                    # BR2_PACKAGE_CUPS
+exec-any  ipp-usb                                  # driverless/IPP-over-USB printers — BR2_PACKAGE_IPP_USB

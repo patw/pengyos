@@ -1,0 +1,24 @@
+# RGB lighting tools need to open the SMBus as the logged-in user. The kernel
+# side is already in the image (CONFIG_I2C_CHARDEV loads at boot via
+# /usr/lib/modules-load.d/ddcutil.conf, CONFIG_I2C_I801 is built in for the
+# motherboard's SMBus, CONFIG_HIDRAW/USB_HIDDEV for the USB route), but
+# systemd's 50-udev-default.rules leaves /dev/i2c-N at root:root 0600 — so
+# OpenRGB, installed post-install as a Flatpak or an AppImage, lists no
+# motherboard, no RAM and no GPU, and blames a missing driver.
+#
+# uaccess = an ACL for the seat's user. Nothing is opened globally, and the rule
+# covers the machine's own lighting (motherboard, RAM and GPU all sit on
+# SMBus/i2c).
+#
+# Deliberately NOT here: blanket `hidraw` access. A hidraw node of a keyboard or
+# mouse is keystroke-readable, so USB peripherals stay a per-device grant that
+# belongs with the tool (OpenRGB ships its own 60-openrgb.rules, and its Flatpak
+# asks for --device=all) rather than an OS-wide rule. Widen this file only with a
+# vendor/product pair somebody has actually tested.
+KERNEL=="i2c-[0-9]*", SUBSYSTEM=="i2c-dev", TAG+="uaccess"
+
+# The Super I/O "port" device: how OpenRGB and the hwmon tools reach the LPC
+# registers on boards that drive RGB there rather than over SMBus. Matches
+# OpenRGB's own rule verbatim (no SUBSYSTEM — the node's parent is the pnp
+# device, and the match stays as upstream wrote it).
+KERNEL=="port", TAG+="uaccess"

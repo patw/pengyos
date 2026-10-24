@@ -818,6 +818,19 @@ echo "post-build: MIME index built (mimeinfo.cache)"
 # different images. Nothing under /usr is meant to be writable by others.
 find "${TARGET_DIR}/usr" -perm /022 ! -type l -exec chmod go-w {} +
 
+# --- The image still has the daemon capabilities this edition claims ------------
+# The kernel has board/*/kernel-required.txt, checked from the core post-build.
+# This is the userspace twin: a Buildroot sub-option that defaults off ships a
+# daemon missing half its protocols and says nothing — bluez5_utils --disable-hog
+# gave us a gamepad that paired, connected, resolved GATT 1812 and never became an
+# input device (26.10.40). Fail the build instead of shipping that.
+python3 "$(dirname "$0")/../../../scripts/check-daemon-features.py" \
+    --target-dir "${TARGET_DIR}" \
+    --require "$(dirname "$0")/features-required.txt" || {
+    echo "post-build: the rootfs lost capabilities listed above" >&2
+    exit 1
+}
+
 # --- Every dbus-activated service must name a unit the image ships -------------
 # See board/common/check-dbus-units.py: with --systemd-activation on both buses,
 # a SystemdService= that resolves to no unit is a feature that quietly never

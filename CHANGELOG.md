@@ -17,6 +17,62 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — a Bluetooth gamepad paired, connected, and then did nothing (found on behotv, 26.10.40)
+
+- Two Xbox pads, bonded, connected, `ServicesResolved=true`, a battery percentage in
+  the applet — blinking LEDs, no input device, nothing in **Gamepads**. `bluetoothd`
+  was built `--disable-hid --disable-hog`: Buildroot makes every BlueZ profile an
+  opt-in sub-option, so the daemon had no input profile at all. A BLE HID device
+  pairs, bonds, resolves GATT `1812` and stops there; no `uhid` device is ever
+  created, so no `hid-generic`/`hid-microsoft` binding, no `/dev/input/event*`, and
+  the pad (which only stops blinking once the host has it as a HID device) blinks
+  forever. The reported level came from the pad's GATT `2A19` stub, not from the
+  report the pad itself uses. The kernel half was already right and already tested:
+  `CONFIG_BT_HIDP`, `CONFIG_UHID`, `CONFIG_HID_MICROSOFT` with the Xbox 1708/1914/
+  1797 BLUETOOTH ids, `CONFIG_HID_BATTERY_STRENGTH`.
+- Desktop now sets `BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_HID` (which selects `HOG`) and
+  `PLUGINS_SIXAXIS`. That covers BLE pads and BLE keyboards/mice — a BT mouse was
+  equally dead, with no wired fallback to blame — classic-BT HIDP devices, and the
+  DualShock 3, which has no descriptor the kernel can use and needs BlueZ's own
+  plugin.
+- **And the tools to see it next time.** The image shipped no `bluetoothctl`, no
+  `btmon`, no `hcitool`/`sdptool`: the diagnosis took `busctl` plus `strings` on the
+  daemon binary. Now `CLIENT` (bluetoothctl), `MONITOR` (btmon), `TOOLS` (`l2ping`,
+  `btattach` for UART/SPI adapters, `hex2hcd`, `rctest`) and `DEPRECATED`
+  (`hcitool`, `sdptool`, `hcidump`, `hciconfig`, `rfcomm`) are on. `bluetoothctl`
+  works as the desktop user — the image's `bluetooth.conf` is the stock
+  `allow send_destination="org.bluez"` policy and 5.86's `agent.c` has no
+  polkit/uid gate, so no sudo for pair/trust/info.
+- Not the fix, but worth knowing: both pads were `Trusted=false`, and
+  `cosmic-applet-bluetooth` only reconnects devices that are paired **and** trusted,
+  so nothing on the desktop side nudges them after they sleep.
+
+### Added — the build now checks the capabilities the image claims (2026-10-24)
+
+- `kernel-required.txt` + `check-kernel-fragments.py` exist because Kconfig silently
+  drops options (2026-10-17: PCIe hotplug had never been on). The userspace half had
+  no equivalent, and the Bluetooth bug above is the same shape: a sub-option that
+  defaults off, a daemon that answers every handshake, and nothing anywhere saying
+  "this cannot work". New `scripts/check-daemon-features.py` +
+  `board/desktop/features-required.txt`, run from the desktop post-build, which
+  **fails the build** when a claim stops holding: `bluetoothd` carries the HID/HoG
+  and sixaxis code, the BT tools exist, `/dev/uinput` and the joystick udev rule are
+  in place, cupsd and ipp-usb are there, the RGB rule is there.
+- Ten tests (`scripts/tests/test_daemon_features.py`), including one that keeps the
+  shipped features file parseable, so the guard cannot rot into prose.
+
+### Added — OpenRGB works the moment it is installed (2026-10-24)
+
+- The kernel was already ready (`CONFIG_I2C_CHARDEV` loaded at boot by ddcutil's
+  `modules-load.d`, `CONFIG_I2C_I801` built in, `HIDRAW`/`USB_HIDDEV`), but
+  `/dev/i2c-N` is `root:root 0600`, so an OpenRGB installed post-install as a
+  Flatpak or AppImage listed no motherboard, no RAM and no GPU and blamed a missing
+  driver. New `70-pengyos-rgb.rules` grants the seat `uaccess` on the i2c-dev nodes
+  and on the Super I/O `port` device, which is what OpenRGB's own rules do.
+- Deliberately **not** a blanket `hidraw` grant: a keyboard's hidraw node is
+  keystroke-readable, so USB peripherals stay a per-device grant that belongs with
+  the tool rather than an OS-wide rule.
+
 ### Security — Desktop images stop carrying the build host's Ubuntu libraries (2026-10-23)
 
 - Desktop images shipped 25 libraries copied unchanged from the build host's Ubuntu
