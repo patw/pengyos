@@ -7,6 +7,12 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- **"Log in automatically" now says it also skips the lock screen after
+  sleep.** The image no longer locks the automatic-login user's session on
+  sleep or idle (cosmic-greeter and cosmic-idle patches), so the switch's
+  description says so.
+
 ### Added
 - **A Pengy screen in the wizard.** The flow is now
   `Welcome → Disk → Layout → User → Network → Pengy → Summary → Progress`. The

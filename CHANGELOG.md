@@ -17,6 +17,30 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — automatic login no longer asks for a password on wake
+
+- With automatic login on (the installer's "Log in automatically", or
+  `sudo pengyos-autologin on USER`), the desktop skipped the password at boot
+  but locked on every sleep and every idle screen-off, so a home machine still
+  asked for a password each time it woke. COSMIC has no option for either:
+  cosmic-greeter's locker locks on every logind `PrepareForSleep`, and cosmic-idle
+  runs the lock action after every screen-off.
+- Now the two follow automatic login, as one choice: when
+  `/etc/pengyos/autologin.conf` names the session's user, neither the sleep nor
+  the idle path locks (the screen still turns off; Super+Escape still locks).
+  Turn automatic login off (say, before travelling with a laptop) and the next
+  sleep locks again, without a reboot. Another account that logs in through the
+  greeter is still locked. Carried as `board/desktop/cosmic-patches/cosmic-greeter/0001-…`
+  and `cosmic-idle/0001-…`.
+
+### Fixed — two Bluetooth pads of the same model showed as one in Gamepads
+
+- With two Xbox pads connected over Bluetooth, **Gamepads** listed one and tested
+  only that one. It merged evdev nodes by name + `phys`, and BlueZ sets `phys` to
+  the host adapter's address, so every pad of one model on one adapter looked
+  like the same device. `uniq` (each pad's own address) is now part of the key,
+  and the second pad is listed as "… (2)". pengyos-gamepads 0.1.3.
+
 ### Fixed — a Bluetooth gamepad paired, connected, and then did nothing (found on behotv, 26.10.40)
 
 - Two Xbox pads, bonded, connected, `ServicesResolved=true`, a battery percentage in

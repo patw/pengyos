@@ -1,0 +1,58 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] no idle lock when the session logged in automatically
+
+When the screen-off timer fires, cosmic-idle fades the outputs off and
+then runs the lock-screen action. With automatic login on, that locks a
+session that never asked for a password. Skip the lock (the screen still
+turns off) when /etc/pengyos/autologin.conf names $USER, matching the
+cosmic-greeter sleep-lock patch.
+
+Upstream: no lock-on-idle option on cosmic-idle master (2026-10-24)
+---
+diff --git a/src/main.rs b/src/main.rs
+index d8511c3..4ed1a6a 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -104,6 +104,28 @@ struct State {
+     loop_handle: calloop::LoopHandle<'static, Self>,
+ }
+ 
++/// PengyOS: the account that logs in automatically, from
++/// /etc/pengyos/autologin.conf (GDM's custom.conf format, written by
++/// `pengyos-autologin` and AccountsService). Read the way greetd-config reads
++/// it: the last AutomaticLoginEnable and AutomaticLogin lines win, and root
++/// never counts. An unreadable file means "lock".
++fn autologin_user() -> Option<String> {
++    let conf = std::fs::read_to_string("/etc/pengyos/autologin.conf").ok()?;
++    let value = |key: &str| {
++        conf.lines()
++            .filter_map(|line| {
++                let (k, v) = line.split_once('=')?;
++                (k.trim() == key).then(|| v.trim().to_string())
++            })
++            .last()
++    };
++    match value("AutomaticLoginEnable")?.as_str() {
++        "True" | "true" | "1" | "Yes" | "yes" => {}
++        _ => return None,
++    }
++    value("AutomaticLogin").filter(|u| !u.is_empty() && u != "root")
++}
++
+ fn run_command(command: String) {
+     let mut child = match Command::new("/bin/sh").arg("-c").arg(&command).spawn() {
+         Ok(child) => child,
+@@ -170,6 +192,13 @@ impl State {
+     }
+ 
+     fn lock_screen(&self) {
++        // PengyOS: the automatic-login account's screen turns off but does not
++        // lock, the same as cosmic-greeter's sleep lock; turning automatic
++        // login off brings both back.
++        if std::env::var("USER").is_ok_and(|user| autologin_user().is_some_and(|u| u == user)) {
++            log::info!("automatic login is on for this user: not locking the idle screen");
++            return;
++        }
+         let command = self
+             .system_actions
+             .get(&shortcuts::action::System::LockScreen)

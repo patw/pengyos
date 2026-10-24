@@ -1,0 +1,79 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] locker: no lock for sleep when the session logged in automatically
+
+The locker locks on every logind PrepareForSleep, with no setting to
+turn that off, so a machine set to log in without a password still asks
+for one on every wake. Skip the sleep lock when /etc/pengyos/autologin.conf
+names this session's user, and release the delay inhibitor so the sleep
+goes ahead. Locking by hand (Super+Escape, loginctl lock-session) is
+unchanged, and turning automatic login off brings the sleep lock back at
+the next sleep.
+
+Upstream: no lock-on-suspend option on cosmic-greeter master (2026-10-24)
+---
+diff --git a/src/logind.rs b/src/logind.rs
+index 74da8e4..b779ffe 100644
+--- a/src/logind.rs
++++ b/src/logind.rs
+@@ -84,6 +84,29 @@ pub fn subscription() -> Subscription<Message> {
+     })
+ }
+ 
++/// PengyOS: the account that logs in automatically, from
++/// /etc/pengyos/autologin.conf (GDM's custom.conf format, written by
++/// `pengyos-autologin` and AccountsService). Read the way greetd-config reads
++/// it: the last AutomaticLoginEnable and AutomaticLogin lines win, and root
++/// never counts. Read at every sleep, so turning automatic login off brings
++/// the lock back at once. An unreadable file means "lock".
++fn autologin_user() -> Option<String> {
++    let conf = std::fs::read_to_string("/etc/pengyos/autologin.conf").ok()?;
++    let value = |key: &str| {
++        conf.lines()
++            .filter_map(|line| {
++                let (k, v) = line.split_once('=')?;
++                (k.trim() == key).then(|| v.trim().to_string())
++            })
++            .last()
++    };
++    match value("AutomaticLoginEnable")?.as_str() {
++        "True" | "true" | "1" | "Yes" | "yes" => {}
++        _ => return None,
++    }
++    value("AutomaticLogin").filter(|u| !u.is_empty() && u != "root")
++}
++
+ //TODO: use never type?
+ pub async fn handler(msg_tx: &mut mpsc::Sender<Message>) -> Result<(), Box<dyn Error>> {
+     let connection = Connection::system().await?;
+@@ -96,6 +119,9 @@ pub async fn handler(msg_tx: &mut mpsc::Sender<Message>) -> Result<(), Box<dyn E
+         .build()
+         .await?;
+ 
++    // PengyOS: the account this locker belongs to (see autologin_user).
++    let user = session.name().await.unwrap_or_default();
++
+     let mut inhibit_opt = Some(inhibit(&manager).await?);
+     let mut prepare_for_sleep = manager.receive_prepare_for_sleep().await?;
+     let mut lock = session.receive_lock().await?;
+@@ -112,10 +138,18 @@ pub async fn handler(msg_tx: &mut mpsc::Sender<Message>) -> Result<(), Box<dyn E
+                         Ok(args) => {
+                             if args.start {
+                                 tracing::info!("logind prepare for sleep");
+-                                if let Some(inhibit) = inhibit_opt.take() {
+-                                    msg_tx.send(Message::Inhibit(Arc::new(inhibit))).await?;
++                                if autologin_user().is_some_and(|u| u == user) {
++                                    // Automatic login is on for this account, so
++                                    // waking asks for no password either. Release
++                                    // the delay lock so the sleep goes ahead.
++                                    tracing::info!("automatic login is on for {}: not locking for sleep", user);
++                                    inhibit_opt = None;
++                                } else {
++                                    if let Some(inhibit) = inhibit_opt.take() {
++                                        msg_tx.send(Message::Inhibit(Arc::new(inhibit))).await?;
++                                    }
++                                    msg_tx.send(Message::Lock).await?;
+                                 }
+-                                msg_tx.send(Message::Lock).await?;
+                             } else {
+                                 tracing::info!("logind resume");
+                                 if inhibit_opt.is_none() {

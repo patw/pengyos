@@ -1,5 +1,17 @@
 # Changelog — pengyos-gamepads
 
+## [0.1.3] — 2026-10-24
+
+### Fixed
+- **Two Bluetooth pads of the same model showed as one.** The list dropped
+  duplicate evdev nodes by name + phys, and over Bluetooth phys is the *host
+  adapter's* address, so a second Xbox pad matched the first and vanished: only
+  one entry, and nothing to select for the other. The key now includes `uniq`
+  (each pad's own address), and the second pad of a name is listed as
+  "… (2)", so the two can be told apart and tested one at a time.
+- **A Bluetooth pad's bus read "other"** when its phys was just the adapter
+  address; the bus now comes from the modalias (`b0005`) first.
+
 ## [0.1.2] — 2026-10-12
 
 Tested on behoweather with an 8BitDo Ultimate 3-mode (xpad): the buttons light

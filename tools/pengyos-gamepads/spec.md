@@ -50,11 +50,14 @@ A Rust crate `pengyos-gamepads` (MIT), built like `pengyos-disks`:
 ## Behaviour
 
 **Enumeration.** Every `/dev/input/eventN`, read from
-`/sys/class/input/eventN/device/{name,phys,modalias,capabilities/*}`. sysfs is
+`/sys/class/input/eventN/device/{name,phys,modalias,uniq,capabilities/*}`. sysfs is
 world-readable, so the list is complete for a user who cannot open the node;
-the card then says so. Devices are deduped by name+phys (a combo device shows
-once per interface), sorted by the `inputN` number, split into **Game
-controllers** (the six controller kinds) and **Other input devices**.
+the card then says so. Devices are deduped by name+phys+uniq (a combo device
+shows once per interface; `uniq` keeps two Bluetooth pads of one model apart,
+since their phys is the shared adapter address), sorted by the `inputN` number,
+and the second and later of one name are numbered ("… (2)"). They are split
+into **Game controllers** (the six controller kinds) and **Other input devices**.
+A modalias bus of `b0005` reads as Bluetooth.
 
 **Classification** (`classify`, in this order — the specific shapes first,
 because a mouse answers `ABS_X/ABS_Y` and a wheel answers `ABS_STEER`):

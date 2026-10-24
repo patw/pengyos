@@ -628,8 +628,8 @@ impl AppModel {
             .add(
                 item::builder("Log in automatically")
                     .description(
-                        "Skip the login screen at startup. Anyone who can switch this \
-                         computer on gets your desktop.",
+                        "Skip the login screen at startup, and the lock screen after \
+                         sleep. Anyone who can switch this computer on gets your desktop.",
                     )
                     // A plain switch as the control, not `.toggler()`: that
                     // wraps the row in a list button around the switch, and a

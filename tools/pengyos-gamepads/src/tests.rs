@@ -205,6 +205,7 @@ fn test_pad_state_tracks_the_device() {
         name: "Microsoft XBox Controller".into(),
         phys: "usb-0000:00:14.0-3/input0".into(),
         modalias: "usb:v045Ep028Ed0700dc00dsc00p00ic01isc02ip00in01".into(),
+        uniq: String::new(),
         caps: gamepad_caps(),
     }
     .pad();
@@ -275,6 +276,7 @@ fn test_ids_and_bus() {
         name: "Controller".into(),
         phys: "usb-0000:00:14.0-3/input0".into(),
         modalias: "usb:v045Ep028Ed0700dc00dsc00p00ic01isc02ip00in01".into(),
+        uniq: String::new(),
         caps: gamepad_caps(),
     }
     .pad();
@@ -288,6 +290,7 @@ fn test_ids_and_bus() {
         name: "Eee PC WMI hotkeys".into(),
         phys: "eeepc-wmi/input0".into(),
         modalias: String::new(),
+        uniq: String::new(),
         caps: Caps { ev: set(&[EV_KEY]), keys: set(&[KEY_A, KEY_ESC]), ..Default::default() },
     }
     .pad();
@@ -332,6 +335,51 @@ fn test_split_and_dedup() {
 }
 
 #[test]
+fn test_two_bluetooth_pads_of_one_model_are_both_listed() {
+    // What BlueZ gives two paired Xbox pads (hog over uhid): the same name,
+    // phys = the host adapter's address, uniq = each pad's own address. Keyed
+    // on name+phys, the second pad vanished from the list (behotv, 26.10.40).
+    let bt = |path: &str, uniq: &str| DeviceInfo {
+        path: path.into(),
+        name: "Xbox Wireless Controller".into(),
+        phys: "a0:b1:c2:d3:e4:f5".into(),
+        modalias: "input:b0005v045Ep0B13e0509-e0,1,3,15,k130,ra0,1,2,5,9,10,11,mlsfw".into(),
+        uniq: uniq.into(),
+        caps: gamepad_caps(),
+        ..Default::default()
+    }
+    .pad();
+    let pads = vec![
+        bt("/dev/input/event20", "98:7a:14:00:00:01"),
+        bt("/dev/input/event21", "98:7a:14:00:00:02"),
+        // The first pad's second node is still the same device.
+        bt("/dev/input/event22", "98:7a:14:00:00:01"),
+    ];
+    let listed = number_same_names(dedup_pads(pads));
+    let names: Vec<_> = listed.iter().map(|p| (p.path.as_str(), p.name.as_str())).collect();
+    assert_eq!(
+        names,
+        [
+            ("/dev/input/event20", "Xbox Wireless Controller"),
+            ("/dev/input/event21", "Xbox Wireless Controller (2)"),
+        ]
+    );
+    // The adapter-address phys says nothing about the bus; the modalias does.
+    assert_eq!(listed[0].bus(), "Bluetooth");
+}
+
+#[test]
+fn test_different_names_are_not_numbered() {
+    let pad = |path: &str, name: &str| DeviceInfo {
+        path: path.into(), name: name.into(), caps: gamepad_caps(), ..Default::default()
+    }
+    .pad();
+    let listed = number_same_names(vec![pad("/dev/input/event1", "Pad A"), pad("/dev/input/event2", "Pad B")]);
+    assert_eq!(listed[0].name, "Pad A");
+    assert_eq!(listed[1].name, "Pad B");
+}
+
+#[test]
 fn test_list_output_names_the_kind() {
     let pads = vec![DeviceInfo {
         path: "/dev/input/event13".into(),
@@ -339,6 +387,7 @@ fn test_list_output_names_the_kind() {
         name: "Microsoft XBox Controller".into(),
         phys: "usb-0000:00:14.0-3/input0".into(),
         modalias: "usb:v045Ep028Ed0700".into(),
+        uniq: String::new(),
         caps: gamepad_caps(),
     }
     .pad()];

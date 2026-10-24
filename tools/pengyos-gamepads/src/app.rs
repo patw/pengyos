@@ -144,6 +144,7 @@ fn selftest_pad() -> Pad {
         name: "Synthetic test pad".into(),
         phys: "usb-selftest/input0".into(),
         modalias: String::new(),
+        uniq: String::new(),
         caps,
     }
     .pad()

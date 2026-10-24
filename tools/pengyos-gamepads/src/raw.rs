@@ -37,10 +37,11 @@ pub fn pads() -> Result<Vec<Pad>, String> {
         infos.push(info);
     }
     infos.sort_by(|a, b| sysfs_number(&a.sys).cmp(&sysfs_number(&b.sys)).then(a.sys.cmp(&b.sys)));
-    Ok(crate::dedup_pads(infos.into_iter().map(|i| i.pad()).collect()))
+    let pads = crate::dedup_pads(infos.into_iter().map(|i| i.pad()).collect());
+    Ok(crate::number_same_names(pads))
 }
 
-/// `name`, `phys`, `modalias` and the capability groups for one event node.
+/// `name`, `phys`, `modalias`, `uniq` and the capability groups for one event node.
 fn read_sysfs(node: &str, file_name: &str) -> Option<DeviceInfo> {
     let device = Path::new("/sys/class/input").join(file_name).join("device");
     if !device.exists() {
@@ -50,6 +51,7 @@ fn read_sysfs(node: &str, file_name: &str) -> Option<DeviceInfo> {
     let name = read_trimmed(&device.join("name"));
     let phys = read_trimmed(&device.join("phys"));
     let modalias = read_trimmed(&device.join("modalias"));
+    let uniq = read_trimmed(&device.join("uniq"));
     let mut caps_text = String::new();
     for group in ["ev", "key", "rel", "abs", "msc", "sw", "led", "ff"] {
         let words = read_trimmed(&device.join("capabilities").join(group));
@@ -61,6 +63,7 @@ fn read_sysfs(node: &str, file_name: &str) -> Option<DeviceInfo> {
         name,
         phys,
         modalias,
+        uniq,
         caps: crate::caps_from_sysfs(&caps_text),
     })
 }

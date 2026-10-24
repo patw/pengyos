@@ -102,7 +102,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-update` | the updater (above) |
 | `pengyos-install` | the install engine (`disks`, `image`) — what the installers drive |
 | `pengyos-install-tui` | the console installer (`install`) |
-| `pengyos-autologin on\|off` | Desktop: skip the login screen (Desktop) |
+| `pengyos-autologin on\|off` | Desktop: skip the login screen at boot and the lock screen on sleep/idle |
 | `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers |
 | `distrobox create\|enter` | a full distro userspace sharing `$HOME` |
 | `flatpak install flathub <app>` | third-party GUI apps (Desktop) |

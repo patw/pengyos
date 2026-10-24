@@ -463,6 +463,10 @@ pub struct DeviceInfo {
     pub phys: String,
     /// `device/modalias`, e.g. `usb:v045Ep028Ed0700dc00dsc00p00ic01isc02ip00in01`.
     pub modalias: String,
+    /// `device/uniq`: the device's own serial or address. Over Bluetooth
+    /// `phys` is the *adapter's* address, so this is what tells two paired
+    /// pads of the same model apart.
+    pub uniq: String,
     pub caps: Caps,
 }
 
@@ -480,6 +484,7 @@ impl DeviceInfo {
             },
             phys: self.phys.trim().to_string(),
             modalias: self.modalias.trim().to_string(),
+            uniq: self.uniq.trim().to_string(),
             caps: self.caps.clone(),
             kind,
         }
@@ -494,6 +499,7 @@ pub struct Pad {
     pub name: String,
     pub phys: String,
     pub modalias: String,
+    pub uniq: String,
     pub caps: Caps,
     pub kind: Kind,
 }
@@ -546,6 +552,11 @@ impl Pad {
     /// How the device is attached, from its phys path.
     pub fn bus(&self) -> &'static str {
         let p = self.phys.as_str();
+        // An input/HID modalias names the bus outright (`b0005` is
+        // BUS_BLUETOOTH); a Bluetooth phys is only the adapter's address.
+        if self.modalias.contains(":b0005") {
+            return "Bluetooth";
+        }
         if p.starts_with("usb") {
             "USB"
         } else if p.starts_with("pci") {
@@ -1006,6 +1017,7 @@ pub fn device_from_sysfs(path: String, sys: String, fields: [String; 4]) -> Devi
         name,
         phys,
         modalias,
+        uniq: String::new(),
         caps: caps_from_sysfs(&caps_text),
     }
 }
@@ -1081,11 +1093,31 @@ pub fn split_pads(pads: Vec<Pad>) -> (Vec<Pad>, Vec<Pad>) {
 }
 
 /// Drop duplicate nodes of the same physical device (a pad shows up as one
-/// evdev node per interface; a combo device as several).
+/// evdev node per interface; a combo device as several). `uniq` is part of
+/// the key: two Bluetooth pads of one model share their name *and* their phys
+/// (the adapter's address), and keying on those two alone listed only the
+/// first of them.
 pub fn dedup_pads(pads: Vec<Pad>) -> Vec<Pad> {
     let mut seen: BTreeSet<String> = BTreeSet::new();
     pads.into_iter()
-        .filter(|p| seen.insert(format!("{}|{}", p.name, p.phys)))
+        .filter(|p| seen.insert(format!("{}|{}|{}", p.name, p.phys, p.uniq)))
+        .collect()
+}
+
+/// Number the second and later pads that share a name ("Xbox Wireless
+/// Controller (2)"), so two of one model can be told apart in the list, the
+/// panel title and `--list`.
+pub fn number_same_names(pads: Vec<Pad>) -> Vec<Pad> {
+    let mut count: std::collections::BTreeMap<String, usize> = Default::default();
+    pads.into_iter()
+        .map(|mut p| {
+            let n = count.entry(p.name.clone()).or_insert(0);
+            *n += 1;
+            if *n > 1 {
+                p.name = format!("{} ({})", p.name, n);
+            }
+            p
+        })
         .collect()
 }
 

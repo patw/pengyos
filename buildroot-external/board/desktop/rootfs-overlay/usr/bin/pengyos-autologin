@@ -6,11 +6,15 @@
 #   sudo pengyos-autologin off
 #
 # Off (the default), the desktop starts at the login screen and asks for your
-# password. On, it starts straight into USER's desktop at boot; logging out
-# still shows the login screen. Anyone who can switch the computer on then
-# gets that desktop, so leave it off on laptops and shared machines.
-# Takes effect at the next boot. The setting is /etc/pengyos/autologin.conf
-# (GDM's format, shared with AccountsService).
+# password. On, it starts straight into USER's desktop at boot, and USER's
+# screen does not lock when the computer sleeps or the screen turns off for
+# being idle; logging out still shows the login screen, and Super+Escape
+# still locks. Anyone who can switch the computer on or open its lid then
+# gets that desktop, so leave it off on laptops you carry and shared machines.
+# The login screen changes at the next boot; the lock on sleep and idle
+# changes at once. The setting is /etc/pengyos/autologin.conf (GDM's format,
+# shared with AccountsService; cosmic-greeter and cosmic-idle carry PengyOS
+# patches that read it).
 set -eu
 CONF=/etc/pengyos/autologin.conf
 
@@ -27,7 +31,7 @@ need_root() {
 case "${1:-status}" in
     status)
         u=$(current)
-        if [ -n "$u" ]; then echo "automatic login: on ($u)"; else echo "automatic login: off (the login screen asks for a password)"; fi
+        if [ -n "$u" ]; then echo "automatic login: on ($u; no lock on sleep or idle)"; else echo "automatic login: off (the login screen and the lock screen ask for a password)"; fi
         ;;
     on)
         need_root
@@ -38,14 +42,14 @@ case "${1:-status}" in
         mkdir -p "$(dirname "$CONF")"
         printf '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=%s\n' "$u" > "$CONF.new"
         mv "$CONF.new" "$CONF"
-        echo "automatic login: on ($u), from the next boot"
+        echo "automatic login: on ($u), from the next boot; no lock on sleep or idle from now"
         ;;
     off)
         need_root
         mkdir -p "$(dirname "$CONF")"
         printf '[daemon]\nAutomaticLoginEnable=False\n' > "$CONF.new"
         mv "$CONF.new" "$CONF"
-        echo "automatic login: off, from the next boot"
+        echo "automatic login: off, from the next boot; the screen locks on sleep and idle from now"
         ;;
     *)
         echo "usage: pengyos-autologin status | on [USER] | off" >&2; exit 2 ;;
