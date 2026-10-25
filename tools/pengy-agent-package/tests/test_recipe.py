@@ -184,22 +184,33 @@ def test_installs_default_settings():
     )
 
 
-def test_installs_systemd_unit():
-    """The recipe ships the hardened unit in the systemd unit directory."""
-    dests = recipe_check.installed_init_files(_mk_text())
-    assert "usr/lib/systemd/system/pengy-web.service" in dests, (
-        f"recipe does not install the systemd unit; got {dests}"
+def test_installs_no_systemd_unit():
+    """The recipe ships no unit: running the UI is a per-user, opt-in act.
+
+    The unit this repo used to carry was written for PengyR and wrong for this
+    image (`--config`, `DynamicUser`, `ProtectHome`, root), and the live recipe
+    never installed it. Serving `pengy-web` is now the system template
+    `board/server/rootfs-overlay/etc/systemd/system/pengy-web@.service`, enabled
+    per user by `pengyos-webui on`; a recipe-installed unit would be enabled on
+    every machine that builds the recipe.
+    """
+    text = _mk_text()
+    assert "pengy-web.service" not in text, "the recipe must not install a unit"
+    assert "PENGY_INSTALL_INIT_SYSTEMD" not in text, "no unit to install"
+    units = recipe_check.installed_systemd_units(text)
+    assert units == [], f"recipe installs systemd units: {units}"
+    assert not (PACKAGE_DIR / "pengy-web.service").exists(), (
+        "the package directory must not carry a pengy-web unit"
     )
 
 
-def test_installs_nothing_beyond_bins_config_and_unit():
-    """The recipe installs exactly the two bins, the default config, and the unit."""
+def test_installs_nothing_beyond_bins_and_config():
+    """The recipe installs exactly the two bins and the default config."""
     dests = recipe_check.installed_init_files(_mk_text())
     expected = {
         "usr/bin/pengy-cli",
         "usr/bin/pengy-web",
         "etc/pengy/settings.json",
-        "usr/lib/systemd/system/pengy-web.service",
     }
     assert set(dests) == set(expected), (
         f"install destinations {dests} are not exactly {sorted(expected)}"
@@ -225,10 +236,11 @@ def test_no_cmake_or_meson_package_macro():
     assert "meson-package" not in text, "recipe must not use meson-package"
 
 
-# Target (non-host) dependencies the headless recipe is allowed to declare.
-# ``systemd`` is the only system dep: the recipe ships a systemd unit for the
-# headless web agent. Anything else (``qt6``/``libgtk``/C++) would pull the GUI
-# toolchain into Core, which is explicitly out of scope.
+# Target (non-host) dependencies the headless recipe is allowed to declare. A
+# headless cargo build needs none: the cargo macro supplies host-rustc, and the
+# recipe ships no unit (see test_installs_no_systemd_unit). Anything else
+# (``qt6``/``libgtk``/C++) would pull the GUI toolchain into Core, which is
+# explicitly out of scope.
 _ALLOWED_SYSTEM_DEPS = ("systemd",)
 
 
@@ -237,9 +249,9 @@ def test_no_gui_system_dependency_declared():
 
     A headless cargo build needs no GUI system libraries. If the recipe declares
     a ``PENGY_DEPENDENCIES`` line, every entry must be either ``host-rustc``
-    (supplied by the cargo-package macro) or an allowed non-GUI system dep
-    (``systemd`` — the recipe ships a systemd unit). Any ``qt6``/``libgtk``/C++
-    dep would pull the GUI toolchain into Core, which is explicitly out of scope.
+    (supplied by the cargo-package macro) or an allowed non-GUI system dep. Any
+    ``qt6``/``libgtk``/C++ dep would pull the GUI toolchain into Core, which is
+    explicitly out of scope. The recipe declares none: it installs no unit.
     """
     deps = recipe_check.mk_variable(_mk_text(), "PENGY_DEPENDENCIES")
     if not deps:

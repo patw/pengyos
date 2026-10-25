@@ -5,6 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-25
+
+### Removed
+- `package/pengy/pengy-web.service`, and the tests that asserted its shape
+  (`tests/test_service_and_config.py` → `tests/test_config.py`, keeping the
+  default-config contract; `test_recipe.py` now asserts the recipe installs **no**
+  unit). The unit was written for PengyR and is wrong for this image: it ran
+  `--config /etc/pengy/settings.json` (this binary takes `--config-dir`), set
+  `DynamicUser=yes` and `ProtectHome=yes` — which hide `~/.config/pengy`,
+  `~/skills` and `~/.secrets`, all of the agent's state — and wanted
+  `multi-user.target` as root. The live recipe
+  (`buildroot-external/package/pengy/pengy.mk`) never installed it, so no image
+  ever shipped it: a unit describing a service no image ran.
+- `PENGY_INSTALL_INIT_SYSTEMD` and the `systemd` dependency from the vendored
+  `pengy.mk`, so the vendored recipe matches the live one.
+
+### Changed
+- Serving `pengy-web` is a per-user, opt-in act, not a recipe-wide enablement:
+  the unit is the system template
+  `buildroot-external/board/server/rootfs-overlay/etc/systemd/system/pengy-web@.service`
+  (`User=%i`, `WorkingDirectory=%h`, loopback by default, no `DynamicUser`, no
+  `ProtectHome`), enabled by [`pengyos-webui`](../pengyos-webui/). README and
+  `spec.md` say so; the recipe installs the two binaries and the default config
+  and nothing else.
+
 ## [0.1.0] - 2026-09-18
 
 ### Added

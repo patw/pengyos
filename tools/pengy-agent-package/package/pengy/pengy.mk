@@ -34,10 +34,13 @@ PENGY_INSTALL_TARGET = YES
 PENGY_LICENSE = MIT
 PENGY_LICENSE_FILES = LICENSE
 
-# The recipe ships a systemd unit for the headless web agent, so systemd is a
-# build dependency. The cargo-package macro already adds host-rustc, so this is
-# the only explicit dependency.
-PENGY_DEPENDENCIES = systemd
+# No systemd unit here, and so no systemd dependency: the cargo-package macro
+# supplies host-rustc, and this recipe installs binaries and one config file.
+# Running pengy-web as a service is a per-user, per-machine decision (the UI has
+# no authentication), so it lives with the tool that makes it: the system
+# template board/server/rootfs-overlay/etc/systemd/system/pengy-web@.service,
+# enabled per user by `pengyos-webui on`. A unit installed by a recipe is
+# enabled on every machine that builds the recipe — the wrong shape for that.
 
 # The PengyR workspace has three members (`.`, `cli`, `web`). The root crate is a
 # library; the only two *binaries* are `pengy-cli` and `pengy-web`. The Qt GUI is
@@ -63,13 +66,6 @@ define PENGY_INSTALL_TARGET_CMDS
 		$(TARGET_DIR)/usr/bin/pengy-web
 	$(INSTALL) -D -m 0644 $(PENGY_PKGDIR)/settings.json \
 		$(TARGET_DIR)/etc/pengy/settings.json
-endef
-
-# Install the hardened systemd unit for the headless web agent. Buildroot creates
-# the enablement symlink automatically when systemd is the init system.
-define PENGY_INSTALL_INIT_SYSTEMD
-	$(INSTALL) -D -m 0644 $(PENGY_PKGDIR)/pengy-web.service \
-		$(TARGET_DIR)/usr/lib/systemd/system/pengy-web.service
 endef
 
 $(eval $(cargo-package))
