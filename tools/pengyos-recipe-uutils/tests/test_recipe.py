@@ -28,7 +28,7 @@ RECIPE_DIR = REPO_ROOT / "package" / "uutils-coreutils"
 
 CONFIG_IN = RECIPE_DIR / "Config.in"
 MK = RECIPE_DIR / "uutils-coreutils.mk"
-FIXTURE_UTILITIES = REPO_ROOT / "tests" / "fixtures" / "coreutils-0.11.0-unix-utilities.txt"
+FIXTURE_UTILITIES = REPO_ROOT / "tests" / "fixtures" / "coreutils-0.12.0-unix-utilities.txt"
 
 # The tree's copy of the recipe: the tool authors it, the external tree builds it.
 # They must not drift (a fix landed in one and not the other is the failure mode).
@@ -134,7 +134,7 @@ def test_version_tracks_upstream_release(recipe: str) -> None:
     match = re.search(r"^UUTILS_COREUTILS_VERSION\s*=\s*(\S+)", recipe, re.MULTILINE)
     assert match is not None
     version = match.group(1)
-    assert version == "0.11.0", "bump this test when the pinned version changes"
+    assert version == "0.12.0", "bump this test when the pinned version changes"
 
 
 def test_source_matches_version(recipe: str) -> None:
@@ -334,6 +334,20 @@ def test_utility_list_matches_authoritative_fixture(recipe: str) -> None:
 # These need the network and are skipped unless PENGYOS_IT=1. They pin the
 # recipe's .hash to the real upstream artifact so a bad digest fails CI.
 # --------------------------------------------------------------------------- #
+def _raw_upstream_digest(recipe_hash: str) -> tuple[str, str] | None:
+    """The raw-archive digest recorded in the .hash comment, with its tag.
+
+    The .hash *body* is Buildroot's post-processed digest (the cargo post-process
+    re-packs the source with the vendored crates), so it can never equal the raw
+    GitHub archive. The comment records the raw one precisely so it can be
+    checked against the live tarball.
+    """
+    prose = " ".join(ln.lstrip("#").strip() for ln in recipe_hash.splitlines()
+                     if ln.lstrip().startswith("#"))
+    m = re.search(r"archive of tag (\d+\.\d+\.\d+) hashes to ([0-9a-f]{64})", prose)
+    return (m.group(1), m.group(2)) if m else None
+
+
 def _downloaded_tarball(tmp_path: Path, version: str) -> Path:
     import urllib.request
 
@@ -344,7 +358,14 @@ def _downloaded_tarball(tmp_path: Path, version: str) -> Path:
 
 
 def test_hash_matches_downloaded_source(recipe: str, recipe_hash: str, tmp_path: Path) -> None:
-    """PENGYOS_IT=1: the .hash digest must equal the sha256 of the real tarball."""
+    """PENGYOS_IT=1: the recorded raw-archive digest must match the live tarball.
+
+    This used to compare the .hash *body* with the raw download, which can never
+    match: the body is Buildroot's post-processed tarball (the cargo post-process
+    vendors the crates and re-packs). The test therefore failed for anyone who
+    ran the opt-in suite, and proved nothing. What is worth pinning is the pair
+    the comment records: the tag, and the digest of that tag's real archive.
+    """
     if not os.environ.get("PENGYOS_IT"):
         pytest.skip("opt-in integration test; set PENGYOS_IT=1 to run")
 
@@ -352,10 +373,17 @@ def test_hash_matches_downloaded_source(recipe: str, recipe_hash: str, tmp_path:
     assert ver is not None, "UUTILS_COREUTILS_VERSION must be defined"
     version = ver.group(1)
 
-    pairs = hash_lines(recipe_hash)
-    expected, _ = next((p for p in pairs if p[1] == f"coreutils-{version}.tar.gz"), None)
-    assert expected is not None, f".hash must hash coreutils-{version}.tar.gz"
+    recorded = _raw_upstream_digest(recipe_hash)
+    assert recorded is not None, (
+        "the .hash comment must record the raw upstream digest "
+        "(\"archive of tag <ver> hashes to <sha256>\") — that is what this check can verify")
+    tag, expected = recorded
+    assert tag == version, f".hash comment records tag {tag}, but the recipe pins {version}"
+
+    # The body must still cover the pinned tarball, whatever digest it carries.
+    assert any(fn == f"coreutils-{version}.tar.gz" for _, fn in hash_lines(recipe_hash)), (
+        f".hash must hash coreutils-{version}.tar.gz")
 
     tarball = _downloaded_tarball(tmp_path, version)
     actual = __import__("hashlib").sha256(tarball.read_bytes()).hexdigest()
-    assert actual == expected, f"digest drift: .hash={expected} live={actual}"
+    assert actual == expected, f"raw archive digest drift: comment={expected} live={actual}"

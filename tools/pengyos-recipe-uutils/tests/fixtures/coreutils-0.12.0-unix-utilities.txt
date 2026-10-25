@@ -1,7 +1,11 @@
-# uutils/coreutils 0.11.0 --features unix (feat_os_unix): the utility names the
+# uutils/coreutils 0.12.0 --features unix (feat_os_unix): the utility names the
 # multicall `coreutils` binary dispatches on. Generated from the pinned Cargo.toml's
 # feature sets (feat_common_core + feat_Tier1 + feat_require_unix_core +
-# feat_require_unix_utmpx + feat_require_unix_hostid) on 2026-10-12; 106 names.
+# feat_require_unix_utmpx) on 2026-10-25; 106 names.
+# Two notes for the next bump: 0.12.0 folded upstream's feat_require_unix_hostid
+# into feat_common_core (hostid is still shipped, the set is unchanged), and
+# stdbuf is not in any of those groups -- it comes from feat_external_libstdbuf,
+# which PengyOS enables deliberately.
 arch
 b2sum
 base32

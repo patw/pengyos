@@ -17,6 +17,28 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — a version bump that only reached one of the two copies (2026-10-25)
+
+`main` went red on 2026-10-20 and stayed red: the nightly routine's routine bump
+of uutils/coreutils to 0.12.0 edited `buildroot-external/package/uutils-coreutils/`
+and nothing else. That recipe has two copies on purpose — the tool in
+`tools/pengyos-recipe-uutils` authors it, the external tree builds it — and a test
+asserts they are byte-identical, because a fix that lands in one and not the other
+is not in the image. The bump crossed that line, so the tool's suite failed and
+`test_github_ready` fell with it.
+
+The authored copy is now carried to 0.12.0 (`.mk`, `.hash`, the re-pinned
+`coreutils-0.12.0-unix-utilities.txt` fixture, all byte-identical with the tree),
+and its opt-in network test — which compared Buildroot's post-processed digest
+with the raw GitHub archive and so could never pass — now checks the raw-archive
+digest the `.hash` comment records.
+
+**The nightly's act lane is the thing to fix next.** It applies a package bump to
+the build tree without knowing that a tool owns that recipe, and it does not run
+the gate before landing, so the break reached `main` and the image built from it.
+Both are recorded, neither is fixed here.
+
+
 ### Added — `pengyos-postmortem`: what ended that session? (2026-10-25)
 
 On behopc a whole COSMIC session vanished in one instant — every app gone, the

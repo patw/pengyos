@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep-a-Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.1 — 2026-10-25
+
+### Fixed
+- The authored recipe is pinned to uutils/coreutils **0.12.0**, matching the build
+  tree. The nightly routine's bump (2026-10-20, image 26.10.36) edited
+  `buildroot-external/package/uutils-coreutils/` only, so this copy drifted and
+  `test_tree_copy_is_identical_to_the_authored_copy` went red on `main`, taking
+  `test_github_ready` with it. The `.hash` comment now records the raw upstream
+  archive digest for 0.12.0 (`4fb32765…e122`, verified against the live tarball on
+  2026-10-25) beside Buildroot's post-processed one.
+- The authoritative fixture is re-pinned: `coreutils-0.12.0-unix-utilities.txt`.
+  The set is unchanged at 106 names — 0.12.0 folded upstream's
+  `feat_require_unix_hostid` into `feat_common_core` (hostid is still shipped) —
+  and its header now records that, plus that `stdbuf` comes from
+  `feat_external_libstdbuf`, which PengyOS enables deliberately.
+- `test_hash_matches_downloaded_source` (opt-in, `PENGYOS_IT=1`) could never pass:
+  it compared the `.hash` **body** — Buildroot's post-processed tarball — with the
+  raw GitHub archive. It now checks the pair the comment records (tag + raw
+  archive digest) plus the body's filename, which is what actually drifts.
+  Mutation-checked: corrupting the recorded digest fails it.
+
 ## Unreleased
 ### Added
 - `test_hash_line_format_is_buildroots`: the `.hash` body uses Buildroot's

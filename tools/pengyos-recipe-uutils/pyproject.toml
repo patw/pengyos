@@ -1,6 +1,6 @@
 [project]
 name = "pengyos-recipe-uutils"
-version = "0.1.0"
+version = "0.1.1"
 description = "PengyOS Buildroot recipe for uutils/coreutils, validated by tests."
 readme = "README.md"
 license = { text = "MIT" }
