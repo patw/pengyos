@@ -52,21 +52,24 @@ fi
 # GUI on top. An installed system has them too, harmlessly: no payload.
 # pengyos-update (the updater) is installed the same way; it renders grub.cfg
 # with pengyos_install's code, so the two always agree.
+# pengyos-postmortem ("what ended that session?") rides along: it is the tool
+# you want *on the machine that just lost its session*, and it is stdlib-only
+# and read-only, so shipping it costs nothing but keeps the answer local.
 PENGYOS_TOOLS="$(cd "$(dirname "$0")/../../../tools" && pwd)"
 SITE="$(ls -d "${TARGET_DIR}"/usr/lib/python3.*/site-packages 2>/dev/null | head -1)"
 if [ -n "${SITE}" ]; then
     for pkg in pengyos-install/src/pengyos_install pengyos-install-tui/pengyos_install_tui \
-               pengyos-update/src/pengyos_update; do
+               pengyos-update/src/pengyos_update pengyos-postmortem/src/pengyos_postmortem; do
         rm -rf "${SITE}/$(basename "${pkg}")"
         cp -r "${PENGYOS_TOOLS}/${pkg}" "${SITE}/"
         find "${SITE}/$(basename "${pkg}")" -name __pycache__ -prune -exec rm -rf {} +
     done
     for cmd in pengyos-install:pengyos_install pengyos-install-tui:pengyos_install_tui \
-               pengyos-update:pengyos_update; do
+               pengyos-update:pengyos_update pengyos-postmortem:pengyos_postmortem; do
         printf '#!/bin/sh\nexec /usr/bin/python3 -m %s "$@"\n' "${cmd#*:}" > "${TARGET_DIR}/usr/bin/${cmd%%:*}"
         chmod 755 "${TARGET_DIR}/usr/bin/${cmd%%:*}"
     done
-    echo "post-build: installed pengyos-install + pengyos-install-tui + pengyos-update (${SITE#${TARGET_DIR}})"
+    echo "post-build: installed pengyos-install + pengyos-install-tui + pengyos-update + pengyos-postmortem (${SITE#${TARGET_DIR}})"
 
     # The dev box (pengyos-guest): distrobox guests declared in
     # /usr/share/pengyos/guests.d, created on first `pengyos-guest enter`.

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-postmortem"
+version = "0.1.0"
+description = "Read a boot's journal and say what ended a session: a broadcast signal, a logout, an OOM kill, or a crash."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf" }]
+keywords = ["pengyos", "journal", "diagnostics", "session", "signals"]
+
+# Standard library only, at runtime and in the tests' subject. The one external
+# command is journalctl, which every PengyOS image has.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+pengyos-postmortem = "pengyos_postmortem.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

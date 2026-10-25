@@ -17,6 +17,31 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — `pengyos-postmortem`: what ended that session? (2026-10-25)
+
+On behopc a whole COSMIC session vanished in one instant — every app gone, the
+greetd login screen back, no reboot. The cause was four lines in a 6705-line
+journal: fifteen processes announcing SIGTERM inside 0.6 s, eighteen more scopes
+stopped silently, and `systemd --user` deactivated **without** the `Stopping User
+Manager` line that a logout produces. That last detail is the whole answer — a
+manager nobody asked to stop was *signalled* — and it took twenty minutes of grep
+to find, while every generic lead (memory, GPU, kernel) was a dead end.
+
+`pengyos-postmortem` is that reconstruction in one command. It reads the boot's
+journal (`journalctl -o json`, no privileges, no writes) and returns one of five
+verdicts — **broadcast signal**, **logout**, **out of memory**, **single
+process**, **unknown** — with the victims named and the alternatives reported as
+FOUND or "no evidence". It ships on Server and Desktop (installed by
+`board/server/post-build.sh` like the other stdlib Python tools), so the answer
+lives on the machine that just lost its session. `--json` for scripts.
+
+Its rules are narrow on purpose, and each narrowness is a real line from that
+boot: `earlyoom` announces its thresholds with the word SIGTERM and nobody died;
+the kernel registers hibernation memory at every boot, which is not a suspend;
+`Received SIGRTMIN+20 from PID 494` is a notification, not a death; and a
+`kill(-1)` victim's command line is quoted with its whole environment, so the
+name has to come from the end of it.
+
 ### Added — `strace` and `unshare`: a machine that can answer a syscall question (2026-10-25)
 
 The same session needed one fact — does `os.killpg(1, SIGTERM)` really signal

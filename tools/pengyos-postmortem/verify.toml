@@ -1,0 +1,9 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# Python tool: pytest in this tool's directory. No journal, no root, no network:
+# the analysis is pure and every timeline in the suite is hand-built.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-postmortem"
+expect = "exit0"
+timeout = 300
