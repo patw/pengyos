@@ -1,0 +1,29 @@
+# Feature claims for the Server image (and every edition stacked on it).
+#
+# The Server twin of board/desktop/features-required.txt; same format, same
+# checker (scripts/check-daemon-features.py), run from the SERVER post-build, so
+# the Desktop editions are held to it too. These are things nothing in the image
+# links or starts, so a layer edit that drops one is silent until a user needs it.
+#
+# Format: `kind  argument...`  then an optional `  # why`
+#   contains <path> <needle> | exec <path> | exec-any <basename> | exists <path>
+#
+# Put the Buildroot symbol in `why`, so a failure is one line away from its fix.
+
+# --- Health and remote access (US-SRV-3, US-SRV-5) ------------------------------
+exec-any  smartctl                                 # SMART disk health — BR2_PACKAGE_SMARTMONTOOLS
+exec-any  nvme                                     # NVMe health log — BR2_PACKAGE_NVME
+exec-any  wg                                       # WireGuard keys and status — BR2_PACKAGE_WIREGUARD_TOOLS
+exec-any  ethtool                                  # NIC link, offloads, Wake-on-LAN — BR2_PACKAGE_ETHTOOL
+
+# --- GPU firmware for xe (US-SRV-9 transcoding) ---------------------------------
+exists    usr/lib/firmware/xe/bmg_guc_70.bin       # Battlemage GuC — BR2_PACKAGE_LINUX_FIRMWARE_XE
+
+# --- What manylinux wheels assume the host has (US-SRV-10) ----------------------
+exists    usr/lib/libGL.so.1                       # libglvnd GLX dispatch — BR2_PENGYOS_MANYLINUX_LIBS
+exists    usr/lib/libEGL.so.1                      # libglvnd EGL dispatch — BR2_PENGYOS_MANYLINUX_LIBS
+exists    usr/lib/libX11.so.6                      # BR2_PENGYOS_MANYLINUX_LIBS
+exists    usr/lib/libXext.so.6                     # BR2_PENGYOS_MANYLINUX_LIBS
+exists    usr/lib/libXrender.so.1                  # BR2_PENGYOS_MANYLINUX_LIBS
+exists    usr/lib/libSM.so.6                       # BR2_PENGYOS_MANYLINUX_LIBS
+exists    usr/lib/libICE.so.6                      # BR2_PENGYOS_MANYLINUX_LIBS

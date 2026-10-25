@@ -186,7 +186,9 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 | Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq, curl |
 | Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo |
 | Containers | **podman**, rootless and daemonless, with the API socket |
-| Ops | default-deny nftables, a metrics timer, an opt-in backup timer (off by default), the daily update check |
+| Ops | default-deny nftables, a metrics timer, an opt-in backup timer (off by default), the daily update check; disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
+| As a VM guest | virtio (KVM, Proxmox, QEMU) and Hyper-V/Azure (VMBus disk, network, console, `hv_utils`), VMGENID |
+| Compatibility | the libraries manylinux wheels assume the host has: `libGL.so.1`/`libEGL.so.1` (libglvnd dispatch only, no GL driver) and the X11 client libraries |
 | Virtual machines | **QEMU** (x86_64 system emulation, KVM-accelerated, TCG fallback; SeaBIOS + edk2 guest firmware; `qemu-img`) and KVM, vhost, VFIO in the kernel |
 | Install & update | the console installer on a USB stick, the A/B layout, `pengyos-update` |
 | Pengy | `pengy-web` (the assistant in a browser) |
@@ -246,9 +248,10 @@ by accident. So the OS extends through four lanes, ordered by trust:
 | **4 — Guests** | podman + **distrobox** | anything that needs a full distro userspace | isolated container, the vendor's own environment |
 
 Per edition: Core = Lane 1; Server = 1, 2, 4; Desktop = all four, **Lane 3 is the
-star**. Steam, Chrome, Discord and VS Code are Flatpaks; `tools/pengyos-debx`
-(bounded deb/rpm extraction that never runs maintainer scripts) remains for the rare
-Lane 2 case.
+star**. Steam, Chrome, Discord and VS Code are Flatpaks. AppImages run in place;
+`pengyos-appimage` (Desktop) adds one to the app launcher and names the libraries it
+needs that the image lacks, without running it. A vendor `.deb`/`.rpm` goes in a Lane 4
+guest, which has the package manager it expects.
 
 **Trust rule.** Installing a binary that runs with system access is a Tier-2 (human)
 act; sandboxing is how untrusted binaries are accepted without being trusted.

@@ -120,7 +120,10 @@ propose `apt install`, `pip install` into system paths, or editing files under
    hash and isolated in its own prefix.
 3. **Sandboxed apps (Lane 3)** — **Flatpak** from Flathub is the primary way to
    add a GUI app on Desktop (Firefox lands on first boot); AppImage works too
-   (FUSE is present).
+   (FUSE is present). On Desktop, `pengyos-appimage integrate APP.AppImage`
+   adds one to the app launcher where it sits, and when one will not start,
+   `pengyos-appimage check APP.AppImage` names the libraries it needs that the
+   image lacks (exit 4). It never runs the AppImage.
 4. **Guests (Lane 4)** — anything needing a full distro userspace: `podman`
    rootless, `distrobox`, `pengyos-guest`. **Compilers and build toolchains live
    in the `dev` guest** (`pengyos-guest enter dev`), which shares `$HOME` and
@@ -134,6 +137,13 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
 
 - **`/usr` is read-only.** A "fix" that edits `/usr` cannot work; the mutable
   surface is `/etc` (Tier 1) and the data partition.
+- **Scheduling is systemd timers; there is no cron or `at`.** A recurring job
+  is a `.service` + `.timer` pair (`OnCalendar=`, `Persistent=true`) in
+  `~/.config/systemd/user/` (as the user; `loginctl enable-linger` once so it
+  runs while logged out) or `/etc/systemd/system/` (as root). A one-off is
+  `systemd-run --user --on-active=2h CMD`. Check a schedule with
+  `systemd-analyze calendar '...'`; the `crontab` command prints the mapping.
+  Cron inside a distrobox guest never fires (no init there).
 - **sshd is key-only** (password logins over SSH are off). A user with no key in
   `~/.ssh/authorized_keys` can log in at the console and not over SSH.
 - **The Desktop's COSMIC pieces are built on the build host**, not in the image;

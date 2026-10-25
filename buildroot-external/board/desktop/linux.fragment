@@ -190,13 +190,8 @@ CONFIG_SND_HDA_INTEL=m
 # CPU idle: intel_idle (x86_64_defconfig leaves it off) — the N100 ran acpi_idle
 # with only C1-C3; intel_idle reaches the deep package C-states (power, heat).
 CONFIG_INTEL_IDLE=y
-# CPU/package power reporting (powercap/RAPL) and CPU temperature (coretemp);
-# NVMe and SATA drive temperatures as hwmon sensors.
-CONFIG_POWERCAP=y
-CONFIG_INTEL_RAPL=m
-CONFIG_SENSORS_CORETEMP=m
-CONFIG_NVME_HWMON=y
-CONFIG_SENSORS_DRIVETEMP=m
+# CPU/package power, CPU and drive temperatures: server/linux.fragment (since
+# 2026-10-25; a server needs them more).
 # Intel LPSS: the low-speed I2C/SPI/UART controllers (00:15.x, 00:19.x, 00:1e.x
 # had no driver). Laptop touchpads and touchscreens hang off these I2C buses.
 CONFIG_X86_INTEL_LPSS=y
@@ -209,8 +204,7 @@ CONFIG_SERIAL_8250_DW=m
 CONFIG_TCG_TPM=m
 CONFIG_TCG_CRB=m
 CONFIG_TCG_TIS=m
-# The chipset watchdog (iTCO) — systemd can use it to reset a hung machine.
-CONFIG_ITCO_WDT=m
+# The chipset watchdog (iTCO): server/linux.fragment.
 # Wireless core as modules: built in, cfg80211 looked for regulatory.db before
 # the rootfs was mounted ("Direct firmware load for regulatory.db failed").
 CONFIG_CFG80211=m
@@ -343,9 +337,7 @@ CONFIG_SND_SOC_INTEL_SOF_ES8336_MACH=m
 # classes of common hardware with no driver at all. Found by checking this config
 # against the hardware a tester is likely to own; all modules, loaded by udev
 # only where the device exists. Firmware: desktop.config / external.mk.
-# GPU: Lunar Lake / Panther Lake iGPUs and Arc B-series (Battlemage) are driven
-# by xe only (i915 does not bind them): without it, no GPU acceleration.
-CONFIG_DRM_XE=m
+# GPU: xe (Lunar Lake / Panther Lake, Battlemage) is in server/linux.fragment.
 # Wi-Fi 7: Intel BE200/BE201/BE211 run the MLD op mode (iwl-drv.c sends Wi-Fi 7
 # parts to iwlmld only when it is built); MediaTek MT7925 (common on 2024+ AMD
 # laptops), Qualcomm WCN7850 (ath12k), and the Realtek rtw89 parts budget
@@ -415,18 +407,12 @@ CONFIG_AMD_SFH_HID=m
 CONFIG_HID_SENSOR_ACCEL_3D=m
 CONFIG_HID_SENSOR_ALS=m
 # Trying PengyOS in a VM: VirtualBox's default VMSVGA adapter and VMware are
-# vmwgfx; VirtualBox's older VBoxVGA and its guest device; Hyper-V's display,
-# disk, network and input.
+# vmwgfx; VirtualBox's older VBoxVGA and its guest device; Hyper-V's mouse (its
+# disk, network, keyboard and display are in server/linux.fragment).
 CONFIG_DRM_VMWGFX=m
 CONFIG_DRM_VBOXVIDEO=m
-CONFIG_VIRT_DRIVERS=y
 CONFIG_VBOXGUEST=m
-CONFIG_HYPERV=y
-CONFIG_DRM_HYPERV=m
-CONFIG_HYPERV_STORAGE=m
-CONFIG_HYPERV_NET=m
 CONFIG_HID_HYPERV_MOUSE=m
-CONFIG_HYPERV_KEYBOARD=m
 # Bluetooth PAN (tethering through a phone); bluetoothd's network plugin logged
 # "kernel lacks bnep-protocol support".
 CONFIG_BT_BNEP=m

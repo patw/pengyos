@@ -165,6 +165,16 @@ if [ -d "${QEMU_SHARE}" ]; then
     echo "post-build: QEMU guest firmware trimmed to x86 (${before} -> $(du -sm "${QEMU_SHARE}" | cut -f1) MB)"
 fi
 
+# --- The image still has what this edition claims ---------------------------------
+# Tools and libraries nothing in the image starts or links (disk health, `wg`,
+# the manylinux set): a layer edit that drops one would otherwise pass silently.
+python3 "$(dirname "$0")/../../../scripts/check-daemon-features.py" \
+    --target-dir "${TARGET_DIR}" \
+    --require "$(dirname "$0")/features-required.txt" || {
+    echo "post-build: the rootfs lost capabilities listed above" >&2
+    exit 1
+}
+
 # --- Last: every shared library the image needs is in it ------------------------
 # (the edition's later post-build runs this again over the finished tree)
 python3 "$(dirname "$0")/../common/check-needed-libs.py" "${TARGET_DIR}"

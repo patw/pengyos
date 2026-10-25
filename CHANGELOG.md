@@ -17,6 +17,33 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — the Server catches up on what an unattended box needs
+
+Set against its user stories, the 26.10.40 Server lacked things the Desktop had
+picked up: no Intel CPU or drive temperatures and no hardware watchdog (US-SRV-3);
+no way to read SMART or NVMe health; the WireGuard module but no `wg` to make a
+key (US-SRV-5); no Hyper-V/Azure drivers, so a Generation 2 VM could not see its
+own disk; no xe driver for Battlemage and Lunar Lake transcoding (US-SRV-9); and
+none of the libraries manylinux wheels assume, so `uv add opencv-python` failed
+at import on `libGL.so.1` (US-SRV-10). The kernel options (coretemp, drivetemp,
+nvme-hwmon, RAPL, iTCO and sp5100 watchdogs, Hyper-V with `hv_utils`, VMGENID,
+xe) and the packages (smartmontools, nvme-cli, wireguard-tools, ethtool, xe
+firmware) moved from the Desktop layer down to the Server's, so the Desktop is
+unchanged. libGL/libEGL come from libglvnd's dispatch libraries alone, with no GL
+driver (`BR2_PENGYOS_MANYLINUX_LIBS`). `board/server/features-required.txt` now
+fails the build if any of it goes missing.
+
+### Removed — cron: scheduling is systemd timers, and says so
+
+Every edition carried BusyBox's `crontab` and `crond`, but nothing started
+`crond` and there was no spool, so `crontab -e` accepted jobs that never ran.
+Agents reach for cron first, and reported such jobs as scheduled. Both applets
+are compiled out; `crontab` and `at` are now stubs that print the systemd-timer
+equivalent (a unit pair, `systemd-run`, a cron-to-`OnCalendar` table) and exit
+127, and Pengy's skill says the same. The core post-build now also removes
+links to applets BusyBox no longer builds, which an incremental build kept and
+which hid the stub.
+
 ### Added — the libraries prebuilt apps expect from the host (Desktop)
 
 Prebuilt apps (AppImages, Playwright's Chromium) died at load on libraries the

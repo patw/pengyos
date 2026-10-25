@@ -65,3 +65,38 @@ CONFIG_PCI_IOV=y
 # SMB/CIFS client: `mount -t cifs` for Windows and NAS shares (the Desktop's file
 # manager goes through gvfs/libsmbclient instead, but fstab mounts need this).
 CONFIG_CIFS=m
+
+# --- An unattended box: health, watchdog, VM guest, GPU (2026-10-25) -----------
+# Measured against the 26.10.40 Server kernel next to the Desktop's: these had
+# landed in desktop/linux.fragment, but a server needs them more. Moved here
+# (Desktop inherits them) rather than duplicated.
+# Health (US-SRV-3): CPU package power (RAPL) and Intel CPU temperature
+# (coretemp; AMD's k10temp was already on), NVMe and SATA drive temperatures as
+# hwmon sensors. node_exporter showed no CPU or disk temperature on an Intel box.
+CONFIG_POWERCAP=y
+CONFIG_INTEL_RAPL=m
+CONFIG_SENSORS_CORETEMP=m
+CONFIG_NVME_HWMON=y
+CONFIG_SENSORS_DRIVETEMP=m
+# Hardware watchdogs: the chipset's iTCO (Intel) and the FCH's sp5100_tco (AMD),
+# so systemd's RuntimeWatchdogSec can reset a hung, unattended machine. The
+# Server had no watchdog driver at all.
+CONFIG_ITCO_WDT=m
+CONFIG_SP5100_TCO=m
+# As a VM guest. virtio was covered (KVM/Proxmox/QEMU); on Hyper-V (and Azure) a
+# Generation 2 VM's disk, network, console and keyboard are VMBus devices, so the
+# Server could not even see its own disk. hv_utils is the host's clean shutdown,
+# time sync and heartbeat. VMGENID tells the kernel a VM was cloned or restored
+# from a snapshot so the RNG reseeds instead of repeating itself.
+CONFIG_VIRT_DRIVERS=y
+CONFIG_VMGENID=y
+CONFIG_HYPERV=y
+CONFIG_HYPERV_UTILS=m
+CONFIG_HYPERV_STORAGE=m
+CONFIG_HYPERV_NET=m
+CONFIG_HYPERV_KEYBOARD=m
+CONFIG_DRM_HYPERV=m
+# GPU: Lunar Lake / Panther Lake iGPUs and Arc B-series (Battlemage) are driven
+# by xe only (i915 does not bind them). US-SRV-9 transcodes on /dev/dri, and the
+# Arc cards are the usual transcoding card. Firmware: server.config.
+CONFIG_DRM_XE=m

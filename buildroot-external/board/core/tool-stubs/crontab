@@ -1,0 +1,33 @@
+#!/bin/sh
+# PengyOS stub: 'crontab' is intentionally not shipped on this image.
+# PengyOS schedules with systemd timers (one scheduler, logged to the journal,
+# catches up on runs missed while the machine was off). This points an agent
+# or a human at the equivalent instead of silently accepting a crontab.
+cat >&2 <<'MSG'
+PengyOS: 'crontab' is not installed; scheduling is done with systemd timers.
+
+  A recurring job, as you (no root):
+    ~/.config/systemd/user/backup.service   [Service]  Type=oneshot
+                                                       ExecStart=/home/you/bin/backup.sh
+    ~/.config/systemd/user/backup.timer     [Timer]    OnCalendar=*-*-* 03:00
+                                                       Persistent=true
+                                            [Install]  WantedBy=timers.target
+    systemctl --user daemon-reload && systemctl --user enable --now backup.timer
+    loginctl enable-linger "$USER"     # once: run timers even when logged out
+
+  As root (system-wide): the same two files in /etc/systemd/system/, then
+    systemctl daemon-reload && systemctl enable --now backup.timer
+
+  Quick, until reboot:
+    systemd-run --user --on-calendar='*-*-* 03:00' /home/you/bin/backup.sh
+
+  cron fields -> OnCalendar:  '30 3 * * *' -> '*-*-* 03:30'
+                              '0 * * * *'  -> 'hourly'
+                              '*/15 * * * *' -> '*:0/15'
+                              '0 9 * * 1-5'  -> 'Mon..Fri *-*-* 09:00'
+    check one with: systemd-analyze calendar 'Mon..Fri *-*-* 09:00'
+
+  See it run: systemctl --user list-timers; journalctl --user -u backup
+  A distrobox guest is no workaround: it runs no init, so cron in it never fires.
+MSG
+exit 127

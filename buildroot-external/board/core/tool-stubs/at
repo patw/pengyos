@@ -1,0 +1,16 @@
+#!/bin/sh
+# PengyOS stub: 'at' is intentionally not shipped on this image.
+# systemd-run covers it: a transient timer, logged to the journal.
+cat >&2 <<'MSG'
+PengyOS: 'at' is not installed; use systemd-run for a one-off job.
+
+  In 2 hours:        systemd-run --user --on-active=2h /path/to/job.sh
+  At a time today:   systemd-run --user --on-calendar='17:30' /path/to/job.sh
+  As root:           drop --user
+  List / cancel:     systemctl --user list-timers; systemctl --user stop run-XXXX.timer
+  Output:            journalctl --user -u run-XXXX.service
+
+  These do not survive a reboot. For a recurring or permanent job, write a
+  .timer unit (run 'crontab' for an example).
+MSG
+exit 127

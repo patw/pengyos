@@ -37,6 +37,23 @@ if [ -d "${BINARIES_DIR}/efi-part/" ]; then
     cp -f "${BOARD_DIR}/grub-pengyos.pf2" "${BINARIES_DIR}/efi-part/EFI/BOOT/grub-pengyos.pf2"
 fi
 
+# --- AppImages: inspect, add to the launcher, find missing libraries -----------
+# tools/pengyos-appimage, a stdlib-only Python package installed like the
+# installer and updater (Server's post-build): copied into site-packages with a
+# /usr/bin wrapper. It never runs or unpacks an AppImage; it reads the payload
+# in place (zstd payloads need Python 3.14's compression.zstd, which the image
+# has). `check` is the answer to "why won't this AppImage start".
+PENGYOS_TOOLS="$(cd "$(dirname "$0")/../../../tools" && pwd)"
+SITE="$(ls -d "${TARGET_DIR}"/usr/lib/python3.*/site-packages 2>/dev/null | head -1)"
+if [ -n "${SITE}" ]; then
+    rm -rf "${SITE}/pengyos_appimage"
+    cp -r "${PENGYOS_TOOLS}/pengyos-appimage/src/pengyos_appimage" "${SITE}/"
+    find "${SITE}/pengyos_appimage" -name __pycache__ -prune -exec rm -rf {} +
+    printf '#!/bin/sh\nexec /usr/bin/python3 -m pengyos_appimage "$@"\n' > "${TARGET_DIR}/usr/bin/pengyos-appimage"
+    chmod 755 "${TARGET_DIR}/usr/bin/pengyos-appimage"
+    echo "post-build: installed pengyos-appimage (${SITE#${TARGET_DIR}})"
+fi
+
 # --- COSMIC: install the host-built binaries ---------------------------------
 # Built on the build host ($COSMIC_BUILD/release) and copied in here; this goes
 # away once COSMIC has Buildroot recipes (tools/pengyos-cosmic-build). Guarded:

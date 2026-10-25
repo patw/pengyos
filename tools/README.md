@@ -64,7 +64,7 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengy-solitaire`](pengy-solitaire/) | *Frostbite Solitaire*: Klondike, draw three, drag and drop (Rust, libcosmic). |
 | [`pengy-theme`](pengy-theme/) | Minimal, modern theme & desktop-defaults packager/validator for PengyOS. |
 | [`pengyos-apparmor`](pengyos-apparmor/) | Minimal, strict-by-default AppArmor profiles for PengyOS core components (including the pengy agent) plus a validat… |
-| [`pengyos-appimage`](pengyos-appimage/) | Inspect, extract, integrate, and sandbox AppImages under PengyOS. |
+| [`pengyos-appimage`](pengyos-appimage/) | Inspect AppImages, add them to the app launcher, and find the libraries they need. Never runs or unpacks one. Shipped on Desktop. |
 | [`pengyos-attest`](pengyos-attest/) | A tamper-evident, append-only hash-chained attestation log for PengyOS: record build and change events as an append… |
 | [`pengyos-btrfs-layout`](pengyos-btrfs-layout/) | Plan a btrfs subvolume layout for PengyOS (root, home, var, snapshots, …) and generate the btrfs subvolume / snapsh… |
 | [`pengyos-build`](pengyos-build/) | Reproducible Buildroot build driver for PengyOS targets: drive a named target declared in targets.toml through a pi… |
@@ -73,7 +73,6 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-cosmic-native-deps`](pengyos-cosmic-native-deps/) | Buildroot recipes for the native (non-Rust) dependencies COSMIC needs that 2026.08 does not ship — the closing BR2_… |
 | [`pengyos-cosmic-pkg`](pengyos-cosmic-pkg/) | The COSMIC packaging engine: turn a git Rust component (a component manifest — URL + pinned tag + Cargo.lock) into… |
 | [`pengyos-cosmic-recipes`](pengyos-cosmic-recipes/) | Manifest-driven Buildroot cargo recipes for the COSMIC desktop components, built on top of the pengyos-cosmic-pkg e… |
-| [`pengyos-debx`](pengyos-debx/) | Bounded deb / rpm extractor for PengyOS. |
 | [`pengyos-desktop-curation`](pengyos-desktop-curation/) | Curated PengyOS Desktop default-application set as declarative data. |
 | [`pengyos-desktop-drivers`](pengyos-desktop-drivers/) | The generic (no vendor-acceleration) driver set for the PengyOS Desktop live + installed image: a kernel linux.frag… |
 | [`pengyos-desktop-nvidia`](pengyos-desktop-nvidia/) | Containment lint for the opt-in NVIDIA editions, Server and Desktop (package `nvidia-open`): the proprietary driver stays out of every default image. |

@@ -1,5 +1,24 @@
 menu "PengyOS (external tree)"
 
+	# The libraries a manylinux wheel may assume the host provides (PEP 600 /
+	# auditwheel policy) and so never bundles: libGL.so.1 and the X11 client
+	# libraries. libglvnd builds libGL/libEGL only when a GL driver selects its
+	# dispatch symbols (Mesa does on the Desktop); a headless Server has no GL
+	# driver, so this selects them itself. Selecting them as well as Mesa is
+	# what Mesa does anyway, so the Desktop is unchanged. layers/server.config.
+	config BR2_PENGYOS_MANYLINUX_LIBS
+		bool "libraries manylinux Python wheels expect from the host"
+		depends on BR2_PACKAGE_XORG7
+		depends on BR2_TOOLCHAIN_HAS_SYNC_4 && BR2_TOOLCHAIN_HAS_THREADS && !BR2_STATIC_LIBS
+		select BR2_PACKAGE_LIBGLVND
+		select BR2_PACKAGE_LIBGLVND_DISPATCH_GL
+		select BR2_PACKAGE_LIBGLVND_DISPATCH_EGL
+		select BR2_PACKAGE_XLIB_LIBX11
+		select BR2_PACKAGE_XLIB_LIBXEXT
+		select BR2_PACKAGE_XLIB_LIBXRENDER
+		select BR2_PACKAGE_XLIB_LIBSM
+		select BR2_PACKAGE_XLIB_LIBICE
+
 	# COSMIC native (non-Rust) dependencies Buildroot 2026.08 does not ship.
 	# Emitted by pengyos-cosmic-native-deps (committed under that tool) and
 	# installed here so the Desktop target's `BR2_PACKAGE_*` symbols resolve.

@@ -141,6 +141,29 @@ fi
 rm -f "${TARGET_DIR}"/etc/ssh/ssh_host_*
 echo "post-build: no ssh host keys in the image (generated per machine on first boot)"
 
+# --- Applet links BusyBox no longer provides --------------------------------------
+# Compiling an applet out of busybox.fragment does not remove its symlink from an
+# incremental build's TARGET_DIR (Buildroot never deletes files), and the stub
+# loop below would take that dangling-in-spirit link for a real tool and skip the
+# stub (hit with crontab, 26.10.43). busybox.links lists what this build installs;
+# any other link to busybox is stale.
+BB_LINKS="$(ls "${BUILD_DIR}"/busybox-*/busybox.links 2>/dev/null | head -1)"
+if [ -n "${BB_LINKS}" ]; then
+    # Names, not paths: /bin, /sbin and /usr/sbin are merged into /usr/bin.
+    BB_NAMES="$(sed 's|.*/||' "${BB_LINKS}")"
+    for d in bin sbin usr/bin usr/sbin; do
+        [ -d "${TARGET_DIR}/$d" ] && [ ! -L "${TARGET_DIR}/$d" ] || continue
+        for p in "${TARGET_DIR}/$d"/*; do
+            [ -L "$p" ] && [ "$(basename "$(readlink "$p")")" = busybox ] || continue
+            name=$(basename "$p")
+            if ! printf '%s\n' "${BB_NAMES}" | grep -qxF -- "${name}"; then
+                rm -f "$p"
+                echo "post-build: removed stale BusyBox link /$d/${name}"
+            fi
+        done
+    done
+fi
+
 # --- "Not installed" stubs for tools this image lacks --------------------------
 # A stub prints what to use instead (for an agent or a human) and exits 127.
 # Only for tools the image really lacks: an edition that ships the real tool

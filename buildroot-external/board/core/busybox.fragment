@@ -248,6 +248,12 @@
 # CONFIG_DNSD is not set
 # CONFIG_SSL_SERVER is not set
 # CONFIG_VLOCK is not set
+# Scheduling is systemd timers. Nothing started BusyBox crond and there was no
+# /var/spool/cron, so `crontab -e` saved jobs that never ran, silently, and an
+# agent reporting "scheduled" was wrong. board/core/tool-stubs/crontab (and
+# at) now answer with the timer equivalent instead.
+# CONFIG_CROND is not set
+# CONFIG_CRONTAB is not set
 
 # --- BusyBox wget: make HTTPS real -------------------------------------------
 # The Core image has no curl (that is the Server's); busybox wget was the only

@@ -56,3 +56,4 @@ exists    usr/lib/libXcomposite.so.1               # Chromium/Electron — BR2_P
 exists    usr/lib/libxcb-cursor.so.0               # Qt >= 6.5 xcb plugin dlopens it — BR2_PACKAGE_XCB_UTIL_CURSOR
 exists    usr/lib/libxcb-icccm.so.4                # Qt 6 xcb plugin — BR2_PACKAGE_XCB_UTIL_WM
 exists    usr/lib/libxcb-keysyms.so.1              # Qt 6 xcb plugin — BR2_PACKAGE_XCB_UTIL_KEYSYMS
+exec      usr/bin/pengyos-appimage                 # inspect/integrate/check — board/desktop/post-build.sh

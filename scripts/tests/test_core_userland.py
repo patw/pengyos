@@ -311,6 +311,8 @@ DELIBERATELY_DROPPED = {
     # Nothing provides ifup/ifdown (net-tools does not): networkd and
     # NetworkManager own the interfaces, and ifupdown-scripts is off.
     "IFUP", "IFDOWN",
+    # systemd timers schedule; board/core/tool-stubs/crontab says how.
+    "CROND", "CRONTAB",
 }
 
 

@@ -4,4 +4,6 @@ PengyOS Desktop -- https://pengyos.catbee.ca
   pengyos-guest enter dev
                          a development box (compilers, SDKs) that shares your home
   pengyos-autologin      turn automatic login to the desktop on or off
+  pengyos-appimage integrate APP.AppImage
+                         add an AppImage to the app launcher (check: why won't it start)
 
