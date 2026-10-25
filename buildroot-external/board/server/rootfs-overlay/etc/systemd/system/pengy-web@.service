@@ -1,0 +1,45 @@
+# PengyOS — the Pengy web UI for one user (%i = the user name).
+#
+# Turned on and off with `pengyos-webui on|off USER`, which writes
+# /etc/pengyos/webui.conf and the per-user drop-in that carries this
+# instance's port and bind address. Enabling it by hand works too: the
+# defaults below are the documented ones (5000 on 127.0.0.1).
+#
+#   systemctl status 'pengy-web@beholder.service'
+#   journalctl -u 'pengy-web@beholder.service'
+#
+# It runs as %i, in %i's home, and sees %i's ~/.config/pengy, ~/skills and
+# ~/.secrets: that is the whole point — the UI is the agent as that person,
+# with their configuration and their chats. So no DynamicUser (there is no
+# ephemeral user here, the user is the subject) and no ProtectHome (it would
+# hide exactly the state the agent needs). It is a system unit, not a user
+# unit, so it comes up at boot on a headless Server where nobody has logged
+# in and no session exists, and it does not depend on loginctl enable-linger.
+#
+# The UI has no login and exposes run_bash and run_python: whoever can reach
+# the bind address runs tools as %i. The default bind is loopback, this
+# machine only. A non-loopback bind is a deliberate, documented decision,
+# taken with `pengyos-webui on --host`, never a default and never implied.
+[Unit]
+Description=Pengy web UI for %i
+Documentation=https://pengyos.catbee.ca
+After=network.target
+ConditionPathExists=/usr/bin/pengy-web
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=%h
+# Overridden per user by the drop-in pengyos-webui writes; these are the
+# documented defaults, so a unit enabled by hand binds the same loopback port.
+Environment=WEBUI_PORT=5000
+Environment=WEBUI_HOST=127.0.0.1
+ExecStart=/usr/bin/pengy-web --port ${WEBUI_PORT} --host ${WEBUI_HOST}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

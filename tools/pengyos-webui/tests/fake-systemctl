@@ -1,0 +1,79 @@
+#!/bin/sh
+# pengyos-webui test helper: a fake `systemctl` for the --root sandbox.
+#
+# It lives at <sandbox>/usr/bin/systemctl, which is where pengyos-webui looks
+# for it when it is run with --root <sandbox>. It keeps just enough state to
+# answer the questions pengyos-webui asks: is this unit enabled (a symlink in
+# multi-user.target.wants), is it active (a marker file), and the effects of
+# enable/disable/start/stop/restart. Every call is appended to
+# <sandbox>/var/log/fake-systemctl.log so a test can assert the sequence.
+#
+# Exit codes follow systemd's: is-active 0/3, is-enabled 0/1.
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+WANTS="$ROOT/etc/systemd/system/multi-user.target.wants"
+ACTIVE="$ROOT/var/lib/fake-systemd/active"
+LOG="$ROOT/var/log/fake-systemctl.log"
+mkdir -p "$WANTS" "$ACTIVE" "$ROOT/var/log"
+echo "systemctl $*" >> "$LOG"
+
+cmd=""
+unit=""
+now=0
+for a in "$@"; do
+    case "$a" in
+        daemon-reload|enable|disable|start|stop|restart|is-active|is-enabled) cmd=$a ;;
+        --now) now=1 ;;
+        --quiet|--no-pager|-q) ;;
+        *.service) unit=$a ;;
+        *) ;;
+    esac
+done
+
+[ -n "$cmd" ] || { echo "fake-systemctl: no command in: $*" >&2; exit 2; }
+if [ "$cmd" != daemon-reload ] && [ -z "$unit" ]; then
+    echo "fake-systemctl: no unit in: $*" >&2
+    exit 2
+fi
+
+case "$cmd" in
+    daemon-reload)
+        exit 0
+        ;;
+    enable)
+        mkdir -p "$WANTS"
+        ln -sf "../$unit" "$WANTS/$unit"
+        if [ "$now" = 1 ]; then touch "$ACTIVE/$unit"; fi
+        exit 0
+        ;;
+    disable)
+        rm -f "$WANTS/$unit"
+        if [ "$now" = 1 ]; then rm -f "$ACTIVE/$unit"; fi
+        exit 0
+        ;;
+    start|restart)
+        touch "$ACTIVE/$unit"
+        exit 0
+        ;;
+    stop)
+        rm -f "$ACTIVE/$unit"
+        exit 0
+        ;;
+    is-active)
+        if [ -e "$ACTIVE/$unit" ]; then
+            echo active
+            exit 0
+        fi
+        echo inactive
+        exit 3
+        ;;
+    is-enabled)
+        if [ -e "$WANTS/$unit" ] || [ -L "$WANTS/$unit" ]; then
+            echo enabled
+            exit 0
+        fi
+        echo disabled
+        exit 1
+        ;;
+esac

@@ -134,4 +134,5 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-usage`](pengyos-usage/) | *Disk Usage*: what is taking the space, as a ring chart you click into beside a ranked list; your home or any filesystem, read-only (Rust, libcosmic). |
 | [`pengyos-upstream-watch`](pengyos-upstream-watch/) | Detect new upstream releases for PengyOS pins → change proposals. |
 | [`pengyos-verifier`](pengyos-verifier/) | External witness for PengyOS builds. |
+| [`pengyos-webui`](pengyos-webui/) | `pengyos-webui status\|on\|off` — serve the Pengy web UI as a named user (Server/Desktop): the `pengy-web@.service` system template, `User=%i`, loopback by default, state in `/etc/pengyos/webui.conf`. The UI has no login. |
 | [`pengyos-witness-bundle`](pengyos-witness-bundle/) | Present a pengyos-build output in the canonical witness layout and verify its SBOM signature, so an external witnes… |

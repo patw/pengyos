@@ -1,0 +1,9 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The tool is POSIX shell; the suite is Python and drives the script itself
+# against a sandbox root, so it needs no root, no systemd and no build.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-webui"
+expect = "exit0"
+timeout = 600

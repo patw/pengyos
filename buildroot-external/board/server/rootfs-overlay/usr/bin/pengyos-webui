@@ -1,0 +1,404 @@
+#!/bin/sh
+# pengyos-webui - turn the Pengy web UI on or off, for a named user.
+#
+#   pengyos-webui status [--json]
+#   sudo pengyos-webui on [USER] [--port N] [--host ADDR]
+#   sudo pengyos-webui off [USER]
+#
+# On: /usr/bin/pengy-web runs as USER, as the systemd service
+# pengy-web@USER.service, from boot, and answers on http://127.0.0.1:5000.
+# Open that in a browser: it is the Pengy chat UI, on USER's own
+# configuration, skills and chats, because the service runs as USER and sees
+# USER's home. Off (the default): nothing runs and nothing is enabled.
+#
+# Read the consequences before turning it on. The UI has no login, no
+# password and no per-user ACL, and it exposes run_bash and run_python:
+# whoever can reach the port chats with the agent, reads and writes the files
+# USER can, and runs commands as USER.
+#
+#   * Bound to 127.0.0.1 (the default, and the only default this tool has)
+#     that means this machine only: the person at the console, and root.
+#     Nobody on the network reaches it.
+#   * --host ADDR binds on a real interface and puts that agent, with that
+#     shell, in front of the network with no authentication at all. It is
+#     never a default and never implied: it takes the flag on purpose, and
+#     `status` prints the bind address every time it is asked. On Server the
+#     default-deny firewall has to open the port as well, so a Server stays
+#     dark until both are changed.
+#   * The service starts at boot and stays up, on a headless Server with no
+#     session as well as on Desktop. `off` stops it and takes it back out of
+#     the boot.
+#
+# State is /etc/pengyos/webui.conf: one `user=NAME PORT HOST` line per
+# enabled user. /etc is the overlay that survives OS updates; nothing is
+# written under the read-only /usr. The per-user port and bind are handed to
+# the service in a drop-in,
+#   /etc/systemd/system/pengy-web@USER.service.d/pengyos-webui.conf
+# which `on` regenerates and `off` removes.
+#
+# --root DIR (the last argument form) is the test hook: it points every write
+# at DIR/etc/... instead of /etc/..., and lifts the root guard for that run
+# because nothing outside DIR is touched. Without it, on/off need root.
+set -eu
+
+PROG=pengyos-webui
+BIN=/usr/bin/pengy-web
+UNIT=pengy-web@.service
+DEFAULT_PORT=5000
+DEFAULT_HOST=127.0.0.1
+ROOT=""
+JSON=0
+usage() {
+    cat <<'EOF'
+pengyos-webui - the Pengy web UI, on or off, per user
+
+  pengyos-webui status [--json]      what is running, on what URL
+  sudo pengyos-webui on [USER]       serve the UI as USER (default: the sudo user)
+      --port N     port to bind (default 5000; a second user needs its own)
+      --host ADDR  bind here instead of 127.0.0.1 - NO AUTHENTICATION, see below
+  sudo pengyos-webui off [USER]      stop it and take it out of the boot
+
+The UI has no login and runs run_bash and run_python: anyone who can reach
+the port runs tools as USER. The default bind is 127.0.0.1, this machine
+only. --host is a deliberate, documented, unauthenticated network bind.
+USER defaults to the user running sudo. State: /etc/pengyos/webui.conf.
+--root DIR writes under DIR instead of / (for tests; needs no root).
+EOF
+}
+
+die() {
+    echo "$PROG: $*" >&2
+    exit 2
+}
+
+need_root() {
+    # --root is the sandbox: every write goes under it, so it needs no root.
+    [ -n "$ROOT" ] && return 0
+    [ "$(id -u)" = 0 ] || die "run it with sudo"
+}
+
+# A user name is also a systemd unit instance name (%i), so it is checked
+# before anything is written: no slash, no whitespace, no shell or glob
+# metacharacter, no leading dot, and short.
+valid_user() {
+    case "$1" in
+        ''|root|.*) return 1 ;;
+        *[!A-Za-z0-9._-]*) return 1 ;;
+    esac
+    [ "${#1}" -le 32 ] || return 1
+    return 0
+}
+
+check_user() {
+    valid_user "$1" || die "not a usable user name: '$1'"
+    getent passwd "$1" >/dev/null 2>&1 || die "no user '$1' on this machine"
+}
+
+valid_port() {
+    case "$1" in ''|*[!0-9]*) return 1 ;; esac
+    [ "${#1}" -le 5 ] || return 1
+    [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+# The bind address goes into a systemd Environment= line, so: no whitespace,
+# no shell metacharacters, no glob characters.
+valid_host() {
+    case "$1" in
+        ''|*[!A-Za-z0-9.:-]*) return 1 ;;
+        .*|*.) return 1 ;;
+    esac
+    [ "${#1}" -le 126 ] || return 1
+    return 0
+}
+
+# --- state: /etc/pengyos/webui.conf -----------------------------------------
+# One "user=NAME PORT HOST" line per enabled user; no user lines means off.
+
+CONF_PATH=$ROOT/etc/pengyos/webui.conf
+UNIT_DIR=$ROOT/etc/systemd/system
+WANTS_DIR=$ROOT/etc/systemd/system/multi-user.target.wants
+
+# Every enabled user, one per line.
+conf_users() {
+    [ -f "$CONF_PATH" ] || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            user=*)
+                # shellcheck disable=SC2086
+                set -- $line
+                [ $# -ge 3 ] && [ -n "$2" ] && echo "${1#user=}"
+                ;;
+        esac
+    done < "$CONF_PATH"
+    return 0
+}
+
+# The whole record for one enabled user: "NAME PORT HOST". Empty for a user
+# that is not enabled. The name is repeated so the caller can write the line
+# back out without keeping a second copy of it.
+conf_record() {
+    want=$1
+    [ -f "$CONF_PATH" ] || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            user=*)
+                # shellcheck disable=SC2086
+                set -- $line
+                if [ $# -ge 3 ] && [ "$1" = "user=$want" ]; then
+                    echo "$want $2 $3"
+                    return 0
+                fi
+                ;;
+        esac
+    done < "$CONF_PATH"
+    return 0
+}
+
+write_conf() {
+    mkdir -p "${CONF_PATH%/*}"
+    {
+        echo '# PengyOS - the Pengy web UI (/etc/pengyos/webui.conf)'
+        echo '#'
+        echo '# Written by pengyos-webui; read by pengyos-webui. One "user=NAME PORT HOST"'
+        echo '# line per enabled user; no user lines means off.'
+        echo '# The UI has no login: whoever can reach HOST:PORT runs tools as NAME.'
+        echo '# 127.0.0.1 is this machine only; --host is an unauthenticated network bind.'
+        echo '# See: pengyos-webui --help'
+        for rec in "$@"; do
+            echo "user=$rec"
+        done
+    } > "$CONF_PATH.new"
+    chmod 0644 "$CONF_PATH.new"
+    mv "$CONF_PATH.new" "$CONF_PATH"
+}
+
+# --- the service -------------------------------------------------------------
+
+unit_name() {
+    echo "pengy-web@$1.service"
+}
+
+write_dropin() {
+    d="$UNIT_DIR/pengy-web@$1.service.d"
+    mkdir -p "$d"
+    {
+        echo '# Written by pengyos-webui from /etc/pengyos/webui.conf.'
+        echo '[Service]'
+        echo "Environment=WEBUI_PORT=$2"
+        echo "Environment=WEBUI_HOST=$3"
+    } > "$d/pengyos-webui.conf"
+    chmod 0644 "$d/pengyos-webui.conf"
+}
+
+remove_dropin() {
+    rm -rf "$UNIT_DIR/pengy-web@$1.service.d"
+}
+
+systemctl() {
+    if [ -n "$ROOT" ]; then
+        [ -x "$ROOT/usr/bin/systemctl" ] || die "no systemctl under $ROOT (see --root)"
+        "$ROOT/usr/bin/systemctl" "$@"
+        return $?
+    fi
+    command -v systemctl >/dev/null 2>&1 || die "no systemctl on this system"
+    command systemctl "$@"
+}
+
+# --- on / off ---------------------------------------------------------------
+
+do_on() {
+    need_root
+    [ -x "$ROOT$BIN" ] || die "no $BIN in this image (Core ships no web UI)"
+    [ -n "$user" ] || user=${SUDO_USER:-}
+    [ -n "$user" ] || die "who? sudo $PROG on USER"
+    check_user "$user"
+    [ -z "$port" ] || valid_port "$port" || die "not a port: '$port'"
+    [ -z "$host" ] || valid_host "$host" || die "not a bind address: '$host'"
+    [ -n "$port" ] || port=$DEFAULT_PORT
+    [ -n "$host" ] || host=$DEFAULT_HOST
+
+    # One port is one process: a second user given a port someone already
+    # holds would only fail to bind, so say so instead of writing a unit that
+    # restarts in a loop.
+    for other in $(conf_users); do
+        [ "$other" = "$user" ] && continue
+        otherport=$(conf_record "$other" | cut -d' ' -f2)
+        [ "$otherport" = "$port" ] &&
+            die "port $port is already the UI for $other; give this one --port N"
+    done
+
+    # Rebuild the state: every other user's record, plus this one.
+    set --
+    for other in $(conf_users); do
+        [ "$other" = "$user" ] && continue
+        rec=$(conf_record "$other")
+        [ -n "$rec" ] || continue
+        set -- "$@" "$rec"
+    done
+    set -- "$@" "$user $port $host"
+    write_conf "$@"
+
+    write_dropin "$user" "$port" "$host"
+    systemctl daemon-reload
+    systemctl enable --now "$(unit_name "$user")"
+    # enable --now does not restart a unit that is already running, and `on`
+    # is also how a port gets changed, so apply what was just written.
+    systemctl restart "$(unit_name "$user")"
+
+    echo "pengy web UI: on for $user, http://$host:$port (pengy-web@$user.service, from this boot and every boot)"
+    [ "$host" = "$DEFAULT_HOST" ] && return 0
+    echo "  WARNING: bound on $host, and the UI has no login - anyone who can"
+    echo "  reach that address runs tools as $user. On Server, the port also"
+    echo "  has to be opened in /etc/nftables.conf to be seen off the machine."
+}
+
+do_off() {
+    need_root
+    [ -n "$user" ] || user=${SUDO_USER:-}
+    [ -n "$user" ] || die "who? sudo $PROG off USER"
+    valid_user "$user"
+    [ -z "$port" ] || die "$PROG off takes no --port"
+    [ -z "$host" ] || die "$PROG off takes no --host"
+
+    set --
+    for other in $(conf_users); do
+        [ "$other" = "$user" ] && continue
+        rec=$(conf_record "$other")
+        [ -n "$rec" ] || continue
+        set -- "$@" "$rec"
+    done
+    write_conf "$@"
+
+    # Idempotent: a unit that is not enabled and not running is a no-op.
+    systemctl disable --now "$(unit_name "$user")" 2>/dev/null ||
+        systemctl stop "$(unit_name "$user")" 2>/dev/null ||
+        true
+    remove_dropin "$user"
+    systemctl daemon-reload
+
+    left=$(conf_users)
+    if [ -z "$left" ]; then
+        echo "pengy web UI: off (no user has it enabled)"
+    else
+        echo "pengy web UI: off for $user; still on for: $(echo "$left" | tr '\n' ' ')"
+    fi
+}
+
+# --- status -----------------------------------------------------------------
+
+do_status() {
+    enabled=$(conf_users)
+    users_json=""
+    human=""
+    for u in $enabled; do
+        rec=$(conf_record "$u")
+        [ -n "$rec" ] || continue
+        # shellcheck disable=SC2086
+        set -- $rec
+        p=$2
+        h=$3
+        unit=$(systemctl is-active "$(unit_name "$u")" 2>/dev/null || true)
+        [ -n "$unit" ] || unit=unknown
+        boot=$(systemctl is-enabled "$(unit_name "$u")" 2>/dev/null || true)
+        [ -n "$boot" ] || boot=unknown
+        users_json="$users_json{\"user\":\"$u\",\"port\":$p,\"host\":\"$h\",\"unit\":\"$unit\",\"boot\":\"$boot\",\"url\":\"http://$h:$p\"},"
+        human="$human  $u  http://$h:$p  unit $unit, $boot at boot
+"
+    done
+
+    # A symlink in multi-user.target.wants is not in the state file: report it
+    # instead of pretending the file is the whole truth.
+    stray_json=""
+    stray_human=""
+    for w in "$WANTS_DIR"/pengy-web@*.service; do
+        [ -e "$w" ] || [ -L "$w" ] || continue
+        su=${w##*@}
+        su=${su%.service}
+        case " $enabled " in
+            *" $su "*) continue ;;
+        esac
+        stray_json="$stray_json\"$su\","
+        stray_human="$stray_human $su"
+    done
+
+    if [ "$JSON" = 1 ]; then
+        printf '{"tool":"%s","enabled":%s,"default_port":%s,"default_host":"%s","users":[%s],"hand_enabled":[%s]}\n' \
+            "$PROG" \
+            "$([ -n "$enabled" ] && echo true || echo false)" \
+            "$DEFAULT_PORT" \
+            "$DEFAULT_HOST" \
+            "${users_json%,}" \
+            "${stray_json%,}"
+        return 0
+    fi
+
+    if [ -n "$enabled" ]; then
+        echo "pengy web UI: on ($(echo "$enabled" | wc -l | tr -d ' ') user(s))"
+        printf '%s' "$human"
+        echo "  The UI has no login: anyone who can reach the port runs tools as that user."
+        for u in $enabled; do
+            h=$(conf_record "$u" | cut -d' ' -f3)
+            if [ "$h" = "$DEFAULT_HOST" ]; then
+                echo "  $u: bind 127.0.0.1 - this machine only."
+            else
+                echo "  $u: WARNING bound on $h - not loopback, and not authenticated."
+            fi
+        done
+    else
+        echo "pengy web UI: off (no user has it enabled)"
+        echo "  sudo $PROG on"
+    fi
+    if [ -n "$stray_human" ]; then
+        echo "  enabled by hand, not by $PROG:$stray_human"
+    fi
+    return 0
+}
+
+# --- arguments --------------------------------------------------------------
+
+cmd=""
+user=""
+port=""
+host=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --json) JSON=1; shift ;;
+        --port) [ $# -ge 2 ] || die "--port needs a value"; port=$2; shift 2 ;;
+        --port=*) port=${1#--port=}; shift ;;
+        --host) [ $# -ge 2 ] || die "--host needs a value"; host=$2; shift 2 ;;
+        --host=*) host=${1#--host=}; shift ;;
+        --root) [ $# -ge 2 ] || die "--root needs a value"; ROOT=$2; shift 2 ;;
+        --root=*) ROOT=${1#--root=}; shift ;;
+        -*) die "no such option: $1 (see --help)" ;;
+        *)
+            # The first bare word is the subcommand, the next one is USER.
+            if [ -z "$cmd" ]; then
+                case "$1" in
+                    status|on|off) cmd=$1; shift ;;
+                    *) die "no such command: '$1' (status | on | off, see --help)" ;;
+                esac
+            elif [ -n "$user" ]; then
+                die "too many arguments (see --help)"
+            else
+                user=$1
+                shift
+            fi
+            ;;
+    esac
+done
+[ -n "$cmd" ] || cmd=status
+if [ "$cmd" = status ] && [ -n "$user" ]; then
+    die "status takes no user (see --help)"
+fi
+ROOT=${ROOT%/}
+[ -z "$ROOT" ] || [ -d "$ROOT" ] || die "no such directory: $ROOT"
+CONF_PATH=$ROOT/etc/pengyos/webui.conf
+UNIT_DIR=$ROOT/etc/systemd/system
+WANTS_DIR=$ROOT/etc/systemd/system/multi-user.target.wants
+
+case "$cmd" in
+    on) do_on ;;
+    off) do_off ;;
+    status) do_status ;;
+esac

@@ -17,6 +17,49 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — `pengyos-webui`: the Pengy web UI, on and off per user
+
+`pengy-web` has been in the Server and Desktop images for a while, and the only
+way to run it as yourself at boot was to hand-write a unit. `sudo
+pengyos-webui on [USER]` now does it: the systemd system template
+`pengy-web@.service` runs `/usr/bin/pengy-web` as that user, in their home, from
+boot, answering on `http://127.0.0.1:5000`; `off` stops it and takes it out of
+the boot; `status [--json]` says what is running, on what URL and on what
+address. `pengyos-webui status` works unprivileged.
+
+It runs as the human because the UI *is* the agent as that person: `User=%i`,
+`WorkingDirectory=%h`, and deliberately **no** `DynamicUser` and **no**
+`ProtectHome` — those hide `~/.config/pengy`, `~/skills` and `~/.secrets`, which
+is all of the agent's state. It is a system unit, not a user unit, so it comes
+up on a headless Server where nobody has logged in and no session exists, with
+no `loginctl enable-linger` to explain.
+
+The UI has **no login** and exposes `run_bash` and `run_python`: whoever can
+reach the port runs tools as that user. So the bind stays `127.0.0.1` — the only
+default — and `--host` is a deliberate, documented, unauthenticated network
+bind that has to be typed on purpose and that `status` prints every time. State
+is `/etc/pengyos/webui.conf` plus a per-user drop-in and the enable symlink:
+all Tier-1, all under the `/etc` overlay, nothing written under the read-only
+`/usr`. Server and Desktop get one copy from the Server layer; Core ships
+neither the tool nor the unit.
+
+`tools/pengyos-webui` is the tool's own project (spec, README, `verify.toml`)
+and its suite drives the real script against a `--root` sandbox with a fake
+`systemctl` — no root, no systemd, no build. It asserts the unit byte for byte,
+the state file, idempotency, the port-collision rule, the validation of user
+names / ports / bind addresses, the root guard, and unprivileged `status`.
+
+### Removed — the PengyR `pengy-web.service` in `pengy-agent-package`
+
+It ran `--config /etc/pengy/settings.json` (this binary takes `--config-dir`),
+set `DynamicUser=yes` and `ProtectHome=yes` (hiding the agent's whole state),
+and wanted `multi-user.target` as root. The live recipe
+(`buildroot-external/package/pengy/pengy.mk`) never installed it, so no image
+shipped it and nothing ran it. Serving the UI is per-user and opt-in, so the
+unit lives with the tool that enables it. `pengy-agent-package` 0.2.0: the
+vendored recipe installs the two binaries and the default config and nothing
+else, and its suite asserts that.
+
 ### Added — the Server catches up on what an unattended box needs
 
 Set against its user stories, the 26.10.40 Server lacked things the Desktop had

@@ -103,6 +103,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-install` | the install engine (`disks`, `image`) — what the installers drive |
 | `pengyos-install-tui` | the console installer (`install`) |
 | `pengyos-autologin on\|off` | Desktop: skip the login screen at boot and the lock screen on sleep/idle |
+| `pengyos-webui status\|on\|off` | Server/Desktop: serve the Pengy web UI as a user, on `http://127.0.0.1:5000` (no login — see Gotchas) |
 | `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers |
 | `distrobox create\|enter` | a full distro userspace sharing `$HOME` |
 | `flatpak install flathub <app>` | third-party GUI apps (Desktop) |
@@ -135,6 +136,14 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
 
 ## Gotchas
 
+- **`pengyos-webui` serves a UI with no login.** `sudo pengyos-webui on
+  [USER]` runs `pengy-web` as that user at boot, on `127.0.0.1:5000`; `off`
+  stops it, `status [--json]` says what is running. The UI has no login and
+  exposes `run_bash`/`run_python`, so anyone who can reach the port runs tools
+  as that user: loopback is the only default, `--host` is an unauthenticated
+  network bind that has to be typed on purpose, and `status` prints the bind.
+  State is `/etc/pengyos/webui.conf` (Tier 1, survives updates). Core has no
+  `pengy-web` and no `pengyos-webui`.
 - **`/usr` is read-only.** A "fix" that edits `/usr` cannot work; the mutable
   surface is `/etc` (Tier 1) and the data partition.
 - **Scheduling is systemd timers; there is no cron or `at`.** A recurring job

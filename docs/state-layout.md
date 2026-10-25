@@ -134,6 +134,33 @@ every future image version of it. A `pengyos-etc-diff` tool should list upper
 files whose image copy changed since they were written, so an update can report
 "you kept your old `nftables.conf`; the image's changed".
 
+### Tier-1 state a command writes: `pengyos-webui` (2026-10-25)
+
+The pattern for a per-machine setting that a command turns on and off: the
+state, the service config and the enablement all land in the `/etc` upper
+layer, so an OS update never touches them and `off` removes all of it.
+
+`sudo pengyos-webui on [USER]` (Server and Desktop; Core has no `pengy-web`)
+writes three things and nothing else:
+
+| Path | What |
+|---|---|
+| `/etc/pengyos/webui.conf` | the record: one `user=NAME PORT HOST` line per enabled user |
+| `/etc/systemd/system/pengy-web@USER.service.d/pengyos-webui.conf` | that user's port and bind, as `Environment=` |
+| `/etc/systemd/system/multi-user.target.wants/pengy-web@USER.service` | the `systemctl enable` symlink |
+
+The unit itself (`pengy-web@.service`, a system template, `%i` = the user) ships
+in the image at `board/server/rootfs-overlay/etc/systemd/system/`; nothing is
+written under the read-only `/usr` at runtime. It runs as `%i` in `%h` — no
+`DynamicUser`, no `ProtectHome`, because the agent has to see that user's
+`~/.config/pengy`, `~/skills` and `~/.secrets` — and it is a system unit so it
+comes up at boot on a headless Server with no session and no `enable-linger`.
+
+The state is worth naming because the UI has **no login** and exposes
+`run_bash`/`run_python`: the bind address in that file says who can run tools as
+that user. The default is `127.0.0.1`; a non-loopback bind is only ever there
+because someone typed `--host`. `pengyos-webui status` prints it.
+
 ## How install works (implemented: `pengyos-install image`)
 
 The installer:

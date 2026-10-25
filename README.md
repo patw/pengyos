@@ -65,7 +65,10 @@ boot returns to the old slot by itself. Core can't update in place yet.
   since 2026-10-05 (26.10.8).
 - **The assistant ships in the image.** Server carries `pengy-web`, Desktop carries
   the Pengy app, and the same agent watches for updates and triages CVEs. Ignore it
-  and the OS still runs; nothing about it is required.
+  and the OS still runs; nothing about it is required. To serve the web UI as
+  yourself at boot: `sudo pengyos-webui on` (then `pengyos-webui status`, and
+  `off` to stop it). It answers on `http://127.0.0.1:5000` — this machine only,
+  which matters, because the UI has no login and runs tools as that user.
 
 ## What isn't ready
 
@@ -108,7 +111,7 @@ what cannot be reproduced from this repo at all.
 
 ## The repo
 
-`tools/` holds 88 directories, each a tested project with its own spec and test
+`tools/` holds 87 directories, each a tested project with its own spec and test
 suite (79 with tests). `buildroot-external/` is our Buildroot tree: boards, defconfigs,
 authored recipes. `scripts/` has the host helpers, `docs/` the design record, and
 `.github/workflows/` runs the whole gate on every push.

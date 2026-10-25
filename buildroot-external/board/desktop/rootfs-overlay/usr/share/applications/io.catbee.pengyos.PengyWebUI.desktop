@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Pengy Web UI
+GenericName=Pengy assistant in a browser
+Comment=Open the Pengy web UI on this machine (http://127.0.0.1:5000); turn it on first with sudo pengyos-webui on
+Exec=open http://127.0.0.1:5000
+Icon=pengy
+Terminal=false
+Categories=System;Utility;
+Keywords=pengy;web;ui;agent;assistant;chat;browser;localhost;loopback;5000;
+StartupNotify=true
