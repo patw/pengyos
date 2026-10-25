@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-appimage"
-version = "0.1.0"
-description = "Inspect, extract, integrate, and sandbox AppImages under PengyOS."
+version = "0.2.0"
+description = "Inspect AppImages, add them to the app launcher, and find the libraries they need."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Pat Wendorf" }]
 keywords = ["appimage", "pengyos", "sandbox", "bubblewrap", "linux", "desktop"]

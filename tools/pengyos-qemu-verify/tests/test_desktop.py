@@ -241,6 +241,33 @@ def test_desktop_missing_required_binary_is_reported(tmp_path, capsys, monkeypat
     assert "is not installed" in capsys.readouterr().err
 
 
+def test_qemu_that_exits_early_is_reported_as_such(tmp_path):
+    """A QEMU without the SDL display (no qemu-system-gui) exits before it opens
+    the serial socket. That used to surface as "failed to launch a required
+    binary: [Errno 2]", from the socket connect, which sent the reader looking
+    for a missing program."""
+    img = tmp_path / "stick.img"
+    img.write_bytes(b"\x00" * 1024)
+    code = tmp_path / "code.fd"
+    code.write_bytes(b"")
+    vars_fd = tmp_path / "vars.fd.in"
+    vars_fd.write_bytes(b"")
+    qemu = tmp_path / "qemu"
+    qemu.write_text("#!/bin/sh\n"
+                    "echo \"qemu-system-x86_64: Display 'sdl' is not available.\" >&2\n"
+                    "exit 1\n")
+    qemu.chmod(0o755)
+    with pytest.raises(D.DesktopCheckError) as exc:
+        D.run_desktop_check(
+            str(img), str(tmp_path / "out" / "o"),
+            timeout=8, xvfb_bin="true", ffmpeg_bin="true", qemu_bin=str(qemu),
+            ovmf_code=str(code), ovmf_vars=str(vars_fd),
+        )
+    msg = str(exc.value)
+    assert "QEMU exited early (exit 1)" in msg, msg
+    assert "Display 'sdl' is not available" in msg, msg
+
+
 # --- the plain live image: a session, without an installer ------------------
 #
 # 26.10.15 shipped a plain live desktop image that stopped at the greeter. The

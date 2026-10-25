@@ -20,8 +20,7 @@ env/
 htmlcov/
 .tox/
 
-# bubblewrap / extraction scratch output
-_appimage_extracted/
+# Real AppImages used for opt-in tests (PENGYOS_APPIMAGE_REAL)
 *.AppImage
 
 NEEDS.md.bak

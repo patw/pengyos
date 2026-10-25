@@ -17,6 +17,40 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — the libraries prebuilt apps expect from the host (Desktop)
+
+Prebuilt apps (AppImages, Playwright's Chromium) died at load on libraries the
+image did not ship, even though Xwayland had already pulled in most of the X
+client stack. Measured on 26.10.42: Chromium lacked NSS/NSPR and libXcomposite;
+Qt 6.5+ apps that do not bundle `libxcb-cursor` fail with a platform-plugin
+error, because Qt dlopens it. The Desktop now ships NSS/NSPR, libsecret (the
+keyring client, backed by oo7), the rest of the X client libraries (Xcomposite,
+Xcursor, Xinerama, Xft, Xpm, XScrnSaver) and the xcb-util family. Codecs, ICU,
+SDL and GTK2 stay out: apps bundle those. `features-required.txt` now fails the
+build if any of them goes missing. This does not make Chromium a supported
+browser engine.
+
+### Changed — `pengyos-appimage` is a small helper for AppImages that run in place (0.2.0)
+
+The tool could not read a single real AppImage: it parsed a metadata trailer
+the format does not have. It is rebuilt around how AppImages are used on
+PengyOS (run in place): `inspect` says what one is, `integrate` adds it to the
+app launcher where it sits (`--remove` undoes it), and `check` names the
+libraries it needs that the system lacks. It reads the payload in pure Python
+and starts no process; `extract` and the bubblewrap `run` are gone. The tool is
+not in any image yet.
+
+### Fixed — a build box on an installed PengyOS runs the full gate and the desktop check
+
+A trial move of the build host into a distrobox on an installed PengyOS Desktop
+NVIDIA machine (behotv) turned up two gaps. `provision-build-host.sh` now installs
+`qemu-system-gui`: without its SDL display, QEMU exits at once and
+`pengyos-qemu-verify desktop` fails. behoserver only had it because someone
+installed it by hand. `scripts/tests/test_pipewire_live_root.py` now hands
+`systemd-analyze` the real kernel command line (`SYSTEMD_PROC_CMDLINE`). In a
+container, systemd reads PID 1's command line instead, so on an installed system
+the test took the box for a live boot and failed.
+
 ### Changed — automatic login no longer asks for a password on wake
 
 - With automatic login on (the installer's "Log in automatically", or

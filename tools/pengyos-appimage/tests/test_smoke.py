@@ -1,9 +1,12 @@
-"""Smoke tests for the pengyos-appimage scaffold.
+"""Smoke tests: the package, the CLI wiring, and the no-execution invariant.
 
-These verify the package imports, the CLI parser wires up all four
-subcommands, the (not-yet-implemented) handlers raise an honest
-``NotYetImplementedError``, and the console entry point works.
+The invariant: the tool never runs or unpacks an AppImage. It has no reason to
+start a process at all, so the strongest test is to make every way of starting
+one raise, run all three commands against the sample AppImage (whose AppRun
+would write a poison file), and require that they succeed.
 """
+
+from __future__ import annotations
 
 import os
 import subprocess
@@ -14,106 +17,69 @@ import pytest
 
 from pengyos_appimage import __version__, cli
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SRC_DIR = PROJECT_ROOT / "src"
+POISON_PATH = Path("/tmp/PENGYOS_APPIMAGE_POISON")
 
 
 def test_package_has_version():
-    assert isinstance(__version__, str)
-    assert __version__
+    assert __version__.count(".") == 2
 
 
-def test_parser_registers_all_subcommands():
+def test_parser_registers_exactly_three_subcommands():
     parser = cli.build_parser()
-    # Each subcommand needs valid required args to parse; verify the dispatch
-    # target is set for every registered command.
-    cases = {
-        "inspect": ["inspect", "x.AppImage"],
-        "extract": ["extract", "x.AppImage", "--to", "/tmp/x"],
-        "integrate": ["integrate", "/tmp/app"],
-        "run": ["run", "/tmp/app"],
-    }
-    for cmd, argv in cases.items():
-        args = parser.parse_args(argv)
-        assert args.command == cmd
+    sub = next(a for a in parser._actions if a.dest == "command")
+    assert set(sub.choices) == {"inspect", "integrate", "check"}
+    assert set(cli._HANDLERS) == {"inspect", "integrate", "check"}
 
 
-def test_inspect_handler_is_implemented():
-    # ``inspect`` is now implemented: the handler must be the real one, not the
-    # placeholder that raises ``NotYetImplementedError``.
-    assert cli._HANDLERS["inspect"] is cli._cmd_inspect
-    import inspect as py_inspect
-
-    assert "NotYetImplementedError" not in py_inspect.getsource(cli._cmd_inspect)
-
-
-def test_all_four_handlers_are_implemented():
-    # All subcommands are now implemented: each handler is the real one, not the
-    # placeholder that raises ``NotYetImplementedError``.
-    import inspect as py_inspect
-
-    expected = {
-        "inspect": cli._cmd_inspect,
-        "extract": cli._cmd_extract,
-        "integrate": cli._cmd_integrate,
-        "run": cli._cmd_run,
-    }
-    for command, handler in expected.items():
-        assert cli._HANDLERS[command] is handler
-        assert "NotYetImplementedError" not in py_inspect.getsource(handler)
-
-
-def test_run_handler_builds_parser_with_sandbox_flags():
-    # ``run`` gained a documented bubblewrap profile: --sandbox / --no-sandbox.
-    parser = cli.build_parser()
-    args = parser.parse_args(["run", "--sandbox", "/tmp/app"])
-    assert args.command == "run"
-    assert args.sandbox is True
-    assert args.no_sandbox is False
-    args = parser.parse_args(["run", "--no-sandbox", "/tmp/app"])
-    assert args.no_sandbox is True
-    args = parser.parse_args(["run", "/tmp/app"])
-    # Default: sandboxed.
-    assert args.sandbox is False
-    assert args.no_sandbox is False
-
-
-def test_main_no_subcommand_prints_help():
-    # ``required=True`` on subparsers means no command -> argparse exits 2.
+def test_no_subcommand_is_a_usage_error():
     with pytest.raises(SystemExit) as exc:
         cli.main([])
     assert exc.value.code == cli.EXIT_USAGE
 
 
-def test_missing_required_to_arg_is_usage_error():
-    parser = cli.build_parser()
-    with pytest.raises(SystemExit) as exc:
-        parser.parse_args(["extract", "x.AppImage"])
-    assert exc.value.code == cli.EXIT_USAGE
-
-
 def test_cli_version_flag_via_module():
-    env = dict(os.environ, PYTHONPATH=str(SRC_DIR))
-    result = subprocess.run(
+    proc = subprocess.run(
         [sys.executable, "-m", "pengyos_appimage", "--version"],
-        capture_output=True,
-        text=True,
-        cwd=str(PROJECT_ROOT),
-        env=env,
+        capture_output=True, text=True,
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")},
     )
-    assert result.returncode == 0
-    assert __version__ in result.stdout
+    assert proc.returncode == 0
+    assert __version__ in proc.stdout
 
 
-def test_cli_help_flag_lists_all_subcommands():
-    env = dict(os.environ, PYTHONPATH=str(SRC_DIR))
-    result = subprocess.run(
-        [sys.executable, "-m", "pengyos_appimage", "--help"],
-        capture_output=True,
-        text=True,
-        cwd=str(PROJECT_ROOT),
-        env=env,
-    )
-    assert result.returncode == 0
-    for cmd in ("inspect", "extract", "integrate", "run"):
-        assert cmd in result.stdout
+@pytest.fixture
+def no_processes(monkeypatch):
+    def refuse(*args, **kwargs):
+        raise AssertionError(f"tried to start a process: {args!r}")
+
+    for name in ("run", "Popen", "call", "check_call", "check_output"):
+        monkeypatch.setattr(subprocess, name, refuse)
+    for name in ("system", "execv", "execve", "execvp", "execvpe", "posix_spawn",
+                 "posix_spawnp", "fork"):
+        if hasattr(os, name):
+            monkeypatch.setattr(os, name, refuse)
+
+
+def test_no_command_starts_a_process(sample_appimage, tmp_path, no_processes, capsys):
+    POISON_PATH.unlink(missing_ok=True)
+    assert cli.main(["inspect", str(sample_appimage)]) == cli.EXIT_OK
+    assert cli.main(["integrate", str(sample_appimage), "--dest", str(tmp_path)]) == cli.EXIT_OK
+    assert cli.main(["integrate", "--remove", str(sample_appimage), "--dest", str(tmp_path)]) == cli.EXIT_OK
+    assert cli.main(["check", str(sample_appimage), "--libdirs", str(tmp_path)]) == cli.EXIT_MISSING
+    assert not POISON_PATH.exists()
+
+
+def test_nothing_is_unpacked(sample_appimage, tmp_path, monkeypatch):
+    # inspect and check write nothing anywhere; integrate writes only its
+    # entry and icon under --dest.
+    monkeypatch.chdir(tmp_path)
+    cli.main(["inspect", str(sample_appimage)])
+    cli.main(["check", str(sample_appimage), "--libdirs", str(tmp_path)])
+    assert list(tmp_path.iterdir()) == []
+    dest = tmp_path / "share"
+    cli.main(["integrate", str(sample_appimage), "--dest", str(dest)])
+    written = sorted(str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file())
+    assert written == [
+        "applications/appimage-sample.desktop",
+        "icons/hicolor/16x16/apps/appimage-sample.png",
+    ]

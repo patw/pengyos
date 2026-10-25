@@ -18,6 +18,7 @@ pair, so ``pengyos.data`` covers ``pengyos.data=4``.
 Run: python3 -m pytest scripts/tests -q   (from the repo root)
 """
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -56,6 +57,12 @@ def test_the_dropins_are_identical():
     assert len(texts) == 1, sorted(texts)
 
 
+def _analyze(cmdline):
+    """In a container (a distrobox build box) systemd reads PID 1's command line,
+    not /proc/cmdline, so hand it the host's kernel line explicitly."""
+    return dict(os.environ, SYSTEMD_PROC_CMDLINE=cmdline)
+
+
 @pytest.mark.skipif(shutil.which("systemd-analyze") is None,
                     reason="systemd-analyze not available")
 def test_the_condition_agrees_with_this_hosts_cmdline():
@@ -66,7 +73,7 @@ def test_the_condition_agrees_with_this_hosts_cmdline():
     live = "pengyos.data=" not in cmdline
     r = subprocess.run(["systemd-analyze", "condition",
                         "ConditionKernelCommandLine=|!pengyos.data"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, env=_analyze(cmdline))
     assert (r.returncode == 0) == live, r.stdout + r.stderr
 
 
@@ -79,5 +86,5 @@ def test_the_positive_form_is_the_complement():
     live = "pengyos.data=" not in cmdline
     r = subprocess.run(["systemd-analyze", "condition",
                         "ConditionKernelCommandLine=pengyos.data"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, env=_analyze(cmdline))
     assert (r.returncode == 0) == (not live), r.stdout + r.stderr

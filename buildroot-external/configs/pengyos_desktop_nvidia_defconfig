@@ -664,6 +664,41 @@ BR2_PACKAGE_LIBEPOXY=y
 BR2_PACKAGE_LIBGLVND=y
 BR2_PACKAGE_MESA3D_OPENGL_GLX=y
 
+# --- Prebuilt apps (AppImages): the libraries they link but do not bundle ----
+# Xwayland already pulls in most of the X client stack, but not all of it, so a
+# prebuilt X11 binary still died at load. Measured on beholaptop (26.10.42,
+# 2026-10-25): Playwright's Chromium lacked libnss3/libnssutil3/libsmime3/
+# libnspr4/libXcomposite; Qt >= 6.5 dlopens libxcb-cursor from its xcb platform
+# plugin, so a Qt 6 AppImage that doesn't bundle it fails with a platform-plugin
+# error, not a missing library. Well-built AppImages bundle their toolkit; these
+# are the libraries they expect the host to provide. Rule for adding more:
+# small linkage glue only (no daemon, no codecs, no language runtimes; the app
+# ships those). This does not make Chromium a supported browser engine; see
+# docs/browser-engine-viability.md (Band 5, Flatpak).
+# - NSS/NSPR: Chromium and Electron TLS/cert code (libfreebl3, libsoftokn3 and
+#   libnssckbi come with it; NSS dlopens them).
+BR2_PACKAGE_LIBNSS=y
+# - libsecret: the keyring client Chromium, Electron and VS Code dlopen. It talks
+#   to the oo7 Secret Service below; without it they store secrets in plain text.
+BR2_PACKAGE_LIBSECRET=y
+# - X client libraries Xwayland did not pull in. libXss: older Electron links it
+#   directly (current Chromium no longer does). Xft/Xpm/Xcursor/Xinerama: older
+#   X11 toolkits and apps.
+BR2_PACKAGE_XLIB_LIBXCOMPOSITE=y
+BR2_PACKAGE_XLIB_LIBXCURSOR=y
+BR2_PACKAGE_XLIB_LIBXINERAMA=y
+BR2_PACKAGE_XLIB_LIBXFT=y
+BR2_PACKAGE_XLIB_LIBXPM=y
+BR2_PACKAGE_XLIB_LIBXSCRNSAVER=y
+# - xcb-util family: Qt 6's xcb plugin (cursor, icccm, image, keysyms,
+#   render-util), SDL and other xcb clients. -wm provides icccm and ewmh.
+BR2_PACKAGE_XCB_UTIL=y
+BR2_PACKAGE_XCB_UTIL_CURSOR=y
+BR2_PACKAGE_XCB_UTIL_IMAGE=y
+BR2_PACKAGE_XCB_UTIL_KEYSYMS=y
+BR2_PACKAGE_XCB_UTIL_RENDERUTIL=y
+BR2_PACKAGE_XCB_UTIL_WM=y
+
 # --- GPU firmware (linux-firmware subset) ------------------------------------
 # Without firmware i915 logs adlp_dmc.bin/tgl_guc_70.bin -ENOENT and declares
 # the GPU wedged (no hardware GL). i915 is a module (=m in linux.fragment) so it

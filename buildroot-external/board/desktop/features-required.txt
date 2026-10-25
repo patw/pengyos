@@ -44,3 +44,15 @@ exists    usr/lib/udev/rules.d/70-pengyos-rgb.rules  # SMBus + Super I/O access 
 # --- Printing: the two paths a home printer actually arrives by ---------------
 exec-any  cupsd                                    # BR2_PACKAGE_CUPS
 exec-any  ipp-usb                                  # driverless/IPP-over-USB printers — BR2_PACKAGE_IPP_USB
+
+# --- Prebuilt apps (AppImages): libraries they link or dlopen from the host ----
+# Nothing on the image links these, so a layer edit that drops one is silent
+# until an app fails to start. One soname per family is enough to catch it.
+exists    usr/lib/libnss3.so                       # Chromium/Electron — BR2_PACKAGE_LIBNSS
+exists    usr/lib/libsoftokn3.so                   # NSS dlopens its crypto token — BR2_PACKAGE_LIBNSS
+exists    usr/lib/libnspr4.so                      # BR2_PACKAGE_LIBNSPR (selected by LIBNSS)
+exists    usr/lib/libsecret-1.so.0                 # keyring client Electron dlopens — BR2_PACKAGE_LIBSECRET
+exists    usr/lib/libXcomposite.so.1               # Chromium/Electron — BR2_PACKAGE_XLIB_LIBXCOMPOSITE
+exists    usr/lib/libxcb-cursor.so.0               # Qt >= 6.5 xcb plugin dlopens it — BR2_PACKAGE_XCB_UTIL_CURSOR
+exists    usr/lib/libxcb-icccm.so.4                # Qt 6 xcb plugin — BR2_PACKAGE_XCB_UTIL_WM
+exists    usr/lib/libxcb-keysyms.so.1              # Qt 6 xcb plugin — BR2_PACKAGE_XCB_UTIL_KEYSYMS

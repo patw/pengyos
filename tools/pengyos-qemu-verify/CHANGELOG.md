@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixtures were captured from images that still started it, so that one line is
   removed from each; the rest of each log is as captured.
 
+### Fixed
+- **`desktop` blamed a missing binary when QEMU died at launch.** A QEMU without
+  the SDL display (no `qemu-system-gui`) exits before it opens the serial socket.
+  The connect then failed with ENOENT, and the check reported "failed to launch a
+  required binary: [Errno 2]". It now says "QEMU exited early (exit N)", quotes
+  the last line of `<out>.qemu.log`, and gives up as soon as QEMU exits instead of
+  waiting out the socket timeout.
+
 ## [0.6.1] - 2026-10-12
 
 ### Fixed

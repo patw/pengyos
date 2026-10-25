@@ -1,42 +1,30 @@
 """Command-line interface for pengyos-appimage.
 
-This CLI intentionally never executes an AppImage's embedded hooks. It only:
+Three commands, none of which executes or unpacks the AppImage:
 
-* ``inspect``  -- read the AppImage type and extract the ``.desktop`` + icon
-                  WITHOUT executing it (squashfs/offset parsing or
-                  ``--appimage-extract`` into a temp dir).
-* ``extract``  -- extract the AppImage to a prefix and validate its structure.
-* ``integrate``-- generate a ``.desktop`` file, icon, and mime entries.
-* ``run``      -- launch the extracted application under a bubblewrap sandbox.
-
-All four subcommand handlers are wired here so the parser is real and
-dispatchable. Handlers that are not yet implemented raise
-:class:`NotYetImplementedError` (which the CLI turns into an exit code of
-``3``). This is an honest placeholder, not a stub that pretends to work.
+* ``inspect``   -- what the AppImage is: type, arch, compression, update info,
+                   signature, and the ``.desktop`` entry and icon it carries.
+* ``integrate`` -- add it to the app launcher in place (``--remove`` undoes it).
+* ``check``     -- name the libraries it needs that this system lacks.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
-from typing import cast
 
 from . import __version__
 
 # Exit codes:
-#   0  success (or help printed with no subcommand)
-#   1  usage / unexpected error
+#   0  success (check: nothing missing)
+#   1  error (unreadable file, not an AppImage, ...)
 #   2  argparse usage error
-#   3  feature not yet implemented
-
+#   4  check: one or more libraries missing
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_USAGE = 2
-EXIT_NOT_IMPLEMENTED = 3
-
-
-class NotYetImplementedError(RuntimeError):
-    """Raised by a subcommand whose implementation has not been written yet."""
+EXIT_MISSING = 4
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,123 +32,77 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pengyos-appimage",
         description=(
-            "Inspect, extract, integrate, and sandbox AppImages under PengyOS. "
-            "Never executes an AppImage's embedded hooks."
+            "Inspect AppImages, add them to the app launcher, and find the "
+            "libraries they need. Never runs or unpacks an AppImage."
         ),
     )
     parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
+        "--version", action="version", version=f"%(prog)s {__version__}"
     )
-    subparsers = parser.add_subparsers(
-        dest="command", metavar="<command>", required=True
-    )
+    sub = parser.add_subparsers(dest="command", metavar="<command>", required=True)
 
-    # inspect: read type + .desktop + icon WITHOUT executing the AppImage.
-    inspect_parser = subparsers.add_parser(
+    p = sub.add_parser(
         "inspect",
-        help="read the AppImage type and extract the .desktop + icon without executing it",
-        description=(
-            "Read the AppImage type and extract the .desktop + icon WITHOUT "
-            "executing it."
-        ),
+        help="show what an AppImage is, without running it",
+        description="Show the AppImage's type, update info, signature, .desktop entry and icon.",
     )
-    inspect_parser.add_argument(
-        "appimage", help="path to the .AppImage file to inspect"
-    )
-    inspect_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="emit the inspection report as JSON",
-    )
+    p.add_argument("appimage", help="path to the .AppImage file")
+    p.add_argument("--json", action="store_true", help="emit the report as JSON")
 
-    # extract: extract to a prefix and validate structure.
-    extract_parser = subparsers.add_parser(
-        "extract",
-        help="extract the AppImage to a prefix and validate structure",
-        description="Extract the AppImage to a prefix and validate its structure.",
-    )
-    extract_parser.add_argument("appimage", help="path to the .AppImage file")
-    extract_parser.add_argument(
-        "--to", required=True, metavar="DIR", help="destination prefix directory"
-    )
-
-    # integrate: generate .desktop + icon + mime entries.
-    integrate_parser = subparsers.add_parser(
+    p = sub.add_parser(
         "integrate",
-        help="generate a .desktop file, icon, and mime entries",
-        description="Generate a .desktop file, icon, and mime entries for an extracted app.",
-    )
-    integrate_parser.add_argument(
-        "app_dir", help="path to the extracted application directory"
-    )
-    integrate_parser.add_argument(
-        "--dest",
-        default=None,
-        metavar="DIR",
-        help=(
-            "directory to write integration entries into "
-            "(defaults to $XDG_DATA_HOME/applications)"
+        help="add an AppImage to the app launcher (where it is)",
+        description=(
+            "Write a launcher entry and icon for the AppImage under the XDG data "
+            "home. The entry runs the AppImage from where it is now; move it and "
+            "integrate again."
         ),
     )
+    p.add_argument("appimage", help="path to the .AppImage file")
+    p.add_argument(
+        "--remove", action="store_true",
+        help="remove the entry and icon written for this path instead",
+    )
+    p.add_argument(
+        "--dest", default=None, metavar="DIR",
+        help="XDG data home to write under (default: $XDG_DATA_HOME or ~/.local/share)",
+    )
+    p.add_argument("--json", action="store_true", help="emit the report as JSON")
 
-    # run: launch under a bubblewrap sandbox.
-    run_parser = subparsers.add_parser(
-        "run",
-        help="run the extracted application under a bubblewrap sandbox",
-        description="Run the extracted application under a bubblewrap sandbox.",
+    p = sub.add_parser(
+        "check",
+        help="name the libraries an AppImage needs that this system lacks",
+        description=(
+            "Read every ELF object in the payload and report the libraries "
+            "neither the AppImage nor this system provides. Exit status 4 when "
+            "something is missing."
+        ),
     )
-    run_parser.add_argument(
-        "app_dir", help="path to the extracted application directory"
+    p.add_argument("appimage", help="path to the .AppImage file")
+    p.add_argument(
+        "--libdirs", nargs="+", metavar="DIR", default=None,
+        help="host library directories (default: the loader's, from /etc/ld.so.conf)",
     )
-    run_parser.add_argument(
-        "--sandbox",
-        action="store_true",
-        help="enforce the bubblewrap sandbox (the default; see --no-sandbox to relax)",
-    )
-    run_parser.add_argument(
-        "--no-sandbox",
-        action="store_true",
-        help="run WITHOUT the bubblewrap sandbox (insecure; prefer --sandbox)",
-    )
-    run_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="emit the run report as JSON",
-    )
-
+    p.add_argument("--json", action="store_true", help="emit the report as JSON")
     return parser
 
 
 def _cmd_inspect(args: argparse.Namespace) -> int:
-    """Implement the ``inspect`` subcommand."""
-    import json
-
     from . import inspect as inspector
 
     try:
-        result = inspector.inspect_appimage(args.appimage)
+        r = inspector.inspect_appimage(args.appimage)
     except inspector.InspectionError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR
-
     if args.json:
-        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
-    else:
-        _print_inspection_report(result)
-    return EXIT_OK
-
-
-def _print_inspection_report(result: "InspectResult") -> None:
-    """Render an inspection report as human-readable text."""
-    from .inspect import InspectResult
-
-    r = cast("InspectResult", result)
-    print(f"Format:   {r.format}")
+        print(json.dumps(r.to_dict(), indent=2, sort_keys=True))
+        return EXIT_OK
     print(f"Type:     {r.type}")
     print(f"Arch:     {r.arch}")
-    print(f"Payload:  offset {r.payload_offset}")
+    print(f"Payload:  squashfs ({r.compression}) at offset {r.payload_offset}")
+    print(f"Update:   {r.update_info or '(none)'}")
+    print(f"Signed:   {'yes' if r.signed else 'no'}")
     print("Desktop:")
     print(f"  Path: {r.desktop.path}")
     print(f"  Name: {r.desktop.name}")
@@ -168,122 +110,79 @@ def _print_inspection_report(result: "InspectResult") -> None:
     print(f"  Exec: {r.desktop.exec}")
     print(f"  Type: {r.desktop.type}")
     if r.icon.found:
-        print(f"Icon:     found {r.icon.path} ({r.icon.size} bytes)")
+        print(f"Icon:     {r.icon.path} ({r.icon.size} bytes)")
     else:
         print("Icon:     not found")
-
-
-def _cmd_extract(args: argparse.Namespace) -> int:
-    """Implement the ``extract`` subcommand."""
-    from . import extract as extractor
-
-    try:
-        result = extractor.extract_appimage(args.appimage, args.to)
-    except extractor.ExtractError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_ERROR
-
-    print(f"Extracted to {result.prefix}")
-    print(f"App entry:  {result.app_entry or '(none)'}")
-    print(f"Desktop:    {result.desktop or '(none)'}")
-    print(f"Root dir:   {result.root_directory or '(unspecified)'}")
-    print(f"Files:      {len(result.files)} extracted")
-    if result.warnings:
-        print("Warnings:")
-        for warning in result.warnings:
-            print(f"  - {warning}")
-    else:
-        print("Structure OK.")
     return EXIT_OK
 
 
 def _cmd_integrate(args: argparse.Namespace) -> int:
-    """Implement the ``integrate`` subcommand."""
     from . import integrate as integrator
 
+    if args.remove:
+        removed = integrator.remove_integration(args.appimage, args.dest)
+        if args.json:
+            print(json.dumps({"removed": [str(p) for p in removed]}, indent=2))
+        elif removed:
+            for p in removed:
+                print(f"Removed {p}")
+        else:
+            print(f"Nothing was integrated for {args.appimage}")
+        return EXIT_OK
+
     try:
-        result = integrator.integrate_app(args.app_dir, args.dest)
+        r = integrator.integrate_appimage(args.appimage, args.dest)
     except integrator.IntegrateError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR
-
-    print(f"Integrated {result.app_dir}")
-    print(f"Destination: {result.dest}")
-    print(f"Desktop:     {result.desktop_path or '(none)'}")
-    print(f"Icon:        {result.icon_path or '(skipped)'}")
-    if result.mime_xml_path:
-        print(f"MIME:        {result.mime_xml_path} ({', '.join(result.mime_types)})")
-    else:
-        print("MIME:        (none needed)")
-    if result.warnings:
-        print("Warnings:")
-        for warning in result.warnings:
-            print(f"  - {warning}")
+    if args.json:
+        print(json.dumps(r.to_dict(), indent=2, sort_keys=True))
+        return EXIT_OK
+    print(f"{'Replaced' if r.replaced else 'Added'} {r.desktop_path}")
+    print(f"Icon:  {r.icon_path or '(none installed)'}")
+    for warning in r.warnings:
+        print(f"warning: {warning}")
     return EXIT_OK
 
 
-def _cmd_run(args: argparse.Namespace) -> int:
-    """Implement the ``run`` subcommand."""
-    from . import run as runner
-
-    sandbox = not args.no_sandbox
-    if args.sandbox and args.no_sandbox:
-        print(
-            "error: --sandbox and --no-sandbox are mutually exclusive",
-            file=sys.stderr,
-        )
-        return EXIT_USAGE
+def _cmd_check(args: argparse.Namespace) -> int:
+    from . import check as checker
 
     try:
-        result = runner.run_app(
-            args.app_dir,
-            sandbox=sandbox,
-        )
-    except runner.RunError as exc:
+        r = checker.check_appimage(args.appimage, args.libdirs)
+    except checker.CheckError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR
-
     if args.json:
-        import json
-
-        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        print(json.dumps(r.to_dict(), indent=2, sort_keys=True))
+        return EXIT_OK if r.ok else EXIT_MISSING
+    foreign = f", {r.skipped_foreign} for other architectures skipped" if r.skipped_foreign else ""
+    print(f"Read {r.elf_count} {r.arch} ELF objects{foreign}.")
+    for path in r.unreadable:
+        print(f"warning: could not parse {path}")
+    if r.ok:
+        print("Every library they need is in the AppImage or on this system.")
         return EXIT_OK
-
-    print(f"Program:    {result.program or '(none)'}")
-    print(f"Binary:     {result.binary or '(none)'}")
-    print(f"Sandbox:    {'bubblewrap' if result.sandboxed else 'disabled (--no-sandbox)'}")
-    print(f"Return:     {result.returncode if result.returncode is not None else '(not run)'}")
-    if result.warnings:
-        print("Warnings:")
-        for warning in result.warnings:
-            print(f"  - {warning}")
-    return EXIT_OK
+    print(f"Missing {len(r.missing)}:")
+    for m in r.missing:
+        how = "loaded at run time by" if m.dlopen else "needed by"
+        print(f"  {m.soname}")
+        print(f"    {how}: {', '.join(m.needed_by)}")
+        print(f"    {m.hint}")
+    return EXIT_MISSING
 
 
-# Map subcommand -> handler. Kept as a table so dispatch is explicit and
-# testable (a missing mapping is a real wiring bug, not a silent no-op).
-_HANDLERS: dict[str, callable] = {
+_HANDLERS = {
     "inspect": _cmd_inspect,
-    "extract": _cmd_extract,
     "integrate": _cmd_integrate,
-    "run": _cmd_run,
+    "check": _cmd_check,
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point. Returns a process exit code."""
-    parser = build_parser()
-    args = parser.parse_args(argv)
-
-    handler = _HANDLERS[args.command]
-    try:
-        return handler(args)
-    except NotYetImplementedError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_NOT_IMPLEMENTED
-    except Exception as exc:  # pragma: no cover - defensive catch-all
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_ERROR
+    args = build_parser().parse_args(argv)
+    return _HANDLERS[args.command](args)
 
 
 if __name__ == "__main__":

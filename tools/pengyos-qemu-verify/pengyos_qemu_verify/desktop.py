@@ -330,6 +330,20 @@ def _ps_line(ps_section: str, name: str) -> "str | None":
 # --- live: Xvfb + QEMU + the console + a screenshot --------------------------
 
 
+def _qemu_gone(qemu: "subprocess.Popen", qemu_log: str) -> str:
+    """Say why QEMU never opened its serial console, from its own stderr."""
+    try:
+        with open(qemu_log, encoding="utf-8", errors="replace") as handle:
+            lines = [line.strip() for line in handle if line.strip()]
+    except OSError:
+        lines = []
+    last = f": {lines[-1]}" if lines else ""
+    code = qemu.poll()
+    if code is not None:
+        return f"QEMU exited early (exit {code}) before opening its serial console{last} (see {qemu_log})"
+    return f"QEMU never opened its serial console{last} (see {qemu_log})"
+
+
 def run_desktop_check(
     image: str,
     out_prefix: str,
@@ -406,9 +420,14 @@ def run_desktop_check(
                 stderr=qemu_log,
             )
         for _ in range(int(timeout / 4) or 1):
-            if os.path.exists(sock):
+            if os.path.exists(sock) or qemu.poll() is not None:
                 break
             time.sleep(0.2)
+        if not os.path.exists(sock):
+            # Without this, the connect below fails with ENOENT and reads as a
+            # missing binary; a QEMU that lacks the SDL display (no
+            # qemu-system-gui) exits right here.
+            raise DesktopCheckError(_qemu_gone(qemu, out_prefix + ".qemu.log"))
         conn = socket.socket(socket.AF_UNIX)
         conn.connect(sock)
         conn.settimeout(1)

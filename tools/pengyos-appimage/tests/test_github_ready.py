@@ -65,15 +65,15 @@ def test_readme_exists_and_is_authored():
     assert len(text) >= 2000, "README looks like a stub (too small)"
     assert text.lstrip().startswith("# pengyos-appimage")
     assert text.count("\n## ") >= 5, "README lacks a real section structure"
-    # All four subcommands are documented.
-    for cmd in ("inspect", "extract", "integrate", "run"):
+    # All three subcommands are documented.
+    for cmd in ("inspect", "integrate", "check"):
         assert cmd in text, f"README usage docs do not mention {cmd!r}"
     # The security invariant must be documented.
-    assert "hook" in text.lower()
+    assert "never runs or unpacks" in text.lower()
     # Install instructions are present.
     assert "pip install" in text
     # The documented flags are actually wired (see test_smoke.py).
-    for flag in ("--to", "--sandbox"):
+    for flag in ("--remove", "--libdirs", "--json"):
         assert flag in text, f"README usage docs do not mention {flag!r}"
 
 
@@ -157,8 +157,8 @@ def test_gitignore_covers_build_test_and_runtime_noise():
     assert "dist/" in text
     # Virtual environments.
     assert ".venv" in text or "venv/" in text
-    # The tool's runtime artifact: an extracted AppImage prefix.
-    assert "_appimage_extracted" in text
+    # Real AppImages used for opt-in tests must never be committed.
+    assert "*.AppImage" in text
 
 
 def test_gitignored_artifacts_are_not_committed():
@@ -189,7 +189,7 @@ def test_gitignored_artifacts_are_not_committed():
         or "__pycache__" in name
         or name.endswith((".egg-info",))
         or ".pytest_cache" in name
-        or name.endswith("_appimage_extracted")
+        or name.endswith(".AppImage")
     ]
     assert not offenders, f"gitignored artifacts are tracked: {offenders}"
 

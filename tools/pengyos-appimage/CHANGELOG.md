@@ -5,6 +5,59 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-10-25
+
+Rebuilt as a small helper for AppImages that run in place: `inspect`,
+`integrate`, `check`. It starts no process and unpacks nothing.
+
+### Removed
+
+- `extract` and `run`. An AppImage already runs in place on PengyOS; unpacking
+  each app to a prefix duplicated it with no update path, needed `unsquashfs`
+  (not in the image), and `run` skipped `AppRun`, which linuxdeploy-style
+  AppImages need to set up their library and plugin paths. Its sandbox gave the
+  app an empty home, so it could neither open nor save files.
+- The bsdtar/unsquashfs/7z extraction layer (bsdtar cannot read squashfs; 7z
+  takes no offset) and the MIME-package XML `integrate` wrote (an app must not
+  declare MIME types; `MimeType=` in its entry is what associates files).
+
+### Added
+
+- `check`: reads `DT_NEEDED` from every ELF object in the payload and names the
+  libraries neither the AppImage nor the host provides, which objects need
+  them, and a hint. A small table adds `dlopen()` dependencies (Qt 6's xcb
+  plugin → `libxcb-cursor.so.0`). Exit status 4 when anything is missing.
+- `squashfs.py`: a read-only squashfs 4.0 reader in pure Python (gzip, xz,
+  lzma, zstd via `compression.zstd`), bounded against hostile images. It
+  matches `unsquashfs` byte for byte on real AppImages.
+- `elf.py`: `DT_NEEDED`/`DT_SONAME` from headers, mapping `DT_STRTAB` through
+  the `PT_LOAD` segments (pengyos-debx treats it as a file offset, which reads
+  garbage in a non-PIE executable).
+- `integrate --remove`, matched on an `X-PengyOS-AppImage` marker so it works
+  after the AppImage is deleted.
+
+### Changed
+
+- `integrate` takes the AppImage itself, not an extracted directory, and points
+  every `Exec` (and `TryExec`) at its absolute path; before, it copied the
+  payload's `Exec=app %F`, which named a program that is not on `PATH`. The
+  entry is `appimage-<id>.desktop` and the icon goes to a size hicolor declares.
+- `inspect` reads the payload in place and also reports its compression.
+
+### Fixed
+
+- Every real AppImage failed with "suspicious trailer size 0". The parser
+  modelled a format that does not exist: an ELF *trailer* at the end of the
+  file carrying `X-AppImage-*` keys. A type-2 AppImage is the runtime ELF at
+  offset 0 (`AI\x02` in `e_ident`) followed by the squashfs; the tests passed
+  only because the fixture was built to the same invented layout. `trailer.py`
+  is replaced by `runtime.py`, which finds the payload as the runtime does
+  (`appimage_get_elf_size`), checks the `hsqs` magic there, and reads
+  `.upd_info` and `.sha256_sig`.
+- Fixtures are real tool output: the sample AppImage is the upstream
+  type2-runtime with a `mksquashfs` payload of `gcc`-built ELF objects, and the
+  squashfs fixtures cover every compressor and layout the reader handles.
+
 ## [0.1.0] — 2026-02-11
 
 ### Added

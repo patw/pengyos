@@ -26,8 +26,10 @@ PKGS=(
   tar gzip bzip2 xz-utils zstd ca-certificates
   # Boot testing (tools/pengyos-qemu-verify): QEMU+KVM, UEFI firmware, a software TPM
   qemu-system-x86 ovmf swtpm
-  # The Desktop session check (pengyos-qemu-verify desktop): virtual X + screenshot
-  xvfb ffmpeg
+  # The Desktop session check (pengyos-qemu-verify desktop): virtual X + screenshot;
+  # qemu-system-gui carries the SDL display the session check opens on that X
+  # (without it QEMU exits with "Display 'sdl' is not available")
+  xvfb ffmpeg qemu-system-gui
   # Repo tooling: tool test suites, the gate
   python3-pytest
 )

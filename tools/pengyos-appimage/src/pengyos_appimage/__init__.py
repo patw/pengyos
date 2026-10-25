@@ -7,6 +7,6 @@ reads static metadata, extracts files to a prefix, generates desktop/mime
 integration, and launches the extracted application under a bubblewrap sandbox.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = ["__version__"]

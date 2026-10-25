@@ -1,9 +1,8 @@
-"""Parse and (later) generate freedesktop ``.desktop`` entries.
+"""Parse and render freedesktop ``.desktop`` entries.
 
-This module reads and renders freedesktop ``.desktop`` files. :func:`parse_desktop`
-parses a document; :func:`render_entry` serialises a single ``[Desktop Entry]``
-block back to text (used by the ``integrate`` subcommand to emit a validated
-``.desktop`` file).
+:func:`parse_desktop` parses a document; :func:`render_entry` serialises one
+group and :func:`render_document` a whole document (the ``integrate``
+subcommand writes the payload's entry back out with its ``Exec`` rewritten).
 
 The freedesktop Desktop Entry Specification (https://specifications.freedesktop.org
 /desktop-entry-spec/) groups keys into sections delimited by ``[Name]`` headers.
@@ -73,6 +72,11 @@ def render_entry(entry: DesktopEntry) -> str:
     lines = [f"[{entry.section}]"]
     lines += [f"{key}={value}" for key, value in entry.keys.items()]
     return "\n".join(lines) + "\n"
+
+
+def render_document(doc: DesktopDocument) -> str:
+    """Serialize every group of *doc*, separated by blank lines."""
+    return "\n".join(render_entry(entry) for entry in doc.entries)
 
 
 class DesktopParseError(ValueError):
