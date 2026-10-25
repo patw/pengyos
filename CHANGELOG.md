@@ -60,6 +60,17 @@ unit lives with the tool that enables it. `pengy-agent-package` 0.2.0: the
 vendored recipe installs the two binaries and the default config and nothing
 else, and its suite asserts that.
 
+### Fixed — the Desktop launcher check could not see a program from an overlay
+
+`scripts/tests/test_cosmic_app_wiring.py` asserts every
+`usr/share/applications/*.desktop` runs a program the image installs, and it
+read only `board/desktop/post-build.sh`. A program that lands through
+`BR2_ROOTFS_OVERLAY` — `open`, `pengyos-autologin` — is installed too (the
+overlay is copied with `rsync -a`), so a launcher over one was reported as
+broken. The check now counts the core, server and desktop overlays' `usr/bin`
+alongside the post-build copies, with a test naming `open` so the blind spot
+does not come back.
+
 ### Added — the Server catches up on what an unattended box needs
 
 Set against its user stories, the 26.10.40 Server lacked things the Desktop had

@@ -30,6 +30,13 @@ APPS_DIR = (
     ROOT / "buildroot-external" / "board" / "desktop" / "rootfs-overlay"
     / "usr" / "share" / "applications"
 )
+# Every layer's overlay, in the order a Desktop build stacks them (core,
+# server, desktop). An overlay file lands on the target verbatim, so a program
+# in an overlay's usr/bin is as installed as one a post-build copies in.
+OVERLAY_BIN_DIRS = [
+    ROOT / "buildroot-external" / "board" / board / "rootfs-overlay" / "usr" / "bin"
+    for board in ("core", "server", "desktop")
+]
 
 # Launchers that point at something other than a PengyOS app binary. (The old
 # Printers entry, pengyos-printers.desktop, opened CUPS' web pages through
@@ -64,6 +71,22 @@ def _installed_bins() -> set[str]:
             loop = lm
         assert loop, f"post-build.sh: ${{{var}}} in /usr/bin/{prefix}${{{var}}} is not a loop variable"
         out.update(prefix + item for item in loop.group(1).split())
+    return out
+
+
+def _overlay_bins() -> set[str]:
+    """Every /usr/bin/<name> a rootfs-overlay ships.
+
+    `BR2_ROOTFS_OVERLAY` is copied with `rsync -a` after the packages, so an
+    overlay file is installed by the image, exactly like a post-build `install`
+    line. The launcher check used to see only post-build copies, which made a
+    launcher running an overlay program (`open`, `pengyos-autologin`) look
+    broken.
+    """
+    out = set()
+    for d in OVERLAY_BIN_DIRS:
+        if d.is_dir():
+            out.update(p.name for p in d.iterdir() if p.is_file() or p.is_symlink())
     return out
 
 
@@ -108,14 +131,27 @@ def test_the_desktop_apps_have_launchers():
 
 
 def test_every_launcher_runs_an_installed_program():
-    installed = _installed_bins()
+    installed = _installed_bins() | _overlay_bins()
     # Programs the image ships from Buildroot recipes, not from post-build.sh.
     for name, prog in _launchers().items():
         if name in NON_APP_LAUNCHERS:
             continue
         assert prog in installed, (
-            f"{name} runs `{prog}`, which no post-build step installs"
+            f"{name} runs `{prog}`, which no post-build step installs and no "
+            "rootfs-overlay ships"
         )
+
+
+def test_the_overlay_bins_are_counted_as_installed():
+    """The fix, with teeth: `open` is an overlay file, not a post-build copy.
+
+    Asserting it by name keeps this from being quietly reverted to
+    `_installed_bins()` alone, which is what made a launcher over an overlay
+    program look like a broken launcher.
+    """
+    assert "open" in _overlay_bins()
+    assert "open" not in _installed_bins()
+    assert "open" in _installed_bins() | _overlay_bins()
 
 
 def test_the_gamepads_app_is_wired_end_to_end():
