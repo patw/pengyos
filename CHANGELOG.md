@@ -17,6 +17,19 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — `strace` and `unshare`: a machine that can answer a syscall question (2026-10-25)
+
+The same session needed one fact — does `os.killpg(1, SIGTERM)` really signal
+every process the caller owns? — and the image could neither trace a syscall
+(`strace` absent) nor run the experiment safely in a private PID namespace
+(`unshare` absent). The answer came from web man pages and had to be reported as
+"I could not demonstrate it live", which is exactly the gap the diagnosis was
+trying to close.
+
+Both are diagnostic primitives with no daemon, in the Core layer so every edition
+has them: `strace` when a process dies or misbehaves, `unshare` when the safe way
+to ask is a namespace whose pid 1 is a throwaway shell.
+
 ### Added — `pengyos-webui`: the Pengy web UI, on and off per user
 
 `pengy-web` has been in the Server and Desktop images for a while, and the only
