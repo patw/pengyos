@@ -12,6 +12,18 @@
 #   menu (a laptop on 26.10.27, 2026-10-13). The user folders are created here
 #   for the same reason tmpfiles creates the system ones: the panel scans icon
 #   folders once, at startup.
+# - PATH: greetd's session worker hands the session a minimal environment, so
+#   PATH arrives as /usr/bin alone -- not the /usr/local/bin:/usr/bin a login
+#   shell gets. A session started by a system service never sources profile.d
+#   (same reason as XDG_DATA_DIRS above), and the comfort profile deliberately
+#   returns early for non-interactive shells: the per-user bin dirs it adds
+#   worked in a terminal and were missing from every GUI app, and from anything
+#   an app forks. `uv`, `cargo`, `pip --user` and an agent harness's tools live
+#   in ~/.local/bin, and all of them were "command not found" to an app started
+#   from the panel (a Desktop box, 2026-10-26). Prepended in the comfort
+#   profile's own add_path order so a terminal and a GUI app resolve the same
+#   binary, and skipped when already present so the private-bus re-exec below
+#   cannot duplicate an entry.
 # - LIBSEAT_BACKEND=seatd: cosmic-comp opens the seat through seatd (the user
 #   is in the seat group); desktop.config explains why not logind.
 # - xdg-user-dirs-update: ~/Downloads, ~/Documents, … exist before any app
@@ -54,6 +66,21 @@ export XDG_DATA_DIRS="$FLATPAK_USER_SHARE:/var/lib/flatpak/exports/share:/usr/lo
 export XDG_CONFIG_DIRS=/etc/xdg
 export LANG="${LANG:-en_US.UTF-8}"
 export LIBSEAT_BACKEND=seatd
+
+# Match the comfort profile's per-user bin dirs and its order; `${PATH:-}` keeps
+# an unset PATH from producing an empty (== current directory) entry, and the
+# case skips a dir already present so the private-bus re-exec below cannot
+# duplicate it.
+_path="${PATH:-/usr/bin}"
+for _d in "$HOME/.local/bin" "$HOME/bin"; do
+    case ":$_path:" in
+        *":$_d:"*) : ;;
+        *) _path="$_d:$_path" ;;
+    esac
+done
+PATH="$_path"
+unset _path _d
+export PATH
 
 cd "$HOME" 2>/dev/null || cd /
 /usr/bin/xdg-user-dirs-update || true

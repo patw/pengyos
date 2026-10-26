@@ -17,6 +17,36 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — a GUI-launched app could not find what a terminal could (2026-10-26)
+
+`greetd`'s session worker hands the session a minimal environment, so
+`start-cosmic` received `PATH=/usr/bin` and everything below it inherited that:
+the compositor, the panel, every app started from the panel, and anything an app
+forks. A session started by a system service never sources `profile.d`, and the
+comfort profile deliberately returns early for non-interactive shells, so the
+per-user bin dirs it adds (`~/.local/bin`: `uv`, `cargo`, `pip --user`) existed
+for a terminal and nowhere else — the exact inverse of the `XDG_DATA_DIRS`
+finding, where the missing entry was system-scope.
+
+It surfaced as an agent harness launched from the panel running with
+`PATH=/usr/bin`, where `uv` was "command not found": every `uv run` in its child
+shells failed while the same command worked in a terminal on that machine. That
+is the failure mode worth naming — a tool that works where a person looks and not
+where the machine starts things, with nothing in its output pointing at the env.
+`start-cosmic` now prepends the comfort profile's dirs in that profile's own
+`add_path` order, dedupes them so the private-bus re-exec cannot duplicate an
+entry, and defaults to `/usr/bin` so an unset `PATH` cannot leave an empty
+component behind (an empty component means the current directory). A test asserts
+the two lists are equal, so a terminal and a GUI app cannot drift to resolving
+different binaries.
+
+Nothing on an already-flashed box picks this up except an image: `/usr` is a
+read-only A/B slot, and `greetd` *replaces* `PATH` for the session command rather
+than passing its own (its service has no `Environment=`, so systemd's wider
+default is what it started with) — neither an `/etc/profile.d` file nor a
+`greetd.service` drop-in reaches it. The in-place route is a bind mount over
+`start-cosmic`, as with the session-command tests on behoweather.
+
 ### Fixed — a fresh build host lacked three Python modules the tooling imports (2026-10-26)
 - Moving the build host to a distrobox on behopc found that `provision-build-host.sh`
   never installed `python3-cryptography` (pengyos-release signs the download
