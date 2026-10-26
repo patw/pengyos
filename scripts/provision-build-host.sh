@@ -24,6 +24,9 @@ PKGS=(
   bison flex gettext texinfo perl python3 python3-dev
   libncurses-dev libssl-dev libelf-dev
   tar gzip bzip2 xz-utils zstd ca-certificates
+  # rtkit's meson setup needs xxd (Desktop). Hosts with vim had it; a fresh
+  # ubuntu:26.04 box does not (behopc clean rebuild, 2026-10-26).
+  xxd
   # Boot testing (tools/pengyos-qemu-verify): QEMU+KVM, UEFI firmware, a software TPM
   qemu-system-x86 ovmf swtpm
   # The Desktop session check (pengyos-qemu-verify desktop): virtual X + screenshot;
