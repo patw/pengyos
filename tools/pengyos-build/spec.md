@@ -119,9 +119,13 @@ already been configured:
 
     make -C <source> O=<output> BR2_EXTERNAL=<tree>[ BR2_BOARD=<board>] -j<jobs>
 
-- `--jobs N` sets the parallelism; the default is `-j$(nproc)` (the host core
-  count, `os.cpu_count()`, clamped to at least 1). Buildroot's parallel GCC
-  can race, so a lower `--jobs` is the documented knob.
+- `--jobs N` sets the parallelism; the default is `$PENGYOS_BUILD_JOBS` when
+  set and non-empty, else `-j$(nproc)` (the host core count, `os.cpu_count()`,
+  clamped to at least 1). A variable that is not a positive integer is an
+  error, never silently ignored. Buildroot's parallel GCC can race, so a lower
+  `--jobs` is the documented knob; the variable caps builds the operator does
+  not start by hand (`scripts/release.sh` and the nightly act lane pass no
+  `--jobs`).
 - The **defconfig is NOT re-passed**: `make O=…` builds the already-configured
   `.config` without re-running kconfig (passing the defconfig again would
   silently re-configure). `BR2_EXTERNAL`/`BR2_BOARD` ARE re-passed for

@@ -526,6 +526,24 @@ board = "pengyos/qemu-x86_64"
         assert m is not None
         assert int(m.group(1)) == (os.cpu_count() or 1)
 
+    def test_jobs_env_sets_the_default(self, env):
+        # How a host caps builds it does not start by hand (release.sh, act).
+        proc = _run_cli(
+            "build", "demo", "--targets", f"{env['workspace']}/targets.toml",
+            **env, PENGYOS_BUILD_JOBS="3",
+        )
+        assert proc.returncode == 0, proc.stderr
+        text = (Path(env["root"]) / "output" / "demo" / "logs" / "build.log").read_text()
+        assert "-j3" in text.split()
+
+    def test_bad_jobs_env_is_exit_1(self, env):
+        proc = _run_cli(
+            "build", "demo", "--targets", f"{env['workspace']}/targets.toml",
+            **env, PENGYOS_BUILD_JOBS="lots",
+        )
+        assert proc.returncode == 1
+        assert "PENGYOS_BUILD_JOBS" in proc.stderr
+
     def test_make_failure_is_exit_1_and_names_build_log(self, env):
         bin_dir = env["PATH"].split(":")[0]
         make = Path(bin_dir) / "make"

@@ -135,6 +135,22 @@ class TestDefaultJobs:
         monkeypatch.setattr(os, "cpu_count", lambda: 12)
         assert default_jobs() == 12
 
+    def test_env_overrides_cpu_count(self, monkeypatch):
+        monkeypatch.setattr(os, "cpu_count", lambda: 20)
+        monkeypatch.setenv("PENGYOS_BUILD_JOBS", "16")
+        assert default_jobs() == 16
+
+    def test_empty_env_falls_back_to_cpu_count(self, monkeypatch):
+        monkeypatch.setattr(os, "cpu_count", lambda: 20)
+        monkeypatch.setenv("PENGYOS_BUILD_JOBS", "")
+        assert default_jobs() == 20
+
+    @pytest.mark.parametrize("bad", ["0", "-4", "sixteen", "1.5"])
+    def test_bad_env_is_an_error(self, monkeypatch, bad):
+        monkeypatch.setenv("PENGYOS_BUILD_JOBS", bad)
+        with pytest.raises(BuildError, match="PENGYOS_BUILD_JOBS"):
+            default_jobs()
+
     def test_clamps_to_one_when_cpu_count_is_none(self, monkeypatch):
         monkeypatch.setattr(os, "cpu_count", lambda: None)
         assert default_jobs() == 1

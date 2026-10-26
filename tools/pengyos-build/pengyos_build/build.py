@@ -13,9 +13,11 @@ the defconfig keeps the build from silently re-configuring.  ``BR2_EXTERNAL``
 (and ``BR2_BOARD``) *are* re-passed for symmetry with configure and so a
 build never depends on ambient state.
 
-* ``-j<jobs>`` defaults to the host core count (``-j$(nproc)``) and is
-  configurable via the CLI ``--jobs`` flag (lower it on hosts where Buildroot's
-  parallel GCC races, e.g. 8).
+* ``-j<jobs>`` defaults to ``$PENGYOS_BUILD_JOBS`` when set, else the host
+  core count (``-j$(nproc)``), and is configurable via the CLI ``--jobs`` flag
+  (lower it on hosts where Buildroot's parallel GCC races, e.g. 8).  The
+  variable is how a host caps builds it does not start itself:
+  ``scripts/release.sh`` and the nightly act lane pass no ``--jobs``.
 * make's stdout and stderr are **streamed, merged and in order**, straight
   into ``<out>/logs/build.log`` (never buffered in memory): the child writes
   to the log file handle line-by-line, so the log grows as the build runs and
@@ -87,8 +89,21 @@ Spawner = Callable[..., subprocess.CompletedProcess]
 
 
 def default_jobs() -> int:
-    """Parallelism for a build with no explicit ``--jobs``: the host core
-    count, i.e. ``-j$(nproc)`` (clamped to at least 1)."""
+    """Parallelism for a build with no explicit ``--jobs``:
+    ``$PENGYOS_BUILD_JOBS`` when set and non-empty, else the host core count,
+    i.e. ``-j$(nproc)`` (clamped to at least 1).  Raises :class:`BuildError`
+    when the variable is not a positive integer."""
+    raw = os.environ.get("PENGYOS_BUILD_JOBS", "").strip()
+    if raw:
+        try:
+            jobs = int(raw)
+        except ValueError:
+            jobs = 0
+        if jobs < 1:
+            raise BuildError(
+                f"PENGYOS_BUILD_JOBS must be a positive integer, got {raw!r}"
+            )
+        return jobs
     return os.cpu_count() or 1
 
 

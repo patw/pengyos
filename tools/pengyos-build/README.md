@@ -74,8 +74,9 @@ recorded in `<out>/.pengyos-leftovers.txt` until a clean build (or removing thos
 files) makes it go away.
 
 `build` runs `make -C <src> O=<out> BR2_EXTERNAL=<ext> [BR2_BOARD=<board>]
--j<N>` (N defaults to `-j$(nproc)`; lower `--jobs` to dodge Buildroot's
-parallel GCC races), streaming make's merged stdout+stderr into
+-j<N>` (N defaults to `$PENGYOS_BUILD_JOBS`, else `-j$(nproc)`; lower
+`--jobs` to dodge Buildroot's parallel GCC races, or set the variable to cap
+builds started by `release.sh` and the nightly act lane), streaming make's merged stdout+stderr into
 `<out>/logs/build.log`. `clean` runs Buildroot's own clean target against
 the per-target output dir (`make … O=<out> … clean`): artifacts are removed,
 `.config` is kept, and nothing outside the output dir is touched. `status`

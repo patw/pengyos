@@ -17,6 +17,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — a fresh build host lacked three Python modules the tooling imports (2026-10-26)
+- Moving the build host to a distrobox on behopc found that `provision-build-host.sh`
+  never installed `python3-cryptography` (pengyos-release signs the download
+  manifests with it), `python3-flask` (the nightly's decision page) or `python3-yaml`
+  (the Server backup, containers and firewall tools). behoserver had them installed
+  by hand. The unscoped full gate passes in the new box (176/176).
+- `pengyos-build` 0.1.0 takes its default `-j` from `PENGYOS_BUILD_JOBS` when set, so
+  a host can cap the builds `release.sh` and the nightly act lane start (they pass no
+  `--jobs`). behopc's box sets 16.
+
 ### Fixed — a version bump that only reached one of the two copies (2026-10-25)
 
 `main` went red on 2026-10-20 and stayed red: the nightly routine's routine bump

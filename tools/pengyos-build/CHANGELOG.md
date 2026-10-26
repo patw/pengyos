@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — `PENGYOS_BUILD_JOBS` sets the default parallelism
+- `build` and `sbom` default to `$PENGYOS_BUILD_JOBS` when it is set, else
+  `-j$(nproc)` as before; `--jobs` still wins. `scripts/release.sh` and the nightly
+  act lane pass no `--jobs`, so a host with less memory per core (behopc: 20
+  threads, 31 GB) had no way to cap the builds it does not start by hand. A value
+  that is not a positive integer is an error, never silently ignored.
+
 ### Fixed — the leftovers guard could not see a leftover an aging had touched
 - **The guard's own mitigation defeated it.** `prepare_rebuild` ages the mtime of
   every file of every package it is about to rebuild, so a reinstall rewrites and

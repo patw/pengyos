@@ -136,7 +136,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="parallel jobs -jN (default: number of host cores, i.e. -j$(nproc))",
+        help="parallel jobs -jN (default: $PENGYOS_BUILD_JOBS, else number of host "
+        "cores, i.e. -j$(nproc))",
     )
     build_p.add_argument(
         "--targets",
@@ -236,7 +237,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="parallel jobs for the legal-info pass (default: host cores)",
+        help="parallel jobs for the legal-info pass (default: $PENGYOS_BUILD_JOBS, "
+        "else host cores)",
     )
     sbom_p.add_argument(
         "--sign-key",

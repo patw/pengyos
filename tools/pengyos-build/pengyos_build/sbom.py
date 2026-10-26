@@ -30,7 +30,7 @@ from typing import Callable, Sequence
 
 from . import hostshim
 from .acquire import default_build_root, source_dir
-from .build import build_target, default_jobs
+from .build import BuildError, build_target, default_jobs
 from .configure import HOSTSHIM_DIRNAME, LOGS_SUBDIR, output_dir
 from .targets import Target
 
@@ -121,7 +121,10 @@ def generate_sbom(
     """
     env = os.environ if env is None else env
     root = Path(build_root) if build_root is not None else default_build_root(env)
-    resolved = default_jobs() if jobs is None else jobs
+    try:
+        resolved = default_jobs() if jobs is None else jobs
+    except BuildError as exc:
+        raise SbomError(str(exc)) from exc
     if resolved < 1:
         raise SbomError(f"--jobs must be a positive integer, got {resolved}")
 
