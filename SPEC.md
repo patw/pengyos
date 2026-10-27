@@ -75,6 +75,7 @@ Chosen once, inherited everywhere.
 | **Toolchain** | Buildroot's internal **GCC 15** + binutils 2.45; Rust for our own components | GPL-3.0 + exception | pure LLVM | 🟢 |
 | **Our code** | **Rust** for shipped apps; **Python** (stdlib) for tooling and on-device scripts | MIT / Apache-2.0 | — | 🟢 |
 | **Coreutils** | **uutils/coreutils 0.11.0** (Rust) — our recipe `package/uutils-coreutils`, built `--features unix`, one multicall binary + a symlink per utility | MIT | GNU coreutils (GPL-3.0; Buildroot's recipe — what shipped up to 26.10.24) | 🟢 |
+| **Privilege** | **sudo-rs 0.2.15** (Rust, Server and Desktop) — our recipe `package/sudo-rs`: `sudo` (setuid), `sudoedit`, `visudo`; `/etc/sudoers` grants root and `%sudo` and includes `/etc/sudoers.d` (`wheel`); PAM service `sudo` | Apache-2.0 / MIT | C sudo (ISC; Buildroot's recipe — what shipped up to 26.10.44), doas | 🟢 |
 | **Shell** | **bash** (Core); **zsh** added on Server, wired to the comfort profile (`/etc/pengyos/shell/profile`: starship prompt, fzf, zoxide, aliases) + the zsh plugins (autosuggestions, syntax highlighting) | GPL-3.0 / MIT | nushell, fish, oh-my-zsh (a git-checkout framework with an update ping; the curated profile ships its feel instead) | 🟢 |
 | **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (stock Buildroot recipe, not enabled) | 🟢 / 🔵 broker |
 | **Devices, logs** | systemd-udevd, systemd-journald | LGPL-2.1 | eudev, rsyslog | 🟢 |
@@ -184,7 +185,7 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 | Group | Ships |
 |---|---|
 | Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq, curl |
-| Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo |
+| Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo (sudo-rs) |
 | Containers | **podman**, rootless and daemonless, with the API socket |
 | Ops | a metrics timer, an opt-in backup timer (off by default), the daily update check; disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
 | As a VM guest | virtio (KVM, Proxmox, QEMU) and Hyper-V/Azure (VMBus disk, network, console, `hv_utils`), VMGENID |

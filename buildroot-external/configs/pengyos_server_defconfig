@@ -487,11 +487,12 @@ BR2_PENGYOS_MANYLINUX_LIBS=y
 # (post-build.sh installs them). What they need beyond Core:
 #   zstd    the payload is zstd-compressed
 #   sgdisk  partitioning + relabelling (GUIDs, backup GPT) the installed disk
-#   sudo    the created user is the admin (wheel; overlay: /etc/sudoers.d/wheel)
+#   sudo    the created user is the admin (wheel; overlay: /etc/sudoers.d/wheel).
+#           sudo-rs, our recipe (package/sudo-rs), not Buildroot's C sudo.
 BR2_PACKAGE_ZSTD=y
 BR2_PACKAGE_GPTFDISK=y
 BR2_PACKAGE_GPTFDISK_SGDISK=y
-BR2_PACKAGE_SUDO=y
+BR2_PACKAGE_SUDO_RS=y
 # Login sessions: PAM + systemd-logind, so an SSH (or console) login is a real
 # logind session — /run/user/UID, the user's systemd manager and a delegated
 # cgroup. Rootless podman (and so distrobox) needs that: without it runc failed

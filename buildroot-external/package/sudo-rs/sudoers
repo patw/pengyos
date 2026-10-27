@@ -1,0 +1,15 @@
+# /etc/sudoers (sudo-rs). Machine-specific rules go in /etc/sudoers.d, not here:
+# on an installed system /etc is an overlay, and an edited copy of this file
+# hides every later image's version of it. Check a drop-in with `visudo -c`.
+#
+# Same rules the stock C sudo shipped up to the switch: root, the `sudo` group,
+# and the drop-ins (PengyOS's own is sudoers.d/wheel). The stock file's
+# `Defaults!/usr/sbin/visudo env_keep += ...` line is gone: sudo-rs's visudo
+# reads SUDO_EDITOR / VISUAL / EDITOR itself.
+
+Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+root ALL=(ALL:ALL) ALL
+%sudo ALL=(ALL:ALL) ALL
+
+@includedir /etc/sudoers.d

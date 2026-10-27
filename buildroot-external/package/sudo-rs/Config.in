@@ -1,0 +1,27 @@
+config BR2_PACKAGE_SUDO_RS
+	bool "sudo-rs (Rust sudo)"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on BR2_USE_MMU # fork()
+	depends on BR2_ENABLE_LOCALE && BR2_USE_WCHAR # linux-pam
+	depends on !BR2_STATIC_LIBS # linux-pam
+	depends on BR2_TOOLCHAIN_GCC_AT_LEAST_4_9 # linux-pam
+	depends on !BR2_PACKAGE_SUDO # both install /usr/bin/sudo
+	select BR2_PACKAGE_HOST_RUSTC
+	select BR2_PACKAGE_LINUX_PAM
+	help
+	  sudo-rs: a memory-safe reimplementation of sudo and visudo in
+	  Rust, by the Trifecta Tech Foundation. The default sudo on
+	  Ubuntu since 25.10. Reads the usual /etc/sudoers (and
+	  @includedir /etc/sudoers.d), authenticates through PAM.
+
+	  Installs sudo (setuid root), sudoedit (a symlink, sudo
+	  dispatches on argv[0]) and visudo. Not su: util-linux's su
+	  stays in Core.
+
+	  https://github.com/trifectatechfoundation/sudo-rs
+
+comment "sudo-rs needs a toolchain w/ wchar, locale, dynamic library, gcc >= 4.9"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on BR2_USE_MMU
+	depends on !BR2_ENABLE_LOCALE || !BR2_USE_WCHAR || BR2_STATIC_LIBS || \
+		!BR2_TOOLCHAIN_GCC_AT_LEAST_4_9
