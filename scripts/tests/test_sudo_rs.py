@@ -1,17 +1,17 @@
 """Tests for the sudo wiring (SPEC: Privilege — sudo-rs in place of the C sudo).
 
-Why these checks exist. Buildroot's C sudo did four things for us that nothing
-else in the tree states: it made /usr/bin/sudo setuid root, created the `sudo`
-group the installer puts the owner in, installed /etc/pam.d/sudo, and shipped an
-/etc/sudoers that grants `%sudo` and includes /etc/sudoers.d (where our `wheel`
-rule lives). Our sudo-rs recipe has to do all four itself, or sudo ships and
-nobody can use it — a missing setuid bit or a missing @includedir is a
+Why these checks exist. Buildroot's C sudo did three things for us that nothing
+else in the tree states: it made /usr/bin/sudo setuid root, installed
+/etc/pam.d/sudo, and shipped an /etc/sudoers that includes /etc/sudoers.d (where
+our `wheel` rule lives). Our sudo-rs recipe has to do all three itself, or sudo
+ships and nobody can use it — a missing setuid bit or a missing @includedir is a
 "sudo: not allowed" on every installed machine, found only after an update.
 
 1. the Server layer selects sudo-rs and not the C sudo, so every edition that has
    sudo has exactly one (both install /usr/bin/sudo);
 2. the recipe is wired (Config.in sourced, .mk, .hash);
-3. it keeps the four things above;
+3. it keeps the three things above, and wheel is the only admin group: the PAM
+   file requires wheel (pam_wheel), so a `%sudo` rule or `sudo` group grants nothing;
 4. its CPE matches how NVD files sudo-rs CVEs, so pkg-stats can see them.
 
 Run: python3 -m pytest scripts/tests -q   (from the repo root)
@@ -30,6 +30,7 @@ RECIPE = EXT / "package/sudo-rs"
 MK = RECIPE / "sudo-rs.mk"
 SUDOERS = RECIPE / "sudoers"
 WHEEL = EXT / "board/server/rootfs-overlay/etc/sudoers.d/wheel"
+PAM = RECIPE / "sudo.pam"
 
 WITH_SUDO = ("pengyos_server_defconfig", "pengyos_desktop_defconfig",
              "pengyos_server_nvidia_defconfig", "pengyos_desktop_nvidia_defconfig")
@@ -69,9 +70,11 @@ def test_sudo_is_setuid_root():
     assert re.search(r"^\s*/etc/sudoers f 0440 0 0 ", perms, re.M)
 
 
-def test_the_sudo_group_still_exists():
-    users = re.search(r"define SUDO_RS_USERS\n(.*?)\nendef", MK.read_text(), re.S).group(1)
-    assert re.search(r"^\s*- - sudo -1 ", users, re.M)
+def test_wheel_is_the_only_admin_group():
+    assert "SUDO_RS_USERS" not in MK.read_text()
+    assert re.search(r"^auth\s+required\s+pam_wheel\.so use_uid$", PAM.read_text(), re.M)
+    owners = (EXT / "board/server/rootfs-overlay/usr/lib/pengyos/owner-groups").read_text().split()
+    assert "wheel" in owners and "sudo" not in owners
 
 
 def test_install_ships_sudoedit_visudo_sudoers_and_pam():
@@ -81,10 +84,10 @@ def test_install_ships_sudoedit_visudo_sudoers_and_pam():
     assert "ln -sf sudo $(TARGET_DIR)/usr/bin/sudoedit" in install
 
 
-def test_sudoers_grants_the_same_rules_the_c_sudo_did():
+def test_sudoers_grants_root_and_includes_the_wheel_drop_in():
     lines = [l for l in SUDOERS.read_text().splitlines() if l and not l.startswith("#")]
     assert "root ALL=(ALL:ALL) ALL" in lines
-    assert "%sudo ALL=(ALL:ALL) ALL" in lines
+    assert not [l for l in lines if l.startswith("%sudo")]
     assert "@includedir /etc/sudoers.d" in lines
     assert "%wheel ALL=(ALL:ALL) ALL" in WHEEL.read_text()
 

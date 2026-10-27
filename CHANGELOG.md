@@ -17,6 +17,19 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — `wheel` is the only admin group (2026-10-27)
+
+`/etc/sudoers` granted `%sudo`, and the installer put the owner in a `sudo`
+group. But `/etc/pam.d/sudo` requires `wheel` (`pam_wheel use_uid`), so the
+rule never let anyone in, with the C sudo or with sudo-rs: a user in `sudo` but
+not `wheel` was refused by PAM (tested on a booted Server). The rule, the group
+and the owner-groups entry are gone, so the files say what the system does:
+`wheel` is the administrators, as it already was for polkit and
+accountsservice. Nobody loses access. The installed owner is in `wheel`, and on
+an existing machine the old, now empty-handed `sudo` group just stays in
+`/etc/group`. The PAM file now lives in `package/sudo-rs` (unchanged from
+Buildroot's), so the test that pins the wheel check reads a file we own.
+
 ### Removed — 30 more tools nothing used (2026-10-27)
 
 The second half of the vestigial sweep. These 30 tools had no reference from an

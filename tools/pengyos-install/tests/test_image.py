@@ -256,7 +256,7 @@ def test_install_image_end_to_end(tmp_path, monkeypatch):
     # The user owns the desktop: admin + seat groups (only those the image has),
     # and the session drop-in.
     (useradd,) = [c[2:] for c in run.calls if c[2:3] == ["useradd"]]
-    assert useradd == ["useradd", "-m", "-U", "-s", "/usr/bin/zsh", "-G", "wheel,sudo,seat,video", "pat"]
+    assert useradd == ["useradd", "-m", "-U", "-s", "/usr/bin/zsh", "-G", "wheel,seat,video", "pat"]
     for sub in ("etc", "var", "home", "root"):
         assert ["btrfs", "subvolume", "create", f"{root}/data/{sub}"] in run.calls
     # A Desktop starts at its login screen: no automatic login unless chosen.

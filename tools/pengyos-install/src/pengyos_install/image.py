@@ -87,7 +87,7 @@ LIVE_NM_CONNECTIONS = "/etc/NetworkManager/system-connections"
 # existing owners to groups appended later); tests/test_owner_groups.py keeps
 # the two equal.
 USER_GROUPS = (
-    "wheel", "sudo", "seat", "video", "audio", "input", "render", "pipewire", "gamemode",
+    "wheel", "seat", "video", "audio", "input", "render", "pipewire", "gamemode",
 )
 
 #: The data partition: btrfs, one subvolume per area (preinit mounts the same way).
