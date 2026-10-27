@@ -7,7 +7,7 @@ sudoers -print` stopped listing / at /proc, printed nothing and exited 0.
 Skip only a directory walkdir entered. GNU findutils prints /etc/sudoers.
 
 Signed-off-by: Pat Wendorf <dungeons@gmail.com>
-Upstream: not yet offered (no upstream fix or issue as of 2026-10-27)
+Upstream: not offered; carried (no upstream fix or issue as of 2026-10-27)
 ---
 --- a/src/find/mod.rs
 +++ b/src/find/mod.rs
