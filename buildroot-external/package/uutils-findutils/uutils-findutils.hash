@@ -1,0 +1,10 @@
+# Locally calculated
+#
+# NOTE: Buildroot's cargo infrastructure re-packs the source tarball with the
+# vendored crates (VENDOR/, checked against Cargo.lock's checksums) and verifies
+# the hash of THAT tarball, `-cargo6`. The upstream GitHub archive of tag 0.10.0
+# hashes to e36ae3937f889bc59cfbd65820a642baa695c58d7fa1e387e41857e710f40419
+# (fetched 2026-10-27); the value below is the "got" of
+# `make uutils-findutils-source` the same day.
+sha256  0acb48e565ea96fb2fe129113b65062a5a11b4bb7adaafc95570cf5f59678979  uutils-findutils-0.10.0-cargo6.tar.gz
+sha256  b2888851106d2281b01ff2b807b4950463725c39895dd064770c43d28d419a71  LICENSE

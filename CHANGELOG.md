@@ -17,6 +17,41 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — find and xargs are uutils/findutils, the Rust findutils (2026-10-27)
+
+Every edition shipped GNU findutils 4.10. It now ships **uutils/findutils
+0.10.0** (`package/uutils-findutils`, Core layer): `find`, `xargs`, `locate`,
+`updatedb`. The reasons are the uutils-coreutils ones: MIT instead of GPL-3.0,
+and memory safety in the tool every script and agent runs over untrusted
+filenames.
+
+It was adopted on evidence, not on the test-suite score. Upstream passes 88% of
+GNU's findutils suite and 87% of BFS's. What decided it was a side-by-side run
+against GNU findutils on one fixture tree. That run covered every `find`/`xargs`
+invocation in the image's own scripts (distrobox, lvm's `fsadm`,
+`rescan-scsi-bus.sh`, `usb-devices`, the xdg-utils) and the everyday options
+(`-printf`, `-print0 | xargs -0`, `-prune`, `-wholename`/`-iname` with `-o`, `-L`,
+`-exec {} +`, `-regextype`, `-newer`, `-size`, `-mtime`, `-empty`, `-perm`,
+`xargs -d -I -P -r -n`, and the exit codes). All 29 cases gave byte-identical
+output. Its regexes use Buildroot's oniguruma (jq already shipped it on Server),
+not a bundled copy.
+
+The boot test found the one divergence the fixture tree could not show: under
+`-xdev`, `-prune` on a mount point (`find / -xdev -path /proc -prune -o …`)
+silently ended the walk of that directory's siblings and exited 0. GNU find
+prints them. walkdir's `skip_current_dir()` popped the parent, because `-xdev` had
+never entered the pruned mount point. We carry a fix with a regression test
+(`0001-find-pruning-an-xdev-mount-point-must-not-end-the-walk.patch`). There was
+no upstream issue or fix as of 2026-10-27.
+
+**Diffutils stays GNU.** The same run found uutils/diffutils 0.6.0 has no
+recursive diff (`diff -r` is rejected), no `-W`, and no `diff3` or `sdiff`. That
+would be a regression for anyone diffing trees.
+
+release-monitoring.org has no project for uutils/findutils, so pkg-stats cannot
+see it age. pengyos-nightly gains a `uutils-findutils` source that reads the
+upstream tags.
+
 ### Docs — status that had gone stale (2026-10-27)
 
 - `docs/install-update-architecture.md` opened with two status banners that

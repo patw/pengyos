@@ -1,0 +1,102 @@
+find: pruning an -xdev mount point must not end the walk of its siblings
+
+walkdir's skip_current_dir() pops the directory it last entered. Under
+-xdev it does not enter a directory on another file system, so -prune on
+one popped the parent instead: `find / -xdev -path /proc -prune -o -name
+sudoers -print` stopped listing / at /proc, printed nothing and exited 0.
+Skip only a directory walkdir entered. GNU findutils prints /etc/sudoers.
+
+Signed-off-by: Pat Wendorf <dungeons@gmail.com>
+Upstream: not yet offered (no upstream fix or issue as of 2026-10-27)
+---
+--- a/src/find/mod.rs
++++ b/src/find/mod.rs
+@@ -204,6 +204,33 @@
+     })
+ }
+ 
++#[cfg(unix)]
++fn root_device(dir: &str) -> Option<u64> {
++    use std::os::unix::fs::MetadataExt;
++    std::fs::metadata(dir).ok().map(|m| m.dev())
++}
++
++#[cfg(not(unix))]
++fn root_device(_dir: &str) -> Option<u64> {
++    None
++}
++
++/// Whether walkdir entered `entry`, which is a directory: always, except a
++/// directory on another file system under -xdev (`root_dev` is then set).
++#[cfg(unix)]
++fn descends(entry: &WalkEntry, root_dev: Option<u64>) -> bool {
++    use std::os::unix::fs::MetadataExt;
++    match root_dev {
++        Some(dev) if entry.depth() > 0 => entry.metadata().map_or(true, |m| m.dev() == dev),
++        _ => true,
++    }
++}
++
++#[cfg(not(unix))]
++fn descends(_entry: &WalkEntry, _root_dev: Option<u64>) -> bool {
++    true
++}
++
+ fn process_dir(
+     dir: &str,
+     config: &Config,
+@@ -224,6 +251,16 @@
+ 
+     let mut ret = 0;
+ 
++    // walkdir's skip_current_dir() pops whatever directory it last entered.
++    // Under -xdev it does not enter a directory on another file system, so
++    // pruning one (find / -xdev -path /proc -prune -o ...) would pop its
++    // parent instead and silently end the walk of every remaining sibling.
++    let root_dev = if config.same_file_system {
++        root_device(dir)
++    } else {
++        None
++    };
++
+     // Slightly yucky loop handling here :-(. See docs for
+     // WalkDirIterator::skip_current_dir for explanation.
+     let mut it = walkdir.into_iter();
+@@ -256,7 +293,7 @@
+                     *quit = true;
+                     break;
+                 }
+-                if matcher_io.should_skip_current_dir() {
++                if matcher_io.should_skip_current_dir() && descends(&entry, root_dev) {
+                     it.skip_current_dir();
+                 }
+             }
+--- a/tests/test_find.rs
++++ b/tests/test_find.rs
+@@ -675,6 +675,26 @@
+ }
+ 
+ #[test]
++#[cfg(target_os = "linux")]
++fn find_xdev_prune_mount_point_keeps_siblings() {
++    // Pruning a directory -xdev does not enter (a mount point) must not end
++    // the walk of its siblings. /proc is a mount point under / on Linux.
++    use std::os::unix::fs::MetadataExt;
++    let (Ok(root), Ok(proc_)) = (std::fs::metadata("/"), std::fs::metadata("/proc")) else {
++        return;
++    };
++    if root.dev() == proc_.dev() {
++        return;
++    }
++    let all = std::fs::read_dir("/").unwrap().count();
++    let out = ucmd()
++        .args(&["/", "-maxdepth", "1", "-xdev", "-path", "/proc", "-prune", "-o", "-print"])
++        .run();
++    // "/" itself plus every top-level entry except /proc.
++    assert_eq!(out.stdout_str().lines().count(), all, "{}", out.stdout_str());
++}
++
++#[test]
+ fn find_accessible() {
+     ucmd()
+         .args(&["test_data", "-readable"])

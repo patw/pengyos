@@ -92,13 +92,14 @@ BR2_PACKAGE_DBUS=y
 # Ubuntu 25.10 made.
 BR2_PACKAGE_UUTILS_COREUTILS=y
 # The text/search tools agents reach for, from the projects that define the
-# behaviour: findutils (find -printf, xargs -0 -d -P), grep (-P, --include, -o),
+# behaviour: findutils (find -printf, xargs -0 -d -P; uutils/findutils, our
+# recipe package/uutils-findutils), grep (-P, --include, -o),
 # sed (-E, \b, -i), gawk (gensub, asort, -v), GNU time (-v, -o, -f), which,
 # diffutils (diff -u -r -N), patch, Info-ZIP unzip, gzip, tree, lsof, less,
 # attr (getfattr/setfattr) and psmisc (killall -q, fuser, pstree). BusyBox
 # ships an applet for every one of these; the applets are compiled out (see
 # board/core/busybox.fragment) so there is exactly one implementation of each.
-BR2_PACKAGE_FINDUTILS=y
+BR2_PACKAGE_UUTILS_FINDUTILS=y
 BR2_PACKAGE_GREP=y
 BR2_PACKAGE_SED=y
 BR2_PACKAGE_GAWK=y

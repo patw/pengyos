@@ -116,7 +116,7 @@ APPLET_OWNER = {
     "YES": "BR2_PACKAGE_UUTILS_COREUTILS", "LINK": "BR2_PACKAGE_UUTILS_COREUTILS",
     "TEE": "BR2_PACKAGE_UUTILS_COREUTILS",
     # findutils / grep / sed / gawk / time / which / diffutils / patch
-    "FIND": "BR2_PACKAGE_FINDUTILS", "XARGS": "BR2_PACKAGE_FINDUTILS",
+    "FIND": "BR2_PACKAGE_UUTILS_FINDUTILS", "XARGS": "BR2_PACKAGE_UUTILS_FINDUTILS",
     "GREP": "BR2_PACKAGE_GREP", "EGREP": "BR2_PACKAGE_GREP", "FGREP": "BR2_PACKAGE_GREP",
     "SED": "BR2_PACKAGE_SED", "AWK": "BR2_PACKAGE_GAWK", "TIME": "BR2_PACKAGE_TIME",
     "WHICH": "BR2_PACKAGE_WHICH", "DIFF": "BR2_PACKAGE_DIFFUTILS",
@@ -335,9 +335,9 @@ def test_the_tools_agents_reach_for_are_not_busybox_applets():
     """The point of the change, stated as a check: each of these has a BusyBox
     applet, so the applet must be compiled out and the real package selected."""
     core = LAYER_CORE.read_text()
-    for applet, sym in (("FIND", "BR2_PACKAGE_FINDUTILS"), ("GREP", "BR2_PACKAGE_GREP"),
+    for applet, sym in (("FIND", "BR2_PACKAGE_UUTILS_FINDUTILS"), ("GREP", "BR2_PACKAGE_GREP"),
                         ("SED", "BR2_PACKAGE_SED"), ("AWK", "BR2_PACKAGE_GAWK"),
-                        ("XARGS", "BR2_PACKAGE_FINDUTILS"), ("TIME", "BR2_PACKAGE_TIME"),
+                        ("XARGS", "BR2_PACKAGE_UUTILS_FINDUTILS"), ("TIME", "BR2_PACKAGE_TIME"),
                         ("WHICH", "BR2_PACKAGE_WHICH"), ("DIFF", "BR2_PACKAGE_DIFFUTILS"),
                         ("PATCH", "BR2_PACKAGE_PATCH"), ("UNZIP", "BR2_PACKAGE_UNZIP"),
                         ("LSOF", "BR2_PACKAGE_LSOF"), ("TREE", "BR2_PACKAGE_TREE"),
