@@ -1,4 +1,0 @@
-# Empty pins manifest: valid schema with zero pinned components.
-# A run over this is a success that yields zero proposals ("nothing to update").
-schema = "pengyos.pins/v1"
-description = "no components pinned"

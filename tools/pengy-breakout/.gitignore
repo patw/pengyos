@@ -1,5 +1,0 @@
-# Cargo build artifacts. The crate has no dependencies, so there is no
-# Cargo.lock churn to ignore — the lockfile IS committed (zero deps, 3 lines).
-/target/
-/target/tmp/
-*.bin

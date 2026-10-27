@@ -1,8 +1,0 @@
-config BR2_PACKAGE_BTOP
-	bool "btop"
-	help
-	  btop is a high-performance terminal hardware and process
-	  monitor — a modern replacement for top/htop showing CPU,
-	  memory, disks, network and processes.
-
-	  https://github.com/aristocratos/btop

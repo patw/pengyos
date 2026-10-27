@@ -59,6 +59,8 @@ This repository is a **monorepo**. There are two kinds of subdirectory:
   follows the *tool contract*: a `README.md`, `LICENSE`, `CHANGELOG.md`,
   `spec.md`, a pinned `verify.toml`, and a real test suite. See
   [`tools/README.md`](tools/README.md).
+- **`prototypes/<id>/`** — measured evaluations that are not shipped, kept in the
+  tool shape but outside the gate (`check_toolkit_suite` walks `tools/` only).
 - **Structural directories** — `buildroot-external/` (our Buildroot tree),
   `docs/`, `scripts/`. Each has its own `README.md`.
 

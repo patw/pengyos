@@ -550,8 +550,6 @@ def test_the_changelog_records_it():
 
 def test_the_old_pengy_web_unit_is_gone():
     """The PengyR-shaped unit (--config, DynamicUser, ProtectHome) must not ship."""
-    old = REPO_ROOT / "tools/pengy-agent-package/package/pengy/pengy-web.service"
-    assert not old.exists(), "replaced by the pengy-web@.service template"
     for path in REPO_ROOT.rglob("*.service"):
         if ".git" in path.parts or path.is_symlink():
             continue  # enable symlinks point into the image, not into the repo
@@ -565,12 +563,3 @@ def test_the_old_pengy_web_unit_is_gone():
         assert "ProtectHome=yes" not in text, path
         assert "DynamicUser=yes" not in text, path
 
-
-def test_the_agent_package_suite_still_passes():
-    """The vendored recipe suite is the owner of the deleted unit; it must stay green."""
-    pkg = REPO_ROOT / "tools/pengy-agent-package"
-    p = subprocess.run(
-        [sys.executable, "-m", "pytest", "-o", "addopts=", "-q"],
-        cwd=pkg, capture_output=True, text=True, timeout=600,
-    )
-    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]

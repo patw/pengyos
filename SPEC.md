@@ -76,7 +76,7 @@ Chosen once, inherited everywhere.
 | **Our code** | **Rust** for shipped apps; **Python** (stdlib) for tooling and on-device scripts | MIT / Apache-2.0 | — | 🟢 |
 | **Coreutils** | **uutils/coreutils 0.11.0** (Rust) — our recipe `package/uutils-coreutils`, built `--features unix`, one multicall binary + a symlink per utility | MIT | GNU coreutils (GPL-3.0; Buildroot's recipe — what shipped up to 26.10.24) | 🟢 |
 | **Shell** | **bash** (Core); **zsh** added on Server, wired to the comfort profile (`/etc/pengyos/shell/profile`: starship prompt, fzf, zoxide, aliases) + the zsh plugins (autosuggestions, syntax highlighting) | GPL-3.0 / MIT | nushell, fish, oh-my-zsh (a git-checkout framework with an update ping; the curated profile ships its feel instead) | 🟢 |
-| **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (`tools/pengyos-recipe-dbus-broker`) | 🟢 / 🔵 broker |
+| **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (stock Buildroot recipe, not enabled) | 🟢 / 🔵 broker |
 | **Devices, logs** | systemd-udevd, systemd-journald | LGPL-2.1 | eudev, rsyslog | 🟢 |
 | **Network** | **systemd-networkd + resolved** (Core/Server); **NetworkManager** on Desktop | LGPL-2.1 / GPL-2.0 | — | 🟢 |
 | **Firewall** | **nftables**, default-deny inbound in every edition (Core layer; Desktop: ports above 1024 open, as Fedora Workstation; rootful podman bridges and published ports allowed). A machine opens its own ports with `pengyos-firewall`, one rule file each in `/etc/pengyos/nftables.d/` | GPL-2.0 | iptables, firewalld | 🟢 |
@@ -146,8 +146,8 @@ exactly. The maintenance loop exists to keep up.
 - **Kernel:** latest stable, pinned (7.2.12 today); adopt a new mainline line within
   one or two releases of its `.0`, take point releases continuously.
 - **The cost:** a non-LTS kernel gets only months of point releases, so we own the
-  rebase cadence. `tools/pengyos-upstream-watch` and `pengyos-update-triage` exist to
-  propose every move for human approval.
+  rebase cadence. `tools/pengyos-nightly` observes upstream and proposes every move
+  for human approval.
 
 ---
 

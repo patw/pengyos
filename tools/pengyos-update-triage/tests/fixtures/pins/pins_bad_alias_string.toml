@@ -1,4 +1,0 @@
-[[component]]
-name = "openssl"
-version = "3.0.13"
-aliases = "libssl"

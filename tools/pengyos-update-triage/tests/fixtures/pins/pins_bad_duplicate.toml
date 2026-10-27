@@ -1,7 +1,0 @@
-[[component]]
-name = "glibc"
-version = "2.39"
-
-[[component]]
-name = "glibc"
-version = "2.40"
