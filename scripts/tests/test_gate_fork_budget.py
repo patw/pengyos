@@ -164,6 +164,43 @@ def test_fork_observed_by_pkg_stats_fails(tmp_path):
     assert "cannot see a fork" in checks[0].detail
 
 
+def test_authored_fork_pkg_stats_tracks_passes_with_its_project(tmp_path):
+    """distrobox and xdg-utils (2026-10-27): Buildroot has no recipe for them, so ours is
+    the only recipe and pkg-stats looks it up on release-monitoring.org by name. That is
+    a real observer, but only as a stated, checkable claim: the project id."""
+    recipe = "buildroot-external/package/distrobox"
+    entry = fork_entry("distrobox-1.8.2.5-fork", "distrobox", recipe=recipe,
+                       observe="pkg-stats") + "release_monitoring_id = 242098\n"
+    repo = make_repo(tmp_path, [entry], budget=10, recipes=(recipe,))
+    checks = obs_checks(repo)
+    assert len(checks) == 1 and checks[0].ok, [c.detail for c in checks]
+    assert "242098" in checks[0].detail
+
+
+def test_a_release_monitoring_id_must_be_a_real_project(tmp_path):
+    """A string, zero or a blank does not count: the check must not become a phrase to
+    paste past the openssh failure."""
+    for bad in ('"242098"', "0", '""'):
+        entry = fork_entry("openssh-10.6p1-fork", "openssh-pengyos", recipe=RECIPE,
+                           observe="pkg-stats") + f"release_monitoring_id = {bad}\n"
+        repo = make_repo(tmp_path / bad.strip('"') if bad.strip('"') else tmp_path / "blank",
+                         [entry], budget=10)
+        checks = obs_checks(repo)
+        assert len(checks) == 1 and not checks[0].ok, (bad, checks[0].detail)
+        assert "release_monitoring_id" in checks[0].detail
+
+
+def test_build_fixes_are_not_counted_as_forks(tmp_path):
+    """A build-fix is ledgered (expiry, observer) but is packaging, not a fork."""
+    fix = ('[[divergence]]\nid = "appstream-1.2.1-build-fix"\nkind = "build-fix"\n'
+           'component = "appstream"\ncarried_since = "2026-10-02"\n'
+           'expiry = "a release cross-builds data/"\nobserve_source = "pkg-stats"\n'
+           'upstream_status = "not-offered"\nrecipe = "buildroot-external/package/appstream"\n')
+    repo = make_repo(tmp_path, [GOOD, fix], budget=10)
+    assert "1 of 10" in budget_check(repo).detail
+    assert len(obs_checks(repo)) == 1
+
+
 def test_fork_with_no_observe_source_fails(tmp_path):
     repo = make_repo(tmp_path, [fork_entry("openssh-10.6p1-fork", "openssh-pengyos",
                                            recipe=RECIPE, observe="")], budget=10)
@@ -208,7 +245,7 @@ def test_patch_set_may_name_pkg_stats_as_its_observer(tmp_path):
 # --- the live ledger ------------------------------------------------------------------
 
 def test_the_real_ledger_passes_the_new_check():
-    """The repo as it stands must pass: 1 fork, budget 10, openssh names its own source.
+    """The repo as it stands must pass: every fork within budget and observable.
 
     This is the check that would have caught the openssh fork's first shape, and the one
     that will fail the day ffmpeg and hplip push the count past a stated budget.

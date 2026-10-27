@@ -97,6 +97,48 @@ def test_a_patch_in_a_nested_directory_is_its_own_uncovered_set(tmp_path):
     assert not nested.ok and "no divergence.toml entry" in nested.detail
 
 
+FORK = '''[[divergence]]
+id = "distrobox-1.8.2.5-fork"
+kind = "fork"
+component = "distrobox"
+carried_since = "2026-09-28"
+expiry = "an upstream release carries the fix: delete the patch"
+observe_source = "pkg-stats"
+upstream_status = "not-offered"
+recipe = "buildroot-external/package/distrobox"
+'''
+
+
+def test_unledgered_recipe_patch_fails_the_way_it_was_found(tmp_path):
+    """2026-10-27: five authored recipes carried patches of ours and the check only
+    looked under patches/. The failure names the recipe and asks for a fork entry."""
+    repo = make_repo(tmp_path, ENTRY, {"buildroot-external/package/distrobox": 1})
+    checks = {c.name: c for c in coverage(repo)}
+    c = checks["patch-set-ledgered:buildroot-external/package/distrobox"]
+    assert not c.ok and "authored recipe" in c.detail
+    assert 'kind = "fork"' in c.detail and 'recipe = "buildroot-external/package/distrobox"' in c.detail
+
+
+def test_recipe_patches_are_claimed_by_the_entrys_recipe(tmp_path):
+    """The forks name their directory as `recipe` (ffmpeg-pengyos, hplip-pengyos) or as
+    `patches_dir` (libdisplay-info-pengyos); either claims the recipe's patches."""
+    repo = make_repo(tmp_path, FORK, {"buildroot-external/package/distrobox": 2})
+    checks = coverage(repo)
+    assert checks and all(c.ok for c in checks), [c.detail for c in checks]
+    as_dir = FORK.replace("recipe = ", "patches_dir = ")
+    repo = make_repo(tmp_path, as_dir, {"buildroot-external/package/distrobox": 1}, name="dir")
+    assert all(c.ok for c in coverage(repo))
+
+
+def test_a_recipe_is_one_set_whatever_its_patch_layout(tmp_path):
+    """Buildroot also reads <pkg>/<version>/*.patch; those belong to the recipe's entry,
+    not to a set of their own, and a recipe with no patches claims nothing."""
+    repo = make_repo(tmp_path, FORK, {"buildroot-external/package/distrobox/1.8.2.5": 1,
+                                     "buildroot-external/package/sudo-rs": 0})
+    names = [c.name for c in coverage(repo)]
+    assert names == ["patch-set-ledgered:buildroot-external/package/distrobox"]
+
+
 def test_a_tree_with_no_patch_sets_claims_nothing(tmp_path):
     repo = make_repo(tmp_path, ENTRY, {})
     checks = coverage(repo)

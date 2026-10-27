@@ -17,6 +17,34 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Gate — every patch we carry in a recipe is ledgered (2026-10-27)
+
+`divergence.toml` says every divergence gets an entry before it lands. The gate
+only enforced that for global patch sets (`buildroot-external/patches/`), so five
+authored recipes carried patches of ours with no entry, and nothing recorded when
+those patches could be dropped. `check_ledger_covers_patch_sets` now also reads
+`package/<name>/**/*.patch`. An entry claims a recipe's patches through `recipe`
+or `patches_dir`. All five are ledgered. We do not offer patches upstream: each
+expiry is an upstream release that fixes the problem on its own.
+
+- **New kind `build-fix`:** for patches that only make a recipe build here.
+  `appstream` (a cross build without a native appstreamcli) and `cutecosmic`
+  (no Qt Quick Controls, prebuilt offline Rust bindings) are build-fixes. They
+  need an expiry and an observe source but don't count against the fork budget.
+- **`distrobox` and `xdg-utils` are forks:** their patches change behaviour (a
+  read-only volume option podman rejects, `xdg-open` with no `file` or
+  `mimetype`). The budget is now 8 of 10.
+  - distrobox's Go rewrite (2.0.0-rc.4) already writes `:ro,rslave`, so that
+    fork ends when 2.0 ships.
+  - xdg-utils master and v1.3.0-rc.1 still lack the fix.
+- **Fork observability, made precise:** the rule that a fork can't name
+  pkg-stats as its observer assumed a fork always shadows a switched-off stock
+  recipe. distrobox and xdg-utils have no stock recipe, and pkg-stats tracks
+  them by name. Such a fork may now name pkg-stats if it gives
+  `release_monitoring_id` (242098 and 5176), a claim that can be checked
+  against pkg-stats' JSON. A renamed `-pengyos` fork still has to name a
+  nightly source.
+
 ### Changed — find and xargs are uutils/findutils, the Rust findutils (2026-10-27)
 
 Every edition shipped GNU findutils 4.10. It now ships **uutils/findutils
