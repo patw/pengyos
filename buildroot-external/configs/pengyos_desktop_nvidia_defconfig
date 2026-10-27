@@ -157,6 +157,8 @@ BR2_PACKAGE_IPROUTE2=y
 # a ps applet, but procps-ng's is the full-featured one.
 BR2_PACKAGE_PROCPS_NG=y
 BR2_PACKAGE_BASH=y
+# The default-deny firewall: its ruleset, unit and pengyos-firewall are in
+# board/core's overlay, so every edition starts closed (Desktop opens >1024).
 BR2_PACKAGE_NFTABLES=y
 # chrony is the one time daemon (SPEC: timesyncd rejected). Buildroot builds
 # systemd-timesyncd by default, and the two ran side by side on every edition:
@@ -361,8 +363,8 @@ BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_PENGYOS_PATH)/patches"
 # ----------------------------------------------------------------------------
 # Stacked on layers/core.config (everything Core has, Server has). Adds the
 # server toolset (mosh, tmux, ripgrep, jq, the comfort-CLI set), rootless
-# podman, and the server board (overlay: firewall, monitoring,
-# backup, sshd config). See configs/layers/README.md.
+# podman, and the server board (overlay: monitoring, backup, sshd
+# config; the firewall is Core's). See configs/layers/README.md.
 # ============================================================================
 
 # --- Toolchain ---------------------------------------------------------------
@@ -522,7 +524,7 @@ BR2_PACKAGE_QEMU_SLIRP=y
 BR2_PACKAGE_QEMU_TOOLS=y
 
 # --- Board: server ----------------------------------------------
-# The Server's overlay (sshd config, nftables firewall, monitoring + backup
+# The Server's overlay (sshd config, monitoring + backup
 # timers, podman socket, rootless-podman defaults) and post-build stack on
 # Core's; the post-image script replaces Core's.
 # BR2_ROOTFS_OVERLAY: set by the desktop layer
@@ -1161,7 +1163,7 @@ BR2_PACKAGE_SANE_BACKENDS=y
 # nothing: no network printer or scanner ever appeared. With it, driverless
 # (IPP Everywhere / AirPrint) printers show up in every print dialog on their
 # own. sane-airscan: driverless network scanners (eSCL / WSD). The firewall
-# lets mDNS in (Server layer nftables.conf).
+# lets mDNS in (Core layer nftables.conf).
 BR2_PACKAGE_AVAHI=y
 BR2_PACKAGE_AVAHI_DAEMON=y
 # nss-mdns: programs resolve name.local through avahi ("ssh behoserver.local"

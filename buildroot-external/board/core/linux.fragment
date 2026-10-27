@@ -241,3 +241,16 @@ CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=y
 CONFIG_LRU_GEN=y
 CONFIG_LRU_GEN_ENABLED=y
 # NOT zswap: swap is zram (above), and zswap in front of zram compresses twice.
+# The firewall's `ct state` / `ct status` rules (/etc/nftables.conf, Core layer)
+# need the nftables conntrack expression. Server only had it as a side effect of
+# netavark's kernel fixups (podman); a Core kernel without it failed to load the
+# ruleset at all ("Could not process rule: No such file or directory"), found
+# booting Core in QEMU on 2026-10-27. NF_CONNTRACK is what it reads.
+# NF_TABLES is set here too, not left to the nftables package: x86_64_defconfig
+# has no NF_TABLES, NFT_CT sits under `if NF_TABLES`, and Buildroot applies the
+# package's KCONFIG_ENABLE_OPT only after the fragment merge's olddefconfig has
+# already dropped NFT_CT.
+CONFIG_NF_TABLES=y
+CONFIG_NF_TABLES_INET=y
+CONFIG_NF_CONNTRACK=y
+CONFIG_NFT_CT=y

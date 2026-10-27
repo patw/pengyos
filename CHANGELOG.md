@@ -17,6 +17,35 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — every edition is default-deny, and a port is opened with `pengyos-firewall` (2026-10-27)
+
+Core shipped `nft` but no ruleset: `/etc/nftables.conf`, its unit and the
+enable symlink were in the Server overlay. A Core box, whose own use cases are
+a router and an unattended remote-site machine, accepted connections on every
+port. Whatever someone added to one was on the network the moment it started.
+The ruleset now lives in the Core layer, so Core, Server and Desktop all start
+from the same default-deny input chain: ssh, mDNS, and replies to this
+machine's own connections. **The Desktop is unchanged**: its image rule still
+opens every port above 1024 (LAN games, Steam Remote Play, LocalSend). Core and
+Server stay closed, per US-SRV-5's "only intended ports are exposed". On a
+cloud VM or other public network, an open range would be open to the internet,
+and `pengyos-webui --host` relies on the firewall as its second lock. A Core
+used as a router needs its own `forward` rules, as it always did; the shipped
+chain drops forwarded traffic it does not recognise.
+
+Opening a port on a Server meant editing `/etc/nftables.conf`. On an installed
+machine that file is in the `/etc` overlay, so an edited copy hides every later
+image's ruleset for good. It came up while planning Strata (:8086) on a
+Server NVIDIA box. The ruleset now also includes
+`/etc/pengyos/nftables.d/*.nft`, and the new `pengyos-firewall` (Core overlay,
+every edition) writes one rule file per opened port:
+`sudo pengyos-firewall allow 8086 --from 10.0.23.0/24`, `remove` with the same
+arguments, and `status [--json]`. It checks the whole ruleset with `nft -c`
+before reloading, and removes a rule nft rejects, so a typo cannot leave the
+firewall unloadable at the next boot. `pengyos-webui on --host` now points to it
+instead of to `nftables.conf`. The Core smoke matrix checks that the firewall
+loaded.
+
 ### Fixed — a GUI-launched app could not find what a terminal could (2026-10-26)
 
 `greetd`'s session worker hands the session a minimal environment, so

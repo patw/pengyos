@@ -1,0 +1,28 @@
+#!/bin/sh
+# pengyos-firewall test helper: a fake `nft` for the --root sandbox.
+#
+# Only `nft -c -f FILE` (check the ruleset) is supported, which is all
+# pengyos-firewall runs. It records the call, and for each rule file the real
+# ruleset would include it records the file's contents too, so a test can
+# see what was in place when the check ran. FAKE_NFT_REJECT=1 makes the check
+# fail with an nft-style error, the way a rule the kernel cannot load would.
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+LOG="$ROOT/var/log/fake-nft.log"
+mkdir -p "$ROOT/var/log"
+echo "nft $*" >> "$LOG"
+for f in "$ROOT"/etc/pengyos/nftables.d/*.nft; do
+    [ -e "$f" ] || continue
+    echo "  included: ${f##*/}" >> "$LOG"
+done
+
+case " $* " in
+    *" -c "*) ;;
+    *) echo "fake-nft: only -c is supported: $*" >&2; exit 2 ;;
+esac
+if [ "${FAKE_NFT_REJECT:-0}" = 1 ]; then
+    echo "/etc/pengyos/nftables.d/rule.nft:3:1-3: Error: syntax error" >&2
+    exit 1
+fi
+exit 0

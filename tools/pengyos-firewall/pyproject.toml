@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-firewall"
+version = "0.1.0"
+description = "PengyOS tool (shipped in the Core overlay) that opens and closes this machine's own ports on top of the default-deny nftables firewall."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf", email = "dungeons@gmail.com" }]
+# The tool is POSIX shell; Python is only the test harness. stdlib-only.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

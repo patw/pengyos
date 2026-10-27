@@ -1,7 +1,7 @@
 # ============================================================================
-# PengyOS Server — nftables.service (firewall)
+# PengyOS — nftables.service (firewall), every edition
 # ----------------------------------------------------------------------------
-# Loads the Server firewall ruleset from /etc/nftables.conf (shipped in the
+# Loads the firewall ruleset from /etc/nftables.conf (shipped in the Core
 # overlay) at boot and removes it on stop. Type=oneshot + RemainAfterExit=yes
 # so systemd treats "firewall loaded" as a stable, reached state.
 #

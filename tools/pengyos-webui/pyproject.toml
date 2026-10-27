@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-webui"
-version = "0.1.0"
+version = "0.1.1"
 description = "PengyOS tool (shipped in the Server overlay) that turns the Pengy web UI on/off per user, as a systemd template unit."
 readme = "README.md"
 requires-python = ">=3.9"

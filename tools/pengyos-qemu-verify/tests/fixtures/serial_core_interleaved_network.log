@@ -791,6 +791,7 @@ Network[0m.
 
 [[0;32m  OK  [0m] Reached target [0;1;39mLogin Prompts[0m.
 
+         Starting [0;1;39mnftables firewall[0m...
          Starting [0;1;39mOpenSSH server daemon[0m...
 
 [[0;32m  OK  [0m] Finished [0;1;39mCreate lvm system.devices[0m.
@@ -798,6 +799,7 @@ Network[0m.
 [[0;32m  OK  [0m] Started [0;1;39mD-Bus System Message Bus[0m.
 
 [[0;32m  OK  [0m] Started [0;1;39mOpenSSH server daemon[0m.
+[[0;32m  OK  [0m] Finished [0;1;39mnftables firewall[0m.
 
 [[0;32m  OK  [0m] Reached target [0;1;39mMulti-User System[0m.
 

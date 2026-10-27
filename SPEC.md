@@ -79,7 +79,7 @@ Chosen once, inherited everywhere.
 | **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (`tools/pengyos-recipe-dbus-broker`) | 🟢 / 🔵 broker |
 | **Devices, logs** | systemd-udevd, systemd-journald | LGPL-2.1 | eudev, rsyslog | 🟢 |
 | **Network** | **systemd-networkd + resolved** (Core/Server); **NetworkManager** on Desktop | LGPL-2.1 / GPL-2.0 | — | 🟢 |
-| **Firewall** | **nftables**, default-deny inbound (Desktop: ports above 1024 open, as Fedora Workstation; rootful podman bridges and published ports allowed) | GPL-2.0 | iptables, firewalld | 🟢 |
+| **Firewall** | **nftables**, default-deny inbound in every edition (Core layer; Desktop: ports above 1024 open, as Fedora Workstation; rootful podman bridges and published ports allowed). A machine opens its own ports with `pengyos-firewall`, one rule file each in `/etc/pengyos/nftables.d/` | GPL-2.0 | iptables, firewalld | 🟢 |
 | **Storage** | **A/B ext4 system slots** (read-only) + a **btrfs `data`** partition; `/etc` an overlay on `data` | GPL-2.0 | btrfs root with snapshots (designed, parked) | 🟢 |
 | **Swap** | zram (`zram-generator`) | MIT | swap partition | 🟢 |
 | **Time / trust** | chrony; ca-certificates; OpenSSL | GPL-2.0 / MPL-2.0 / Apache-2.0 | timesyncd | 🟢 |
@@ -186,7 +186,7 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 | Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq, curl |
 | Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo |
 | Containers | **podman**, rootless and daemonless, with the API socket |
-| Ops | default-deny nftables, a metrics timer, an opt-in backup timer (off by default), the daily update check; disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
+| Ops | a metrics timer, an opt-in backup timer (off by default), the daily update check; disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
 | As a VM guest | virtio (KVM, Proxmox, QEMU) and Hyper-V/Azure (VMBus disk, network, console, `hv_utils`), VMGENID |
 | Compatibility | the libraries manylinux wheels assume the host has: `libGL.so.1`/`libEGL.so.1` (libglvnd dispatch only, no GL driver) and the X11 client libraries |
 | Virtual machines | **QEMU** (x86_64 system emulation, KVM-accelerated, TCG fallback; SeaBIOS + edk2 guest firmware; `qemu-img`) and KVM, vhost, VFIO in the kernel |

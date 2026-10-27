@@ -1,0 +1,45 @@
+#!/bin/sh
+# pengyos-firewall test helper: a fake `systemctl` for the --root sandbox.
+#
+# It lives at <sandbox>/usr/bin/systemctl, which is where pengyos-firewall
+# looks for it when run with --root <sandbox>. nftables.service is "active"
+# while <sandbox>/var/lib/fake-systemd/active/nftables.service exists. Every
+# call is appended to <sandbox>/var/log/fake-systemctl.log so a test can
+# assert whether the firewall was reloaded. FAKE_SYSTEMCTL_RELOAD_FAIL=1 makes
+# reload fail.
+#
+# Exit codes follow systemd's: is-active 0/3.
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+ACTIVE="$ROOT/var/lib/fake-systemd/active"
+LOG="$ROOT/var/log/fake-systemctl.log"
+mkdir -p "$ACTIVE" "$ROOT/var/log"
+echo "systemctl $*" >> "$LOG"
+
+cmd=""
+unit=""
+for a in "$@"; do
+    case "$a" in
+        is-active|reload) cmd=$a ;;
+        --quiet|-q|--no-pager) ;;
+        *.service) unit=$a ;;
+        *) ;;
+    esac
+done
+[ -n "$cmd" ] && [ -n "$unit" ] || { echo "fake-systemctl: unsupported: $*" >&2; exit 2; }
+
+case "$cmd" in
+    is-active)
+        if [ -e "$ACTIVE/$unit" ]; then
+            case " $* " in *" --quiet "*|*" -q "*) ;; *) echo active ;; esac
+            exit 0
+        fi
+        case " $* " in *" --quiet "*|*" -q "*) ;; *) echo inactive ;; esac
+        exit 3
+        ;;
+    reload)
+        [ "${FAKE_SYSTEMCTL_RELOAD_FAIL:-0}" = 1 ] && exit 1
+        exit 0
+        ;;
+esac

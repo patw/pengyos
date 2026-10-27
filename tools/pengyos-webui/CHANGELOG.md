@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.1.1] - 2026-10-27
+
+### Changed
+- `on --host ADDR` now names the command that opens the port on a Server,
+  `sudo pengyos-firewall allow PORT --from CIDR`, instead of saying to edit
+  `/etc/nftables.conf`. An edited copy of that file shadows every later image's
+  ruleset.
+
 ## [0.1.0] - 2026-10-25
 
 ### Added

@@ -1,0 +1,331 @@
+#!/bin/sh
+# pengyos-firewall - open and close this machine's own ports in the firewall.
+#
+#   pengyos-firewall status [--json]
+#   sudo pengyos-firewall allow PORT[-PORT][/tcp|/udp] [--from CIDR]
+#   sudo pengyos-firewall remove PORT[-PORT][/tcp|/udp] [--from CIDR]
+#
+# Every edition boots with the default-deny ruleset in /etc/nftables.conf:
+# inbound ssh (22) and mDNS, replies to what this machine started, and
+# nothing else. The Desktop adds an image-owned rule that opens ports above
+# 1024 (/usr/lib/pengyos/nftables.d/input-desktop.nft). Core and Server open
+# nothing more until someone says so, and this is how they say it.
+#
+# `allow` writes one rule file, /etc/pengyos/nftables.d/allow-*.nft, which
+# /etc/nftables.conf includes into its input chain. Then it checks the whole
+# ruleset (`nft -c`) and reloads the firewall. A rule that does not check is
+# removed again, so a typo can never leave the firewall unloadable at the next
+# boot. `remove` deletes that file and reloads. Both are idempotent.
+#
+# Why a file per rule and not an edit to /etc/nftables.conf: /etc is the
+# overlay that survives OS updates, so an edited nftables.conf shadows every
+# later image's version of it, for good. The rule files only add to it.
+#
+# --from CIDR limits a port to one address or network (10.0.23.0/24,
+# 192.168.1.5, fd00::/8). Without it the port is open to every address that
+# can reach this machine, which on a public network is the internet.
+#
+# --root DIR (the last argument form) is the test hook: it points every write
+# at DIR/etc/... instead of /etc/..., runs DIR/usr/bin/nft and
+# DIR/usr/bin/systemctl, and lifts the root guard for that run because nothing
+# outside DIR is touched. Without it, allow/remove need root.
+set -eu
+
+PROG=pengyos-firewall
+UNIT=nftables.service
+ROOT=""
+JSON=0
+usage() {
+    cat <<'EOF'
+pengyos-firewall - this machine's opened ports, on top of the default-deny firewall
+
+  pengyos-firewall status [--json]          what is open, and what the firewall is doing
+  sudo pengyos-firewall allow PORT          open a TCP port (or a range: 6000-6010)
+      PORT/udp     a UDP port instead
+      --from CIDR  only for this address or network (10.0.23.0/24, 192.168.1.5)
+  sudo pengyos-firewall remove PORT         close it again (same PORT/udp and --from)
+
+Without --from the port is open to every address that can reach this machine.
+Each opened port is one file in /etc/pengyos/nftables.d/, which survives OS
+updates. Ports 22 (ssh) and 5353/udp (mDNS) are always open; the Desktop also
+opens every port above 1024.
+--root DIR writes under DIR instead of / (for tests; needs no root).
+EOF
+}
+
+die() {
+    echo "$PROG: $*" >&2
+    exit 2
+}
+
+need_root() {
+    # --root is the sandbox: every write goes under it, so it needs no root.
+    [ -n "$ROOT" ] && return 0
+    [ "$(id -u)" = 0 ] || die "run it with sudo"
+}
+
+valid_port() {
+    case "$1" in ''|*[!0-9]*) return 1 ;; esac
+    [ "${#1}" -le 5 ] || return 1
+    [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+# PORT, LO-HI, either with /tcp or /udp. Sets port (as nft writes it: 8086 or
+# 6000-6010) and proto.
+parse_spec() {
+    spec=$1
+    proto=tcp
+    case "$spec" in
+        */tcp) spec=${spec%/tcp} ;;
+        */udp) spec=${spec%/udp}; proto=udp ;;
+        */*) die "not a protocol: '${spec#*/}' (tcp or udp)" ;;
+    esac
+    case "$spec" in
+        *-*)
+            lo=${spec%%-*}
+            hi=${spec#*-}
+            valid_port "$lo" && valid_port "$hi" || die "not a port range: '$spec'"
+            [ "$lo" -lt "$hi" ] || die "not a port range: '$spec' (low-high)"
+            ;;
+        *)
+            valid_port "$spec" || die "not a port: '$spec'"
+            ;;
+    esac
+    port=$spec
+}
+
+# An address or network, v4 or v6. Only the characters an address can hold,
+# so it is safe in a file name and an nft statement; nft -c checks the rest.
+# Sets family (ip or ip6).
+parse_from() {
+    case "$1" in
+        ''|*[!0-9A-Fa-f.:/]*) die "not an address or network: '$1'" ;;
+        /*|*/|*/*/*) die "not an address or network: '$1'" ;;
+    esac
+    [ "${#1}" -le 43 ] || die "not an address or network: '$1'"
+    case "$1" in
+        *:*) family=ip6 ;;
+        *[!0-9./]*) die "not an address or network: '$1'" ;;
+        *) family=ip ;;
+    esac
+}
+
+# --- the rule files: /etc/pengyos/nftables.d/ -------------------------------
+
+RULE_DIR=$ROOT/etc/pengyos/nftables.d
+IMAGE_DIR=$ROOT/usr/lib/pengyos/nftables.d
+
+# allow-tcp-8086.nft, allow-udp-6000-6010-from-10.0.23.0_24.nft
+rule_file() {
+    f="allow-$proto-$port"
+    [ -z "$from" ] || f="$f-from-$(echo "$from" | tr '/:' '__')"
+    echo "$RULE_DIR/$f.nft"
+}
+
+rule_line() {
+    src=""
+    [ -z "$from" ] || src="$family saddr $from "
+    if [ "$proto" = tcp ]; then
+        echo "tcp dport $port ${src}ct state new accept"
+    else
+        echo "udp dport $port ${src}accept"
+    fi
+}
+
+# What a rule file opens, for status: the label line allow writes, else the
+# file name (a file someone wrote by hand).
+rule_label() {
+    label=$(sed -n 's/^# pengyos-firewall: //p' "$1" | head -n 1)
+    [ -n "$label" ] && echo "$label" || echo "(by hand) ${1##*/}"
+}
+
+nft() {
+    if [ -n "$ROOT" ]; then
+        [ -x "$ROOT/usr/bin/nft" ] || die "no nft under $ROOT (see --root)"
+        "$ROOT/usr/bin/nft" "$@"
+        return $?
+    fi
+    command -v nft >/dev/null 2>&1 || die "no nft on this system"
+    command nft "$@"
+}
+
+systemctl() {
+    if [ -n "$ROOT" ]; then
+        [ -x "$ROOT/usr/bin/systemctl" ] || die "no systemctl under $ROOT (see --root)"
+        "$ROOT/usr/bin/systemctl" "$@"
+        return $?
+    fi
+    command -v systemctl >/dev/null 2>&1 || die "no systemctl on this system"
+    command systemctl "$@"
+}
+
+# Check the whole ruleset with the rule files as they now are, then load it.
+# A firewall that is not running (stopped on purpose) is left stopped: the
+# files apply when it next starts.
+check_and_reload() {
+    if ! out=$(nft -c -f "$ROOT/etc/nftables.conf" 2>&1); then
+        echo "$out" >&2
+        return 1
+    fi
+    # Called from an `if`, where set -e does not apply: fail explicitly.
+    if systemctl is-active --quiet "$UNIT"; then
+        systemctl reload "$UNIT" || { echo "$PROG: reloading $UNIT failed" >&2; return 1; }
+        loaded=1
+    else
+        loaded=0
+    fi
+    return 0
+}
+
+# --- allow / remove ---------------------------------------------------------
+
+do_allow() {
+    need_root
+    [ -n "$spec_arg" ] || die "allow what? sudo $PROG allow PORT[/udp] [--from CIDR]"
+    parse_spec "$spec_arg"
+    [ -z "$from" ] || parse_from "$from"
+    file=$(rule_file)
+    what="$port/$proto"
+    [ -z "$from" ] || what="$what from $from"
+
+    mkdir -p "$RULE_DIR"
+    {
+        echo "# pengyos-firewall: $what"
+        echo "# Written by pengyos-firewall allow; 'remove' with the same arguments deletes it."
+        rule_line
+    } > "$file.new"
+    chmod 0644 "$file.new"
+    had=0
+    [ -e "$file" ] && had=1
+    mv "$file.new" "$file"
+
+    if ! check_and_reload; then
+        # Leave the firewall exactly as it was: a rule that does not check would
+        # stop nftables.service from loading anything at the next boot.
+        [ "$had" = 1 ] || rm -f "$file"
+        die "nft rejected the rule; nothing was changed"
+    fi
+    if [ "$loaded" = 1 ]; then
+        echo "firewall: $what open (${file##*/})"
+    else
+        echo "firewall: $what written (${file##*/}); $UNIT is not running, so it applies when the firewall next starts"
+    fi
+    [ -n "$from" ] || echo "  open to every address that can reach this machine; --from CIDR narrows it"
+}
+
+do_remove() {
+    need_root
+    [ -n "$spec_arg" ] || die "remove what? sudo $PROG remove PORT[/udp] [--from CIDR]"
+    parse_spec "$spec_arg"
+    [ -z "$from" ] || parse_from "$from"
+    file=$(rule_file)
+    what="$port/$proto"
+    [ -z "$from" ] || what="$what from $from"
+
+    if [ ! -e "$file" ]; then
+        echo "firewall: $what was not opened by $PROG (no ${file##*/}); nothing to do"
+        return 0
+    fi
+    rm -f "$file"
+    check_and_reload || die "the remaining rules do not check; see the error above"
+    echo "firewall: $what closed"
+}
+
+# --- status -----------------------------------------------------------------
+
+do_status() {
+    active=$(systemctl is-active "$UNIT" 2>/dev/null || true)
+    [ -n "$active" ] || active=unknown
+
+    image_json=""
+    image_human=""
+    for f in "$IMAGE_DIR"/input-*.nft; do
+        [ -e "$f" ] || continue
+        n=${f##*/}
+        image_json="$image_json\"$n\","
+        case "$n" in
+            input-desktop.nft) image_human="$image_human  image: every port above 1024 (Desktop, $n)
+" ;;
+            *) image_human="$image_human  image: $n
+" ;;
+        esac
+    done
+
+    open_json=""
+    open_human=""
+    for f in "$RULE_DIR"/*.nft; do
+        [ -e "$f" ] || continue
+        label=$(rule_label "$f")
+        open_json="$open_json{\"file\":\"${f##*/}\",\"opens\":\"$label\"},"
+        open_human="$open_human  $label
+"
+    done
+
+    if [ "$JSON" = 1 ]; then
+        printf '{"tool":"%s","unit":"%s","active":"%s","always_open":["22/tcp","5353/udp mDNS"],"image_rules":[%s],"opened":[%s]}\n' \
+            "$PROG" "$UNIT" "$active" "${image_json%,}" "${open_json%,}"
+        return 0
+    fi
+
+    if [ "$active" = active ]; then
+        echo "firewall: on (default-deny inbound; $UNIT active)"
+    else
+        echo "firewall: $active ($UNIT) - NOT filtering until it starts"
+    fi
+    echo "  always: 22/tcp (ssh), 5353/udp (mDNS), replies to this machine's own connections"
+    printf '%s' "$image_human"
+    if [ -n "$open_human" ]; then
+        echo "  opened on this machine (/etc/pengyos/nftables.d):"
+        printf '%s' "$open_human" | sed 's/^/  /'
+    else
+        echo "  opened on this machine: nothing"
+        echo "  sudo $PROG allow PORT[/udp] [--from CIDR]"
+    fi
+    return 0
+}
+
+# --- arguments --------------------------------------------------------------
+
+cmd=""
+spec_arg=""
+from=""
+family=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --json) JSON=1; shift ;;
+        --from) [ $# -ge 2 ] || die "--from needs a value"; from=$2; shift 2 ;;
+        --from=*) from=${1#--from=}; shift ;;
+        --root) [ $# -ge 2 ] || die "--root needs a value"; ROOT=$2; shift 2 ;;
+        --root=*) ROOT=${1#--root=}; shift ;;
+        -*) die "no such option: $1 (see --help)" ;;
+        *)
+            # The first bare word is the subcommand, the next one is PORT.
+            if [ -z "$cmd" ]; then
+                case "$1" in
+                    status|allow|remove) cmd=$1; shift ;;
+                    *) die "no such command: '$1' (status | allow | remove, see --help)" ;;
+                esac
+            elif [ -n "$spec_arg" ]; then
+                die "too many arguments (see --help)"
+            else
+                spec_arg=$1
+                shift
+            fi
+            ;;
+    esac
+done
+[ -n "$cmd" ] || cmd=status
+if [ "$cmd" = status ] && { [ -n "$spec_arg" ] || [ -n "$from" ]; }; then
+    die "status takes no port (see --help)"
+fi
+ROOT=${ROOT%/}
+[ -z "$ROOT" ] || [ -d "$ROOT" ] || die "no such directory: $ROOT"
+RULE_DIR=$ROOT/etc/pengyos/nftables.d
+IMAGE_DIR=$ROOT/usr/lib/pengyos/nftables.d
+
+case "$cmd" in
+    allow) do_allow ;;
+    remove) do_remove ;;
+    status) do_status ;;
+esac

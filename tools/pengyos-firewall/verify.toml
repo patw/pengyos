@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The tool is POSIX shell; the suite is Python and drives the script itself
+# against a sandbox root with a fake nft and systemctl, so it needs no root,
+# no nftables and no build.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-firewall"
+expect = "exit0"
+timeout = 600

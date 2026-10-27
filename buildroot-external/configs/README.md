@@ -19,7 +19,7 @@ it).
 | Defconfig | Edition / milestone | Notes |
 |---|---|---|
 | `pengyos_core_defconfig` | **Core** | The systemd base — the current "Core". Boots on real N100 hardware. |
-| `pengyos_server_defconfig` | **Server** | Core + the comfort-CLI set, rootless podman, monitoring, backup, nftables. |
+| `pengyos_server_defconfig` | **Server** | Core + the comfort-CLI set, rootless podman, monitoring, backup. |
 | `pengyos_desktop_defconfig` | **Desktop** | Server/Core base + Wayland + COSMIC + graphics/audio/network. The main Desktop image. |
 | `pengyos_desktop_nvidia_defconfig` | **Desktop (NVIDIA variant)** | **Opt-in**, not built by default. The Desktop base plus the proprietary NVIDIA driver on the open kernel modules (`package/nvidia-open`, RTX 20 and newer; a documented Tier-2 concession — see `SPEC.md` §2.5 and `tools/pengyos-desktop-nvidia`). |
 

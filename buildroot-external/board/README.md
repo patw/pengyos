@@ -18,8 +18,8 @@ hardware (Intel N100 mini-PCs, Intel and AMD laptops).
 
 | Board | Layer (used by) | What it is |
 |---|---|---|
-| `core/` | `core` (every edition) | **Core** — the systemd userspace base: glibc, D-Bus, networkd/resolved, chrony, journald, udev, key-only sshd, signed SBOM, video console. Its `post-build.sh` runs first in every edition; `tool-stubs/` holds the "not installed" stubs. |
-| `server/` | `server` (Server, Server NVIDIA, Desktop) | **Server** — remote-work + rootless containers + monitoring/backup + nftables, and the shared install/update machinery (preinit, the A/B layout, `pengyos-update`). |
+| `core/` | `core` (every edition) | **Core** — the systemd userspace base: glibc, D-Bus, networkd/resolved, chrony, journald, udev, key-only sshd, the default-deny nftables firewall and `pengyos-firewall`, signed SBOM, video console. Its `post-build.sh` runs first in every edition; `tool-stubs/` holds the "not installed" stubs. |
+| `server/` | `server` (Server, Server NVIDIA, Desktop) | **Server** — remote-work + rootless containers + monitoring/backup, and the shared install/update machinery (preinit, the A/B layout, `pengyos-update`). |
 | `desktop/` | `desktop` (Desktop, Desktop NVIDIA) | **Desktop** — the COSMIC session + graphics/audio/network stack. The NVIDIA editions add no board: their driver files come from `package/nvidia-open` (and `nvidia-container-toolkit`), and each post-build names the image `… NVIDIA` when `nvidia-smi` is in it. |
 | `common/` | — | Shared by every edition: `os-release.sh` (from the root `VERSION`), `installer-image.sh` (the install payload + the installer stick for Server and Desktop), `image-ids.sh` (disk and filesystem IDs derived from os-release, for reproducible images), `check-needed-libs.py` (the end of each post-build: fail if an ELF needs a library the image lacks) and `pyc-compile.py` (per-file Python byte-compiling, called from `external.mk`). |
 

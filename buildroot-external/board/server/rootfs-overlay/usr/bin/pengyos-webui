@@ -23,8 +23,8 @@
 #     shell, in front of the network with no authentication at all. It is
 #     never a default and never implied: it takes the flag on purpose, and
 #     `status` prints the bind address every time it is asked. On Server the
-#     default-deny firewall has to open the port as well, so a Server stays
-#     dark until both are changed.
+#     default-deny firewall has to open the port as well (pengyos-firewall
+#     allow), so a Server stays dark until both are changed.
 #   * The service starts at boot and stays up, on a headless Server with no
 #     session as well as on Desktop. `off` stops it and takes it back out of
 #     the boot.
@@ -248,8 +248,9 @@ do_on() {
     echo "pengy web UI: on for $user, http://$host:$port (pengy-web@$user.service, from this boot and every boot)"
     [ "$host" = "$DEFAULT_HOST" ] && return 0
     echo "  WARNING: bound on $host, and the UI has no login - anyone who can"
-    echo "  reach that address runs tools as $user. On Server, the port also"
-    echo "  has to be opened in /etc/nftables.conf to be seen off the machine."
+    echo "  reach that address runs tools as $user. On Server the port also has"
+    echo "  to be opened to be seen off the machine (a Desktop opens ports above 1024):"
+    echo "    sudo pengyos-firewall allow $port --from YOUR-NETWORK/CIDR"
 }
 
 do_off() {

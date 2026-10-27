@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **The Core matrix now requires the firewall** (`nftables-loaded`, the same
+  check as the Server matrix). The default-deny ruleset moved from the Server
+  layer to Core, so every edition loads it. The Server matrix's "rejects a Core
+  boot on exactly the Server facts" test no longer counts the firewall as a
+  Server fact. The two Core login fixtures were recaptured from a 26.10.45
+  Core build (2026-10-27). The two Core failure recordings
+  (`serial_core_interleaved_network.log`, `serial_core_autologin_denied.log`)
+  can't be recaptured, because their bugs are fixed. Each got the firewall's
+  `Starting`/`Finished` lines, at the place a real boot prints them; the rest of
+  each log is as captured.
 - **The Server matrix now requires the backup timer to be off** (`backup-timer` →
   `backup-timer-off`, kind `absent`). The image no longer enables
   `pengyos-backup.timer`: its defaults filled the drive. The three Server serial

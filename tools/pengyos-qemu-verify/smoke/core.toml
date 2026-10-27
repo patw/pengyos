@@ -114,6 +114,12 @@ pattern = "Reached target (?:[\\s\\S]{0,120}?\\n)?(?:\u001b\\[[0-9;]*m)?(?:[\\s\
 description = "network.target was reached (not just 'Preparation for Network'), even when a kernel message split the console line it was printed on"
 
 [[check]]
+id = "nftables-loaded"
+kind = "present"
+pattern = "Finished .*nftables firewall"
+description = "the default-deny nftables ruleset loaded (Core layer since 26.10.45: every edition is default-deny)"
+
+[[check]]
 id = "chrony-started"
 kind = "present"
 pattern = "Started .*Chrony"

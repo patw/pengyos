@@ -161,6 +161,25 @@ The state is worth naming because the UI has **no login** and exposes
 that user. The default is `127.0.0.1`; a non-loopback bind is only ever there
 because someone typed `--host`. `pengyos-webui status` prints it.
 
+### Tier-1 state a command writes: `pengyos-firewall` (2026-10-27)
+
+The same pattern for the firewall. Every edition loads `/etc/nftables.conf`
+(Core layer, default-deny inbound). The Desktop adds its image-owned rule
+from `/usr/lib/pengyos/nftables.d/` (every port above 1024). A machine's
+**own** opened ports are files in the upper layer, one each:
+
+| Path | What |
+|---|---|
+| `/etc/pengyos/nftables.d/allow-<proto>-<port>[-from-<cidr>].nft` | one input-chain rule, written by `sudo pengyos-firewall allow PORT[/udp] [--from CIDR]` and deleted by `remove` |
+
+`/etc/nftables.conf` includes `/etc/pengyos/nftables.d/*.nft`, so the rules
+add to the image's ruleset instead of replacing it. That is the point. Before
+this, the only way to open a port on a Server was to edit `nftables.conf`,
+and an edited copy shadows every later image's version of the file (see
+"Divergence should be visible" above). `allow` checks the whole ruleset with
+`nft -c` before it reloads, and removes a rule nft rejects, so the firewall
+cannot be left unloadable at the next boot.
+
 ## How install works (implemented: `pengyos-install image`)
 
 The installer:

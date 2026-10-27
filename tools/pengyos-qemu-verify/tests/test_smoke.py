@@ -175,9 +175,9 @@ def test_shipped_matrix_rejects_a_real_failed_boot_for_the_right_reasons():
     expected = {
         "firmware-handoff", "grub-cmdline", "rootfs-mounted", "systemd-pid1",
         "distro-welcome", "rootfs-remounted-rw", "nic-link-up", "networkd-started",
-        "resolved-started", "network-target", "chrony-started", "sshd-started",
-        "multi-user", "reached-login", "autologin-shell", "no-kernel-panic",
-        "no-oops",
+        "resolved-started", "network-target", "nftables-loaded", "chrony-started",
+        "sshd-started", "multi-user", "reached-login", "autologin-shell",
+        "no-kernel-panic", "no-oops",
     }
     for variant in outcome.variants:
         assert set(variant.failed_checks) == expected, variant.failed_checks
@@ -218,11 +218,12 @@ def test_server_matrix_passes_a_real_server_boot(log_path):
 
 def test_server_matrix_rejects_a_core_boot_on_exactly_the_server_facts():
     """Core is Server minus the Server layer, so a real Core boot must fail
-    the Server-only checks and nothing else."""
+    the Server-only checks and nothing else. The firewall is not one of them:
+    since 26.10.45 the default-deny ruleset is Core's."""
     matrix = smoke.load_matrix(str(SERVER_MATRIX))
     outcome = smoke.run_matrix(matrix, "img", boot_fn=_boot_from(CORE_UEFI_LOG))
     expected = {
-        "distro-welcome", "network-online", "nftables-loaded", "sshd-started",
+        "distro-welcome", "network-online", "sshd-started",
         "podman-socket", "podman-service", "metrics-timer",
         "update-timer", "server-target", "reached-login", "autologin-shell",
     }

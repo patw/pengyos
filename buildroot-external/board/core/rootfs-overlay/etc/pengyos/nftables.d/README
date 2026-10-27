@@ -1,0 +1,16 @@
+This machine's opened firewall ports (PengyOS).
+
+/etc/nftables.conf includes every *.nft file here into the input chain of
+its default-deny firewall. Each file holds input-chain rule statements, e.g.
+
+    tcp dport 8086 ip saddr 10.0.23.0/24 ct state new accept
+
+Manage them with pengyos-firewall instead of by hand:
+
+    pengyos-firewall status
+    sudo pengyos-firewall allow 8086 --from 10.0.23.0/24
+    sudo pengyos-firewall remove 8086 --from 10.0.23.0/24
+
+/etc survives OS updates, and so do these files. They add to the image's
+ruleset without replacing /etc/nftables.conf, so the image can still update
+that file. This README is not a .nft file, so the firewall ignores it.

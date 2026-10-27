@@ -19,11 +19,12 @@ derived. Every component is chosen on its merits and justified in writing; the
 image ships with an SBOM and a signed attestation. Three editions that nest:
 
 ```
-CORE   = the base: systemd, key-only sshd, Python 3, nftables, chrony, firmware
+CORE   = the base: systemd, key-only sshd, Python 3, a default-deny firewall
+         (pengyos-firewall opens a port), chrony, firmware
 SERVER = Core + tmux/mosh/zsh/git/ripgrep/fd/bat/eza/zoxide/jq (+ fzf, starship and the zsh plugins on the comfort profile), rootless podman,
-         distrobox, a default-deny firewall, backup + monitoring timers,
+         distrobox, backup + monitoring timers,
          the daily update check, pengy-web
-DESKTOP= Server + the COSMIC Wayland session, PipeWire, BlueZ, CUPS, Wi-Fi,
+DESKTOP= Server + every port above 1024 open, the COSMIC Wayland session, PipeWire, BlueZ, CUPS, Wi-Fi,
          Mesa/Vulkan, Flatpak + Flathub, Plymouth splash, the Pengy app
 ```
 
