@@ -1,5 +1,9 @@
 # Moving COSMIC to epoch-1.9 — what is actually pinned, and what breaks
 
+**Status:** done. The move shipped in 26.10.8, and behopc runs COSMIC 1.9 as its
+daily desktop. Kept as the method for the next epoch bump: the libcosmic
+coherence check and the commands at the end are what to rerun.
+
 Written 2026-10-05, from the live repos, to support the decision rather than
 describe it. Every number below came from a command; the commands are at the end.
 

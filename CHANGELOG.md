@@ -17,6 +17,20 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Docs — status that had gone stale (2026-10-27)
+
+- `docs/install-update-architecture.md` opened with two status banners that
+  contradicted each other. The older one said there was "no update mechanism
+  yet" and that installs wrote one ext4 root. They are one banner now: what
+  shipped (A/B lite, `pengyos-update`), what is parked, and which tools were
+  retired when.
+- `docs/cosmic-epoch-1.9.md` is marked done (shipped in 26.10.8) and kept as
+  the method for the next epoch bump. It and `browser-engine-viability.md` were
+  missing from `docs/README.md`; both are indexed now.
+- SPEC said uutils was 0.11.0 while the recipe pinned 0.12.0: the nightly bumps
+  recipes, and nothing bumps SPEC. The uutils and sudo-rs rows no longer carry
+  a version; the recipe is the pin.
+
 ### Changed — `wheel` is the only admin group (2026-10-27)
 
 `/etc/sudoers` granted `%sudo`, and the installer put the owner in a `sudo`
