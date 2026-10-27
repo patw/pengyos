@@ -1,3 +1,0 @@
-up{job="node-exporter",instance="node1"} 1 0
-up{job="node-exporter",instance="node1"} 1 60
-up{job="node-exporter",instance="node1"} 1 120

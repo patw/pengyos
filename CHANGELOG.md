@@ -17,6 +17,34 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Removed — 30 more tools nothing used (2026-10-27)
+
+The second half of the vestigial sweep. These 30 tools had no reference from an
+image, a build, a release, the nightly or another live tool. They were written
+for designs the project did not take, or that the board layers, the COSMIC
+desktop and `pengyos-nightly` now cover:
+
+- Desktop ideas from before COSMIC: `pengy-panel`, `pengy-theme`,
+  `pengyos-desktop-session`, `pengyos-desktop-curation`,
+  `pengyos-flatpak-mirror`, `pengyos-desktop-drivers`.
+- Server tools from the early spec phase, replaced by `pengyos-server-toolset`,
+  the overlays and `pengyos-firewall`: `pengyos-server-backup`,
+  `-server-containers`, `-server-monitoring`, `-server-firewall`, `pengyos-net`,
+  `pengyos-storage`.
+- Generic infrastructure the board layers replaced: `pengyos-systemd-units`,
+  `-hardening`, `-apparmor` (the kernel has no AppArmor), `-initramfs`,
+  `-kernel-fragments`, `-hwprofile`, `-hwprofile-kernel`, `-fleet-inventory`,
+  `-fleet-rollout`, `-license-audit`.
+- Provenance tools never wired into build or release: `pengyos-seal`,
+  `-verifier`, `-witness-bundle`, `-repro`, `-repro-report`. `pengyos-sbom`
+  (used by `pengyos-build sbom`), `pengyos-sign` and `pengyos-attest` stay.
+- Installer attempts the `pengyos-install` engine replaced: `pengyos-installer`,
+  `pengyos-media`, `pengyos-live`.
+
+SPEC, USE-CASES and the docs stop describing them as current. US-AUG-2's staged
+rollout is now stated as not built. `tools/` holds 40
+directories.
+
 ### Pengy 1.13.1 — the question dialog is usable on COSMIC (2026-10-27)
 
 - `package/pengy` pin 1.13.0 → 1.13.1, a GUI-only release (Desktop).

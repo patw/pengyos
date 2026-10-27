@@ -1,4 +1,0 @@
-# NVMe storage controller.
-# Single concern: the NVMe block driver for PCIe NVMe SSDs.
-CONFIG_NVME=y
-CONFIG_NVME_MULTIPATH=y

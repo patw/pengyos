@@ -116,7 +116,7 @@ So the honest decomposition of the operator's goal is:
 
 - **Native COSMIC browsing** → a Band-1 additive COSMIC app: iced shell + `wry` +
   WebKitGTK. Lane 1 engine, no new fork, no new toolchain, boots in the existing smoke
-  matrix, and it is the same class of work as `cosmic-files`/`pengy-panel`.
+  matrix, and it is the same class of work as `cosmic-files` or the PengyOS libcosmic apps.
 - **MV2 / full uBlock Origin** → Firefox (already shipped), **not** a Chromium property.
 - **Ad blocking that is engine-independent** → network-level (DNS filtering, hosts,
   proxy). It works in every lane, survives engine churn, and fits the fleet model.

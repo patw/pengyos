@@ -599,7 +599,8 @@ refused.
 
 How: `pengyos-release` publishes signed images (and the matching extensions) to a feed
 served by a Server install (Caddy, static files); `pengyos-update` pulls A/B on each
-machine; `pengyos-fleet-rollout` stages (canary → rest) and rolls back. Signing stays a
+machine. Staging (canary → rest) and fleet-wide rollback are not built yet: the
+channels (stable/testing) are the only staging today. Signing stays a
 human step (Tier 2).
 **Acceptance:** a signed release reaches a canary machine, then the fleet, on the
 schedule; a bad release is halted and rolled back; an unsigned or wrongly signed release

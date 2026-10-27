@@ -25,7 +25,7 @@ broken by crossing the second one even when the first is easy.
 
 | Band | Examples | What makes it admissible today |
 |---|---|---|
-| **1 — Additive** | COSMIC applets, curated apps, theme, boot experience, OOB defaults | Proven. Already shipped (`pengy-panel`, `pengy-theme`, curation). No existing component is displaced |
+| **1 — Additive** | COSMIC applets, curated apps, theme, boot experience, OOB defaults | Proven. Already shipped (the PengyOS libcosmic apps, the games, theme defaults). No existing component is displaced |
 | **2 — Fork upstream** | COSMIC Settings additions, libcosmic patches, `board/desktop/cosmic-patches/` | Boots, reaches a session, passes the smoke matrix and the Desktop screenshot check; patches written upstreamable; ledger entry (§ Divergence budget) |
 | **3 — Replace a userland component** | coreutils → uutils, dbus → dbus-broker, tar/ps/top-class CLIs | Lane-1 recipe (not host injection), reverse dependencies resolved, **our own observe source**, repro still green, ledger entry |
 | **4 — Replace a contract-bearing subsystem** | init/PID 1, C library, display server | Requires a **new verification layer designed before the replacement**, not after. Research track, not roadmap |
@@ -133,7 +133,7 @@ Rules:
 
 **The ledger.** `divergence.toml` at the repository root, one entry per carried
 divergence (fork or patch set), machine-readable so `pengyos-nightly`,
-`pengyos-recipe-lint` and `pengyos-fleet-inventory` can all read the same fact:
+`pengyos-recipe-lint` and the gate can all read the same fact:
 
 ```toml
 [[divergence]]

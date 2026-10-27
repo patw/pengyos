@@ -85,7 +85,7 @@ Chosen once, inherited everywhere.
 | **Swap** | zram (`zram-generator`) | MIT | swap partition | 🟢 |
 | **Time / trust** | chrony; ca-certificates; OpenSSL | GPL-2.0 / MPL-2.0 / Apache-2.0 | timesyncd | 🟢 |
 | **Remote** | OpenSSH, key-only; host keys generated on first boot | BSD | — | 🟢 |
-| **LSM** | **Yama** (`ptrace_scope=1`) and **Landlock** since 26.10.23; no MAC policy yet: AppArmor profiles exist (`tools/pengyos-apparmor`) but are not enabled in an image | GPL-2.0 | SELinux | 🟡 |
+| **LSM** | **Yama** (`ptrace_scope=1`) and **Landlock** since 26.10.23; no MAC policy yet (the kernel has no AppArmor or SELinux) | GPL-2.0 | SELinux | 🟡 |
 | **Signing** | **ed25519** detached signatures (`tools/pengyos-sign`) on update manifests | MIT | GPG | 🟢 |
 | **SBOM** | **SPDX + CycloneDX** per image, generated from Buildroot's `legal-info`/`show-info` (`pengyos-build sbom --embed`), signed, and embedded at `/etc/pengyos/` | CC0-1.0 | — | 🟢 |
 | **Measured boot** | not yet (tpm2-tools ship on Desktop) | — | TPM2 via systemd-measure with the UKI design | ⚪ |
@@ -106,8 +106,7 @@ Chosen once, inherited everywhere.
 > `intel-microcode`, AMD `amd-ucode`; built into the kernel since 26.10.23) and device
 > **firmware** (`linux-firmware`, `sof-firmware`) in every edition, and the **NVIDIA
 > driver** in the NVIDIA editions only (§2.5). Every
-> license cell is checked against the SBOM; `tools/pengyos-license-audit` reports
-> mismatches.
+> license cell is recorded in the SBOM (`pengyos-build sbom`).
 
 ---
 
@@ -272,9 +271,9 @@ therefore not fully from source.
 | **Boot verification** | `pengyos-qemu-verify` boots every image under QEMU/KVM + OVMF and runs the Core and Server smoke matrices; its `desktop` subcommand proves a Desktop stick reaches a running COSMIC session; `release.sh` runs both | 🟢 |
 | **Library check** | every edition's post-build ends with `board/common/check-needed-libs.py`: the build fails if any ELF in the image needs a shared library the image lacks | 🟢 |
 | **Repo gate** | `scripts/pengyos_gate.py`: wiring lints + every tool's suite | 🟢 |
-| **Reproducibility** | `BR2_REPRODUCIBLE`, IDs derived from os-release; `pengyos-repro` compares two builds; `pengyos-verifier` and `pengyos-witness-bundle` check a build as an outside witness | 🟢 26.10.3's Core and Server byte-identical on two hosts (the Desktop apart from host-built COSMIC) · 🔵 not yet a release gate |
+| **Reproducibility** | `BR2_REPRODUCIBLE`, IDs derived from os-release; two hosts' builds of one commit are compared | 🟢 26.10.3's Core and Server byte-identical on two hosts (the Desktop apart from host-built COSMIC) · 🔵 not yet a release gate |
 | **Update triage** | upstream releases and advisories → triage → a proposed change for a human | 🟢 phase 1: `pengyos-nightly` checks upstream, kernel and CVE feeds each evening, triages and emails a report · 🔵 building and proposing changes |
-| **Hardware profiles** | per-machine definitions generated from detected hardware (`pengyos-hwprofile`) | 🔵 |
+| **Hardware profiles** | per-machine definitions generated from detected hardware (not built) | 🔵 |
 | **Attestation log** | an append-only, hash-chained record of builds and changes (`pengyos-attest`) | 🔵 |
 | **Measured / Secure Boot** | TPM2 measurement and signed boot chain | ⚪ (§4) |
 

@@ -1,4 +1,0 @@
-# SATA storage controller.
-# Single concern: the AHCI SATA driver and the underlying ATA layer.
-CONFIG_ATA=y
-CONFIG_SATA_AHCI=y

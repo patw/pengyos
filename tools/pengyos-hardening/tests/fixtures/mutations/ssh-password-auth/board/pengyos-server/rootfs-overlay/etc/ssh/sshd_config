@@ -1,9 +1,0 @@
-# sshd_config — PengyOS server edition (hardened).
-# Managed by pengyos-hardening; edits belong in the baseline, not here.
-PermitRootLogin no
-PasswordAuthentication yes
-PubkeyAuthentication yes
-PermitEmptyPasswords no
-X11Forwarding no
-AllowTcpForwarding no
-Protocol 2

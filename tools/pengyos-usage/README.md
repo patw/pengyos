@@ -71,5 +71,4 @@ CARGO_TARGET_DIR=$PENGYOS_COSMIC_BUILD/install-gui cargo build --release --featu
 `scripts/build-cosmic.sh pengyos-usage` does the last one; the Desktop
 post-build installs it, and the overlay carries `io.catbee.pengyos.DiskUsage.desktop`.
 
-`pengyos-storage` (Python) is the terminal and HTML version of the same question,
-for Server and scripts.
+On a Server, or in a script, the terminal answer is `du -h --max-depth=1 | sort -h`.

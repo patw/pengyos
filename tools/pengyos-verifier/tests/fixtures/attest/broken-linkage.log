@@ -1,2 +1,0 @@
-{"data":{"board":"m1","commit":"abc123"},"hash":"f2a3c556e49afbc68485ae96851fd57784ff541082a492651fc9173552648603","prev_hash":"0000000000000000000000000000000000000000000000000000000000000000","seq":1,"ts":"2026-09-16T00:00:00Z","type":"build"}
-{"data":null,"hash":"a0add6de5d055bdb020d94f1b79babcabfce959303aa9cc95be2dbdc36f1e0cc","prev_hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","seq":2,"ts":"2026-09-16T00:10:00Z","type":"event"}

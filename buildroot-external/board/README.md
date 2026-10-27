@@ -38,8 +38,7 @@ board/<name>/
 ```
 
 - **`linux.fragment`** is merged onto the base x86_64 kernel defconfig — this is
-  how a board gets exactly the drivers it needs and nothing more (see
-  `tools/pengyos-kernel-fragments` and `pengyos-hwprofile-kernel`). Kconfig drops
+  how a board gets exactly the drivers it needs and nothing more. Kconfig drops
   a line whose dependencies are unmet without a word, so the core `post-build.sh`
   runs `scripts/check-kernel-fragments.py --built` and fails the build if any
   fragment line, or any option in a `kernel-required.txt`, did not end up in the

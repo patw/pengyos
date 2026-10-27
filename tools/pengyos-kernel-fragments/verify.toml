@@ -1,8 +1,0 @@
-# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
-# Python/other tool: pytest in this tool's directory.
-[[check]]
-name = "unit tests"
-run = ["python3", "-m", "pytest", "-q"]
-cwd = "tools/pengyos-kernel-fragments"
-expect = "exit0"
-timeout = 600
