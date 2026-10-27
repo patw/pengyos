@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Pengy 1.13.1 — the question dialog is usable on COSMIC (2026-10-27)
+
+- `package/pengy` pin 1.13.0 → 1.13.1, a GUI-only release (Desktop).
+- Pengy's `ask_user_question` dialog opened as a ~70px strip on COSMIC, header
+  and buttons only, so none of the choices could be seen or clicked. cosmic-comp
+  opens a new toplevel at its *minimum* size, and the dialog published a maximum
+  width with only an advisory `resize()`. 1.13.1 publishes the size it wants as
+  its minimum instead. `pengy-cli` and `pengy-web` change only in their version
+  string.
+- The hash is the `cargo vendor` archive (`pengy-1.13.1-cargo6.tar.gz`) that
+  `make pengy-source` produced. LICENSE is unchanged between the tags.
+
 ### Removed — tools nothing used any more; prototypes moved to `prototypes/` (2026-10-27)
 
 Sixteen directories under `tools/` were not wired into any image, build,

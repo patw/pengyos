@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-PENGY_VERSION = 1.13.0
+PENGY_VERSION = 1.13.1
 PENGY_SITE = $(call github,patw,PengyR,v$(PENGY_VERSION))
 PENGY_LICENSE = MIT
 PENGY_LICENSE_FILES = LICENSE
