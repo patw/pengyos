@@ -1,37 +1,30 @@
 # PengyOS — Install & Update architecture (pinned 2026-09-24)
 
-> **Status 2026-09-30 — updates shipped, "A/B lite".** Installed machines update
-> with `pengyos-update` from the signed feed at
-> <https://pengyos.catbee.ca/update/>: GRUB + ext4 slots + a grubenv one-shot
-> trial boot, ed25519 manifests (`pengyos-sig-v1`), channels stable/testing. See
-> `docs/state-layout.md` ("How an update works") and `tools/pengyos-update`.
-> The UKI / systemd-boot / systemd-sysupdate design below stays parked, and
-> the tools built for it (`pengyos-uki`, `pengyos-bootchain`,
-> `pengyos-bootcount`, `pengyos-sysupdate`) were retired on 2026-10-03 — see
-> the `main-prepublic` branch before commit "Retire the parked UKI/sysupdate tools" —
-> and the rest of this design's tools (`pengyos-secureboot-enroll`,
-> `pengyos-secureboot-keys`, `pengyos-measured-boot`, `pengyos-btrfs-layout`,
-> `pengyos-mutations`, `pengyos-pins`, `pengyos-upstream-watch`,
-> `pengyos-update-triage`) on 2026-10-27; the tool lists below are historical;
-> decision 4's "local static feed first" became an HTTPS static feed directly.
-
-> **Status 2026-09-28 — A/B is PARKED.** Decisions 1 and 2 below (A/B slots +
-> btrfs + `systemd-sysupdate`; UKI + systemd-boot + Secure Boot + measured boot)
-> are **not** a prerequisite for installing and are not being built now. They are
-> an *update* mechanism, and there is no update mechanism yet; how installed
-> machines get updates is being decided separately and may or may not use A/B.
+> **Status 2026-10-27 — what shipped, what is parked.** This is the original
+> design (2026-09-24). What shipped is the smaller "A/B lite" in
+> [`state-layout.md`](state-layout.md):
 >
-> **What installs today:** the edition's `pengyos-build` disk image (GRUB + one
-> ext4 root) is carried on the USB stick as a payload and written to the target
-> by `pengyos-install image` (GUI: `pengyos-install-gui`; console:
-> `pengyos-install-tui install`). That still honours decision 3 — only the build
-> output's bytes reach the disk, hash-checked, never a copy of the running live
-> system. See `tools/pengyos-install/README.md`.
+> - **Install:** `pengyos-install image` (GUI `pengyos-install-gui`, console
+>   `pengyos-install-tui install`) writes the edition's build output, hash-checked,
+>   to an ESP + two read-only ext4 root slots + a btrfs `data` partition. Decision 3
+>   holds: only the build's bytes reach the disk, never a copy of the live system.
+> - **Update:** `pengyos-update` from the signed HTTPS feed at
+>   <https://pengyos.catbee.ca/update/>: ed25519 manifests (`pengyos-sig-v1`),
+>   channels stable/testing, the other slot written, a GRUB one-shot trial boot,
+>   kept only if it reaches multi-user. Decision 4's "local static feed first"
+>   became the HTTPS feed directly.
+> - **Parked:** the rest of decisions 1 and 2: `systemd-sysupdate`, UKI +
+>   systemd-boot, Secure Boot, measured boot, btrfs root snapshots. Their tools were
+>   retired: `pengyos-uki`, `-bootchain`, `-bootcount`, `-sysupdate` on 2026-10-03
+>   (on the `main-prepublic` branch, before "Retire the parked UKI/sysupdate tools");
+>   `-secureboot-enroll`, `-secureboot-keys`, `-measured-boot`, `-btrfs-layout`,
+>   `-mutations`, `-pins`, `-upstream-watch`, `-update-triage`, `-installer`,
+>   `-media`, `-fleet-inventory`, `-fleet-rollout` on 2026-10-27 (git history).
+>   `pengyos-install plan` / `install` / `provision-plan`, the A/B plan renderer and
+>   executor, are still in the tree, golden-tested and used by no front-end.
 >
-> **Parked code:** `pengyos-install plan` / `install` / `provision-plan` (the A/B
-> plan renderer + executor) — golden-tested but not executable against a real
-> disk; kept for reference, not used by any front-end. The rest of this document
-> is the original A/B design, unchanged.
+> Below this banner the document is the original design, unchanged: its tool
+> lists and phase table are historical.
 
 > One artifact, one writer, one trust chain. **Install is the first update.**
 
