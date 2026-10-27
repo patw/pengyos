@@ -5,7 +5,6 @@
 # here later. Server and Desktop share the list; groups an image lacks are
 # skipped.
 wheel
-sudo
 seat
 video
 audio

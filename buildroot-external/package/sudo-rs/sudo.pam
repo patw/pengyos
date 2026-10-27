@@ -1,0 +1,16 @@
+# /etc/pam.d/sudo (sudo-rs). Buildroot's package/sudo/sudo.pam, the stack the C
+# sudo used, kept here so it is ours to read and test. pam_wheel use_uid is the
+# admin check: only members of wheel get past auth, whatever sudoers says.
+
+auth        sufficient   pam_rootok.so
+auth        required     pam_wheel.so use_uid
+auth        required     pam_env.so
+auth        required     pam_unix.so nullok
+
+account     required     pam_unix.so
+
+password    required     pam_unix.so nullok
+
+session     required     pam_limits.so
+session     required     pam_env.so
+session     required     pam_unix.so

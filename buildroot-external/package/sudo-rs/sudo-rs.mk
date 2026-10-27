@@ -46,10 +46,11 @@ define SUDO_RS_BUILD_CMDS
 			--bin sudo --bin visudo
 endef
 
-# The binaries, the sudoers file and the PAM service. /etc/sudoers.d is the
+# The binaries, the sudoers file and the PAM service. No `sudo` group: the
+# admins are wheel (see the sudoers file). /etc/sudoers.d is the
 # Server overlay's (sudoers.d/wheel); post-build makes its files 0440.
-# The PAM file is Buildroot's own package/sudo/sudo.pam, the one the C sudo
-# installed, so the PAM stack (pam_wheel use_uid included) does not change.
+# The PAM file is a copy of Buildroot's package/sudo/sudo.pam, the one the C
+# sudo installed, so the PAM stack (pam_wheel use_uid included) does not change.
 define SUDO_RS_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0755 \
 		$(SUDO_RS_SRCDIR)/target/$(RUSTC_TARGET_NAME)/release/sudo \
@@ -59,19 +60,13 @@ define SUDO_RS_INSTALL_TARGET_CMDS
 		$(SUDO_RS_SRCDIR)/target/$(RUSTC_TARGET_NAME)/release/visudo \
 		$(TARGET_DIR)/usr/bin/visudo
 	$(INSTALL) -D -m 0440 $(SUDO_RS_PKGDIR)/sudoers $(TARGET_DIR)/etc/sudoers
-	$(INSTALL) -D -m 0644 package/sudo/sudo.pam $(TARGET_DIR)/etc/pam.d/sudo
+	$(INSTALL) -D -m 0644 $(SUDO_RS_PKGDIR)/sudo.pam $(TARGET_DIR)/etc/pam.d/sudo
 	mkdir -p $(TARGET_DIR)/etc/sudoers.d
 endef
 
 define SUDO_RS_PERMISSIONS
 	/usr/bin/sudo f 4755 0 0 - - - - -
 	/etc/sudoers f 0440 0 0 - - - - -
-endef
-
-# The `sudo` group the stock recipe created: the installer puts the owner in it
-# (pengyos_install/image.py) and /etc/sudoers grants it.
-define SUDO_RS_USERS
-	- - sudo -1 - - - -
 endef
 
 $(eval $(cargo-package))

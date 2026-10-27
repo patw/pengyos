@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The owner is not put in a `sudo` group any more.** `USER_GROUPS` drops
+  `sudo`: the image's PAM file only admits `wheel` to sudo, so the group
+  granted nothing, and the sudo-rs image no longer defines it. `wheel` is the
+  admin group, as for polkit and accountsservice.
+
 ### Added
 - **The installer's Pengy page reaches the engine.** `ProvisionAnswers` carries
   `pengy_base_url` / `pengy_api_key` / `pengy_model`, and `pengyos-install image`
