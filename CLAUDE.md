@@ -4,13 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Warning
 
-**Never auto commit to this repo, the user will always do that themselves.** This is aimed
-at Claude Code, which tends to commit and push constantly. It is a standing instruction for
-that tool.
+**Claude Code and Pengy may commit and push on their own** (operator's standing
+instruction: Pengy since 2026-10-19, Claude Code since 2026-10-27; until then Claude Code
+never committed). Both show up as contributors. The rules for landing do not relax:
+one logical change per commit, a message that says *why*, the repo gate run before
+landing, and work landed the way this repo lands it (a branch, merged into `main` with
+`--no-ff` and a "Merge branch 'x': why" message). Changes across the security boundary
+(see Conventions) still need the operator's sign-off before they land.
 
-Pengy is a separate case: **Pengy may commit and push whenever it wants** (operator's
-standing instruction, 2026-10-19). Pengy's commits still follow the rules below — one logical
-change per commit, a message that says *why*, and the repo gate run before landing.
+The nightly's act lane runs from this same checkout at 02:00 and refuses a dirty tree
+(`clean_tree`), so do not leave uncommitted work or a non-`main` branch checked out
+overnight.
 
 Also the machine is tight on memory use /data/tmp not /tmp for temporary stuff.
 
