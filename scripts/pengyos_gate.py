@@ -260,7 +260,7 @@ def check_patch_declarations(repo: Path) -> list[Check]:
     return out
 
 
-LEDGER_KINDS = ("patch-set", "fork", "host-built")
+LEDGER_KINDS = ("patch-set", "fork", "host-built", "build-fix")
 LEDGER_REQUIRED = ("id", "kind", "component", "carried_since", "expiry",
                    "observe_source", "upstream_status")
 
@@ -292,20 +292,43 @@ def check_ledger_covers_patch_sets(repo: Path) -> list[Check]:
 
     claimed: dict[str, set[str]] = {}
     for e in entries:
-        pdir = str(e.get("patches_dir") or "").strip().strip("/")
-        if pdir:
-            claimed.setdefault(pdir, set()).update(e.get("closes") or [])
+        for key in ("patches_dir", "recipe"):
+            pdir = str(e.get(key) or "").strip().strip("/")
+            if pdir:
+                claimed.setdefault(pdir, set()).update(e.get("closes") or [])
 
+    # Two places carry patches. Global patch sets (patches/<pkg>/<version>/) are fixes on
+    # stock recipes. An authored recipe's own *.patch files (package/<name>/) are our
+    # changes to a component we build: until 2026-10-27 nothing asked for those, and five
+    # recipes (appstream, cutecosmic, distrobox, xdg-utils, uutils-findutils) carried
+    # patches no entry explained. A recipe's patches are one set, claimed by the entry
+    # whose `recipe` or `patches_dir` names the recipe directory.
     root = repo / "buildroot-external" / "patches"
     sets: dict[str, list[str]] = {}
     for p in sorted(root.rglob("*.patch")) if root.is_dir() else []:
         sets.setdefault(p.parent.relative_to(repo).as_posix(), []).append(p.name)
+    recipes = repo / "buildroot-external" / "package"
+    recipe_sets: set[str] = set()
+    for p in sorted(recipes.glob("*/**/*.patch")) if recipes.is_dir() else []:
+        d = p.relative_to(recipes).parts[0]
+        key = f"buildroot-external/package/{d}"
+        sets.setdefault(key, []).append(p.name)
+        recipe_sets.add(key)
 
     out: list[Check] = []
     for d, patches in sorted(sets.items()):
         if d in claimed:
             out.append(Check(f"patch-set-ledgered:{d}", True,
                              f"{len(patches)} patch(es), {len(claimed[d])} CVE(s) in the ledger"))
+            continue
+        if d in recipe_sets:
+            out.append(Check(
+                f"patch-set-ledgered:{d}", False,
+                f"authored recipe carries {len(patches)} patch(es) of ours, no "
+                f"divergence.toml entry: nothing states when this divergence ends or who "
+                f"observes it. Add an entry with id, kind = \"fork\" (or \"build-fix\" "
+                f"if the patches only make it build), component, carried_since, expiry, "
+                f"observe_source, upstream_status and recipe = \"{d}\""))
             continue
         out.append(Check(
             f"patch-set-ledgered:{d}", False,
@@ -396,12 +419,25 @@ def check_fork_budget(repo: Path) -> list[Check]:
             out.append(Check(f"fork-observable:{name}", False,
                              f"`recipe = {recipe}` does not exist in the tree: the fork ships "
                              "nothing, so its observe source compares a version that is not built"))
+        elif ((observe.lower().replace("-", "_") == "pkg_stats" or observe == "pkg-stats")
+              and isinstance(e.get("release_monitoring_id"), int)
+              and e["release_monitoring_id"] > 0):
+            # An authored recipe for a component Buildroot has no recipe for (distrobox,
+            # xdg-utils) is the only recipe, not a stand-in for a switched-off stock one,
+            # and pkg-stats looks it up on release-monitoring.org by name. The entry has
+            # to say which project, so the claim can be checked against pkg-stats' JSON.
+            out.append(Check(
+                f"fork-observable:{name}", True,
+                f"{recipe}, observed by pkg-stats (release-monitoring.org project "
+                f"{e['release_monitoring_id']}; Buildroot has no stock recipe to shadow it)"))
         elif observe.lower().replace("-", "_") == "pkg_stats" or observe == "pkg-stats":
             out.append(Check(
                 f"fork-observable:{name}", False,
                 f"observe_source is pkg-stats, which cannot see a fork: it scans the stock "
                 f"recipe and the stock recipe is switched off. The pin rots silently. Name the "
-                f"pengyos-nightly observe source that watches {recipe}'s version."))
+                f"pengyos-nightly observe source that watches {recipe}'s version, or, if "
+                f"Buildroot has no recipe for it and pkg-stats tracks it, set "
+                f"release_monitoring_id to the project pkg-stats reports."))
         elif not observe:
             out.append(Check(f"fork-observable:{name}", False,
                              "no observe_source: a fork invisible to pkg-stats with no source of "

@@ -104,17 +104,23 @@ them.
 
 **The budget.** PengyOS carries at most **10 maintained forks** (a fork = a
 component we build from our own tree or our own pinned source with our own changes,
-outside a stock Buildroot recipe) at any time. Current count: **1** —
-`openssh-pengyos`, pinned at 10.6p1, carried from 2026-10-19 with the operator's
-sign-off (the Tier-2 rule below); ledger entry `openssh-10.6p1-fork`. Host-built
-COSMIC is *not* a fork under this definition — it is an unbuilt dependency, and it
-is the thing Band 2/3 work should convert into recipes.
+outside a stock Buildroot recipe) at any time. The count lives in `divergence.toml`
+(`fork_budget`), and `scripts/pengyos_gate.py:check_fork_budget` fails the repo past
+it. On 2026-10-27 it is **8**: `upower-pengyos`, `ffmpeg-pengyos`, `hplip-pengyos`,
+`openssh-pengyos` (carried from 2026-10-19 with the operator's sign-off under the
+Tier-2 rule below), `libdisplay-info-pengyos`, `uutils-findutils`, `distrobox` and
+`xdg-utils`. The last three are authored recipes that carry a behaviour fix of our
+own, ledgered on 2026-10-27 when the gate began asking about recipe patches.
+Host-built COSMIC is *not* a fork under this definition. It is an unbuilt
+dependency, and it is the thing Band 2/3 work should convert into recipes.
 
-> **Enforcement, stated honestly (2026-10-19).** The budget is written as a hard
-> gate, and `scripts/pengyos_gate.py` does not implement one: it validates every
-> ledger entry's required fields and every patch set's entry, and has no fork count.
-> Until it does, the count above is maintained by hand. `divergence.toml`'s header
-> says the same thing.
+**Build fixes are not forks.** A patch to an authored recipe that only makes it
+build here and changes nothing it does at run time is ledgered as
+`kind = "build-fix"`: a cross build, offline vendoring, or an optional dependency we
+do not ship. Today that is `appstream` and `cutecosmic`. It still needs an expiry
+and an observe source, and it does not count against the budget. A patch that changes
+behaviour is a fork, however small: the budget measures how far the image's
+behaviour is from upstream's, not how many files we touch.
 
 Rules:
 

@@ -11,6 +11,12 @@
 #   fork        a component we build from our own tree with our own changes
 #   host-built  assembled on the build host, not by a Buildroot recipe (a debt,
 #               not an achievement: it voids byte-identity reproducibility)
+#   build-fix   our patches to an authored recipe that only make it build here
+#               (cross builds, offline vendoring, an optional dependency we do not
+#               ship) and change nothing it does at run time. Ledgered like a fork,
+#               with an expiry and an observe source, but not counted against the
+#               fork budget: a build fix is packaging, not a divergence in behaviour.
+#               A patch that changes behaviour is a fork, however small.
 #
 # Required for every entry: id, kind, component, carried_since, expiry,
 # observe_source, upstream_status.
@@ -18,7 +24,9 @@
 # Both directions of that rule are enforced, not documented:
 #   - an entry must be declared to pkg-stats if it carries patches
 #     (scripts/pengyos_gate.py:check_patch_declarations);
-#   - every patch set in the tree must have an entry here
+#   - every patch set in the tree must have an entry here, and so must every
+#     authored recipe that carries patches of ours (package/<name>/*.patch, claimed
+#     by the entry's `recipe`; since 2026-10-27)
 #     (scripts/pengyos_gate.py:check_ledger_covers_patch_sets), because the entry is
 #     the only thing that carries an expiry. Added 2026-10-18: the tree carried five
 #     patch sets and only two were ledgered, so three divergences had no exit
@@ -30,7 +38,11 @@
 # `observe_source`: "pkg-stats" means Buildroot's own scanner can still see the
 # component. A fork or authored pin is invisible to pkg-stats and MUST name its
 # own pengyos-nightly observe source, or it rots silently (the PengyR case:
-# images shipped 1.10.0 while upstream was at 1.11.1 and nothing noticed).
+# images shipped 1.10.0 while upstream was at 1.11.1 and nothing noticed). The one
+# exception is a fork of a component Buildroot has no recipe for: our recipe is
+# then the only one and pkg-stats tracks it by name, so the entry may say
+# "pkg-stats" if it also gives `release_monitoring_id`, the project pkg-stats
+# reports (pkgstats-<target>.json, packages.<name>.latest_version.id).
 
 schema = 1
 
@@ -40,13 +52,15 @@ schema = 1
 fork_budget = 10
 
 # Budget: at most 10 maintained forks (kind = "fork") at any time.
-# Current fork count: 5 (openssh-pengyos, ffmpeg-pengyos, hplip-pengyos 2026-10-19;
-# upower-pengyos 2026-10-20; libdisplay-info-pengyos 2026-10-23). The gate's count is
-# authoritative; this line is the human copy.
+# Current fork count: 8 (openssh-pengyos, ffmpeg-pengyos, hplip-pengyos 2026-10-19;
+# upower-pengyos 2026-10-20; libdisplay-info-pengyos 2026-10-23; uutils-findutils,
+# distrobox, xdg-utils 2026-10-27). build-fix entries are not counted. The gate's
+# count is authoritative; this line is the human copy.
 # Enforced by the gate from 2026-10-19: scripts/pengyos_gate.py:check_fork_budget counts
 # kind = "fork" entries against `fork_budget` above and fails past it. It also fails a
 # fork whose observe_source is pkg-stats, because pkg-stats cannot see a fork at all -
-# it scans the stock recipe, and the stock recipe is switched off.
+# it scans the stock recipe, and the stock recipe is switched off - unless the fork
+# has no stock recipe and gives its release_monitoring_id (see observe_source above).
 # Before that the count was by hand, and this file claimed the gate enforced it — which
 # is what its own header promises and the gate did not do.
 
@@ -724,4 +738,100 @@ patches_dir = "buildroot-external/package/uutils-findutils"
 cost = "one ~50-line patch to src/find/mod.rs and tests/test_find.rs; it must be re-applied (or dropped) on every uutils-findutils bump"
 expiry = "an upstream uutils/findutils release fixes -prune under -xdev (its tests/test_find.rs covers a mount point): delete 0001 from buildroot-external/package/uutils-findutils and this entry"
 observe_source = "pengyos-nightly observe, source id uutils-findutils: git ls-remote --tags https://github.com/uutils/findutils compared to UUTILS_FINDUTILS_VERSION (sources.uutils_findutils_findings, added 2026-10-27 with the fixture tests/fixtures/ls-remote-uutils-findutils.txt). There is no release-monitoring.org project, so pkg-stats cannot see it."
+upstream_status = "not-offered"
+
+
+[[divergence]]
+id        = "appstream-1.2.1-build-fix"
+kind      = "build-fix"
+component = "appstream"
+pinned_version = "1.2.1"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-02"
+recipe        = "buildroot-external/package/appstream"
+
+# Authored recipe (flatpak needs libappstream; Buildroot 2026.08 has no recipe). A
+# cross build of 1.2.1 fails at configure without a native appstreamcli, which data/
+# runs to generate appstreamcli's own metainfo file. 0001 skips that one file when no
+# native appstream is found. The library and appstreamcli are unchanged.
+# Upstream main still requires the native build (data/meson.build, checked 2026-10-27).
+upstream_fixes = []
+cost = "one meson.build hunk; the image lacks the metainfo file describing appstreamcli itself"
+expiry = "an appstream release builds data/ in a cross build without a native appstreamcli: delete 0001"
+observe_source = "pkg-stats"
+release_monitoring_id = 10385
+upstream_status = "not-offered"
+
+
+[[divergence]]
+id        = "cutecosmic-0.2.0-build-fix"
+kind      = "build-fix"
+component = "cutecosmic"
+pinned_version = "0.2.0"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-09-29"
+recipe        = "buildroot-external/package/cutecosmic"
+
+# Authored recipe: the Qt platform theme that gives Qt apps COSMIC's look. Both patches
+# are packaging. 0001 builds the plugin without Qt Quick Controls (the image ships no
+# qt6declarative; Quick Controls only chose a QML style). 0002 lets the recipe pass in
+# the Rust bindings it built itself, because upstream fetches Corrosion with
+# FetchContent at configure time and a Buildroot build is offline. Neither changes what
+# the plugin does for a Widgets app. Upstream's last commit is the 0.2.0 release
+# (2026-08-15), older than both patches.
+upstream_fixes = []
+cost = "two CMake patches; 0002 must track upstream's bindings target names on every bump"
+expiry = "a cutecosmic release with Qt Quick Controls optional and a way to supply prebuilt bindings: delete the matching patch"
+observe_source = "pkg-stats"
+release_monitoring_id = 387805
+upstream_status = "not-offered"
+
+
+[[divergence]]
+id        = "distrobox-1.8.2.5-fork"
+kind      = "fork"
+component = "distrobox"
+pinned_version = "1.8.2.5"
+editions  = ["pengyos-server", "pengyos-server-nvidia", "pengyos-desktop",
+             "pengyos-desktop-nvidia"]
+carried_since = "2026-09-28"
+recipe        = "buildroot-external/package/distrobox"
+
+# Authored recipe. On a host with a read-only root (every installed PengyOS: the A/B
+# slots are read-only ext4), distrobox-create mounted each read-only top-level
+# directory with "ro:rslave", which podman rejects ("incorrect volume format") because
+# volume options are comma-separated, so `distrobox create` failed. 0001 writes
+# "ro,rslave". A behaviour fix, so a fork.
+#
+# Upstream main is a Go rewrite (2.0.0, at rc.4 on 2026-10-27) whose
+# pkg/containermanager already returns ":ro,rslave". The shell 1.8 line has no fix.
+upstream_fixes = []
+cost = "a one-line patch; the 2.0 bump is a rewrite and needs its own boot test"
+expiry = "distrobox 2.0.0 is released and the recipe moves to it (pkg/containermanager returns \":ro,rslave\"): delete 0001"
+observe_source = "pkg-stats"
+release_monitoring_id = 242098
+upstream_status = "fixed-upstream-unreleased"
+
+
+[[divergence]]
+id        = "xdg-utils-1.2.1-fork"
+kind      = "fork"
+component = "xdg-utils"
+pinned_version = "1.2.1"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-09-29"
+recipe        = "buildroot-external/package/xdg-utils"
+
+# Authored recipe. xdg-utils does not know COSMIC, so xdg-mime runs its generic
+# backend, which finds a file's type with `mimetype` (Perl File::MimeInfo) or `file`.
+# The image ships neither, so `xdg-open FILE` failed. 0001 asks `gio info` first when
+# gio is installed: it reads the shared-mime-info database the desktop itself uses. A
+# behaviour change, so a fork. Upstream master's info_generic (2026-10-27, after
+# 43468529 "fallback cascade for when the file command is not installed") and
+# v1.3.0-rc.1 still have no gio step.
+upstream_fixes = []
+cost = "one xdg-mime.in hunk"
+expiry = "an xdg-utils release whose generic xdg-mime finds a type without mimetype or file (or that detects COSMIC): delete 0001"
+observe_source = "pkg-stats"
+release_monitoring_id = 5176
 upstream_status = "not-offered"
