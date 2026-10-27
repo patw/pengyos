@@ -19,6 +19,11 @@
 # side-by-side run on 2026-10-27. GNU diffutils stays: uutils/diffutils 0.6.0
 # has no recursive diff (`diff -r`), no diff3 or sdiff.
 #
+# The boot test found the one divergence the side-by-side run missed: under
+# -xdev, -prune on a mount point (find / -xdev -path /proc -prune -o ...)
+# ended the walk of its siblings silently, exit 0. 0001 fixes it, with a test;
+# drop it when upstream has the fix.
+#
 # Upstream builds four programs and a test helper; we build the four. They link
 # Buildroot's oniguruma (the onig crate's RUSTONIG_SYSTEM_LIBONIG path) rather
 # than compiling the copy onig_sys bundles, so the regex engine is one library

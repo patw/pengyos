@@ -36,6 +36,14 @@ invocation in the image's own scripts (distrobox, lvm's `fsadm`,
 output. Its regexes use Buildroot's oniguruma (jq already shipped it on Server),
 not a bundled copy.
 
+The boot test found the one divergence the fixture tree could not show: under
+`-xdev`, `-prune` on a mount point (`find / -xdev -path /proc -prune -o …`)
+silently ended the walk of that directory's siblings and exited 0. GNU find
+prints them. walkdir's `skip_current_dir()` popped the parent, because `-xdev` had
+never entered the pruned mount point. We carry a fix with a regression test
+(`0001-find-pruning-an-xdev-mount-point-must-not-end-the-walk.patch`). There was
+no upstream issue or fix as of 2026-10-27.
+
 **Diffutils stays GNU.** The same run found uutils/diffutils 0.6.0 has no
 recursive diff (`diff -r` is rejected), no `-W`, and no `diff3` or `sdiff`. That
 would be a regression for anyone diffing trees.
