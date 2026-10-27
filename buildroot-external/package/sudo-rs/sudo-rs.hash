@@ -1,0 +1,12 @@
+# Locally calculated
+#
+# NOTE: Buildroot's cargo infrastructure re-packs the source tarball with the
+# vendored crates (VENDOR/: libc, glob, checked against Cargo.lock's checksums)
+# and verifies the hash of THAT tarball, `-cargo6`. The upstream GitHub archive
+# of tag v0.2.15 hashes to
+# ae857c3cde962a1ade2b981f7e01cf95e9fa05d5c5f95f94cf5f35394c1bf899 (fetched
+# 2026-10-27); the value below is the "got" of `make sudo-rs-source` the same day.
+sha256  d2ee139ef1fb74542488a61bf5e739f9ea6c2363ba3ae4437647b3f124b67f1f  sudo-rs-0.2.15-cargo6.tar.gz
+sha256  62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a  LICENSE-APACHE
+sha256  c193b76b02b93b4ee4e16aff68672942da93122d563f755380d8a17d07bedd37  LICENSE-MIT
+sha256  cf2bdb550dd0e20f25655371e91c05bc4b6ea8cfb6beff267a3471abf8f55924  COPYRIGHT

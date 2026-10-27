@@ -71,6 +71,8 @@ menu "PengyOS (external tree)"
 	# (SPEC §2.1). Buildroot 2026.08 ships no uutils recipe at all, so the
 	# Core layer's coreutils is ours: package/uutils-coreutils.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/uutils-coreutils/Config.in"
+	# sudo-rs, the Rust sudo (Server): Buildroot 2026.08 has only the C sudo.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/sudo-rs/Config.in"
 
 	# SSH: our fork of Buildroot's openssh, pinned at 10.6p1. It replaces the
 	# stock package in every edition, so the stock symbol is switched off in

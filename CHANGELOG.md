@@ -29,6 +29,27 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 - The hash is the `cargo vendor` archive (`pengy-1.13.1-cargo6.tar.gz`) that
   `make pengy-source` produced. LICENSE is unchanged between the tags.
 
+### Changed — sudo is sudo-rs, the Rust sudo (2026-10-27)
+
+Server and Desktop (and their NVIDIA variants) shipped Buildroot's C sudo
+1.9.17p2. They now ship **sudo-rs 0.2.15**, the memory-safe reimplementation
+by the Trifecta Tech Foundation that Ubuntu has used as its default sudo since
+25.10. It is the same reasoning as uutils-coreutils: the setuid-root binary that
+parses every user's arguments and environment is the one most worth having in a
+memory-safe language. Buildroot 2026.08 has no recipe, so it is ours:
+`package/sudo-rs`. It pins 0.2.15 rather than Ubuntu 26.04's 0.2.13 because
+0.2.15 fixes a sudoedit symlink race (GHSA-f42v-x7gq-phc8).
+
+Nothing a user types changes. `sudo`, `sudoedit` and `visudo` are where they
+were, `/etc/sudoers` grants the same rules (root, `%sudo`, and
+`/etc/sudoers.d`, where `%wheel` lives), and `/etc/pam.d/sudo` is the same PAM
+stack. The image loses `sudoreplay`, `sudo_logsrvd` and `sudo_sendlog`, which
+nothing used. The recipe's CPE (`trifectatech:sudo`) is the one NVD files
+sudo-rs CVEs under, so the nightly's pkg-stats CVE scan covers it, and
+release-monitoring.org reports its new versions like any other authored recipe.
+`scripts/tests/test_sudo_rs.py` keeps the setuid bit, the `sudo` group, the
+sudoers rules and the CPE from going missing.
+
 ### Removed — tools nothing used any more; prototypes moved to `prototypes/` (2026-10-27)
 
 Sixteen directories under `tools/` were not wired into any image, build,
