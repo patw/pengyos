@@ -73,7 +73,7 @@ python3 -m pengyos_qemu_verify boot \
   `smoke/core.toml` (the default) and `smoke/server.toml`, each grounded in real
   serial logs. A matrix finds its image under the build root, so after a build
   `pengyos-qemu-verify smoke` (or `--matrix smoke/server.toml`) needs no path.
-  `pengyos-desktop-session` ships a VM-testable Desktop smoke.
+  The Desktop is checked with `pengyos-qemu-verify desktop` and a screenshot (§5).
 
 > **Artifact safety:** the default is `snapshot=on`, so a verification boot opens the
 > image read-only and leaves its hash unchanged. Only pass `--no-snapshot` when you

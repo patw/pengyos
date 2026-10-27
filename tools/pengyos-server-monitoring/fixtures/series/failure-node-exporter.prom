@@ -1,6 +1,0 @@
-up{job="node-exporter",instance="node1"} 0 0
-up{job="node-exporter",instance="node1"} 0 60
-up{job="node-exporter",instance="node1"} 0 120
-node_systemd_units_failed{instance="node1"} 0 0
-node_systemd_units_failed{instance="node1"} 0 60
-node_systemd_units_failed{instance="node1"} 0 120

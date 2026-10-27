@@ -1,6 +1,0 @@
-# NVIDIA proprietary GPU.
-# Single concern: the vendor-provided NVIDIA DRM driver (proprietary).
-CONFIG_NVIDIA=y
-CONFIG_NVIDIA_GPU_SUPPORT=y
-CONFIG_DRM=y
-CONFIG_FB=y

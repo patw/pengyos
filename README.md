@@ -111,7 +111,7 @@ what cannot be reproduced from this repo at all.
 
 ## The repo
 
-`tools/` holds 70 directories, each a tested project with its own spec and test
+`tools/` holds 40 directories, each a tested project with its own spec and test
 suite, and a `verify.toml` the gate runs. Unshipped prototypes are in `prototypes/`. `buildroot-external/` is our Buildroot tree: boards, defconfigs,
 authored recipes. `scripts/` has the host helpers, `docs/` the design record, and
 `.github/workflows/` runs the whole gate on every push.

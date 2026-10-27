@@ -1,7 +1,0 @@
-# AMD integrated graphics (IGPU).
-# Single concern: AMDGPU DRM/KMS for integrated/discrete AMD GPUs.
-CONFIG_DRM=y
-CONFIG_DRM_AMD=y
-CONFIG_DRM_AMDGPU=y
-CONFIG_FB=y
-CONFIG_FB_SYS_FOPS=y

@@ -1,2 +1,0 @@
-name: PENGYOS
-desc: PengyOS hardening fixture — a BR2_EXTERNAL external tree (Catbee) used by the pengyos_hardening linter test-suite.

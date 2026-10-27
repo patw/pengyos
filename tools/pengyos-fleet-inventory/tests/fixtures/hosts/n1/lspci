@@ -1,7 +1,0 @@
-00:00.0 Host bridge: Intel Corporation 8th Gen Core process host bridge (rev 0c)
-00:02.0 Display controller: Intel Corporation Iris Xe Graphics [8086:9a49] (rev 05)
-00:04.0 Signal processing: Intel Corporation Power Sharing Intelligence Architecture 10th Gen (rev 01)
-00:14.0 USB controller: Intel Corporation USB 3.2 Gen 2 XHC Controller (rev 20)
-00:17.0 Storage controller: Intel Corporation Volume Management Device NVMe RAID Controller (rev 10)
-00:1f.3 Audio controller: Intel Corporation Comet Lake PCH cAVS (rev 30)
-00:1f.5 Network controller: Intel Corporation Comet Lake PCH CNWi WiFi (rev 30)

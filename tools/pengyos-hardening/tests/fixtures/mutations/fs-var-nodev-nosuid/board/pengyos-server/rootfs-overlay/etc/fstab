@@ -1,4 +1,0 @@
-# /etc/fstab — PengyOS server edition.
-# The root and apt data partitions mount nodev,nosuid (baseline: fs-nodev-nosuid).
-/dev/mapper/pengyos-root  /          ext4  defaults,nodev,nosuid  0 1
-/dev/mapper/pengyos-var   /var       ext4  defaults         0 2

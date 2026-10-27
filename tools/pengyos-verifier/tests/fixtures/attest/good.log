@@ -1,3 +1,0 @@
-{"data":{"board":"m1","commit":"abc123"},"hash":"f2a3c556e49afbc68485ae96851fd57784ff541082a492651fc9173552648603","prev_hash":"0000000000000000000000000000000000000000000000000000000000000000","seq":1,"ts":"2026-09-16T00:00:00Z","type":"build"}
-{"data":null,"hash":"7d0d34cda5d38a6c51c550bd54763457785998f7a9ed5e6482dd8ae4f978ce6d","prev_hash":"f2a3c556e49afbc68485ae96851fd57784ff541082a492651fc9173552648603","seq":2,"ts":"2026-09-16T00:10:00Z","type":"event"}
-{"data":{"artifacts":["images/rootfs.ext4","images/bzImage"]},"hash":"78871adeab561e4cd3d00270737cafbeab5f8fa5ba4c922ad46863c5516e9f9b","prev_hash":"7d0d34cda5d38a6c51c550bd54763457785998f7a9ed5e6482dd8ae4f978ce6d","seq":3,"ts":"2026-09-16T00:25:00Z","type":"build"}

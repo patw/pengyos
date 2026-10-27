@@ -1,7 +1,0 @@
-00:00.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Zen4 root bridge [1022:15d0]
-00:02.0 Display controller: Advanced Micro Devices, Inc. [AMD/ATI] Radeon RX Vega [1022:1632] (rev ca)
-00:04.0 PCI bridge: Advanced Micro Devices, Inc. [AMD] Zen4 PCIe bridge [1022:15d1]
-00:14.0 USB controller: Advanced Micro Devices, Inc. [AMD] Zen5 USB 3.2 Gen 2 XHC controller [1022:15ff]
-00:18.0 Storage controller: Advanced Micro Devices, Inc. [AMD] Zen5 NVMe RAID Controller [1022:1500]
-00:1f.0 Audio controller: Advanced Micro Devices, Inc. [AMD] Zen5 HD Audio [1022:15e2]
-01:00.0 Network controller: Advanced Micro Devices, Inc. [AMD] RTL8852BE PCIe Wi-Fi [10ec:8852]

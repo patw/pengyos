@@ -23,5 +23,3 @@ buildroot-external/configs/pengyos_desktop_nvidia_defconfig linguist-generated=t
 # the suites parse them byte for byte. Keep them exactly as captured: no eol
 # normalization, no trailing-whitespace cleanup.
 tools/pengyos-qemu-verify/tests/fixtures/*.log -text
-tools/pengyos-desktop-session/tests/fixtures/*.log -text
-tools/pengyos-verifier/tests/fixtures/** -text

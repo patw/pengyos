@@ -1,6 +1,6 @@
 //! The tool-directory contract, asserted against the committed tree: the
 //! docs, the verifier, the zero-dependency boundary, the pure library, the
-//! launcher, and the Buildroot recipe skeleton. Written the way `pengy-panel`'s
+//! launcher, and the Buildroot recipe skeleton. Written the way the other pack-in games'
 //! and the other pack-in games' `github_ready` test is written.
 
 use std::fs;

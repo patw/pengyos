@@ -7,9 +7,8 @@ into, beside a ranked list. Read-only.
 
 ## Purpose
 `du -sh * | sort -h` answers it a line at a time, if you know where to look.
-COSMIC has no disk usage analyzer. `pengyos-storage` (Python) answers it in a
-terminal or an HTML file; this is the native window the Desktop's other tools
-(Disks, Updates, Printers) look like.
+COSMIC has no disk usage analyzer. This is one, a native window like the
+Desktop's other tools (Disks, Updates, Printers).
 
 ## Deliverable
 A Rust crate `pengyos-usage` (MIT), built like `pengyos-disks`:

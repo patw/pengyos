@@ -1,7 +1,7 @@
 //! The tool-directory contract, asserted against the committed tree: the
 //! GitHub-ready docs, the verifier, the zero-dependency boundary, the pure
 //! library, the launcher, the fixtures and the Buildroot recipe skeleton.
-//! Written the way `pengy-panel`'s and the other pack-in games' `github_ready`
+//! Written the way the other pack-in games' `github_ready`
 //! test is written.
 
 use std::fs;

@@ -1,7 +1,0 @@
-# This file is managed by pengyos-live. Do not edit by hand.
-#
-# Present on a PengyOS live/installer medium. Its presence is what tells
-# the installer (and the rest of the system) it is running from a live
-# medium, not from an installed target.
-edition=core
-live=true
