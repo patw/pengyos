@@ -696,3 +696,32 @@ cost = "none beyond the recipe: no other package selects libdisplay-info, and th
 expiry = "cosmic-comp's pinned commit (scripts/cosmic-components.tsv) depends on a libdisplay-info-sys that accepts the libdisplay-info Buildroot ships: delete buildroot-external/package/libdisplay-info-pengyos, set BR2_PACKAGE_LIBDISPLAY_INFO=y in configs/layers/desktop.config, and remove the libdisplay-info-fork observe source from pengyos-nightly"
 observe_source = "pengyos-nightly observe, source id libdisplay-info-fork: git ls-remote --tags https://gitlab.freedesktop.org/emersion/libdisplay-info.git compared to LIBDISPLAY_INFO_PENGYOS_VERSION (sources.libdisplay_info_fork_findings, added 2026-10-23 with the fixture tests/fixtures/ls-remote-libdisplay-info.txt). A 0.3.x point release is routine and wins over a newer series. pkg-stats cannot see a fork, and NVD lists no libdisplay-info CPE, so this is the only observer."
 upstream_status = "not-offered"
+
+
+[[divergence]]
+id        = "uutils-findutils-0.10.0-fork"
+kind      = "fork"
+component = "uutils-findutils"
+pinned_version = "0.10.0"
+editions  = ["pengyos-core", "pengyos-server", "pengyos-server-nvidia", "pengyos-desktop",
+             "pengyos-desktop-nvidia"]
+carried_since = "2026-10-27"
+recipe        = "buildroot-external/package/uutils-findutils"
+
+# An authored recipe (Buildroot 2026.08 has none) that carries one fix of our own,
+# so it is a fork, not a pin. Under -xdev, -prune on a mount point ended the walk of
+# that directory's siblings: `find / -xdev -path /proc -prune -o -name sudoers -print`
+# printed nothing and exited 0, where GNU find prints /etc/sudoers. walkdir's
+# skip_current_dir() pops the directory it last entered, and -xdev never entered the
+# mount point, so it popped the parent. Found booting the Server image on 2026-10-27;
+# the side-by-side GNU comparison ran on one file system and could not show it.
+# 0001-find-pruning-an-xdev-mount-point-must-not-end-the-walk.patch calls
+# skip_current_dir() only for a directory walkdir entered, and adds a regression test
+# that fails on 0.10.0. Upstream suite: 367/367 with the patch.
+upstream_fixes = []
+patches_dir = "buildroot-external/package/uutils-findutils"
+
+cost = "one ~50-line patch to src/find/mod.rs and tests/test_find.rs; it must be re-applied (or dropped) on every uutils-findutils bump"
+expiry = "an upstream uutils/findutils release fixes -prune under -xdev (its tests/test_find.rs covers a mount point): delete 0001 from buildroot-external/package/uutils-findutils and this entry"
+observe_source = "pengyos-nightly observe, source id uutils-findutils: git ls-remote --tags https://github.com/uutils/findutils compared to UUTILS_FINDUTILS_VERSION (sources.uutils_findutils_findings, added 2026-10-27 with the fixture tests/fixtures/ls-remote-uutils-findutils.txt). There is no release-monitoring.org project, so pkg-stats cannot see it."
+upstream_status = "not-offered"

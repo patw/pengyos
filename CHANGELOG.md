@@ -42,7 +42,9 @@ silently ended the walk of that directory's siblings and exited 0. GNU find
 prints them. walkdir's `skip_current_dir()` popped the parent, because `-xdev` had
 never entered the pruned mount point. We carry a fix with a regression test
 (`0001-find-pruning-an-xdev-mount-point-must-not-end-the-walk.patch`). There was
-no upstream issue or fix as of 2026-10-27.
+no upstream issue or fix as of 2026-10-27, and none will be offered. It is
+ledgered in `divergence.toml` as a fork (the sixth of ten), and the upstream fix
+is its expiry.
 
 **Diffutils stays GNU.** The same run found uutils/diffutils 0.6.0 has no
 recursive diff (`diff -r` is rejected), no `-W`, and no `diff3` or `sdiff`. That
