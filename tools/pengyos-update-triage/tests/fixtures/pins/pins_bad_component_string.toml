@@ -1,2 +1,0 @@
-# 'component' should be an array of tables, not a bare string.
-component = "glibc"

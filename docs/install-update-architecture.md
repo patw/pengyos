@@ -8,7 +8,11 @@
 > The UKI / systemd-boot / systemd-sysupdate design below stays parked, and
 > the tools built for it (`pengyos-uki`, `pengyos-bootchain`,
 > `pengyos-bootcount`, `pengyos-sysupdate`) were retired on 2026-10-03 — see
-> git history before commit "Retire the parked UKI/sysupdate tools";
+> the `main-prepublic` branch before commit "Retire the parked UKI/sysupdate tools" —
+> and the rest of this design's tools (`pengyos-secureboot-enroll`,
+> `pengyos-secureboot-keys`, `pengyos-measured-boot`, `pengyos-btrfs-layout`,
+> `pengyos-mutations`, `pengyos-pins`, `pengyos-upstream-watch`,
+> `pengyos-update-triage`) on 2026-10-27; the tool lists below are historical;
 > decision 4's "local static feed first" became an HTTPS static feed directly.
 
 > **Status 2026-09-28 — A/B is PARKED.** Decisions 1 and 2 below (A/B slots +

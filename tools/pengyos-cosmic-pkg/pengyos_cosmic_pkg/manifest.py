@@ -75,8 +75,7 @@ DEP_REQUIRED_FIELDS: tuple[str, ...] = ("name", "git_url", "tag")
 #: alphanumeric, underscores and dashes. It must start with a **letter** (not a
 #: digit): the manifest ``name`` becomes a Buildroot package directory and a
 #: ``BR2_PACKAGE_<NAME>`` Kconfig symbol, and Kconfig symbols may not start with
-#: a digit. (The sibling ``pengyos-pins`` tool allows digit-starting names
-#: because it tracks arbitrary pinned components, not only Buildroot packages.)
+#: a digit.
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 #: A git URL: an ``https://`` / ``http://`` / ``git://`` authority path, or an
 #: SSH ``git@host:path`` form.

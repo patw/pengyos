@@ -17,6 +17,31 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Removed — tools nothing used any more; prototypes moved to `prototypes/` (2026-10-27)
+
+Sixteen directories under `tools/` were not wired into any image, build,
+release or the nightly loop. They only referenced each other, but the gate's
+full mode still ran every one of their suites:
+
+- `pengy-breakout`, `pengy-icefield`: game drafts with no README, not in
+  `pengy-games`' table.
+- `pengyos-secureboot-enroll`, `pengyos-secureboot-keys`,
+  `pengyos-measured-boot`, `pengyos-btrfs-layout`, `pengyos-mutations`: the rest
+  of the parked UKI/Secure Boot design, whose other four tools were retired on
+  2026-10-03.
+- `pengyos-update-triage`, `pengyos-upstream-watch`, `pengyos-tiers`,
+  `pengyos-propose-client`, `pengyos-cli`, `pengyos-pins`: the proposal pipeline
+  `pengyos-nightly` replaced.
+- `pengy-agent-package`: an out-of-date copy of `package/pengy`.
+- `pengyos-recipe-server-clis`: a recipe generator for CLIs no layer enables.
+- `pengyos-recipe-dbus-broker`: never enabled, and Buildroot 2026.08 now has a
+  stock `dbus-broker`.
+
+They are in git history. The three measured-but-unshipped prototypes,
+`pengyos-jev`, `pengyos-stt-whistle` and `pengyos-upscale`, moved to
+`prototypes/`, outside the gate. `tools/README.md` now also lists
+`pengyos-firewall` and `pengyos-postmortem`, which it had left out.
+
 ### Changed — every edition is default-deny, and a port is opened with `pengyos-firewall` (2026-10-27)
 
 Core shipped `nft` but no ruleset: `/etc/nftables.conf`, its unit and the

@@ -11,7 +11,7 @@ exposes `run_bash` and `run_python`. Serving it is a decision with a named
 consequence, so it gets a bounded command that states the consequence, keeps
 the loopback default, and refuses to be accidental. Today the only way to run
 it as yourself at boot is to hand-write a unit; the one unit in this repo
-(`tools/pengy-agent-package`) was written for PengyR and was wrong for this
+(the since-removed `tools/pengy-agent-package`) was written for PengyR and was wrong for this
 image (`--config`, `DynamicUser`, `ProtectHome`, root).
 
 ## Interface
@@ -68,8 +68,8 @@ Runtime state, all under `/etc` (the Tier-1 overlay, untouched by updates):
   sequence are asserted;
 - idempotency, port collision, validation of user/port/host, the root guard on
   the real path, unprivileged `status`, `--json` in both positions;
-- Core ships neither file, Desktop ships no second copy, the old PengyR unit is
-  gone, and `pengy-agent-package`'s own suite stays green.
+- Core ships neither file, Desktop ships no second copy, and the old PengyR unit is
+  gone.
 
 ## Acceptance criteria
 - `pytest -q` green here; `pengyos_gate.py run --mode fast` green.

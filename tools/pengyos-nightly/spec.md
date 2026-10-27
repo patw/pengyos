@@ -13,7 +13,7 @@ NVD, and it runs on a local model, where tokens cost electricity
 only.
 
 It replaces the TODO items "THE LOOP" (#110) and "automated triage" (#118), and
-it gives `pengyos-upstream-watch` / `pengyos-update-triage` their real inputs.
+it supersedes `pengyos-upstream-watch` / `pengyos-update-triage` (removed 2026-10-27).
 
 ## Three lanes (the whole design; phase 1 implements the reports)
 

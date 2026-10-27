@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# Python tool: pytest in this tool's directory. The suite mocks the HTTP
+# transport and reads a captured response fixture, so the gate stays offline
+# and root-free — no model, no service, no network.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "prototypes/pengyos-jev"
+expect = "exit0"
+timeout = 300

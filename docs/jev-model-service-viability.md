@@ -12,7 +12,7 @@ them — **Laya, 421 M parameters, Apache-2.0** — runs as a static Vulkan
 `llama-server` at **304 ms per decision on a PengyOS Desktop box with only
 integrated graphics, 146 MB resident**. Measured, not promised.
 
-Prototype code + tests: [`tools/pengyos-jev/`](../tools/pengyos-jev/).
+Prototype code + tests: [`prototypes/pengyos-jev/`](../prototypes/pengyos-jev/).
 
 ---
 
@@ -118,7 +118,7 @@ carries slot warm-up. Peak RSS = `VmHWM`.
 Answers were sane and device-independent (same state, RTX 3070 vs N100 iGPU:
 `billing` 0.9904 vs 0.9918; `angry` 0.7856 vs 0.7860). Cold start to serving:
 1.2 s (Laya) / 3.4 s (d1-3B). Full data:
-[`tools/pengyos-jev/results/measured.json`](../tools/pengyos-jev/results/measured.json);
+[`prototypes/pengyos-jev/results/measured.json`](../prototypes/pengyos-jev/results/measured.json);
 reproduce with `results/measure.py`.
 
 **The 16 GB laptop verdict.** behoweather *is* the target class (4 cores, 15 GB,
@@ -142,7 +142,7 @@ pengyos-jev CLI (stdlib)  ·  fleet daemons (CVE triage, update triage,
 
 - **Loopback only** (`--host 127.0.0.1`) with `--api-key`; the Desktop firewall
   stays default-deny.
-- **Own user, hardened unit** (`tools/pengyos-jev/pengyos-jev.service`):
+- **Own user, hardened unit** (`prototypes/pengyos-jev/pengyos-jev.service`):
   `ProtectSystem=strict`, `MemoryMax=4G`, `RestrictAddressFamilies=AF_INET`,
   `DeviceAllow=/dev/dri` for Vulkan, weights read-only under
   `/usr/share/pengyos/jev/`.
@@ -168,7 +168,7 @@ pengyos-jev CLI (stdlib)  ·  fleet daemons (CVE triage, update triage,
 
 ## 7. Recommendation
 
-1. **Prototype Laya-Q8_0 as the default** (`tools/pengyos-jev/` is the
+1. **Prototype Laya-Q8_0 as the default** (`prototypes/pengyos-jev/` is the
    starting point): Apache-2.0, 450 MB download, 146 MB resident, works on
    integrated graphics, multilingual variant available.
 2. **Close the two Buildroot gaps first** — `host-glslc` recipe + a pinned
@@ -214,12 +214,12 @@ ninja -C /data/tmp/llama-vk llama-server
 
 # serve + ask
 /data/tmp/llama-vk/bin/llama-server -m Laya-Q8_0.gguf -c 4096 -ngl 99 --port 8199 --host 127.0.0.1 &
-python3 tools/pengyos-jev/pengyos_jev/pengyos_jev.py decide noul \
+python3 prototypes/pengyos-jev/pengyos_jev/pengyos_jev.py decide noul \
   --state "The build server is offline and 3 deploys are queued." \
   --instructions "Is the build server unavailable?"     # → 0.99
 
 # tests
-cd tools/pengyos-jev && python3 -m pytest -q
+cd prototypes/pengyos-jev && python3 -m pytest -q
 ```
 
 ---

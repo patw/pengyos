@@ -1,9 +1,0 @@
-config BR2_PACKAGE_SD
-	bool "sd"
-	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
-	select BR2_PACKAGE_HOST_RUSTC
-	help
-	  sd is an intuitive find-and-replace command line tool — a
-	  friendlier replacement for sed.
-
-	  https://github.com/chmln/sd
