@@ -219,3 +219,27 @@ def test_pins_from_repo_files():
     assert sources.mk_value("NVIDIA_OPEN_VERSION = 595.104.02\n", "NVIDIA_OPEN_VERSION") == "595.104.02"
     rows = sources.read_cosmic_components("# c\ncosmic-comp\thttps://x\tabc\tbuild\n")
     assert rows == [{"name": "cosmic-comp", "url": "https://x", "commit": "abc"}]
+
+
+# --- uutils/findutils (package/uutils-findutils): no release-monitoring project ---
+
+def test_uutils_findutils_silent_at_the_newest_real_tag():
+    tags = sources.parse_ls_remote((FIX / "ls-remote-uutils-findutils.txt").read_text())
+    assert "latest-commit" in tags            # the moving tag upstream keeps
+    assert sources.uutils_findutils_findings(tags, "0.10.0") == []
+
+
+def test_uutils_findutils_older_pin_from_the_real_tags():
+    tags = sources.parse_ls_remote((FIX / "ls-remote-uutils-findutils.txt").read_text())
+    (f,) = sources.uutils_findutils_findings(tags, "0.9.1")
+    assert f["component"] == "uutils-findutils"   # the Buildroot package name
+    assert (f["current"], f["available"], f["lane"]) == ("0.9.1", "0.10.0", "major")
+
+
+def test_uutils_findutils_patch_release_is_routine():
+    (f,) = sources.uutils_findutils_findings(["0.10.0", "0.10.1", "latest-commit"], "0.10.0")
+    assert (f["available"], f["lane"]) == ("0.10.1", "routine")
+
+
+def test_uutils_findutils_ignores_latest_commit_and_prereleases():
+    assert sources.uutils_findutils_findings(["latest-commit", "0.11.0-rc1"], "0.10.0") == []

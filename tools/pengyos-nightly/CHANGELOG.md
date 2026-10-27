@@ -6,6 +6,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — an observe source for uutils/findutils
+- **`uutils-findutils`** (`sources.uutils_findutils_findings`, wired in `cli.py`):
+  `git ls-remote --tags` of github.com/uutils/findutils compared with
+  `UUTILS_FINDUTILS_VERSION`. The recipe ships find and xargs in Core, and
+  release-monitoring.org has no project for it, so pkg-stats never reports a
+  newer version. Bare tags (`0.10.0`); the moving `latest-commit` tag and
+  prereleases are ignored. A patch release is routine; a new 0.x minor is major.
+
 ### Added — an observe source for the libdisplay-info fork
 - **`libdisplay-info-fork`** (`sources.libdisplay_info_fork_findings`, wired in
   `cli.py`): `git ls-remote --tags` of gitlab.freedesktop.org/emersion/libdisplay-info

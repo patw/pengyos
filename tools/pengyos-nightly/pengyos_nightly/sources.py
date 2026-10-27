@@ -314,6 +314,33 @@ def libdisplay_info_fork_findings(tags: Iterable[str], current: str) -> list[dic
                            "cosmic-comp's libdisplay-info-sys must accept it first")}]
 
 
+def uutils_findutils_findings(tags: Iterable[str], current: str) -> list[dict]:
+    """uutils/findutils, the authored recipe that ships find and xargs
+    (`package/uutils-findutils`, Core).
+
+    pkg-stats can see the recipe but not its upstream: release-monitoring.org has
+    no uutils-findutils project, so the "latest" column stays empty and the pin
+    would age with nothing noticing. This source reads the upstream git tags.
+
+    Upstream tags releases bare (`0.10.0`) and keeps a moving `latest-commit` tag,
+    which is not a release. It is still 0.x, where a new minor is a breaking
+    release, so `bump_kind` makes 0.10.0 -> 0.10.1 routine and 0.11.0 major: the
+    find every script runs is a human's call when its behaviour may change.
+    """
+    versions = [strip_prefix(t) for t in tags if re.fullmatch(r"v?\d+\.\d+\.\d+", t)]
+    newer = [v for v in versions if vkey(v) > vkey(current) and not is_prerelease(v)]
+    if not newer:
+        return []
+    best = max(newer, key=vkey)
+    kind = bump_kind(current, best)
+    # Named after the Buildroot package, which is the key the planner joins on.
+    return [{"lane": kind, "component": "uutils-findutils", "current": current,
+             "available": best,
+             "note": (f"uutils/findutils patch release ({current} -> {best})"
+                      if kind == "routine"
+                      else f"new uutils/findutils series ({current} -> {best})")}]
+
+
 def cosmic_findings(components: list[dict], tags_by_repo: dict[str, dict[str, str]]) -> list[dict]:
     """For each COSMIC repo: the newest epoch-* tag, and whether the pinned
     commit is that tag. Repos behind the newest epoch are grouped into one

@@ -162,6 +162,17 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
                                              "https://gitlab.freedesktop.org/emersion/libdisplay-info.git"])),
             ldiver))
 
+    # uutils/findutils: our recipe for find/xargs (Core). release-monitoring.org has no
+    # project for it, so pkg-stats reports no "latest" and the pin would age unseen.
+    uf_mk = repo / "buildroot-external/package/uutils-findutils/uutils-findutils.mk"
+    ufver = sources.mk_value(uf_mk.read_text(), "UUTILS_FINDUTILS_VERSION") \
+        if uf_mk.exists() else None
+    if ufver:
+        findings += guard("uutils-findutils", lambda: sources.uutils_findutils_findings(
+            sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags",
+                                             "https://github.com/uutils/findutils"])),
+            ufver))
+
     def cosmic():
         comps = sources.read_cosmic_components((repo / "scripts/cosmic-components.tsv").read_text())
         tags = {}
