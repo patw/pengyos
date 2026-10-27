@@ -75,6 +75,7 @@ Chosen once, inherited everywhere.
 | **Toolchain** | Buildroot's internal **GCC 15** + binutils 2.45; Rust for our own components | GPL-3.0 + exception | pure LLVM | 🟢 |
 | **Our code** | **Rust** for shipped apps; **Python** (stdlib) for tooling and on-device scripts | MIT / Apache-2.0 | — | 🟢 |
 | **Coreutils** | **uutils/coreutils** (Rust) — our recipe `package/uutils-coreutils` (the pin is the recipe's version), built `--features unix`, one multicall binary + a symlink per utility | MIT | GNU coreutils (GPL-3.0; Buildroot's recipe — what shipped up to 26.10.24) | 🟢 |
+| **find, xargs** | **uutils/findutils** (Rust) — our recipe `package/uutils-findutils` (the pin is the recipe's version): `find`, `xargs`, `locate`, `updatedb`, linking Buildroot's oniguruma | MIT | GNU findutils (GPL-3.0; what shipped up to 26.10.44). Diffutils stays GNU: uutils/diffutils 0.6.0 has no `diff -r`, `diff3` or `sdiff` | 🟢 |
 | **Privilege** | **sudo-rs** (Rust, Server and Desktop) — our recipe `package/sudo-rs` (the pin is the recipe's version): `sudo` (setuid), `sudoedit`, `visudo`; `/etc/sudoers` grants root and includes `/etc/sudoers.d`; the admins are `wheel` (the drop-in, and `pam_wheel` in PAM service `sudo`) | Apache-2.0 / MIT | C sudo (ISC; Buildroot's recipe — what shipped up to 26.10.44), doas | 🟢 |
 | **Shell** | **bash** (Core); **zsh** added on Server, wired to the comfort profile (`/etc/pengyos/shell/profile`: starship prompt, fzf, zoxide, aliases) + the zsh plugins (autosuggestions, syntax highlighting) | GPL-3.0 / MIT | nushell, fish, oh-my-zsh (a git-checkout framework with an update ping; the curated profile ships its feel instead) | 🟢 |
 | **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (stock Buildroot recipe, not enabled) | 🟢 / 🔵 broker |
@@ -160,9 +161,9 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 - **Boot:** GRUB 2 EFI → kernel 7.2.12 → systemd. Video console (simpledrm/fbcon) and
   serial console; the GRUB menu is full-screen.
 - **Userspace:** systemd (journald, udevd, logind, networkd, resolved), D-Bus, uutils
-  coreutils (Rust), util-linux, kmod, iproute2, procps-ng, bash, Python 3, nftables,
+  coreutils and uutils findutils (Rust), util-linux, kmod, iproute2, procps-ng, bash, Python 3, nftables,
   chrony, OpenSSH (key-only). The text/search tools come from the projects that define
-  the behaviour, not from BusyBox: findutils, grep, sed, gawk, GNU time, which,
+  the behaviour, not from BusyBox: find/xargs (uutils findutils), grep, sed, gawk, GNU time, which,
   diffutils, patch, gzip, Info-ZIP unzip, tar, tree, lsof, less, attr, psmisc — and the
   BusyBox applets for all of them are compiled out (`board/core/busybox.fragment`).
   `/bin/sh` is bash.

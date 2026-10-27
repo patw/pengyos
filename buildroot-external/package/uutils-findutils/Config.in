@@ -1,0 +1,12 @@
+config BR2_PACKAGE_UUTILS_FINDUTILS
+	bool "uutils-findutils (Rust findutils)"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on BR2_USE_MMU # fork()
+	depends on !BR2_PACKAGE_FINDUTILS # both install /usr/bin/find and xargs
+	select BR2_PACKAGE_HOST_RUSTC
+	select BR2_PACKAGE_ONIGURUMA # find -regextype, via the onig crate
+	help
+	  findutils ~ GNU findutils, reimplemented in Rust by uutils:
+	  find, xargs, locate and updatedb. MIT-licensed.
+
+	  https://github.com/uutils/findutils

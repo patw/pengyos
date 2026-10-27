@@ -56,6 +56,7 @@ in `../configs/layers/*.config`.
 | `alsa-ucm-conf/` | ALSA UCM profiles | Without them PipeWire exposes only a generic Analog profile: no HDMI/DisplayPort sinks. |
 | `distrobox/` | `distrobox` | Server layer: the developer toolchain lane (no compiler on the target; gcc/rustc/… live in a distrobox). |
 | `sudo-rs/` | `sudo`, `sudoedit`, `visudo` | Server layer: the Rust sudo (Trifecta Tech Foundation; Ubuntu's default since 25.10) in place of Buildroot's C sudo. Buildroot 2026.08 has no recipe. Ships its own `/etc/sudoers` and the C sudo's PAM stack; `wheel` is the admin group. |
+| `uutils-findutils/` | `find`, `xargs`, `locate`, `updatedb` | Core layer: uutils/findutils (Rust, MIT) in place of GNU findutils. Buildroot 2026.08 has no recipe. Watched by the nightly's `uutils-findutils` source: release-monitoring.org has no project for it. |
 | `font-noto-cjk/` | Noto Sans CJK | Chinese/Japanese/Korean text, one variable-font collection (32 MB). |
 | `xdg-utils/` | `xdg-open`, `xdg-mime`, ... | Not a stock Buildroot package. The scripts' `--help` text is rendered by `docbook2txt.py` (upstream needs `xmlto` + a text browser); a patch lets the generic backend COSMIC runs ask `gio` for file types. |
 | `cosmic-sound-theme/` | COSMIC's system sounds | Data-only; aliased as `Pop`, the name COSMIC 1.9 looks sounds up under. |

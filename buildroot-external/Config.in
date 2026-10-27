@@ -71,6 +71,8 @@ menu "PengyOS (external tree)"
 	# (SPEC §2.1). Buildroot 2026.08 ships no uutils recipe at all, so the
 	# Core layer's coreutils is ours: package/uutils-coreutils.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/uutils-coreutils/Config.in"
+	# ... and uutils/findutils (find, xargs, locate, updatedb), also ours.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/uutils-findutils/Config.in"
 	# sudo-rs, the Rust sudo (Server): Buildroot 2026.08 has only the C sudo.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/sudo-rs/Config.in"
 
