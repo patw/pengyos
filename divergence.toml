@@ -200,7 +200,6 @@ expiry = "Buildroot pins gst-plugins-bad at or above 1.28.1 (where NVD's range s
 observe_source = "pkg-stats"
 upstream_status = "merged"
 
-
 [[divergence]]
 id        = "ffmpeg-9.0.2-fork"
 kind      = "fork"
@@ -300,7 +299,6 @@ expiry = "Buildroot releases with ffmpeg >= 9.0.3 (the first version past NVD's 
 observe_source = "pengyos-nightly observe, source id ffmpeg-fork: https://ffmpeg.org/releases/ directory listing compared to FFMPEG_PENGYOS_VERSION. pkg-stats cannot see a fork - it scans the stock recipe, and the stock recipe is switched off."
 upstream_status = "released"
 
-
 [[divergence]]
 id        = "hplip-3.26.6-fork"
 kind      = "fork"
@@ -367,7 +365,6 @@ expiry = "Buildroot releases with hplip >= 3.26.6: delete buildroot-external/pac
 observe_source = "pengyos-nightly observe, source id hplip-fork: https://prdownloads.sourceforge.net/hplip/hplip/ release listing compared to HPLIP_PENGYOS_VERSION. pkg-stats cannot see a fork - it scans the stock recipe, and the stock recipe is switched off."
 upstream_status = "released"
 
-
 [[divergence]]
 id        = "gst1-libav-pengyos-1.24.13-ffmpeg9"
 kind      = "patch-set"
@@ -402,7 +399,6 @@ expiry = "upstream gst-libav stops naming AV_CODEC_ID_V308/V408/V410 (check the 
 observe_source = "pkg-stats"
 upstream_status = "not-offered"
 
-
 [[divergence]]
 id        = "gst1-plugins-good-1.24.13-cve-2026-73433"
 kind      = "patch-set"
@@ -415,15 +411,10 @@ patches_dir   = "buildroot-external/patches/gst1-plugins-good/1.24.13"
 # Six avidemux fixes for two CVEs: the pair is closed by the set together, which is why
 # every patch in cve-declarations.mk repeats both - the declaration is per patch file, and
 # the last one applied is what closes them.
-closes = ["CVE-2026-73433", "CVE-2026-73434",
-          "CVE-2026-46469", "CVE-2026-46470", "CVE-2026-1940"]
-upstream_fixes = [
-  "bb8fb5a9bf15", "ed6dcb332204", "c8383e484841",
-  "0bcc6564c7de", "30966f12aff2", "44383c6de722",
-  "ea7ac498e3f3",
-  "1171ae8ac218", "3564405b6919", "c73a1f4427ec", "8822ee3b2397", "081484ec99aa",
+closes = [
+  "CVE-2026-73433",  # 0001-avidemux-make-sure-enough-data-is-available-when-parsing.patch
+  "CVE-2026-73434",  # 0001-avidemux-make-sure-enough-data-is-available-when-parsing.patch
 ]
-
 # Added by hand 2026-10-21 (26.10.38):
 #
 # 0007, CVE-2026-46469 / CVE-2026-46470 (GStreamer-SA-2026-0018): qtdemux divides by
@@ -448,7 +439,6 @@ upstream_fixes = [
 expiry = "Buildroot pins gst-plugins-good outside the NVD range of CVE-2026-73433/73434; pkg-stats then reports the ignores as stale and the patch set is deleted"
 observe_source = "pkg-stats"
 upstream_status = "merged"
-
 
 [[divergence]]
 id        = "openssh-10.6p1-fork"
@@ -498,7 +488,6 @@ provenance = "https://www.openssh.com/txt/release-10.6 + openssh-10.6p1.tar.gz.s
 expiry = "Buildroot releases with openssh >= 10.6p1: delete buildroot-external/package/openssh-pengyos, restore the BR2_PACKAGE_OPENSSH lines in configs/layers/core.config, re-enable BR2_PACKAGE_MOSH in configs/layers/server.config, and remove the openssh-fork observe source from pengyos-nightly"
 observe_source = "pengyos-nightly observe, source id openssh-fork: git ls-remote --tags https://github.com/openssh/openssh-portable compared to OPENSSH_PENGYOS_VERSION (sources.openssh_fork_findings, added 2026-10-19 with the fixture tests/fixtures/ls-remote-openssh.txt). pkg-stats cannot see a fork - it scans the stock recipe, and the stock recipe is switched off."
 upstream_status = "released"
-
 
 [[divergence]]
 id        = "podman-v5.7.0-cve-2026"
@@ -622,7 +611,6 @@ expiry = "Buildroot pins gst-plugins-base >= 1.28.5 (the advisory's fixed versio
 observe_source = "pkg-stats"
 upstream_status = "merged"
 
-
 [[divergence]]
 id        = "ca-certificates-20260223-emudhra-blacklist"
 kind      = "patch-set"
@@ -654,7 +642,6 @@ upstream_fixes = ["Debian ca-certificates 20260816+nmu1"]
 expiry = "Buildroot pins ca-certificates >= 20260816+nmu1 (check its mozilla/blacklist.txt names \"emSign ECC Root CA - G3\"): delete buildroot-external/patches/ca-certificates"
 observe_source = "pkg-stats"
 upstream_status = "merged"
-
 
 [[divergence]]
 id        = "libdisplay-info-0.3.0-fork"
@@ -711,7 +698,6 @@ expiry = "cosmic-comp's pinned commit (scripts/cosmic-components.tsv) depends on
 observe_source = "pengyos-nightly observe, source id libdisplay-info-fork: git ls-remote --tags https://gitlab.freedesktop.org/emersion/libdisplay-info.git compared to LIBDISPLAY_INFO_PENGYOS_VERSION (sources.libdisplay_info_fork_findings, added 2026-10-23 with the fixture tests/fixtures/ls-remote-libdisplay-info.txt). A 0.3.x point release is routine and wins over a newer series. pkg-stats cannot see a fork, and NVD lists no libdisplay-info CPE, so this is the only observer."
 upstream_status = "not-offered"
 
-
 [[divergence]]
 id        = "uutils-findutils-0.10.0-fork"
 kind      = "fork"
@@ -740,7 +726,6 @@ expiry = "an upstream uutils/findutils release fixes -prune under -xdev (its tes
 observe_source = "pengyos-nightly observe, source id uutils-findutils: git ls-remote --tags https://github.com/uutils/findutils compared to UUTILS_FINDUTILS_VERSION (sources.uutils_findutils_findings, added 2026-10-27 with the fixture tests/fixtures/ls-remote-uutils-findutils.txt). There is no release-monitoring.org project, so pkg-stats cannot see it."
 upstream_status = "not-offered"
 
-
 [[divergence]]
 id        = "appstream-1.2.1-build-fix"
 kind      = "build-fix"
@@ -761,7 +746,6 @@ expiry = "an appstream release builds data/ in a cross build without a native ap
 observe_source = "pkg-stats"
 release_monitoring_id = 10385
 upstream_status = "not-offered"
-
 
 [[divergence]]
 id        = "cutecosmic-0.2.0-build-fix"
@@ -785,7 +769,6 @@ expiry = "a cutecosmic release with Qt Quick Controls optional and a way to supp
 observe_source = "pkg-stats"
 release_monitoring_id = 387805
 upstream_status = "not-offered"
-
 
 [[divergence]]
 id        = "distrobox-1.8.2.5-fork"
@@ -811,7 +794,6 @@ expiry = "distrobox 2.0.0 is released and the recipe moves to it (pkg/containerm
 observe_source = "pkg-stats"
 release_monitoring_id = 242098
 upstream_status = "fixed-upstream-unreleased"
-
 
 [[divergence]]
 id        = "xdg-utils-1.2.1-fork"
