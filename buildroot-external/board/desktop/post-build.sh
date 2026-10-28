@@ -202,10 +202,10 @@ if [ -n "${STRIP_BIN}" ]; then
     echo "post-build: stripped host-built binaries"
 fi
 
-# --- COSMIC portal data files (the cargo package installs only the binary) ---
+# --- COSMIC portal data files (the cosmic package installs only the binary) ---
 # cosmic.portal + portals.conf + the dbus service let xdg-desktop-portal route
 # to the COSMIC backend (Screenshot/ScreenCast/Settings/FileChooser/...).
-PCDIR="$(find "${BUILD_DIR}" -maxdepth 1 -type d -name 'cosmic-portal-*' 2>/dev/null | head -1)/data"
+PCDIR="${COSMIC_SRC}/xdg-desktop-portal-cosmic/data"
 if [ -d "${PCDIR}" ]; then
     mkdir -p "${TARGET_DIR}/usr/share/xdg-desktop-portal/portals" \
              "${TARGET_DIR}/usr/share/dbus-1/services"

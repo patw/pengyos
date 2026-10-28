@@ -2,7 +2,7 @@
 # the libcosmic pin, scripts/cosmic-locks and board/desktop/cosmic-patches.
 # Do not edit: change those and rerun the script.
 
-COSMIC_VERSION = 03f31a832580
+COSMIC_VERSION = e532608498a7
 COSMIC_SITE = https://github.com/pop-os/cosmic-comp/archive/0fbd4574ef4caf74769a617d205fd1fc909ac9b1
 COSMIC_SOURCE = cosmic-comp-0fbd4574ef4caf74769a617d205fd1fc909ac9b1.tar.gz
 COSMIC_EXTRA_DOWNLOADS = \
@@ -19,6 +19,7 @@ COSMIC_EXTRA_DOWNLOADS = \
 	https://github.com/pop-os/cosmic-bg/archive/9d82a34dab4e73d90ba66c9f72d18d0f9b8be208/cosmic-bg-9d82a34dab4e73d90ba66c9f72d18d0f9b8be208.tar.gz \
 	https://github.com/pop-os/cosmic-randr/archive/6e8e795970fa06d434af22775e415b517f7552d3/cosmic-randr-6e8e795970fa06d434af22775e415b517f7552d3.tar.gz \
 	https://github.com/pop-os/cosmic-screenshot/archive/5ddcf1804192ff98823bd37a778286db5a00f3dd/cosmic-screenshot-5ddcf1804192ff98823bd37a778286db5a00f3dd.tar.gz \
+	https://github.com/pop-os/xdg-desktop-portal-cosmic/archive/2f41161176368840c67e2de9b8a24786accb100c/xdg-desktop-portal-cosmic-2f41161176368840c67e2de9b8a24786accb100c.tar.gz \
 	https://github.com/pop-os/cosmic-greeter/archive/bfb2745176e3fd0824e008d3efb2b37bce5ae0db/cosmic-greeter-bfb2745176e3fd0824e008d3efb2b37bce5ae0db.tar.gz \
 	https://github.com/pop-os/cosmic-term/archive/9129277bed1e810418a3138d683c1bc15656234f/cosmic-term-9129277bed1e810418a3138d683c1bc15656234f.tar.gz \
 	https://github.com/pop-os/cosmic-files/archive/d1f0af78e64f9e8ddb52c486913d53a234ce3cf2/cosmic-files-d1f0af78e64f9e8ddb52c486913d53a234ce3cf2.tar.gz \
@@ -36,8 +37,8 @@ COSMIC_EXTRA_DOWNLOADS = \
 	https://github.com/pop-os/cosmic-protocols/archive/c0cff4db14c37ed954983158e4055aa94c7741d9/cosmic-protocols-c0cff4db14c37ed954983158e4055aa94c7741d9.tar.gz \
 	https://github.com/pop-os/libcosmic/archive/87ab8179e1bd9880239c340855ae8862034bd0e8/libcosmic-87ab8179e1bd9880239c340855ae8862034bd0e8.tar.gz \
 
-COSMIC_COMPONENTS = cosmic-comp cosmic-session cosmic-panel cosmic-applets cosmic-launcher cosmic-settings cosmic-settings-daemon cosmic-notifications cosmic-osd cosmic-osk cosmic-idle cosmic-bg cosmic-randr cosmic-screenshot cosmic-greeter cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player cosmic-app-library cosmic-workspaces-epoch cosmic-viewer cosmic-monitor pop-launcher cosmic-icons cosmic-sound-theme cosmic-workspaces cosmic-protocols libcosmic
-COSMIC_CARGO_COMPONENTS = cosmic-comp cosmic-session cosmic-panel cosmic-applets cosmic-launcher cosmic-settings cosmic-settings-daemon cosmic-notifications cosmic-osd cosmic-osk cosmic-idle cosmic-bg cosmic-randr cosmic-screenshot cosmic-greeter cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player cosmic-app-library cosmic-workspaces-epoch cosmic-viewer cosmic-monitor pop-launcher
+COSMIC_COMPONENTS = cosmic-comp cosmic-session cosmic-panel cosmic-applets cosmic-launcher cosmic-settings cosmic-settings-daemon cosmic-notifications cosmic-osd cosmic-osk cosmic-idle cosmic-bg cosmic-randr cosmic-screenshot xdg-desktop-portal-cosmic cosmic-greeter cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player cosmic-app-library cosmic-workspaces-epoch cosmic-viewer cosmic-monitor pop-launcher cosmic-icons cosmic-sound-theme cosmic-workspaces cosmic-protocols libcosmic
+COSMIC_CARGO_COMPONENTS = cosmic-comp cosmic-session cosmic-panel cosmic-applets cosmic-launcher cosmic-settings cosmic-settings-daemon cosmic-notifications cosmic-osd cosmic-osk cosmic-idle cosmic-bg cosmic-randr cosmic-screenshot xdg-desktop-portal-cosmic cosmic-greeter cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player cosmic-app-library cosmic-workspaces-epoch cosmic-viewer cosmic-monitor pop-launcher
 COSMIC_COMMIT_cosmic-comp = 0fbd4574ef4caf74769a617d205fd1fc909ac9b1
 COSMIC_DATE_cosmic-comp = 2026-09-22
 COSMIC_CARGO_ARGS_cosmic-comp = build --release
@@ -80,6 +81,9 @@ COSMIC_CARGO_ARGS_cosmic-randr = build --release
 COSMIC_COMMIT_cosmic-screenshot = 5ddcf1804192ff98823bd37a778286db5a00f3dd
 COSMIC_DATE_cosmic-screenshot = 2026-08-24
 COSMIC_CARGO_ARGS_cosmic-screenshot = build --release
+COSMIC_COMMIT_xdg-desktop-portal-cosmic = 2f41161176368840c67e2de9b8a24786accb100c
+COSMIC_DATE_xdg-desktop-portal-cosmic = 2026-09-15
+COSMIC_CARGO_ARGS_xdg-desktop-portal-cosmic = build --release
 COSMIC_COMMIT_cosmic-greeter = bfb2745176e3fd0824e008d3efb2b37bce5ae0db
 COSMIC_DATE_cosmic-greeter = 2026-09-26
 COSMIC_CARGO_ARGS_cosmic-greeter = build --release --workspace

@@ -1,9 +1,0 @@
-config BR2_PACKAGE_COSMIC_PORTAL
-	bool "cosmic-portal"
-	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
-	select BR2_PACKAGE_HOST_RUSTC
-	help
-
-	  The COSMIC xdg-desktop-portal backend.
-
-	  https://github.com/pop-os/xdg-desktop-portal-cosmic
