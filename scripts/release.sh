@@ -95,7 +95,7 @@ say "PengyOS ${VERSION} ($(git -C "${REPO}" describe --always --dirty)) — ${TA
 case " ${TARGETS[*]} " in
     *" pengyos-desktop"*)
         if [ "${SKIP_COSMIC}" = 0 ]; then
-            say "COSMIC (scripts/build-cosmic.sh)"
+            say "PengyOS libcosmic apps (scripts/build-cosmic.sh)"
             "${REPO}/scripts/build-cosmic.sh"
         fi ;;
 esac

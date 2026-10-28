@@ -24,6 +24,7 @@ menu "PengyOS (external tree)"
 	# installed here so the Desktop target's `BR2_PACKAGE_*` symbols resolve.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/greetd/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-desktop-portal/Config.in"
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cosmic/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cosmic-portal/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-desktop-portal-gtk/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/dconf/Config.in"

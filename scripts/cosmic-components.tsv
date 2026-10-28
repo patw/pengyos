@@ -1,7 +1,9 @@
 # COSMIC sources the Desktop image is built from, pinned to exact commits.
-# scripts/build-cosmic.sh clones each into $PENGYOS_COSMIC_SRC/<name>, checks out
-# the commit, applies board/desktop/cosmic-patches/<name>/*.patch, and runs the
-# cargo arguments (a `-` means source-only: post-build.sh reads its data files).
+# The Buildroot package buildroot-external/package/cosmic builds them: it fetches
+# each commit as a GitHub archive, applies board/desktop/cosmic-patches/<name>/*.patch,
+# and runs the cargo arguments (a `-` means source-only: post-build.sh reads its data
+# files). After changing a row, run scripts/cosmic-recipe.py to regenerate the
+# package's source list and hashes.
 #
 # The set is epoch-1.9.0 (cosmic-greeter 1.9.1) as of 2026-10-05. Note that an
 # `epoch-*` tag is a Pop *release snapshot*, not a per-repo change: 10 of these
@@ -10,7 +12,7 @@
 # moved. See docs/cosmic-epoch-1.9.md.
 #
 # libcosmic has no epoch tags and each component's own Cargo.lock pinned its own
-# libcosmic commit (14 distinct ones). build-cosmic.sh now forces one rev across
+# libcosmic commit (14 distinct ones). The build forces one rev across
 # the whole set; the rev lives in scripts/cosmic-libcosmic.pin.
 #
 # The cargo-arguments column is a word list run as `cargo <args>`. It may be a
@@ -45,7 +47,7 @@ cosmic-term	https://github.com/pop-os/cosmic-term	9129277bed1e810418a3138d683c1b
 # a second, interactive copy of the file view on the wallpaper (reproduced
 # 2026-10-06 in QEMU; see CHANGELOG). Build the app and the applet as TWO
 # invocations, app FIRST: the app binary must never be compiled with the feature.
-# scripts/build-cosmic.sh fails the build if the app binary carries it anyway.
+# The cosmic package fails the build if the app binary carries it anyway.
 cosmic-files	https://github.com/pop-os/cosmic-files	d1f0af78e64f9e8ddb52c486913d53a234ce3cf2	build --release -p cosmic-files && cargo build --release -p cosmic-files-applet
 cosmic-edit	https://github.com/pop-os/cosmic-edit	bfc98bf21930fe5d9c32b7c238442499191b6319	build --release
 cosmic-store	https://github.com/pop-os/cosmic-store	c6e57a18a8abaf4ae6b5755576982839f8e53900	build --release

@@ -26,6 +26,7 @@ SCRIPTS = pathlib.Path(__file__).resolve().parents[1]
 TSV = SCRIPTS / "cosmic-components.tsv"
 LOCKS = SCRIPTS / "cosmic-locks"
 BUILD = (SCRIPTS / "build-cosmic.sh").read_text()
+PACKAGE = SCRIPTS.parent / "buildroot-external" / "package" / "cosmic" / "cosmic.mk"
 
 spec = importlib.util.spec_from_file_location("lock_check", SCRIPTS / "cosmic-lock-check.py")
 lock_check = importlib.util.module_from_spec(spec)
@@ -72,8 +73,15 @@ def test_the_build_never_resolves_and_always_passes_locked():
     body = re.sub(r"\nrelock\(\) \{.*?\n\}\n", "\n", code, flags=re.S)
     assert "generate-lockfile" not in body and "cargo fetch" not in body, \
         "only --relock may resolve a lock"
-    assert "cargo() { command cargo \"$@\" --locked; }" in body
     assert re.search(r"cargo build --release -p \"\$\{app\}\" --features cosmic --locked", body)
+
+
+def test_the_package_never_resolves_and_always_passes_locked():
+    mk = "\n".join(l for l in PACKAGE.read_text().splitlines() if not l.lstrip().startswith("#"))
+    assert "generate-lockfile" not in mk and "cargo fetch" not in mk
+    # $$@ is make's escape for the shell's $@.
+    assert "cargo() { command cargo \"$$@\" --locked; }" in mk
+    assert "cosmic-locks/$(c).Cargo.lock $(@D)/$(c)/Cargo.lock" in mk
 
 
 def test_the_review_lists_what_a_re_resolve_changed():
