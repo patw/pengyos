@@ -17,6 +17,26 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Security — COSMIC builds against locks PengyOS owns, with `--locked` (2026-10-28)
+
+`build-cosmic.sh` built without `--locked`, and when the libcosmic coherence pin did not
+take it ran `cargo generate-lockfile`, re-resolving the whole dependency graph to
+whatever crates.io served that day; every crate's build script runs on the build host.
+cosmic-idle's lock had drifted that way: 21 crates and 165 versions its upstream lock
+does not name. Upstream's lock plus the pin is not reproducible either (the pin pulls
+libcosmic's own git dependencies by tag). So the 25 locks the current binaries were
+built from are committed in `scripts/cosmic-locks/`, every cargo build passes
+`--locked` (the PengyOS libcosmic apps too), and `build-cosmic.sh --relock COMPONENT`
+is the only path that resolves: it writes the lock and prints what changed, for review.
+Verified on cosmic-bg: a changed checksum and a removed crate both stop the build before
+anything compiles. Performance is unchanged.
+
+An OSV query over the 2,054 crates.io crate versions in those locks on the same day found
+no malicious-crate advisory and 104 vulnerability advisories across 76 versions, all in
+upstream's own locks (none from cosmic-idle's drift): rustls, rustls-webpki, zstd-safe,
+quick-xml, zip, quinn-proto, tokio and others. That is the inventory a cargo advisory
+source in the nightly would watch.
+
 ### Security — the nightly carries a fix only from the package's own repo (2026-10-28)
 
 The patch lane built, signed and published whatever patch an NVD reference URL served,

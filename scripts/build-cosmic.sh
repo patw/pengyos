@@ -5,11 +5,20 @@
 # into the image; run this before `pengyos-build build pengyos-desktop`.
 #
 #   scripts/build-cosmic.sh [--fetch-only] [COMPONENT ...]
+#   scripts/build-cosmic.sh --relock COMPONENT ...
 #
 # Sources go to $PENGYOS_COSMIC_SRC (default ~/cosmic-src), cargo's target dir is
 # $PENGYOS_COSMIC_BUILD (default ~/cosmic-build) — the same variables post-build
 # reads. Idempotent: an existing checkout is moved to its pinned commit, a patch
 # that is already applied is skipped, and cargo only rebuilds what changed.
+#
+# Every component builds with `--locked` against the lock PengyOS owns,
+# scripts/cosmic-locks/<component>.Cargo.lock. Nothing here resolves a dependency:
+# a crate's build script and proc-macros run on this host, so which crates those
+# are is a reviewed commit, not whatever crates.io serves on the day of the build
+# (see scripts/cosmic-lock-check.py for what that cost). --relock re-resolves the
+# named components after the pin, writes their locks into the repo, prints what
+# changed, and builds nothing; review the diff and commit it.
 #
 # Host requirements: scripts/provision-build-host.sh --desktop (the -dev packages
 # COSMIC links against, and rustup's toolchain — some components need a newer
@@ -21,14 +30,22 @@ LIST="${REPO}/scripts/cosmic-components.tsv"
 PATCHES="${REPO}/buildroot-external/board/desktop/cosmic-patches"
 LIBCOSMIC_PIN_FILE="${REPO}/scripts/cosmic-libcosmic.pin"
 PIN_TOOL="${REPO}/scripts/cosmic-libcosmic-pin.py"
+LOCKS="${REPO}/scripts/cosmic-locks"
+LOCK_TOOL="${REPO}/scripts/cosmic-lock-check.py"
 SRC="${PENGYOS_COSMIC_SRC:-$HOME/cosmic-src}"
 BUILD="${PENGYOS_COSMIC_BUILD:-$HOME/cosmic-build}"
 export PATH="$HOME/.cargo/bin:$PATH"   # rustup's cargo before the distro's
 unset LD_LIBRARY_PATH                  # a trailing ':' breaks some build scripts
 
 FETCH_ONLY=0
+RELOCK=0
 if [ "${1:-}" = "--fetch-only" ]; then FETCH_ONLY=1; shift; fi
+if [ "${1:-}" = "--relock" ]; then RELOCK=1; shift; fi
 ONLY=("$@")
+if [ "${RELOCK}" = 1 ] && [ "${#ONLY[@]}" -eq 0 ]; then
+    echo "[cosmic] --relock needs the components to re-resolve, by name" >&2
+    exit 2
+fi
 
 wanted() {
     [ "${#ONLY[@]}" -eq 0 ] && return 0
@@ -63,6 +80,35 @@ checkout() {   # name url commit
     done
 }
 
+# Re-resolve one component after the pin and write its lock into the repo. Cargo
+# resolves the minimum the pin needs first (`cargo fetch` runs no build script);
+# only if the pin still does not take is the whole graph re-resolved - the
+# fallback the normal build used to take silently. Either way the result is shown
+# against the previous lock (or upstream's) and nothing is compiled.
+relock() {   # name
+    local dir="${SRC}/$1" lock="${LOCKS}/$1.Cargo.lock"
+    [ -e "${dir}/Cargo.toml" ] || { echo "[cosmic] $1: not a cargo component" >&2; exit 1; }
+    if [ -n "${LIBCOSMIC_REV}" ]; then
+        if [ ! -e "${dir}/Cargo.lock" ]; then
+            (cd "${dir}" && cargo generate-lockfile --quiet)
+        fi
+        python3 "${PIN_TOOL}" "${dir}" "${LIBCOSMIC_REV}"
+    fi
+    (cd "${dir}" && cargo fetch --quiet)
+    if [ -n "${LIBCOSMIC_REV}" ] && ! python3 "${PIN_TOOL}" --verify "${dir}" "${LIBCOSMIC_REV}"; then
+        echo "[cosmic] $1: pin unused by the graph, re-resolving its whole lock"
+        (cd "${dir}" && cargo generate-lockfile --quiet && cargo fetch --quiet)
+        python3 "${PIN_TOOL}" --verify "${dir}" "${LIBCOSMIC_REV}" || {
+            echo "[cosmic] $1: the coherence pin did not take effect" >&2; exit 1; }
+    fi
+    local ref="git:${dir}"
+    [ -e "${lock}" ] && ref="${lock}"
+    python3 "${LOCK_TOOL}" "${dir}/Cargo.lock" "${ref}" || true
+    mkdir -p "${LOCKS}"
+    cp -f "${dir}/Cargo.lock" "${lock}"
+    echo "[cosmic] $1: wrote ${lock#"${REPO}/"} - review the diff above and commit it"
+}
+
 mkdir -p "${SRC}" "${BUILD}"
 # One libcosmic for the whole set. Each component's own Cargo.lock had frozen its
 # own libcosmic commit (14 distinct ones as measured 2026-10-05); the pin file
@@ -81,34 +127,34 @@ while IFS=$'\t' read -r name url commit args; do
     checkout "${name}" "${url}" "${commit}"
     [ "${FETCH_ONLY}" = 1 ] && continue
     [ "${args}" = "-" ] && continue
+    lock="${LOCKS}/${name}.Cargo.lock"
+    if [ "${RELOCK}" = 1 ]; then
+        relock "${name}"
+        continue
+    fi
+    if [ ! -e "${lock}" ]; then
+        echo "[cosmic] ${name}: no ${lock#"${REPO}/"}; run scripts/build-cosmic.sh --relock ${name} and review the lock it writes" >&2
+        exit 1
+    fi
     if [ -n "${LIBCOSMIC_REV}" ] && [ -e "${SRC}/${name}/Cargo.toml" ]; then
-        # The helper reads the component's Cargo.lock to learn which crates it
-        # pulls out of libcosmic. Six components ship no lock upstream, so make
-        # one first - which is what the build itself would do anyway.
-        if [ ! -e "${SRC}/${name}/Cargo.lock" ]; then
-            (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" cargo generate-lockfile --quiet)
-        fi
+        # The helper reads the lock to learn which crates come out of libcosmic:
+        # upstream's, as --relock read it, or ours when upstream ships none.
+        [ -e "${SRC}/${name}/Cargo.lock" ] || cp -f "${lock}" "${SRC}/${name}/Cargo.lock"
         python3 "${PIN_TOOL}" "${SRC}/${name}" "${LIBCOSMIC_REV}"
     fi
-    echo "[cosmic] cargo ${args}  (${name})"
+    cp -f "${lock}" "${SRC}/${name}/Cargo.lock"
+    echo "[cosmic] cargo ${args} --locked  (${name})"
     # Run through a shell so the column can be a `&&`-joined command list — the
     # cosmic-files row needs the app and the applet built as two separate cargo
     # invocations (see the TSV). -e: a failed first command stops the component.
-    (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" sh -ec "cargo ${args}")
+    # The cargo() wrapper adds --locked to each of them: cargo then refuses any
+    # change to the lock instead of resolving one.
+    (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" \
+        sh -ec 'cargo() { command cargo "$@" --locked; }; eval "cargo $1"' cargo-locked "${args}")
     if [ -n "${LIBCOSMIC_REV}" ] && [ -e "${SRC}/${name}/Cargo.toml" ]; then
-        # A cargo patch only lands if the pinned rev's crate VERSIONS satisfy the
-        # graph. A stale component can get "patch was not used in the crate graph"
-        # and silently keep its old libcosmic - cosmic-idle wanted iced_core
-        # 0.14.0-dev from 2025-10-13 while the pin provides 0.14.0. Build first
-        # (cargo re-resolves exactly what the patch affects); re-resolve the whole
-        # graph only if the pin still did not take.
-        if ! python3 "${PIN_TOOL}" --verify "${SRC}/${name}" "${LIBCOSMIC_REV}"; then
-            echo "[cosmic] ${name}: pin unused by the graph, re-resolving its lock"
-            (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" cargo generate-lockfile --quiet)
-            (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" sh -ec "cargo ${args}")
-            python3 "${PIN_TOOL}" --verify "${SRC}/${name}" "${LIBCOSMIC_REV}" || {
-                echo "[cosmic] ${name}: the coherence pin did not take effect"; exit 1; }
-        fi
+        python3 "${PIN_TOOL}" --verify "${SRC}/${name}" "${LIBCOSMIC_REV}" || {
+            echo "[cosmic] ${name}: the committed lock does not resolve the pinned libcosmic; run --relock ${name}" >&2
+            exit 1; }
     fi
     built=$((built + 1))
 done < "${LIST}"
@@ -122,7 +168,7 @@ done < "${LIST}"
 # file view on the desktop wallpaper (reproduced 2026-10-06 in QEMU; see
 # CHANGELOG). cosmic-components.tsv builds them as two invocations; fail loudly
 # if a future edit reintroduces the single workspace build.
-if [ "${FETCH_ONLY}" = 0 ] && wanted cosmic-files && [ -x "${BUILD}/release/cosmic-files" ]; then
+if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted cosmic-files && [ -x "${BUILD}/release/cosmic-files" ]; then
     if grep -aq "already had surface ID" "${BUILD}/release/cosmic-files"; then
         echo "[cosmic] ERROR: cosmic-files was built WITH the desktop-applet feature" >&2
         echo "[cosmic]        it would draw a second copy of the file view on the desktop." >&2
@@ -138,12 +184,12 @@ if [ "${FETCH_ONLY}" = 0 ] && wanted cosmic-files && [ -x "${BUILD}/release/cosm
 fi
 
 # Our libcosmic apps share one target dir so they share the libcosmic build.
-if [ "${FETCH_ONLY}" = 0 ]; then
+if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ]; then
     for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-usage pengyos-gamepads pengyos-printers pengyos-firmware pengy-games; do
         wanted "${app}" || continue
-        echo "[cosmic] cargo build --release -p ${app} --features cosmic"
+        echo "[cosmic] cargo build --release -p ${app} --features cosmic --locked"
         (cd "${REPO}/tools/${app}" && \
-            CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p "${app}" --features cosmic)
+            CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p "${app}" --features cosmic --locked)
         built=$((built + 1))
     done
 fi
