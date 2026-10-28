@@ -679,6 +679,15 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
     return result
 
 
+def carried_record(action: dict) -> list[dict]:
+    """Each patch an action carries: where it came from and the sha256 of what was
+    written, so a published image's patches can be audited after the fact. Read
+    after pre-flight, which removes a dropped patch from `edits`."""
+    return [{"path": e["path"], "fix_url": e.get("fix_url", ""),
+             "sha256": e.get("sha256", "")}
+            for e in action.get("edits") or [] if e.get("path", "").endswith(".patch")]
+
+
 def record(result: dict, action: dict, state_dir: Path, st: dict, today: dt.date,
            run=subprocess.run, repo: Path | None = None) -> None:
     """actions.json + the attestation chain + state's cooldown map."""
@@ -692,6 +701,7 @@ def record(result: dict, action: dict, state_dir: Path, st: dict, today: dt.date
              "published": result.get("published", False), "error": result.get("error", ""),
              "cves": list(action.get("closes") or
                           [c["cve"] for c in action.get("cves", []) if c.get("covered")]),
+             "patches": carried_record(action),
              "editions": action["editions"]}
     log["actions"].append(entry)
     S.save(path, log)
@@ -1136,7 +1146,8 @@ def record_batch(result: dict, actions: list[dict], state_dir: Path, st: dict,
     try:
         data = json.dumps({"kind": "batch", "version": result.get("version", ""),
                            "changes": [a["component"] for a in shipped],
-                           "cves": entry["cves"], "dropped": entry["dropped"]},
+                           "cves": entry["cves"], "dropped": entry["dropped"],
+                           "patches": [p for a in shipped for p in carried_record(a)]},
                           sort_keys=True)
         _run(run, [sys.executable, "-m", "pengyos_attest", "append",
                    "--log", str(state_dir / "attest.jsonl"), "--type", "nightly-batch",

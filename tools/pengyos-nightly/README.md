@@ -98,6 +98,14 @@ commit (tar's point at Red Hat errata) is reported, never acted on. pkg-stats'
 `unsure_cves` are never actionable. `linux`, `nvidia-open`, `buildroot` and COSMIC are
 report-only in this phase.
 
+**Where a fix may come from.** The fix URL is a reference in an NVD record, and NVD
+references point anywhere, so it is not trusted on its own. A fix is fetched only over
+https, from a host in `edits._PATCH_HOSTS` exactly, and from a repo the package declares
+in the repo-root [`fix-repos.toml`](../../fix-repos.toml); a package with no entry
+carries nothing. The fetched patch must be the commit NVD named (its `From <sha>`), and
+each carried patch's sha256 goes into the action record and the attestation chain.
+Anything refused is named with its reason in `not_carried`.
+
 **A patch does not move a version, so the loop has to remember what it fixed.**
 `state.json` keeps three states per CVE match — *open*, `resolved` (the package moved
 past it) and `patched_by` (we carry the fix as a patch, with the date, the release and

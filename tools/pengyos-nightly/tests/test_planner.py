@@ -12,6 +12,7 @@ one. The libxml2 record is the real one (copied from the live fkie-cad clone on
 
 import datetime as dt
 import json
+import re
 import urllib.error
 from pathlib import Path
 
@@ -26,9 +27,17 @@ LIBXML2 = json.loads((FIX / "nvd" / "git" / "CVE-2026" / "CVE-2026-861xx"
 TODAY = dt.date(2026, 10, 5)
 
 
+def as_commit(text: str, url: str) -> str:
+    """The patch text as the commit `url` names would serve it: the patch lane refuses
+    a fetched patch whose `From <sha>` is not the commit NVD named."""
+    m = re.search(r"/commit/([0-9a-f]{7,40})", url)
+    return (re.sub(r"^From [0-9a-f]+ ", f"From {m.group(1).ljust(40, '0')} ", text, count=1)
+            if m else text)
+
+
 def fake_get(url: str) -> bytes:
     if url.endswith(".patch"):
-        return PATCH_TEXT.encode()
+        return as_commit(PATCH_TEXT, url).encode()
     return b"a fake tarball"
 
 
@@ -96,6 +105,7 @@ def _repo(tmp_path):
     carried = repo / "buildroot-external" / "patches" / "libxml2" / "2.15.3"
     carried.mkdir(parents=True, exist_ok=True)
     (carried / "0001-xmlregexp.patch").write_text(PATCH_TEXT)
+    (repo / "fix-repos.toml").write_text((FIX / "fix-repos.toml").read_text())
     return repo
 
 
@@ -499,7 +509,7 @@ def test_a_package_keeps_the_real_fix_and_admits_the_advisory_one(tmp_path):
                 ["https://github.com/GNOME/libxml2/commit/76fe08d97de88bfaef2f7d5cd27f11954cc5bee2"],
                 versionEndExcluding="2.15.4")
     doc = _rec("xmlsoft", "libxml2", "*",
-               ["https://gitlab.freedesktop.org/gstreamer/gstreamer/-/commit/025d59cf3459"],
+               ["https://gitlab.gnome.org/GNOME/libxml2/-/commit/025d59cf3459"],
                versionEndExcluding="2.15.4")
     nvd = _nvd(tmp_path, ("CVE-2026-86137", real), ("CVE-2026-3086", doc))
     st = _st(_triaged("CVE-2026-86137", "libxml2"), _triaged("CVE-2026-3086", "libxml2"))
@@ -611,9 +621,9 @@ def test_only_max_actions_per_night_and_the_rest_say_cap(tmp_path):
                            cpeid="cpe:2.3:a:libpng:libpng:1.6.40:-:*:*:*:*:*:*",
                            editions=["pengyos-server"]))
     nvd = _nvd(tmp_path,
-               ("CVE-2026-86137", dict(LIBXML2, references=[{"url": "https://github.com/x/y/commit/76fe08d9"}])),
+               ("CVE-2026-86137", dict(LIBXML2, references=[{"url": "https://github.com/GNOME/libxml2/commit/76fe08d9"}])),
                ("CVE-2026-33333", _rec("libpng", "libpng", "*",
-                                       ["https://github.com/x/y/commit/abc12345"],
+                                       ["https://github.com/pnggroup/libpng/commit/abc12345"],
                                        versionEndExcluding="1.6.44")))
     plan = _plan(tmp_path, obs, _st(_triaged("CVE-2026-86137", "libxml2"),
                                     _triaged("CVE-2026-33333", "libpng")), nvd)

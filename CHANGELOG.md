@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Security — the nightly carries a fix only from the package's own repo (2026-10-28)
+
+The patch lane built, signed and published whatever patch an NVD reference URL served,
+from any host and any scheme. It now fetches over https from an exact host list, only
+from a repo the package declares in the new [`fix-repos.toml`](fix-repos.toml), and only
+a patch that is the commit NVD named; each carried patch's sha256 is attested. See
+`tools/pengyos-nightly/CHANGELOG.md`.
+
 ### Removed — `pengyos-recipe-uutils`: the authored copy became the live recipe (2026-10-27)
 
 `tools/pengyos-recipe-uutils` authored the uutils-coreutils recipe, and its suite

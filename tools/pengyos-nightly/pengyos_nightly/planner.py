@@ -235,6 +235,10 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
     kind = bump_kind(current, target) if current and target else "none"
 
     cves = _matches(obs, st, cfg, name, pkg, attribution)
+    try:
+        repos = E.fix_repos(repo)
+    except ValueError:
+        repos = {}      # patch_dir reads it again and the guard names the error
     for c in cves:
         # A CVE attributed from a sibling component of a monorepo keeps the evidence that
         # matched it there - NVD's range is written against the project, and the only
@@ -246,7 +250,8 @@ def _candidate(obs: dict, st: dict, cfg: dict, name: str, pkg: dict, lane: str,
         c.update(EV.evidence(c["cve"], src, nvd_of(c["cve"]), current, target,
                              src_pkg.get("cpeid", "")))
         if c.get("affected") or c.get("covered"):
-            c["fix_commit"] = EV.fix_commit(nvd_of(c["cve"]))
+            c["fix_commit"] = EV.fix_commit(
+                nvd_of(c["cve"]), trusted=lambda u: not E.fix_refusal(u, name, repos))
 
     # What this action may *claim*. For a patch shape the claim is exactly the set
     # of CVEs whose fix will be written into the tree — `carried_cves` is the same

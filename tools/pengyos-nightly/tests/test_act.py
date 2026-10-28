@@ -251,6 +251,24 @@ def test_a_published_run_does_consume_the_cooldown(tmp_path):
     assert st["actions"] == {"libxml2": "2026-10-05"}
 
 
+def test_the_action_record_names_each_carried_patch_and_its_sha256(tmp_path):
+    """So a published image's patches can be audited after the fact: where each came
+    from and the hash of what was written, not just the path and the CVE."""
+    action = {**_action(), "edits": [
+        {"path": "buildroot-external/patches/libxml2/2.15.3/0001-x.patch",
+         "fix_url": "https://github.com/GNOME/libxml2/commit/76fe08d", "sha256": "ab" * 32},
+        {"path": "buildroot-external/configs/layers/core.config", "kind": "ensure"}]}
+    assert A.carried_record(action) == [
+        {"path": "buildroot-external/patches/libxml2/2.15.3/0001-x.patch",
+         "fix_url": "https://github.com/GNOME/libxml2/commit/76fe08d", "sha256": "ab" * 32}]
+    result, fake, *_ = _run(tmp_path)
+    state = tmp_path / "state"
+    A.record(result, action, state, {"cves": {}, "findings": {}, "actions": {}}, TODAY,
+             run=fake)
+    log = json.loads((state / "actions.json").read_text())["actions"]
+    assert log[-1]["patches"] == A.carried_record(action)
+
+
 # --- the wall, checked on the way out ----------------------------------------
 
 def test_act_never_assembles_a_stable_publish(tmp_path, monkeypatch):
