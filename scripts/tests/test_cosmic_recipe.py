@@ -77,3 +77,11 @@ def test_post_build_no_longer_copies_the_binaries():
             / "post-build.sh").read_text()
     assert not re.search(r"cp -f \S*/release/\$\{b\}", post)
     assert "pop-launcher-bin" not in post
+
+
+def test_the_license_survives_legal_info():
+    # Buildroot's legal-info echoes the manifest line inside single quotes; an
+    # apostrophe in the license broke the 26.10.47 release's SBOM step.
+    mk = (PKG / "cosmic.mk").read_text()
+    lic = re.search(r"^COSMIC_LICENSE = (.*)$", mk, re.M).group(1)
+    assert "'" not in lic
