@@ -312,7 +312,9 @@ gated the same day — 26 cargo builds, both Desktop editions rebuilt, and
 each). What is *not* done: the real-hardware round. The wallpaper/lock-screen
 failure mode this whole analysis is about is a greeter-on-real-GPU thing, and
 behoweather (NVIDIA), behopc and behotv still have to boot a 1.9 image.
-`tools/pengyos-cosmic-recipes/cosmic.toml` is also still at epoch-1.8.0 SHAs.
+`tools/pengyos-cosmic-recipes/cosmic.toml` moved with it: the two pin sets are now
+kept equal by `test_every_manifest_pin_matches_the_shipping_component_set`, so a
+future bump that moves one file and not the other fails the gate.
 
 ## Commands behind every number
 

@@ -6,11 +6,13 @@
 #
 # Buildroot builds its own toolchain, so Core and Server only need its host
 # prerequisites. The Desktop is different (SPEC.md §7): COSMIC is built with
-# cargo on the host (scripts/build-cosmic.sh) against the host's libraries, and
-# board/desktop/post-build.sh copies the libraries the COSMIC apps link that the
-# image does not build, plus an OpenSSL/curl pair, into the image. --desktop
-# installs exactly the packages those come from. The verified host is Ubuntu 26.04; on
-# another release the copied libraries' SONAMEs may differ.
+# cargo on the host (scripts/build-cosmic.sh) against the host's -dev packages.
+# Nothing is copied from the host into the image: every library the host-built
+# binaries link must come from a Buildroot package, and
+# board/common/check-needed-libs.py fails the build when one does not. --desktop
+# installs exactly the -dev packages those cargo builds compile against. The
+# verified host is Ubuntu 26.04; on another release a cargo build may resolve
+# against different headers than the image's packages provide.
 #
 # Idempotent; never runs `apt upgrade`. Needs sudo for apt-get.
 set -euo pipefail

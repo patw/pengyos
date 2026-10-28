@@ -53,11 +53,14 @@ pinned tarballs plus our patches, so the system is assembled, never derived.
 | Debian / Arch / RHEL tooling | Excluded by principle: assemble, don't derive. |
 
 **Known exception — COSMIC is host-built for now.** The COSMIC compositor, shell and
-apps, `pop-launcher` and our two libcosmic apps are built with cargo on the build host
-and copied in by `board/desktop/post-build.sh`, together with a few host libraries
-they link (§7). This is the largest gap between "from source" and what ships; the
-planned fix is Buildroot recipes for COSMIC (`tools/pengyos-cosmic-*`). Flatpak
-itself is built from source (`package/flatpak`, with `appstream` and `libfyaml`).
+apps, `pop-launcher` and our eight libcosmic apps are built with cargo on the build
+host and copied in by `board/desktop/post-build.sh` (§7). No host *library* is copied
+in: every library those binaries link must resolve to a Buildroot package, and
+`board/common/check-needed-libs.py` fails the Desktop build on one that does not.
+This is the largest gap between "from source" and what ships; the planned fix is
+Buildroot recipes for COSMIC (`tools/pengyos-cosmic-*` — a design lane, no build
+runs it today). Flatpak itself is built from source (`package/flatpak`, with
+`appstream` and `libfyaml`).
 
 ---
 
@@ -375,17 +378,23 @@ Server: Buildroot builds its own toolchain, and the host only supplies Buildroot
 prerequisites (`scripts/provision-build-host.sh`). The **Desktop** additionally takes
 from the host:
 
-- the COSMIC components and our libcosmic apps, built with cargo
-  (`scripts/build-cosmic.sh`, pinned to the versions in
+- the COSMIC components, `pop-launcher` and our eight libcosmic apps, built with
+  cargo (`scripts/build-cosmic.sh`, pinned to the versions in
   `scripts/cosmic-components.tsv`, with the patches in
-  `board/desktop/cosmic-patches/`);
-- the shared libraries the host-built COSMIC Store, Player and App Library link
-  that the image does not build (GStreamer bits, an OpenSSL/curl pair with
-  ENGINE support), plus six libraries `cosmic-comp` needs.
+  `board/desktop/cosmic-patches/`).
 
-So a Desktop build is only as reproducible as its host: the verified host is **Ubuntu
-26.04**, and the provisioning script installs exactly the packages those copies come
-from. Removing this dependency is open decision §6.3.
+Nothing else is taken from the host, and nothing is copied from it into the image.
+Every library the host-built binaries link comes from a Buildroot package:
+`board/common/check-needed-libs.py` runs at the end of the Desktop post-build and
+fails it on any unresolved SONAME. Post-build used to copy 25 libraries from the host
+(a private `/usr/lib/compat`, and an OpenSSL + libcurl pair behind a `cosmic-store`
+wrapper) at whatever patch level the host happened to be at, where no observe source,
+CVE match or SBOM could see them; those copies are cleared on every build now, and
+`libdisplay-info` is built by `package/libdisplay-info-pengyos`.
+
+So a Desktop build is only as reproducible as its host **for the cargo binaries**: the
+verified host is **Ubuntu 26.04**, and the provisioning script installs the packages
+those cargo builds need. Removing this dependency is open decision §6.3.
 
 ### Bootstrap chain
 
