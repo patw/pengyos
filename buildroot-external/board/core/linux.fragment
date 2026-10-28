@@ -198,6 +198,33 @@ CONFIG_SECURITY_LANDLOCK=y
 # WireGuard: NetworkManager's and wg-quick's VPNs need the kernel module.
 CONFIG_WIREGUARD=m
 
+# --- Memory-safety hardening (2026-10-28) -------------------------------------
+# The nightly reports kernel CVEs but never patches the kernel (guards.DENIED), so
+# this config is the only lever on how exploitable one is. None of these stops a
+# bug; each turns a class of memory corruption into a crash or a dead end instead
+# of root, which matters once something is running as the user (a malicious file,
+# a browser escape, a bad crate or Flatpak). All were off in all five editions
+# (2026-10-28 audit); the post-build check fails the build if one drops out.
+# Heap: freelist pointers obfuscated and checked, freelist order randomised -
+# the standard ways a slab overflow or use-after-free becomes a write primitive.
+CONFIG_SLAB_FREELIST_HARDENED=y
+CONFIG_SLAB_FREELIST_RANDOM=y
+# Linked-list corruption checked on add/del (cheap pointer checks).
+CONFIG_LIST_HARDENED=y
+# Compile-time and run-time bounds on str*/mem* where the size is known.
+CONFIG_FORTIFY_SOURCE=y
+# copy_to/from_user bounds-checked against the slab object or stack frame.
+CONFIG_HARDENED_USERCOPY=y
+# Heap pages and objects zeroed on allocation: closes uninitialised-memory leaks,
+# a large share of real kernel CVEs. 1-3% on allocation-heavy loads, near zero for
+# games; Ubuntu, Fedora and Arch ship it on. Off at boot with init_on_alloc=0.
+CONFIG_INIT_ON_ALLOC_DEFAULT_ON=y
+# Caller-used registers zeroed on function return (limits ROP gadgets and leaks).
+CONFIG_ZERO_CALL_USED_REGS=y
+# Not here, on purpose: INIT_ON_FREE (3-5% for a cold-boot threat a desktop does not
+# have), and MODULE_SIG / SECURITY_LOCKDOWN_LSM, which only mean something with
+# Secure Boot (roadmap) and need the out-of-tree NVIDIA module signed first.
+
 # --- Gaps found against a distro kernel (2026-10-17) ----------------------------
 # Our kernel is x86_64_defconfig plus these fragments, so whatever nobody added
 # is off. A diff against Ubuntu's config found these missing; each was silent.
