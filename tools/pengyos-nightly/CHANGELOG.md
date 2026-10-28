@@ -6,6 +6,26 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Security — a fix is carried only from the package's own upstream repo
+Found by the 2026-10-28 audit: the patch lane fetched whatever URL an NVD reference
+named, and NVD references are data anyone with a CNA can write.
+- **`patch_url`** requires https and an exact host from `_PATCH_HOSTS`. It used a
+  substring test over the whole URL (`notgithub.com.evil.example` and
+  `https://evil.example/github.com/...` passed) and passed any `.patch` URL through
+  from any host and any scheme, `http://` and `file://` included.
+- **`fix_refusal`** (new): a fix must come from a repo the package declares in the
+  repo-root `fix-repos.toml`. No entry, nothing carried. Measured over every CVE
+  pkg-stats matches: NVD names other projects' commits on github.com for `bolt`,
+  `libnotify` and `ninja`, which the host list alone allowed.
+- **`sha_mismatch`** (new): the fetched patch's `From <sha>` must be the commit NVD
+  named; a patch with no `From` line is refused.
+- **`evidence.fix_commit(trusted=...)`**: a trusted reference beats one NVD lists first.
+- **`fetch_bytes`** refuses a redirect from https to anything else.
+- **`Edit.sha256`** and `act.carried_record`: each carried patch's path, fix URL and
+  sha256 go into `actions.json` and both attestation records.
+- Tonight's plan computed from the live state is identical before and after (checked
+  2026-10-28, zero actions either way).
+
 ### Added — an observe source for uutils/findutils
 - **`uutils-findutils`** (`sources.uutils_findutils_findings`, wired in `cli.py`):
   `git ls-remote --tags` of github.com/uutils/findutils compared with

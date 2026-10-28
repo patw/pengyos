@@ -19,6 +19,14 @@ PATCH = (Path(__file__).parent / "fixtures" / "patches"
          / "0001-xmlregexp-prevent-out-of-bounds-read-in-nxt-macro.patch").read_text()
 
 
+@pytest.fixture(autouse=True)
+def _fix_repos(tmp_path):
+    """patch_dir carries a fix only from a repo the package declares; the tests'
+    packages declare theirs in the fixture, as the real repo does at its root."""
+    (tmp_path / "fix-repos.toml").write_text(
+        (Path(__file__).parent / "fixtures" / "fix-repos.toml").read_text())
+
+
 # --- reading a recipe --------------------------------------------------------
 
 def test_the_prefix_comes_from_the_recipe_not_the_package_name():
@@ -227,6 +235,108 @@ def test_patch_url_passes_a_patch_form_through_instead_of_doubling_it():
     assert E.patch_url(url) == url
 
 
+def test_patch_url_refuses_what_the_2026_10_28_audit_could_fetch():
+    """Every one of these was fetchable before: the host test was a substring over the
+    whole URL, and a `.patch` URL was passed through from any host and any scheme."""
+    assert E.patch_url("http://evil.example/x.patch") is None
+    assert E.patch_url("file:///etc/passwd.patch") is None
+    assert E.patch_url("https://notgithub.com.evil.example/a/commit/deadbeef") is None
+    assert E.patch_url("https://evil.example/github.com/commit/deadbeef") is None
+    assert E.patch_url("http://github.com/GNOME/libxml2/commit/76fe08d") is None, \
+        "an allowed host over plaintext is still plaintext"
+    assert E.patch_url("https://github.com.evil.example/o/r/commit/abc.patch") is None
+    assert E.patch_url("https://user@github.com/o/r/commit/abc") is None
+    assert E.patch_url("https://github.com/o/r/commit/abc?w=1") is None
+    assert E.patch_url("https://github.com/o/r/commit/abc#diff-1") == \
+        "https://github.com/o/r/commit/abc.patch", "a fragment is never sent; drop it"
+
+
+def test_a_fix_is_carried_only_from_the_packages_own_repo():
+    """Measured 2026-10-28: NVD names three other projects' commits, all on github.com,
+    for packages we ship. The host is allowed; the project is not ours."""
+    repos = {"libxml2": {"gitlab.gnome.org/gnome/libxml2", "github.com/gnome/libxml2"},
+             "bolt": set()}
+    assert E.fix_refusal("https://github.com/GNOME/libxml2/commit/76fe08d", "libxml2",
+                         repos) == "", "case-insensitive: NVD spells GNOME both ways"
+    assert E.fix_refusal("https://gitlab.gnome.org/GNOME/libxml2/-/commit/c2e233f",
+                         "libxml2", repos) == ""
+    why = E.fix_refusal("https://github.com/bolt/bolt/commit/abc1234", "bolt", repos)
+    assert "no upstream repo is declared for bolt" in why
+    why = E.fix_refusal("https://github.com/someone/libxml2/commit/abc1234", "libxml2", repos)
+    assert "github.com/someone/libxml2" in why and "not libxml2's declared upstream" in why
+    assert E.fix_refusal("http://github.com/GNOME/libxml2/commit/76fe08d", "libxml2", repos)
+
+
+def test_a_fetched_patch_must_be_the_commit_nvd_named():
+    assert E.sha_mismatch(PATCH, "76fe08d") == "", "NVD abbreviates; a prefix is the commit"
+    assert E.sha_mismatch(PATCH, "") == "", "a review request names no commit up front"
+    assert "not 90f293ba" in E.sha_mismatch(PATCH, "90f293ba")
+    assert "no `From <sha>` line" in E.sha_mismatch("diff --git a/x b/x\n", "")
+
+
+def test_patch_dir_refuses_another_projects_fix_without_fetching_it(tmp_path):
+    fetched = []
+    cves = [{"cve": "CVE-2026-86137", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://github.com/someone/libxml2/commit/76fe08d",
+                            "sha": "76fe08d", "host": "github.com", "kind": "commit"}}]
+    with pytest.raises(E.NoCarriableFix) as exc:
+        E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"],
+                    get=lambda url: fetched.append(url) or PATCH.encode())
+    assert fetched == [], "the URL is NVD's data; it is not fetched to find out"
+    assert "not libxml2's declared upstream" in exc.value.refused[0]["reason"]
+
+
+def test_patch_dir_without_a_fix_repos_file_carries_nothing(tmp_path):
+    (tmp_path / "fix-repos.toml").unlink()
+    cves = [{"cve": "CVE-2026-86137", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://github.com/GNOME/libxml2/commit/76fe08d",
+                            "sha": "76fe08d", "host": "github.com", "kind": "commit"}}]
+    with pytest.raises(E.NoCarriableFix, match="no upstream repo is declared"):
+        E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"],
+                    get=lambda url: PATCH.encode())
+
+
+def test_patch_dir_refuses_a_patch_that_is_not_the_named_commit(tmp_path):
+    cves = [{"cve": "CVE-2026-86143", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://github.com/GNOME/libxml2/commit/90f293ba",
+                            "sha": "90f293ba", "host": "github.com", "kind": "commit"}}]
+    with pytest.raises(E.NoCarriableFix, match="not 90f293ba which NVD names"):
+        E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"],
+                    get=lambda url: PATCH.encode())
+
+
+def test_a_carried_patch_records_the_sha256_of_what_was_written(tmp_path):
+    cves = [{"cve": "CVE-2026-86137", "priority": "P1", "affected": True,
+             "fix_commit": {"url": "https://github.com/GNOME/libxml2/commit/76fe08d",
+                            "sha": "76fe08d", "host": "github.com", "kind": "commit"}}]
+    edits, _ = E.patch_dir(tmp_path, "libxml2", "2.15.3", cves, ["pengyos-desktop"],
+                           get=lambda url: PATCH.encode())
+    patch = next(e for e in edits if e.path.endswith(".patch"))
+    assert patch.sha256 == E.sha256_of(patch.new.encode())
+
+
+def test_the_repos_own_fix_repos_file_parses_and_names_only_fetchable_repos():
+    repos = E.fix_repos(Path(__file__).resolve().parents[3])
+    assert repos, "the repo-root fix-repos.toml is missing or empty"
+    for pkg, allowed in repos.items():
+        for r in allowed:
+            assert r.split("/", 1)[0] in E._PATCH_HOSTS, (pkg, r)
+            assert E.fix_refusal(f"https://{r}/commit/abcdef0", pkg, repos) == "", (pkg, r)
+    for other in ("bolt", "libnotify", "ninja"):
+        assert other not in repos, f"{other}: NVD names a different project's repo"
+
+
+def test_a_redirect_from_https_to_plaintext_is_refused():
+    import urllib.error
+    import urllib.request
+    h = E._NoDowngrade()
+    req = urllib.request.Request("https://github.com/o/r/commit/abc.patch")
+    with pytest.raises(urllib.error.HTTPError, match="refused a redirect"):
+        h.redirect_request(req, None, 302, "Found", {}, "http://evil.example/x.patch")
+    assert h.redirect_request(req, None, 302, "Found", {},
+                              "https://patch-diff.githubusercontent.com/raw/o/r/x.patch")
+
+
 def test_patch_sha_reads_the_commit_a_format_patch_came_from():
     """A fix NVD named only as a pull request still ends up recorded against a sha."""
     assert E.patch_sha(PATCH) == "76fe08d97de88bfaef2f7d5cd27f11954cc5bee2"
@@ -328,7 +438,9 @@ def test_patch_dir_records_which_cves_each_patch_closes(tmp_path):
 
 def test_patch_dir_carries_one_numbered_patch_per_distinct_commit(tmp_path):
     def get(url):
-        return PATCH.encode()
+        return PATCH.replace("76fe08d97de88bfaef2f7d5cd27f11954cc5bee2",
+                             "90f293b" + "0" * 33).encode() if "90f293b" in url \
+            else PATCH.encode()
     cves = [{"cve": "CVE-2026-86137", "priority": "P1",
              "fix_commit": {"url": "https://github.com/GNOME/libxml2/commit/76fe08d",
                             "sha": "76fe08d", "host": "github.com"}},

@@ -99,6 +99,21 @@ def test_fix_commit_is_the_upstream_commit_nvd_names():
                  "kind": "commit"}
 
 
+def test_a_trusted_reference_is_preferred_over_one_nvd_lists_first():
+    """The first match is the one carried, so another project's commit listed ahead
+    of the package's own must not win - and a trusted review request beats it too."""
+    rec = {"references": [{"url": "https://github.com/someone/fork/commit/aaaaaaa"},
+                          {"url": "https://gitlab.gnome.org/GNOME/libxml2/-/merge_requests/9"},
+                          {"url": "https://gitlab.gnome.org/GNOME/libxml2/-/commit/bbbbbbb"}]}
+    ours = lambda u: "gitlab.gnome.org/GNOME/libxml2" in u
+    assert EV.fix_commit(rec, trusted=ours)["sha"] == "bbbbbbb"
+    rec["references"].pop()
+    assert EV.fix_commit(rec, trusted=ours)["kind"] == "pull"
+    assert EV.fix_commit(rec)["sha"] == "aaaaaaa", "without a trust test, NVD's order"
+    assert EV.fix_commit(rec, trusted=lambda u: False)["sha"] == "aaaaaaa", \
+        "nothing trusted: the same answer, so the refusal can name it"
+
+
 def test_a_review_request_is_a_fix_the_loop_can_carry():
     """FFmpeg and GStreamer publish a fix as a review request and NVD links the
     request, not the commit. Both hosts serve the request itself as a git

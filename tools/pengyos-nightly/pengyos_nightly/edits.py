@@ -41,6 +41,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tomllib
+import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -67,6 +70,9 @@ class Edit:
     # pre-flight (see act.triage_package), and plan.json is the record of that mapping.
     cves: list[str] = field(default_factory=list)
     fix_url: str = ""
+    # The sha256 of the patch text as written, so a published image's patches can be
+    # checked against what was fetched long after the fetch.
+    sha256: str = ""
 
     def preview(self) -> str:
         if self.kind == "append":
@@ -292,9 +298,26 @@ def expand(raw: dict, prefix: str, version: str, name: str,
 
 # --- hashes ------------------------------------------------------------------
 
+class _NoDowngrade(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but never from https to anything else: a host on the patch
+    list that answers with a plaintext redirect would otherwise hand the fetch to
+    whoever sits on the path (github.com's `.patch` does redirect, to another https
+    host)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if req.full_url.startswith("https:") and not newurl.startswith("https:"):
+            raise urllib.error.HTTPError(newurl, code,
+                                         f"refused a redirect from https to {newurl}",
+                                         headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(_NoDowngrade)
+
+
 def fetch_bytes(url: str, timeout: float = 120) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _OPENER.open(req, timeout=timeout) as r:
         return r.read()
 
 
@@ -602,7 +625,8 @@ def reroot_patch(text: str, prefix: str) -> str:
 
 def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: list[str],
               get=fetch_bytes, upstream: str = "",
-              known_bad=()) -> tuple[list[Edit], list[dict]]:
+              known_bad=(), repos: dict[str, set[str]] | None = None
+              ) -> tuple[list[Edit], list[dict]]:
     """A stock Buildroot package: carry the upstream fixes as patches.
 
     The subset is deliberate, three times over: a CVE whose record names no fetchable
@@ -625,16 +649,29 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
 
     The version is untouched, so the recipe's own hash file stays valid and the
     build stays byte-comparable to every other edition.
+
+    Which fixes may be fetched at all is `fix_refusal`'s call, made before the fetch:
+    the URL comes from an NVD record, and NVD references point anywhere. A fetched
+    patch must then be the commit NVD named (`sha_mismatch`), because the URL's
+    content is the host's to change.
     """
+    repos = fix_repos(repo) if repos is None else repos
     edits: list[Edit] = []
     refused: list[dict] = []
     n = 0
     for group in carried_patches(cves, known_bad):
         src = group["source"]
+        why = fix_refusal(src.get("url", ""), pkg, repos)
+        if why:
+            refused.append({"cves": list(group["cves"]), "fix_url": src.get("url", ""),
+                            "reason": why, "subject": ""})
+            continue
         # One review request can be several commits: each becomes its own patch file,
         # because Buildroot pipes one file to one `patch` invocation.
         for text in fetch_patches(src.get("url", ""), get):
-            verdict = classify_patch(text, upstream or pkg)
+            why = sha_mismatch(text, src.get("sha", ""))
+            verdict = ({"ok": False, "reason": why} if why
+                       else classify_patch(text, upstream or pkg))
             if not verdict["ok"]:
                 refused.append({"cves": list(group["cves"]), "fix_url": src.get("url", ""),
                                 "reason": verdict["reason"], "subject": patch_subject(text)})
@@ -649,7 +686,8 @@ def patch_dir(repo: Path, pkg: str, current: str, cves: list[dict], editions: li
                 note=f"{', '.join(group['cves'])} ({src.get('kind', 'commit')} from "
                      f"{src.get('host', '')} {(sha or src.get('url', ''))[:12]}"
                      + (f"; {verdict['reason']}" if verdict["prefix"] else ""),
-                cves=list(group["cves"]), fix_url=src.get("url", "")))
+                cves=list(group["cves"]), fix_url=src.get("url", ""),
+                sha256=sha256_of(text.encode())))
     if not edits:
         raise NoCarriableFix(
             f"no upstream fix can be carried for {pkg}: "
@@ -674,17 +712,89 @@ def patch_url(source_url: str) -> str | None:
     """The git format-patch form of an upstream fix URL — a commit or a review
     request — for the hosts we know serve one.
 
+    https only, and the host must be one of `_PATCH_HOSTS` exactly. Until 2026-10-28
+    this was a substring test over the whole URL, so `notgithub.com.evil.example` and
+    `https://evil.example/github.com/...` both passed, and any URL already ending in
+    `.patch` was passed through from any host and any scheme (`http://`, `file://`).
+    The URL comes from an NVD reference, which is data anyone with a CNA can write.
+
     NVD sometimes hands us the patch form directly (gstreamer's advisory references
     end in `.patch`), so that case is passed through rather than doubled.
     """
     if not source_url:
         return None
-    url = source_url.rstrip("/")
-    if url.endswith(".patch"):
-        return url
-    if any(h in url for h in _PATCH_HOSTS):
-        return url + ".patch"
-    return None
+    parts = urllib.parse.urlsplit(source_url.rstrip("/"))
+    if parts.scheme != "https" or parts.netloc.lower() not in _PATCH_HOSTS or parts.query:
+        return None
+    url = urllib.parse.urlunsplit(parts._replace(fragment="")).rstrip("/")
+    return url if url.endswith(".patch") else url + ".patch"
+
+
+# The repo part of a fix URL, on every host in _PATCH_HOSTS: GitHub `/o/r/commit/x`,
+# GitLab `/o/r/-/commit/x`, Gitea (code.ffmpeg.org) `/o/r/pulls/n`.
+_FIX_REPO = re.compile(r"^/(.+?)(?:/-)?/(?:commit|pull|pulls|merge_requests|merge-requests)/")
+
+FIX_REPOS = "fix-repos.toml"
+
+
+def fix_repo(url: str) -> str:
+    """`host/owner/repo` of a fix URL, lower-cased (GitHub owners are not
+    case-sensitive and NVD spells them both ways), or "" when there is none."""
+    parts = urllib.parse.urlsplit(url or "")
+    m = _FIX_REPO.match(parts.path)
+    return f"{parts.netloc}/{m.group(1)}".lower() if m else ""
+
+
+def fix_repos(repo: Path) -> dict[str, set[str]]:
+    """The upstream repos each package may carry a fix from (repo-root fix-repos.toml).
+
+    A missing file means no package has one, so nothing is fetched: the list is the
+    trust decision, and its absence is not permission. A malformed file raises
+    (tomllib's error is a ValueError, which the planner records as the reason).
+    """
+    try:
+        text = (repo / FIX_REPOS).read_text()
+    except FileNotFoundError:
+        return {}
+    return {pkg: {r.lower().rstrip("/") for r in repos}
+            for pkg, repos in tomllib.loads(text).get("packages", {}).items()}
+
+
+def fix_refusal(url: str, pkg: str, repos: dict[str, set[str]]) -> str:
+    """Why a fix NVD names may not be fetched for this package, or "" if it may.
+
+    The host test alone does not make a fix this package's: measured 2026-10-28 over
+    every CVE pkg-stats matches, NVD names `github.com/bolt/bolt` (a PHP CMS) for our
+    `bolt`, `mytrile/node-libnotify` for `libnotify` and `ITRS-Group/monitor-ninja`
+    for `ninja` - all on github.com. A fix comes from the package's own project or
+    not at all.
+    """
+    if patch_url(url) is None:
+        return f"{url} is not an https URL on a host that serves git format-patch"
+    allowed = repos.get(pkg) or set()
+    if not allowed:
+        return (f"no upstream repo is declared for {pkg} in {FIX_REPOS}; add the "
+                f"project's own repo there to carry fixes from it")
+    found = fix_repo(url)
+    if found not in allowed:
+        return (f"the fix is from {found or url}, which is not {pkg}'s declared upstream "
+                f"({', '.join(sorted(allowed))})")
+    return ""
+
+
+def sha_mismatch(patch_text: str, named: str) -> str:
+    """Why a fetched patch is not the commit NVD named, or "" if it is.
+
+    A named commit must be the one fetched (NVD may abbreviate the sha, so a prefix
+    match). A review request names none, but every patch must still say which commit
+    it is, or nothing records what was carried.
+    """
+    got = patch_sha(patch_text)
+    if not got:
+        return "the fetched patch has no `From <sha>` line, so it names no commit"
+    if named and not (got.startswith(named.lower()) or named.lower().startswith(got)):
+        return f"the fetched patch is commit {got[:12]}, not {named[:12]} which NVD names"
+    return ""
 
 
 def patch_sha(patch_text: str) -> str:

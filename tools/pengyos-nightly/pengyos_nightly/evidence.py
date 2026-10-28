@@ -194,7 +194,7 @@ def host_of(url: str) -> str:
     return url.split("//", 1)[-1].split("/", 1)[0]
 
 
-def fix_commit(record: dict) -> dict | None:
+def fix_commit(record: dict, trusted=None) -> dict | None:
     """The upstream fix NVD points at, if it names one: a commit, or the pull /
     merge request that carries it.
 
@@ -205,19 +205,29 @@ def fix_commit(record: dict) -> dict | None:
     the hosts we carry patches from serve the request itself as a format-patch,
     which is how FFmpeg and GStreamer actually publish a fix; the sha is then read
     back out of the patch (edits.patch_sha), so the record still names a commit.
+
+    `trusted(url) -> bool`, when given, is asked first: a record can name another
+    project's commit before the package's own (see edits.fix_refusal), and the
+    first match is the one carried. A trusted fix of either kind beats an untrusted
+    one. With nothing trusted the result is what it always was, so the refusal can
+    name the URL NVD gave.
     """
     refs = [r.get("url", "") for r in (record or {}).get("references", [])]
-    # A named commit first: it is the exact change, and it is what the patch lane
-    # has always carried. A request is the fallback, not the preference.
-    for url in refs:
-        m = _COMMIT.search(url)
-        if m:
-            return {"url": url, "sha": m.group(1), "host": host_of(url), "kind": "commit"}
-    for url in refs:
-        m = _PULL.search(url)
-        if m:
-            return {"url": url, "sha": "", "host": host_of(url), "kind": "pull",
-                    "request": m.group(1)}
+    tiers = ([[u for u in refs if trusted(u)], [u for u in refs if not trusted(u)]]
+             if trusted else [refs])
+    for tier in tiers:
+        # A named commit first: it is the exact change, and it is what the patch lane
+        # has always carried. A request is the fallback, not the preference.
+        for url in tier:
+            m = _COMMIT.search(url)
+            if m:
+                return {"url": url, "sha": m.group(1), "host": host_of(url),
+                        "kind": "commit"}
+        for url in tier:
+            m = _PULL.search(url)
+            if m:
+                return {"url": url, "sha": "", "host": host_of(url), "kind": "pull",
+                        "request": m.group(1)}
     return None
 
 

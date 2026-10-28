@@ -1,0 +1,41 @@
+# Where the nightly's patch lane may carry an upstream fix from, per package.
+#
+# An NVD record names its fix as a reference URL, and NVD references point anywhere:
+# researcher blogs, mirrors, and other projects that share the package's name. So a
+# fix is carried only from a repo listed here for that package (Buildroot package
+# name, as pkg-stats reports it), on a host the patch lane can fetch from
+# (edits._PATCH_HOSTS), over https. A package with no entry carries nothing; the
+# refusal says so and names the URL NVD gave, which is how a new entry gets added.
+#
+# Add the project's own repo only: check it against the recipe's homepage or SITE,
+# not against the CVE. Entries are `host/owner/repo`, matched case-insensitively.
+#
+# Seeded 2026-10-28 from every CVE pkg-stats matched across all editions. Left out
+# on purpose: `bolt` (NVD names github.com/bolt/bolt, a PHP CMS), `libnotify`
+# (mytrile/node-libnotify, an npm package) and `ninja` (ITRS-Group/monitor-ninja) -
+# each a different project with the same name.
+
+[packages]
+avahi             = ["github.com/avahi/avahi"]
+cups              = ["github.com/OpenPrinting/cups"]
+cups-filters      = ["github.com/OpenPrinting/cups-filters"]
+ffmpeg-pengyos    = ["code.ffmpeg.org/FFmpeg/FFmpeg"]
+gstreamer1        = ["gitlab.freedesktop.org/gstreamer/gstreamer"]
+gst1-plugins-base = ["gitlab.freedesktop.org/gstreamer/gstreamer"]
+gst1-plugins-good = ["gitlab.freedesktop.org/gstreamer/gstreamer"]
+gst1-plugins-bad  = ["gitlab.freedesktop.org/gstreamer/gstreamer"]
+libopenssl        = ["github.com/openssl/openssl"]
+libsndfile        = ["github.com/libsndfile/libsndfile"]
+# gitlab.gnome.org is upstream; github.com/GNOME is GNOME's own mirror of it.
+libxml2           = ["gitlab.gnome.org/GNOME/libxml2", "github.com/GNOME/libxml2"]
+lua               = ["github.com/lua/lua"]
+net-tools         = ["github.com/ecki/net-tools"]
+nghttp2           = ["github.com/nghttp2/nghttp2"]
+pcre2             = ["github.com/PCRE2Project/pcre2"]
+# The project moved from containers/ to podman-container-tools/; NVD names both.
+podman            = ["github.com/podman-container-tools/podman", "github.com/containers/podman"]
+python-pip        = ["github.com/pypa/pip"]
+python-setuptools = ["github.com/pypa/setuptools"]
+sudo              = ["github.com/sudo-project/sudo"]
+util-linux        = ["github.com/util-linux/util-linux"]
+util-linux-libs   = ["github.com/util-linux/util-linux"]

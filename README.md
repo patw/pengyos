@@ -134,6 +134,8 @@ authored recipes. `scripts/` has the host helpers, `docs/` the design record, an
 - [`CHANGELOG.md`](CHANGELOG.md) — what has shipped.
 - [`divergence.toml`](divergence.toml) — every fork and carried patch set, with the
   condition under which it goes away.
+- [`fix-repos.toml`](fix-repos.toml) — the upstream repos the nightly may carry a
+  security fix from, per package.
 
 ## Contributing
 

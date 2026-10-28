@@ -1,0 +1,11 @@
+# The fix repos the tests' packages declare (see the repo-root fix-repos.toml).
+[packages]
+libxml2           = ["gitlab.gnome.org/GNOME/libxml2", "github.com/GNOME/libxml2"]
+libsndfile        = ["github.com/libsndfile/libsndfile"]
+ffmpeg            = ["code.ffmpeg.org/FFmpeg/FFmpeg"]
+gstreamer1        = ["gitlab.freedesktop.org/gstreamer/gstreamer"]
+gst1-plugins-good = ["gitlab.freedesktop.org/gstreamer/gstreamer"]
+gst1-plugins-bad  = ["gitlab.freedesktop.org/gstreamer/gstreamer"]
+gst1-plugins-ugly = ["gitlab.freedesktop.org/gstreamer/gstreamer"]
+podman            = ["github.com/containers/podman"]
+libpng            = ["github.com/pnggroup/libpng"]
