@@ -28,7 +28,8 @@
 
 include $(BR2_EXTERNAL_PENGYOS_PATH)/package/cosmic/cosmic-sources.inc
 
-COSMIC_LICENSE = GPL-3.0-only (COSMIC components), MPL-2.0 (libcosmic), vendored crates' licenses not listed
+# legal-info writes this inside single quotes: no apostrophe.
+COSMIC_LICENSE = GPL-3.0-only (COSMIC components), MPL-2.0 (libcosmic), vendored crates under their own licenses (not listed)
 COSMIC_LICENSE_FILES = cosmic-comp/LICENSE
 # Buildroot extracts nothing itself: every archive goes to $(@D)/<component>.
 COSMIC_SRCDIR = $(@D)

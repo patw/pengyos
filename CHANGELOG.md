@@ -34,6 +34,10 @@ against the committed locks, and the components keep upstream's release profiles
 guard moved into the package. `build-cosmic.sh` now builds only our libcosmic apps, plus
 `--relock` and `--fetch-only`.
 
+The first release with it (26.10.47) stopped at the SBOM step: an apostrophe in
+`COSMIC_LICENSE` broke Buildroot's `legal-info`, which quotes the field in single
+quotes. Fixed, with a test.
+
 Two things still come from the host: our libcosmic apps, and libclang for bindgen
 (pam-sys, pipewire-sys). cosmic-viewer's libheif-sys builds libheif statically in the
 target dir and finds it through its own `.pc` file; the package's pkg-config wrapper
