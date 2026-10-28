@@ -120,7 +120,7 @@ def classify_from_path(path: str | Path | None = None) -> ClassificationReport:
     """Load the symbol list at *path* (default: the committed snapshot) and classify.
 
     Passing ``None`` uses :func:`.symbols.default_symbol_list_path`, the committed
-    ``data/buildroot-2026.08-symbols.txt``.
+    ``scripts/tests/fixtures/buildroot-2026.08-symbols.txt``.
     """
     resolved: Path = Path(path) if path is not None else default_symbol_list_path()
     return classify(SymbolList.load(resolved))

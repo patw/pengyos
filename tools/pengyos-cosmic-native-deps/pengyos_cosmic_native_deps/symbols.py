@@ -1,11 +1,15 @@
 """The vendored Buildroot ``2026.08`` kconfig symbol list.
 
 This module loads the authoritative, committed symbol list
-(``data/buildroot-2026.08-symbols.txt``) — the same snapshot
+(``scripts/tests/fixtures/buildroot-2026.08-symbols.txt``) — the same snapshot
 ``pengyos-m2-defconfig`` vendors from (commit ``d5180309…``, tag ``2026.08``).
 It answers a single question: *does this kconfig symbol exist in the pinned
 2026.08 tree?* The classification pass uses that answer to decide whether a
 candidate dependency needs a recipe.
+
+The list is a fact about the pinned Buildroot, not about this tool, so it lives
+with the repo's fixtures: ``scripts/tests/test_core_userland.py`` checks every
+layer symbol against the same file. One copy, two readers.
 
 Runtime depends only on the Python standard library.
 """
@@ -25,15 +29,16 @@ _TAG_RE = re.compile(r"tag\s+(\d[\w.]*)")
 
 
 def default_symbol_list_path() -> Path:
-    """The committed symbol list, resolved relative to this package.
+    """The committed symbol list, resolved relative to the repo root.
 
-    The list lives at the repo root under ``data/`` (a sibling of this
-    package), so it is two levels up from this module. This keeps the tool
-    self-contained: ``classify``/``list`` work out of the box against the
-    committed snapshot without any argument.
+    The snapshot is repo-level data — the wiring suite reads the same file — so
+    it sits with the other fixtures next to the BusyBox symbol list. ``classify``
+    and ``list`` work out of the box against it with no argument; ``--symbols``
+    overrides it.
     """
     return (
-        Path(__file__).resolve().parent.parent / "data"
+        Path(__file__).resolve().parents[3]
+        / "scripts" / "tests" / "fixtures"
         / "buildroot-2026.08-symbols.txt"
     )
 

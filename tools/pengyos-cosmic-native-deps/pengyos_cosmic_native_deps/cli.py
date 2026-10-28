@@ -134,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Override the symbol list to classify against (default: the "
-            "committed data/buildroot-2026.08-symbols.txt)."
+            "committed scripts/tests/fixtures/buildroot-2026.08-symbols.txt)."
         ),
     )
     classify_parser.set_defaults(func=_cmd_classify)
