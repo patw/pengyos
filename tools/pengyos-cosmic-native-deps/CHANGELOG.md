@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The 2026.08 symbol snapshot moved to `scripts/tests/fixtures/`.** It is a
+  fact about the pinned Buildroot, not about this tool: the repo's own wiring
+  suite (`scripts/tests/test_core_userland.py`) checks every layer symbol against
+  the same file, so a repo-level test was reaching into this tool's `data/` to
+  read it. One copy now, at the repo's fixture dir next to
+  `busybox-1.38.0-symbols.txt`, and `default_symbol_list_path()` resolves to it.
+  `--symbols PATH` still overrides it. `data/classification.json` and
+  `data/recipes.json` stay here — those are this tool's machine views.
+
 ### Added
 
 - **The committed BR2_EXTERNAL recipes** — the repo root *is* a BR2_EXTERNAL

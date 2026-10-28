@@ -15,8 +15,7 @@ import pytest
 import pengyos_cosmic_native_deps.symbols as symbols
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
-SYMBOLS_PATH = DATA_DIR / "buildroot-2026.08-symbols.txt"
+SYMBOLS_PATH = ROOT.parents[1] / "scripts" / "tests" / "fixtures" / "buildroot-2026.08-symbols.txt"
 
 
 def test_default_symbol_list_path_points_at_the_committed_snapshot():

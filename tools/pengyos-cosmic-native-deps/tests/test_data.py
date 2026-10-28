@@ -1,11 +1,12 @@
-"""Tests for the vendored 2026.08 symbol list (``data/`` committed data).
+"""Tests for the vendored 2026.08 symbol list (the repo fixture).
 
 The *vendor* item copies the authoritative Buildroot
-``2026.08`` kconfig symbol list out of ``pengyos-m2-defconfig`` and into this
-repo's ``data/`` as a self-contained, committed fixture. These tests pin that
-data: it must exist, be the authoritative ``2026.08`` snapshot (by provenance),
-be a clean ``sort -u`` symbol list, and carry the exact present/absent facts the
-follow-up *classify* item depends on.
+``2026.08`` kconfig symbol list out of ``pengyos-m2-defconfig`` and into the
+repo's ``scripts/tests/fixtures/`` as a self-contained, committed fixture — the
+same file ``scripts/tests/test_core_userland.py`` checks the layer symbols
+against. These tests pin that data: it must exist, be the authoritative
+``2026.08`` snapshot (by provenance), be a clean ``sort -u`` symbol list, and
+carry the exact present/absent facts the follow-up *classify* item depends on.
 """
 
 from __future__ import annotations
@@ -17,8 +18,10 @@ import re
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
-SYMBOLS_PATH = DATA_DIR / "buildroot-2026.08-symbols.txt"
+REPO = ROOT.parents[1]
+# The snapshot is repo-level data: scripts/tests/test_core_userland.py reads the
+# same file when it checks the layers' symbols.
+SYMBOLS_PATH = REPO / "scripts" / "tests" / "fixtures" / "buildroot-2026.08-symbols.txt"
 # The sibling repo this list is vendored from.
 SOURCE_PATH = ROOT.parent / "pengyos-m2-defconfig" / "data" / "buildroot-2026.08-symbols.txt"
 
@@ -43,7 +46,7 @@ def _content_lines() -> list[str]:
 
 
 def test_vendored_symbol_list_exists_and_non_empty():
-    assert SYMBOLS_PATH.exists(), "data/buildroot-2026.08-symbols.txt was not vendored"
+    assert SYMBOLS_PATH.exists(), "scripts/tests/fixtures/buildroot-2026.08-symbols.txt is missing"
     assert SYMBOLS_PATH.stat().st_size > 0, "vendored symbol list is empty"
 
 

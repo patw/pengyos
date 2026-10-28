@@ -42,7 +42,8 @@ pengyos-cosmic-native-deps lint --dir DIR [--json]
 * `classify [--json] [--symbols PATH]` classifies every candidate against the
   pinned 2026.08 symbol list and prints the per-candidate status and reason.
   `--symbols` overrides the list to classify against (default: the committed
-  `data/buildroot-2026.08-symbols.txt`). The machine view is the committed
+  `scripts/tests/fixtures/buildroot-2026.08-symbols.txt`, the same snapshot the
+  repo's wiring suite reads). The machine view is the committed
   `data/classification.json`.
 * `recipes [--json]` shows the authored recipe catalogue (`data/recipes.json`):
   for every dependency that needs a recipe, its pinned version, upstream URL,

@@ -51,7 +51,7 @@ DEFCONFIGS = ("pengyos_core_defconfig", "pengyos_server_defconfig",
               "pengyos_desktop_nvidia_defconfig")
 
 BB_SYMBOLS = Path(__file__).resolve().parent / "fixtures" / "busybox-1.38.0-symbols.txt"
-BR_SYMBOLS = REPO / "tools/pengyos-cosmic-native-deps/data/buildroot-2026.08-symbols.txt"
+BR_SYMBOLS = Path(__file__).resolve().parent / "fixtures" / "buildroot-2026.08-symbols.txt"
 
 # What GNU coreutils put in Core before the switch. uutils must ship every one of
 # them, or the image loses a command it has always had.

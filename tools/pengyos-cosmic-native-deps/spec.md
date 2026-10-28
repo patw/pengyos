@@ -7,7 +7,7 @@ Buildroot recipes for the native (non-Rust) dependencies COSMIC needs that 2026.
 SPEC 2.3: COSMIC needs a login daemon (greetd), a portal (xdg-desktop-portal for sandbox/screencast), libdisplay-info (cosmic-comp EDID), seat management, and its fonts — none in 2026.08. These are standard Buildroot-style (autotools/meson) packages, distinct from the cargo cosmic-* ones.
 
 > **Reality note (discovered 2026-09-21):** the vendored 2026.08 kconfig symbol
-> list (`data/buildroot-2026.08-symbols.txt`, tag 2026.08) **does** contain
+> list (`scripts/tests/fixtures/buildroot-2026.08-symbols.txt`, tag 2026.08) **does** contain
 > `BR2_PACKAGE_LIBDISPLAY_INFO` and `BR2_PACKAGE_SEATD`. Per the classification
 > rule below ("skip anything 2026.08 already ships"), those two are **skipped**
 > and get no recipe; only greetd, xdg-desktop-portal, the cosmic portal, and the
