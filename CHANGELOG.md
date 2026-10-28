@@ -17,6 +17,25 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Docs — SPEC's host-built COSMIC exception said the image copies host libraries (2026-10-27)
+
+SPEC §6 claimed COSMIC is copied in "together with a few host libraries they link",
+and §7 named them: GStreamer bits, an OpenSSL/curl pair with ENGINE support, "six
+libraries `cosmic-comp` needs". None of that ships. `board/desktop/post-build.sh`
+now has a **No host libraries** section: it deletes `/usr/lib/compat` and the
+`cosmic-store.bin` wrapper, removes every SONAME no package claims, and
+`check-needed-libs.py` fails the build on any unresolved library. `libdisplay-info`
+is built by `package/libdisplay-info-pengyos`; the Store runs on the image's own
+OpenSSL and curl. §6/§7 and `scripts/provision-build-host.sh`'s header now say what
+the build does — the host supplies cargo builds and the `-dev` packages they compile
+against, nothing is copied in. §6 also said "our two libcosmic apps";
+`scripts/build-cosmic.sh` builds eight.
+
+`docs/cosmic-epoch-1.9.md` closed with "cosmic.toml is also still at epoch-1.8.0
+SHAs". It moved with the shipping TSV, and
+`test_every_manifest_pin_matches_the_shipping_component_set` fails a bump that moves
+one pin set and not the other.
+
 ### Gate — every patch we carry in a recipe is ledgered (2026-10-27)
 
 `divergence.toml` says every divergence gets an entry before it lands. The gate
