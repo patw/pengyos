@@ -1,0 +1,26 @@
+config BR2_PACKAGE_COSMIC
+	bool "cosmic"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on BR2_PACKAGE_SYSTEMD # libudev
+	depends on BR2_PACKAGE_MESA3D_GBM
+	depends on BR2_PACKAGE_FLATPAK # cosmic-store
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_HOST_RUSTC
+	select BR2_PACKAGE_DAV1D
+	select BR2_PACKAGE_DBUS
+	select BR2_PACKAGE_GSTREAMER1
+	select BR2_PACKAGE_GST1_PLUGINS_BASE
+	select BR2_PACKAGE_LIBDISPLAY_INFO_PENGYOS
+	select BR2_PACKAGE_LIBGLIB2
+	select BR2_PACKAGE_LIBINPUT
+	select BR2_PACKAGE_LIBXKBCOMMON
+	select BR2_PACKAGE_LINUX_PAM
+	select BR2_PACKAGE_PIPEWIRE
+	select BR2_PACKAGE_PIXMAN
+	select BR2_PACKAGE_SEATD
+	help
+	  The COSMIC desktop: compositor, session, panel, applets, settings, greeter
+	  and apps, at the commits pinned in scripts/cosmic-components.tsv, built as
+	  one cargo workspace-like set so shared crates compile once.
+
+	  https://github.com/pop-os/cosmic-epoch

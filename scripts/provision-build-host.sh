@@ -5,8 +5,9 @@
 #   scripts/provision-build-host.sh --desktop   # + what the Desktop takes from the host
 #
 # Buildroot builds its own toolchain, so Core and Server only need its host
-# prerequisites. The Desktop is different (SPEC.md §7): COSMIC is built with
-# cargo on the host (scripts/build-cosmic.sh) against the host's -dev packages.
+# prerequisites. The Desktop is different (SPEC.md §7): our libcosmic apps are
+# built with cargo on the host (scripts/build-cosmic.sh) against the host's -dev
+# packages, and the cosmic package's bindgen loads the host's libclang.
 # Nothing is copied from the host into the image: every library the host-built
 # binaries link must come from a Buildroot package, and
 # board/common/check-needed-libs.py fails the build when one does not. --desktop
@@ -44,7 +45,7 @@ PKGS=(
 )
 
 DESKTOP_PKGS=(
-  # Building COSMIC and our libcosmic apps (scripts/build-cosmic.sh)
+  # Building our libcosmic apps (scripts/build-cosmic.sh); libclang for bindgen
   pkg-config cmake clang libclang-dev nasm
   libxkbcommon-dev libwayland-dev libinput-dev libgbm-dev libdrm-dev libegl-dev
   libseat-dev libsystemd-dev libudev-dev libdbus-1-dev libpam0g-dev

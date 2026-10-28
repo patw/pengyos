@@ -378,10 +378,15 @@ Server: Buildroot builds its own toolchain, and the host only supplies Buildroot
 prerequisites (`scripts/provision-build-host.sh`). The **Desktop** additionally takes
 from the host:
 
-- the COSMIC components, `pop-launcher` and our eight libcosmic apps, built with
-  cargo (`scripts/build-cosmic.sh`, pinned to the versions in
-  `scripts/cosmic-components.tsv`, with the patches in
-  `board/desktop/cosmic-patches/`).
+- our eight libcosmic apps, built with cargo (`scripts/build-cosmic.sh`);
+- libclang, which bindgen loads to parse the sysroot's headers while the `cosmic`
+  package builds.
+
+The COSMIC components and `pop-launcher` are the Buildroot package `package/cosmic`
+(since 2026-10-28): cross-built with Buildroot's rustc against the staging sysroot,
+from the commits pinned in `scripts/cosmic-components.tsv` (as hashed GitHub
+archives), with the patches in `board/desktop/cosmic-patches/` and the locks in
+`scripts/cosmic-locks/`.
 
 Nothing else is taken from the host, and nothing is copied from it into the image.
 Every library the host-built binaries link comes from a Buildroot package:
@@ -392,7 +397,7 @@ wrapper) at whatever patch level the host happened to be at, where no observe so
 CVE match or SBOM could see them; those copies are cleared on every build now, and
 `libdisplay-info` is built by `package/libdisplay-info-pengyos`.
 
-So a Desktop build is only as reproducible as its host **for the cargo binaries**: the
+So a Desktop build is only as reproducible as its host **for our libcosmic apps**: the
 verified host is **Ubuntu 26.04**, and the provisioning script installs the packages
 those cargo builds need. Removing this dependency is open decision §6.3.
 

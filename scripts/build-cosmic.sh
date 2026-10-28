@@ -1,28 +1,31 @@
 #!/usr/bin/env bash
-# Build the host-side half of the PengyOS Desktop: the COSMIC components pinned in
-# scripts/cosmic-components.tsv, plus our two libcosmic apps (the graphical
-# installer and PengyOS Updates). board/desktop/post-build.sh copies the results
-# into the image; run this before `pengyos-build build pengyos-desktop`.
+# Build the host-side half of the PengyOS Desktop: our libcosmic apps (the graphical
+# installer, PengyOS Updates and the other tools/ apps). board/desktop/post-build.sh
+# copies them into the image; run this before `pengyos-build build pengyos-desktop`.
 #
-#   scripts/build-cosmic.sh [--fetch-only] [COMPONENT ...]
+#   scripts/build-cosmic.sh [APP ...]
 #   scripts/build-cosmic.sh --relock COMPONENT ...
+#   scripts/build-cosmic.sh --fetch-only [COMPONENT ...]
 #
-# Sources go to $PENGYOS_COSMIC_SRC (default ~/cosmic-src), cargo's target dir is
-# $PENGYOS_COSMIC_BUILD (default ~/cosmic-build) — the same variables post-build
-# reads. Idempotent: an existing checkout is moved to its pinned commit, a patch
-# that is already applied is skipped, and cargo only rebuilds what changed.
+# The COSMIC components themselves (scripts/cosmic-components.tsv) are no longer
+# built here: the Buildroot package buildroot-external/package/cosmic builds them
+# from the same TSV, pin, locks and patches (since 2026-10-28).
 #
-# Every component builds with `--locked` against the lock PengyOS owns,
-# scripts/cosmic-locks/<component>.Cargo.lock. Nothing here resolves a dependency:
-# a crate's build script and proc-macros run on this host, so which crates those
+# What stays here is resolving dependencies. Every component builds with `--locked`
+# against the lock PengyOS owns, scripts/cosmic-locks/<component>.Cargo.lock; a
+# crate's build script and proc-macros run on the build host, so which crates those
 # are is a reviewed commit, not whatever crates.io serves on the day of the build
-# (see scripts/cosmic-lock-check.py for what that cost). --relock re-resolves the
-# named components after the pin, writes their locks into the repo, prints what
-# changed, and builds nothing; review the diff and commit it.
+# (see scripts/cosmic-lock-check.py for what that cost). --relock checks out the
+# named components into $PENGYOS_COSMIC_SRC (default ~/cosmic-src), re-resolves
+# them after the pin, writes their locks into the repo, prints what changed, and
+# builds nothing; review the diff, commit it, and run scripts/cosmic-recipe.py.
+# --fetch-only only checks the components out (to read or patch them).
+#
+# The apps' target dir is $PENGYOS_COSMIC_BUILD/install-gui (default
+# ~/cosmic-build/install-gui), which post-build reads.
 #
 # Host requirements: scripts/provision-build-host.sh --desktop (the -dev packages
-# COSMIC links against, and rustup's toolchain — some components need a newer
-# rustc than the distribution ships).
+# the apps link against, and rustup's toolchain).
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -121,66 +124,15 @@ if [ -n "${LIBCOSMIC_REV}" ]; then
     echo "[cosmic] libcosmic coherence pin: ${LIBCOSMIC_REV:0:12}"
 fi
 built=0
-while IFS=$'\t' read -r name url commit args; do
-    case "${name}" in ''|'#'*) continue ;; esac
-    wanted "${name}" || continue
-    checkout "${name}" "${url}" "${commit}"
-    [ "${FETCH_ONLY}" = 1 ] && continue
-    [ "${args}" = "-" ] && continue
-    lock="${LOCKS}/${name}.Cargo.lock"
-    if [ "${RELOCK}" = 1 ]; then
-        relock "${name}"
-        continue
-    fi
-    if [ ! -e "${lock}" ]; then
-        echo "[cosmic] ${name}: no ${lock#"${REPO}/"}; run scripts/build-cosmic.sh --relock ${name} and review the lock it writes" >&2
-        exit 1
-    fi
-    if [ -n "${LIBCOSMIC_REV}" ] && [ -e "${SRC}/${name}/Cargo.toml" ]; then
-        # The helper reads the lock to learn which crates come out of libcosmic:
-        # upstream's, as --relock read it, or ours when upstream ships none.
-        [ -e "${SRC}/${name}/Cargo.lock" ] || cp -f "${lock}" "${SRC}/${name}/Cargo.lock"
-        python3 "${PIN_TOOL}" "${SRC}/${name}" "${LIBCOSMIC_REV}"
-    fi
-    cp -f "${lock}" "${SRC}/${name}/Cargo.lock"
-    echo "[cosmic] cargo ${args} --locked  (${name})"
-    # Run through a shell so the column can be a `&&`-joined command list — the
-    # cosmic-files row needs the app and the applet built as two separate cargo
-    # invocations (see the TSV). -e: a failed first command stops the component.
-    # The cargo() wrapper adds --locked to each of them: cargo then refuses any
-    # change to the lock instead of resolving one.
-    (cd "${SRC}/${name}" && CARGO_TARGET_DIR="${BUILD}" \
-        sh -ec 'cargo() { command cargo "$@" --locked; }; eval "cargo $1"' cargo-locked "${args}")
-    if [ -n "${LIBCOSMIC_REV}" ] && [ -e "${SRC}/${name}/Cargo.toml" ]; then
-        python3 "${PIN_TOOL}" --verify "${SRC}/${name}" "${LIBCOSMIC_REV}" || {
-            echo "[cosmic] ${name}: the committed lock does not resolve the pinned libcosmic; run --relock ${name}" >&2
-            exit 1; }
-    fi
-    built=$((built + 1))
-done < "${LIST}"
-
-# --- Guard: the cosmic-files APP must not carry the desktop-applet code -------
-# cosmic-files and cosmic-files-applet are one cargo workspace, and the applet
-# depends on the app crate with `desktop-applet`. Building them in ONE cargo
-# invocation lets cargo feature-unify `desktop-applet` onto the cosmic-files
-# *app* binary, which then also creates the applet's full-screen Bottom-layer
-# "desktop" surface — the file manager draws a second, interactive copy of the
-# file view on the desktop wallpaper (reproduced 2026-10-06 in QEMU; see
-# CHANGELOG). cosmic-components.tsv builds them as two invocations; fail loudly
-# if a future edit reintroduces the single workspace build.
-if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted cosmic-files && [ -x "${BUILD}/release/cosmic-files" ]; then
-    if grep -aq "already had surface ID" "${BUILD}/release/cosmic-files"; then
-        echo "[cosmic] ERROR: cosmic-files was built WITH the desktop-applet feature" >&2
-        echo "[cosmic]        it would draw a second copy of the file view on the desktop." >&2
-        echo "[cosmic]        Build cosmic-files and cosmic-files-applet as separate cargo" >&2
-        echo "[cosmic]        invocations (see the cosmic-files row in cosmic-components.tsv)." >&2
-        exit 1
-    fi
-    if [ -x "${BUILD}/release/cosmic-files-applet" ] &&
-       ! grep -aq "already had surface ID" "${BUILD}/release/cosmic-files-applet"; then
-        echo "[cosmic] ERROR: cosmic-files-applet is missing the desktop-applet code" >&2
-        exit 1
-    fi
+if [ "${FETCH_ONLY}" = 1 ] || [ "${RELOCK}" = 1 ]; then
+    while IFS=$'\t' read -r name url commit args; do
+        case "${name}" in ''|'#'*) continue ;; esac
+        wanted "${name}" || continue
+        checkout "${name}" "${url}" "${commit}"
+        if [ "${RELOCK}" = 1 ] && [ "${args}" != "-" ]; then
+            relock "${name}"
+        fi
+    done < "${LIST}"
 fi
 
 # Our libcosmic apps share one target dir so they share the libcosmic build.

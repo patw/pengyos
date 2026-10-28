@@ -9,11 +9,13 @@ set -e
 
 TARGET_DIR="$1"
 
-# COSMIC and the PengyOS GUI apps are built with cargo on the build host, not by
-# Buildroot (yet): sources in $PENGYOS_COSMIC_SRC, cargo's target directory in
-# $PENGYOS_COSMIC_BUILD. See the build guide (Build COSMIC on the host).
-COSMIC_SRC="${PENGYOS_COSMIC_SRC:-$HOME/cosmic-src}"
-COSMIC_BUILD="${PENGYOS_COSMIC_BUILD:-$HOME/cosmic-build}"
+# COSMIC is the `cosmic` package (package/cosmic), which installs the binaries. Its
+# build dir holds every component's source (COSMIC_SRC, read below for schemas,
+# icons, desktop files). The PengyOS GUI apps are still built with cargo on the
+# build host by scripts/build-cosmic.sh, into $PENGYOS_COSMIC_BUILD/install-gui.
+GUI_BUILD="${PENGYOS_COSMIC_BUILD:-$HOME/cosmic-build}"
+COSMIC_INC="$(dirname "$0")/../../package/cosmic/cosmic-sources.inc"
+COSMIC_SRC="${BUILD_DIR}/cosmic-$(sed -n 's/^COSMIC_VERSION = //p' "${COSMIC_INC}")"
 
 # Hostname (belt-and-braces alongside BR2_TARGET_GENERIC_HOSTNAME).
 echo "pengyos-desktop" > "${TARGET_DIR}/etc/hostname"
@@ -54,29 +56,12 @@ if [ -n "${SITE}" ]; then
     echo "post-build: installed pengyos-appimage (${SITE#${TARGET_DIR}})"
 fi
 
-# --- COSMIC: install the host-built binaries ---------------------------------
-# Built on the build host ($COSMIC_BUILD/release) and copied in here; this goes
-# away once COSMIC has Buildroot recipes (tools/pengyos-cosmic-build). Guarded:
-# a host without the build still produces an image, with no desktop session.
-COSMIC_REL="${COSMIC_BUILD}/release"
-if [ -d "${COSMIC_REL}" ]; then
-    n=0
-    for b in cosmic-comp cosmic-session cosmic-panel cosmic-panel-button \
-             cosmic-launcher cosmic-applets cosmic-settings cosmic-settings-daemon \
-             cosmic-notifications cosmic-osd cosmic-osk cosmic-idle cosmic-bg \
-             cosmic-randr cosmic-screenshot \
-             cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player cosmic-app-library \
-             cosmic-workspaces cosmic-viewer cosmic-greeter cosmic-monitor \
-             cosmic-files-applet cosmic-greeter-daemon; do
-        if [ -x "${COSMIC_REL}/${b}" ]; then
-            cp -f "${COSMIC_REL}/${b}" "${TARGET_DIR}/usr/bin/${b}"
-            chmod 755 "${TARGET_DIR}/usr/bin/${b}"
-            n=$((n + 1))
-        fi
-    done
-    echo "post-build: installed ${n} COSMIC binaries from ${COSMIC_REL}"
-else
-    echo "post-build: ${COSMIC_REL} absent — no COSMIC binaries installed (no desktop session)"
+# --- COSMIC: the binaries come from the cosmic package -------------------------
+# Until 2026-10-28 they were host-built and copied in here. Now the package installs
+# them (a copy here would replace them after Buildroot's strip step); a Desktop
+# without the package has no session, so say so.
+if [ ! -x "${TARGET_DIR}/usr/bin/cosmic-comp" ] || [ ! -d "${COSMIC_SRC}" ]; then
+    echo "post-build: the cosmic package is not built (${COSMIC_SRC}) — no desktop session"
 fi
 
 # --- pop-launcher: the search backend behind cosmic-launcher -----------------
@@ -85,9 +70,9 @@ fi
 # logged "pop-launcher failed to start" and never opened. Mirrors the
 # pop-os/launcher justfile `install` with rootdir=/usr: one binary, every plugin
 # a <plugin-dir>/<name>/<name> symlink to it next to its plugin.ron, + scripts.
+# The cosmic package installs the binary as /usr/bin/pop-launcher.
 POP_LAUNCHER_SRC="${COSMIC_SRC}/pop-launcher"
-if [ -x "${COSMIC_REL}/pop-launcher-bin" ] && [ -d "${POP_LAUNCHER_SRC}/plugins/src" ]; then
-    install -Dm0755 "${COSMIC_REL}/pop-launcher-bin" "${TARGET_DIR}/usr/bin/pop-launcher"
+if [ -x "${TARGET_DIR}/usr/bin/pop-launcher" ] && [ -d "${POP_LAUNCHER_SRC}/plugins/src" ]; then
     PL_DIR="${TARGET_DIR}/usr/lib/pop-launcher"
     for plugin in calc desktop_entries files find pop_shell pulse recent scripts terminal web cosmic_toplevel; do
         mkdir -p "${PL_DIR}/plugins/${plugin}"
@@ -98,7 +83,7 @@ if [ -x "${COSMIC_REL}/pop-launcher-bin" ] && [ -d "${POP_LAUNCHER_SRC}/plugins/
     cp -r "${POP_LAUNCHER_SRC}/scripts/." "${PL_DIR}/scripts/"
     echo "post-build: installed pop-launcher + plugins"
 else
-    echo "post-build: pop-launcher not built (${COSMIC_REL}/pop-launcher-bin) — the launcher will NOT open"
+    echo "post-build: pop-launcher not installed — the launcher will NOT open"
 fi
 
 # --- The graphical installer ----------------------------------------------------
@@ -106,7 +91,7 @@ fi
 # GUI is host-built like the COSMIC apps (tools/pengyos-install-gui: cargo build
 # --release --features cosmic, CARGO_TARGET_DIR=~/cosmic-build/install-gui); the
 # live medium starts it (pengyos-live-installer.service).
-INSTALL_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-install-gui"
+INSTALL_GUI="${GUI_BUILD}/install-gui/release/pengyos-install-gui"
 if [ -x "${INSTALL_GUI}" ]; then
     install -Dm0755 "${INSTALL_GUI}" "${TARGET_DIR}/usr/bin/pengyos-install-gui"
     echo "post-build: installed pengyos-install-gui"
@@ -118,7 +103,7 @@ fi
 # tools/pengyos-updates, host-built the same way (cargo build --release
 # --features cosmic, same CARGO_TARGET_DIR, so it shares the libcosmic build).
 # The .desktop files are in the overlay; root's side is pengyos-update.
-UPDATES_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-updates"
+UPDATES_GUI="${GUI_BUILD}/install-gui/release/pengyos-updates"
 if [ -x "${UPDATES_GUI}" ]; then
     install -Dm0755 "${UPDATES_GUI}" "${TARGET_DIR}/usr/bin/pengyos-updates"
     echo "post-build: installed pengyos-updates"
@@ -129,7 +114,7 @@ fi
 # --- Disks (partition and format drives, write images, eject) ----------------
 # tools/pengyos-disks, host-built the same way. It only talks to UDisks2 (in the
 # desktop layer); the .desktop file is in the overlay.
-DISKS_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-disks"
+DISKS_GUI="${GUI_BUILD}/install-gui/release/pengyos-disks"
 if [ -x "${DISKS_GUI}" ]; then
     install -Dm0755 "${DISKS_GUI}" "${TARGET_DIR}/usr/bin/pengyos-disks"
     echo "post-build: installed pengyos-disks"
@@ -140,7 +125,7 @@ fi
 # --- Disk Usage (what is taking the space, as a ring chart) -------------------
 # tools/pengyos-usage, host-built the same way. Read-only and unprivileged: it
 # walks what the user can read. The .desktop file is in the overlay.
-USAGE_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-usage"
+USAGE_GUI="${GUI_BUILD}/install-gui/release/pengyos-usage"
 if [ -x "${USAGE_GUI}" ]; then
     install -Dm0755 "${USAGE_GUI}" "${TARGET_DIR}/usr/bin/pengyos-usage"
     echo "post-build: installed pengyos-usage"
@@ -152,7 +137,7 @@ fi
 # tools/pengyos-gamepads, host-built the same way. It reads /dev/input through
 # sysfs (enumeration) and evdev (the live panel); the .desktop file is in the
 # overlay and the `input` group is in board/desktop/users.table.
-GAMEPADS_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-gamepads"
+GAMEPADS_GUI="${GUI_BUILD}/install-gui/release/pengyos-gamepads"
 if [ -x "${GAMEPADS_GUI}" ]; then
     install -Dm0755 "${GAMEPADS_GUI}" "${TARGET_DIR}/usr/bin/pengyos-gamepads"
     echo "post-build: installed pengyos-gamepads"
@@ -164,7 +149,7 @@ fi
 # tools/pengyos-printers, host-built the same way. It talks IPP to cupsd on its
 # local socket; wheel members administer CUPS (SystemGroup, below) with no
 # password, by peer credentials. The .desktop file is in the overlay.
-PRINTERS_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-printers"
+PRINTERS_GUI="${GUI_BUILD}/install-gui/release/pengyos-printers"
 if [ -x "${PRINTERS_GUI}" ]; then
     install -Dm0755 "${PRINTERS_GUI}" "${TARGET_DIR}/usr/bin/pengyos-printers"
     echo "post-build: installed pengyos-printers"
@@ -177,7 +162,7 @@ fi
 # notifier are unprivileged; root's side is pengyos-firmware-check.service and
 # pengyos-firmware-update@.service (overlay), which run this same binary. The
 # .desktop file, the autostart entry and the polkit rule are in the overlay.
-FIRMWARE_GUI="${COSMIC_BUILD}/install-gui/release/pengyos-firmware"
+FIRMWARE_GUI="${GUI_BUILD}/install-gui/release/pengyos-firmware"
 if [ -x "${FIRMWARE_GUI}" ]; then
     install -Dm0755 "${FIRMWARE_GUI}" "${TARGET_DIR}/usr/bin/pengyos-firmware"
     echo "post-build: installed pengyos-firmware"
@@ -190,7 +175,7 @@ fi
 # called as: /usr/bin/pengy-<game> is a symlink to it, so each launcher's
 # `Exec=pengy-<game>` (overlay, with the icons) and `pengy-<game> --headless`
 # both work. One copy of libcosmic for all eight instead of eight copies.
-GAMES_GUI="${COSMIC_BUILD}/install-gui/release/pengy-games"
+GAMES_GUI="${GUI_BUILD}/install-gui/release/pengy-games"
 if [ -x "${GAMES_GUI}" ]; then
     install -Dm0755 "${GAMES_GUI}" "${TARGET_DIR}/usr/bin/pengy-games"
     for game in solitaire merge blocks floe pong invaders lander rogue; do
@@ -417,7 +402,7 @@ if [ -d "${COSMIC_ICONS_SRC}/freedesktop/scalable" ]; then
     # same name, and each copy overwrites the last: install them in a fixed
     # order (name, then size; scalable/ last) so the largest wins on every build
     # host. Plain `find` order is the filesystem's and differed between hosts.
-    find "${COSMIC_SRC}" -iname 'com.system76.*.svg' -print 2>/dev/null |
+    find "${COSMIC_SRC}" -path "${COSMIC_SRC}/target" -prune -o -iname 'com.system76.*.svg' -print 2>/dev/null |
         awk -F/ '{ n = $NF; size = 0
                    for (i = 1; i < NF; i++) {
                        if ($i == "scalable") size = 100000

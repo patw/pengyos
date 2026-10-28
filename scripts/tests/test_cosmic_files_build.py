@@ -21,8 +21,8 @@ marker string in the compiled binary is "already had surface ID".
 
 Building `-p cosmic-files` alone keeps the applet out of the graph, so the app
 binary never sees the feature; `-p cosmic-files-applet` is a second invocation.
-scripts/build-cosmic.sh also fails the build if the app binary carries the
-marker — this test catches the regression earlier, without cargo.
+The cosmic package (buildroot-external/package/cosmic) also fails the build if
+the app binary carries the marker — this test catches the regression earlier, without cargo.
 """
 from __future__ import annotations
 
