@@ -85,7 +85,6 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-postmortem`](pengyos-postmortem/) | Why did that session end? One read-only command over the journal. Shipped on Server and Desktop. |
 | [`pengyos-qemu-verify`](pengyos-qemu-verify/) | A headless QEMU/KVM boot-test harness for PengyOS: boot a PengyOS disk image under QEMU (q35), wait for readiness m… |
 | [`pengyos-recipe-lint`](pengyos-recipe-lint/) | A linter for the Buildroot package recipes PengyOS authors. It parses .mk/.hash recipe pairs and reports violations… |
-| [`pengyos-recipe-uutils`](pengyos-recipe-uutils/) | Buildroot recipe for uutils/coreutils — the Rust reimplementation of GNU Coreutils — for the PengyOS distribution,… |
 | [`pengyos-release`](pengyos-release/) | Publish a signed, versioned PengyOS release to a local update feed. |
 | [`pengyos-sbom`](pengyos-sbom/) | Turn Buildroot legal-info / show-info manifests into a valid SPDX 2.3 SBOM (and CycloneDX 1.5), with ed25519 signin… |
 | [`pengyos-server-toolset`](pengyos-server-toolset/) | The Server edition's remote-admin comfort set for PengyOS. It ships two things, both validated by a pytest suite: |

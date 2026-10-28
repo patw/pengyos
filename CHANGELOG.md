@@ -17,6 +17,26 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Removed — `pengyos-recipe-uutils`: the authored copy became the live recipe (2026-10-27)
+
+`tools/pengyos-recipe-uutils` authored the uutils-coreutils recipe, and its suite
+kept the tree's copy byte-identical to the authored one. The recipe has since been
+bumped in the tree (0.11.0 → 0.12.0, by the nightly on 2026-10-20) and the two
+copies are identical, so the tool was a duplicate of a file that lives in
+`buildroot-external/package/`, and its distinctive check was the anti-drift test
+between two copies of one thing.
+
+Its recipe rules are ported to `scripts/tests/test_uutils_recipe.py`: the Kconfig
+gates (rustc arch, glibc, MMU, `select HOST_RUSTC`), the pinned version with a
+source and site that track it, the MIT licence, the `.hash` spelling Buildroot's
+`check-hash` actually parses, the `--no-default-features --features unix --offline
+--locked` build, the multicall install with a symlink per utility, and the utility
+list against the authoritative fixture — which moves to
+`scripts/tests/fixtures/`, next to the BusyBox symbol list.
+`scripts/tests/test_core_userland.py` keeps the wiring side (the layers select it,
+every defconfig carries it, `Config.in` sources it, the utility set covers what GNU
+coreutils put in Core). The tool is in git history.
+
 ### Docs — SPEC's host-built COSMIC exception said the image copies host libraries (2026-10-27)
 
 SPEC §6 claimed COSMIC is copied in "together with a few host libraries they link",

@@ -48,8 +48,9 @@ UUTILS_COREUTILS_INSTALL_TARGET = YES
 
 # Utilities exposed by a symlink -> coreutils. This is upstream's feat_os_unix
 # set for the pinned version (106 names); regenerate it from the pinned
-# Cargo.toml when bumping UUTILS_COREUTILS_VERSION. The authoritative fixture
-# lives with the recipe's suite: tools/pengyos-recipe-uutils/tests/fixtures/.
+# Cargo.toml when bumping UUTILS_COREUTILS_VERSION. The authoritative fixture is
+# scripts/tests/fixtures/coreutils-0.12.0-unix-utilities.txt, asserted by
+# scripts/tests/test_uutils_recipe.py.
 UUTILS_COREUTILS_UTILITIES = \
 	arch b2sum base32 base64 basename basenc cat chgrp chmod chown chroot cksum \
 	comm cp csplit cut date dd df dir dircolors dirname du echo env expand expr \
