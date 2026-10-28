@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — the COSMIC portal backend is 1.9.0 and part of the cosmic package (2026-10-28)
+
+`xdg-desktop-portal-cosmic` (screenshots, screen casting, the file chooser, settings for
+Flatpak apps) was the separate `package/cosmic-portal` recipe at `epoch-1.8.0`, built
+against its own libcosmic from upstream's lock, while the rest of COSMIC was 1.9.0 on the
+pinned libcosmic. It is now a row of `scripts/cosmic-components.tsv` at `epoch-1.9.0`,
+built by `package/cosmic` on the same libcosmic pin and `--locked` against
+`scripts/cosmic-locks/xdg-desktop-portal-cosmic.Cargo.lock` (the relock moved only the
+libcosmic crates to the pin; no crates.io dependency changed), and the nightly watches its
+releases like every other row. Its icons are installed by the package; post-build reads
+its data files from the package's build dir.
+
 ### Security — kernel memory-safety hardening on in every edition (2026-10-28)
 
 The nightly reports kernel CVEs and never patches the kernel, so the kernel config is the

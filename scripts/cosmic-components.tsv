@@ -37,6 +37,7 @@ cosmic-idle	https://github.com/pop-os/cosmic-idle	c95d066b5b640509a6369634b669ca
 cosmic-bg	https://github.com/pop-os/cosmic-bg	9d82a34dab4e73d90ba66c9f72d18d0f9b8be208	build --release
 cosmic-randr	https://github.com/pop-os/cosmic-randr	6e8e795970fa06d434af22775e415b517f7552d3	build --release
 cosmic-screenshot	https://github.com/pop-os/cosmic-screenshot	5ddcf1804192ff98823bd37a778286db5a00f3dd	build --release
+xdg-desktop-portal-cosmic	https://github.com/pop-os/xdg-desktop-portal-cosmic	2f41161176368840c67e2de9b8a24786accb100c	build --release
 cosmic-greeter	https://github.com/pop-os/cosmic-greeter	bfb2745176e3fd0824e008d3efb2b37bce5ae0db	build --release --workspace
 cosmic-term	https://github.com/pop-os/cosmic-term	9129277bed1e810418a3138d683c1bc15656234f	build --release
 # cosmic-files (the file manager) and cosmic-files-applet (the desktop) are ONE

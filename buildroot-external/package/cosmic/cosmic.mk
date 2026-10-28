@@ -29,7 +29,7 @@
 include $(BR2_EXTERNAL_PENGYOS_PATH)/package/cosmic/cosmic-sources.inc
 
 # legal-info writes this inside single quotes: no apostrophe.
-COSMIC_LICENSE = GPL-3.0-only (COSMIC components), MPL-2.0 (libcosmic), vendored crates under their own licenses (not listed)
+COSMIC_LICENSE = GPL-3.0-only (COSMIC components), GPL-3.0-or-later (xdg-desktop-portal-cosmic), MPL-2.0 (libcosmic), vendored crates under their own licenses (not listed)
 COSMIC_LICENSE_FILES = cosmic-comp/LICENSE
 # Buildroot extracts nothing itself: every archive goes to $(@D)/<component>.
 COSMIC_SRCDIR = $(@D)
@@ -138,13 +138,23 @@ COSMIC_BINARIES = \
 	cosmic-osd cosmic-osk cosmic-idle cosmic-bg cosmic-randr cosmic-screenshot \
 	cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player \
 	cosmic-app-library cosmic-workspaces cosmic-viewer cosmic-greeter cosmic-monitor \
-	cosmic-files-applet cosmic-greeter-daemon
+	cosmic-files-applet cosmic-greeter-daemon xdg-desktop-portal-cosmic
 
 define COSMIC_INSTALL_TARGET_CMDS
 	$(foreach b,$(COSMIC_BINARIES),
 		$(INSTALL) -D -m 0755 $(COSMIC_RELEASE)/$(b) $(TARGET_DIR)/usr/bin/$(b)
 	)
 	$(INSTALL) -D -m 0755 $(COSMIC_RELEASE)/pop-launcher-bin $(TARGET_DIR)/usr/bin/pop-launcher
+	$(COSMIC_INSTALL_PORTAL_ICONS)
+endef
+
+# The portal ships its own icons (the screenshot dialog's selection / window /
+# screen mode buttons); upstream's justfile installs data/icons into hicolor, and
+# without them the three buttons were blank. (Moved from package/cosmic-portal,
+# which built the portal at epoch-1.8.0 against its own libcosmic until 2026-10-28.)
+define COSMIC_INSTALL_PORTAL_ICONS
+	cd $(@D)/xdg-desktop-portal-cosmic/data/icons && find . -type f -exec \
+		$(INSTALL) -D -m 0644 {} $(TARGET_DIR)/usr/share/icons/hicolor/{} \;
 endef
 
 $(eval $(generic-package))
