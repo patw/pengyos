@@ -17,6 +17,20 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Security — kernel memory-safety hardening on in every edition (2026-10-28)
+
+The nightly reports kernel CVEs and never patches the kernel, so the kernel config is the
+only lever on how exploitable one is, and the 2026-10-28 audit found every mainline
+memory-safety option off in all five editions. Core's fragment now turns on
+`SLAB_FREELIST_HARDENED`, `SLAB_FREELIST_RANDOM`, `LIST_HARDENED`, `FORTIFY_SOURCE`,
+`HARDENED_USERCOPY`, `INIT_ON_ALLOC_DEFAULT_ON` and `ZERO_CALL_USED_REGS`: each turns a
+class of kernel memory corruption into a crash instead of root, for code already running
+as the user. Expected cost: near zero for most, 1-3% on allocation-heavy loads for
+`INIT_ON_ALLOC` (Ubuntu, Fedora and Arch ship it on; `init_on_alloc=0` turns it off at
+boot). `INIT_ON_FREE`, `MODULE_SIG` and the lockdown LSM are left off on purpose (see the
+fragment). The post-build check fails a build where one drops out of Kconfig, and
+`scripts/tests/test_kernel_hardening.py` fails the gate if one is removed.
+
 ### Security — COSMIC builds against locks PengyOS owns, with `--locked` (2026-10-28)
 
 `build-cosmic.sh` built without `--locked`, and when the libcosmic coherence pin did not
