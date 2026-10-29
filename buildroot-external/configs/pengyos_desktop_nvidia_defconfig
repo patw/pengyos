@@ -293,7 +293,7 @@ BR2_PACKAGE_PENGY_CLI=y
 # Pin the kernel explicitly — never a floating "latest" (SPEC §1.6).
 BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION=y
-BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="7.2.12"
+BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="7.2.13"
 # Kernel headers: use a series Buildroot 2026.08 knows (7.1). Headers <= kernel
 # is the correct relationship; AS_KERNEL starves glibc's dependency check when
 # Buildroot does not yet know the kernel's series (learned on the first builds).

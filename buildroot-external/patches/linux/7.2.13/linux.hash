@@ -1,0 +1,5 @@
+# From https://cdn.kernel.org/pub/linux/kernel/v7.x/sha256sums.asc, signed by the
+# kernel.org checksum autosigner (B8868C80BA62A1FFFAF5FDA9632D3A06589DA6B1); checked
+# 2026-10-28. Buildroot keeps kernel hashes per version and has none for a custom
+# version, so without this file the kernel tarball was downloaded unchecked.
+sha256  08e7b0c4f2dd1971f972da274b5e589a98989390ac56acd7a1a5af922363ea6c  linux-7.2.13.tar.xz

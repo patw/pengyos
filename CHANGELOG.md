@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — Linux 7.2.13, with its tarball hash-checked (2026-10-28)
+
+The kernel moves from 7.2.12 to 7.2.13, the 7.2 stable update (232 commits: amdgpu,
+i915/xe, KVM and the usual fixes). Its sha256 is now pinned in
+`patches/linux/7.2.13/linux.hash`, taken from kernel.org's signed `sha256sums.asc`:
+Buildroot ships hashes only for its own default kernel versions, so the custom 7.2
+tarball had been downloaded without any check.
+
 ### Removed — `openssh-pengyos`: stock OpenSSH 10.6p1 again, and mosh is back (2026-10-28)
 
 The openssh fork (2026-10-19) existed because Buildroot 2026.08 pinned 10.5p1, with two

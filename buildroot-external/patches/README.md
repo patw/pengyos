@@ -66,6 +66,11 @@ on 2026-10-20 when upower became a fork at 1.91.5, which carries the fix itself
 (2026-10-28): libxml2's seven CVE fixes (2.15.4 contains all seven) and the
 ca-certificates emSign blacklist (20260816+nmu1 is the Debian upload it was taken from).
 
+`linux/<version>/linux.hash` carries no patch: Buildroot looks for a package's hash
+file in the global patch dir too, and it ships kernel hashes only for its own default
+versions, so this is where the pinned custom kernel's sha256 lives. It moves with
+`BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE` in `configs/layers/core.config`.
+
 Patches a recipe carries in its **own** directory are not listed here, because they
 are not delivered through `BR2_GLOBAL_PATCH_DIR`. `package/hplip-pengyos/` carries four
 (2 regenerated from Buildroot's, 2 authored here) and `package/ffmpeg-pengyos/` carries
