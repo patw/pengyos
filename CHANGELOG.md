@@ -17,6 +17,20 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — rtkit 0.14 from its new upstream; bolt stops matching Bolt CMS (2026-10-28)
+
+rtkit moves from 0.13 (2020, github.com/heftig) to 0.14, released where upstream now
+lives (gitlab.freedesktop.org/pipewire/rtkit). For the Desktop the fix that matters is
+RT privileges no longer being dropped, sometimes, on resume from suspend (#13), which
+PipeWire's realtime threads depend on. Same meson options, same license files.
+
+bolt is already at upstream's newest (0.9.11). The nightly offered "1.3.1" and counted
+13 CVEs against it, all from other projects of the same name: pkg-stats takes the first
+release-monitoring project called bolt (boltdb, a Go key-value store) and, with no CPE
+vendor, matched NVD's only `bolt` product, Bolt CMS. `BOLT_CPE_ID_VENDOR = freedesktop`
+stops the CVE match (NVD has no CPE for this bolt); the version offer is denied in the
+nightly's decisions with that reason.
+
 ### Changed — the COSMIC portal backend is 1.9.0 and part of the cosmic package (2026-10-28)
 
 `xdg-desktop-portal-cosmic` (screenshots, screen casting, the file chooser, settings for
