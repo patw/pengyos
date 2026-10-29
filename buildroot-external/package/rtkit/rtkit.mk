@@ -8,9 +8,11 @@
 #
 ################################################################################
 
-RTKIT_VERSION = 0.13
-RTKIT_SITE = https://github.com/heftig/rtkit/archive/refs/tags
-RTKIT_SOURCE = v$(RTKIT_VERSION).tar.gz
+RTKIT_VERSION = 0.14
+# Upstream moved from github.com/heftig/rtkit (last tag v0.13, 2020) to the PipeWire
+# group on freedesktop.org, where 0.14 was released (2025-12-10).
+RTKIT_SITE = https://gitlab.freedesktop.org/pipewire/rtkit/-/archive/v$(RTKIT_VERSION)
+RTKIT_SOURCE = rtkit-v$(RTKIT_VERSION).tar.gz
 RTKIT_LICENSE = GPL-3.0+ (daemon), MIT (client library)
 RTKIT_LICENSE_FILES = GPL LICENSE
 RTKIT_DEPENDENCIES = host-pkgconf dbus libcap systemd polkit

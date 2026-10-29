@@ -12,4 +12,4 @@ config BR2_PACKAGE_RTKIT
 	  without it every request failed and xdg-desktop-portal logged
 	  "Failed to load RealtimeKit property" at each session start.
 
-	  https://github.com/heftig/rtkit
+	  https://gitlab.freedesktop.org/pipewire/rtkit
