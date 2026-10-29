@@ -1212,7 +1212,6 @@ BR2_PACKAGE_PLYMOUTH=y
 # COSMIC's sound theme (our package; also answers COSMIC's "Pop" lookups) +
 # the freedesktop theme it selects: notification, volume, battery and plug
 # sounds. Before this /usr/share/sounds held only ALSA's test files.
-BR2_PACKAGE_COSMIC_SOUND_THEME=y
 # Fonts (our packages): Fira Sans/Mono, the interface and monospace fonts
 # COSMIC defaults to (the UI was falling back to DejaVu), and Noto Color Emoji
 # (emoji were empty boxes or monochrome DejaVu glyphs). DejaVu stays as the

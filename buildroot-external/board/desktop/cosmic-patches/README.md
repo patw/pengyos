@@ -1,24 +1,23 @@
-# `cosmic-patches/` — fixes to the host-built COSMIC components
+# `cosmic-patches/` — fixes we carry on COSMIC components
 
-The COSMIC compositor, shell and apps are still built with cargo on the build
-host (`scripts/build-cosmic.sh`: `$PENGYOS_COSMIC_SRC/<component>` ->
-`$PENGYOS_COSMIC_BUILD/release`) and copied into the image by `../post-build.sh`,
-until their Buildroot recipes land. Fixes we carry
-on top of upstream live here, one directory per component, as `git am`-style
-patches, so they are reviewed and versioned with the tree rather than living
-only in a checkout.
+COSMIC is one Buildroot package, `package/cosmic`. Fixes we carry on top of
+upstream live here, one directory per component, as `git am`-style patches, so
+they are reviewed and versioned with the tree. The package's post-patch hook
+applies each component's patches inside that component's source dir (Buildroot's
+own patch step works on the package root, not per component), and a patch that
+fails to apply fails the build. The patches are an input of `COSMIC_VERSION`:
+adding or changing one rebuilds the package (rerun `scripts/cosmic-recipe.py`).
 
-`scripts/build-cosmic.sh` applies them after checking out each component's pinned
-commit (and skips a patch that is already applied). By hand:
+To check a patch against a new upstream commit by hand:
 
 ```sh
-cd "$PENGYOS_COSMIC_SRC/cosmic-notifications"
-git apply <repo>/buildroot-external/board/desktop/cosmic-patches/cosmic-notifications/*.patch
+cd <component checkout at the new commit>
+patch -p1 --dry-run < <repo>/buildroot-external/board/desktop/cosmic-patches/<component>/<patch>
 ```
 
 | Component | Patch | Why |
 |---|---|---|
-| `cosmic-notifications` | `0001-applet-wait-longer-for-the-panel-connection.patch` | The daemon gave the panel 1 s to connect; a slow-starting panel lost its notifications applet. |
+| `cosmic-notifications` | `0001-applet-wait-longer-for-the-panel-connection.patch` | The daemon gave the panel 1 s to connect; a slow-starting panel lost its notifications applet. Upstream went to 10 s in epoch-1.11.0 (#181); we keep 30 s until a cold USB-stick boot is proven on 10 s, then drop it. |
 | `cosmic-notifications` | `0002-app-clicking-a-notification-with-no-actions-opens-its-app.patch` | A notification without actions was only dismissed on click; now its app (desktop-entry hint) is launched with the activation token, as GNOME Shell does. Single-instance apps come to the front. |
 | `cosmic-applets` | `0001-battery-no-battery-icon-on-machines-without-a-system-battery.patch` | A desktop with a wireless mouse/keyboard showed a 0% battery icon: the applet took later UPower updates after "no battery". Backport of cosmic-settings a366fc7 (epoch-1.9). |
 | `cosmic-store` | `0001-flatpak-refresh-appstream-by-the-remote-s-name.patch` | The hourly appstream refresh named the system remote by its display id ("flathub (system)"), so a system-wide Flathub's catalogue never refreshed. Unfixed upstream as of 2026-10-11. |

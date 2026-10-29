@@ -9,7 +9,7 @@ and capability summary (every other input device is classified, and printed by
 `--list`, but kept out of the window), and drives a live picture of the selected one: buttons
 light up, stick knobs follow, trigger and pedal bars fill, the D-pad points, and
 every event is printed as it arrives. A Rumble button sends a real force-feedback
-effect. COSMIC Settings (epoch 1.9) has no page for any of this.
+effect. COSMIC Settings (epoch 1.11) has no page for any of this.
 
 ## Purpose
 US-DSK-4 ("Play games") accepts that "GPU + audio + controllers are correct",

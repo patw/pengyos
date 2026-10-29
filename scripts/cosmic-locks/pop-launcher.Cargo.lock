@@ -3664,4 +3664,4 @@ dependencies = [
 [[patch.unused]]
 name = "libcosmic"
 version = "1.0.0"
-source = "git+https://github.com/pop-os/libcosmic//?rev=87ab8179e1bd9880239c340855ae8862034bd0e8#87ab8179e1bd9880239c340855ae8862034bd0e8"
+source = "git+https://github.com/pop-os/libcosmic//?rev=430f3d48a97d8779f9c1985473912e594ccca1ae#430f3d48a97d8779f9c1985473912e594ccca1ae"

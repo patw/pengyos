@@ -101,7 +101,7 @@ nightly routine.
 
 ## 4. The COSMIC wrapper: viable, and it does not need Chromium
 
-PengyOS Desktop's app stack is Rust + `iced` + `libcosmic` (epoch 1.9, pinned in
+PengyOS Desktop's app stack is Rust + `iced` + `libcosmic` (epoch 1.11, pinned in
 `scripts/cosmic-components.tsv`). For a native browser shell there are four wrapper
 architectures:
 
