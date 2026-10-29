@@ -163,6 +163,22 @@ def test_unchanged_dependencies_rebuild_nothing(tmp_path: Path) -> None:
     assert stale.dependency_changes(deps, deps, build) == ()
 
 
+def test_turning_ccache_on_or_off_rebuilds_nothing(tmp_path: Path) -> None:
+    # BR2_CCACHE adds host-ccache to every package's dependencies.
+    build = _build(tmp_path, "cups-2.4.14", "zlib-1.3.1")
+    off = stale.parse_show_info(_info(cups=["dbus", "zlib"], zlib=[]))
+    on = stale.parse_show_info(_info(cups=["dbus", "host-ccache", "zlib"], zlib=["host-ccache"]))
+    assert stale.dependency_changes(off, on, build) == ()
+    assert stale.dependency_changes(on, off, build) == ()
+
+
+def test_ccache_does_not_hide_a_real_dependency_change(tmp_path: Path) -> None:
+    build = _build(tmp_path, "cups-2.4.14")
+    old = stale.parse_show_info(_info(cups=["dbus"]))
+    new = stale.parse_show_info(_info(cups=["avahi", "dbus", "host-ccache"]))
+    assert [p.name for p in stale.dependency_changes(old, new, build)] == ["cups-2.4.14"]
+
+
 def test_dependency_change_of_unbuilt_package_is_skipped(tmp_path: Path) -> None:
     build = _build(tmp_path)
     old = stale.parse_show_info(_info(cups=["dbus"]))

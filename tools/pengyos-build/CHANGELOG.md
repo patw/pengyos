@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — turning the compiler cache on no longer rebuilds the whole tree
+- `BR2_CCACHE` adds host-ccache to every package's dependency list, so the
+  dependency check (`stale.dependency_changes`) marked every built package stale
+  and the next configure dircleaned them all: a full rebuild of each output dir.
+  host-ccache is now ignored in that comparison (`stale.BUILD_TOOL_DEPS`); any
+  other dependency change still rebuilds the package.
+
 ### Added — `PENGYOS_BUILD_JOBS` sets the default parallelism
 - `build` and `sbom` default to `$PENGYOS_BUILD_JOBS` when it is set, else
   `-j$(nproc)` as before; `--jobs` still wins. `scripts/release.sh` and the nightly
