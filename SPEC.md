@@ -70,7 +70,7 @@ Chosen once, inherited everywhere.
 
 | Component | Ships | License | Rejected / alternatives | Status |
 |---|---|---|---|---|
-| **Kernel** | Linux **7.2.12**, latest stable, pinned; configured per hardware via board fragments, not patched | GPL-2.0 | LTS lines (§1.6) | 🟢 |
+| **Kernel** | Linux **7.2.13**, latest stable, pinned; configured per hardware via board fragments, not patched | GPL-2.0 | LTS lines (§1.6) | 🟢 |
 | **Bootloader** | **GRUB 2** (x86_64 EFI), with a one-shot `pengyos_try` entry for updates | GPL-3.0 | systemd-boot + UKI (designed, then parked — §4) | 🟢 |
 | **Initramfs** | none — the root is found directly | — | dracut, booster (when encryption needs one) | 🟢 |
 | **Init** | **systemd** (kept as the contract: unit semantics, targets, logind) | LGPL-2.1 | dinit, s6, OpenRC | 🟢 |
@@ -147,7 +147,7 @@ exactly. The maintenance loop exists to keep up.
 
 - **Engine:** Buildroot's current release line (2026.08).
 - **Components:** the newest stable upstream release, pinned by version and hash.
-- **Kernel:** latest stable, pinned (7.2.12 today); adopt a new mainline line within
+- **Kernel:** latest stable, pinned (7.2.13 today); adopt a new mainline line within
   one or two releases of its `.0`, take point releases continuously.
 - **The cost:** a non-LTS kernel gets only months of point releases, so we own the
   rebase cadence. `tools/pengyos-nightly` observes upstream and proposes every move
@@ -161,7 +161,7 @@ exactly. The maintenance loop exists to keep up.
 
 Boots a modern x86_64 machine to a networked, SSH-managed console.
 
-- **Boot:** GRUB 2 EFI → kernel 7.2.12 → systemd. Video console (simpledrm/fbcon) and
+- **Boot:** GRUB 2 EFI → kernel 7.2.13 → systemd. Video console (simpledrm/fbcon) and
   serial console; the GRUB menu is full-screen.
 - **Userspace:** systemd (journald, udevd, logind, networkd, resolved), D-Bus, uutils
   coreutils and uutils findutils (Rust), util-linux, kmod, iproute2, procps-ng, bash, Python 3, nftables,

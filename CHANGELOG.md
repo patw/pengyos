@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — Linux 7.2.13, with its tarball hash-checked (2026-10-28)
+
+The kernel moves from 7.2.12 to 7.2.13, the 7.2 stable update (232 commits: amdgpu,
+i915/xe, KVM and the usual fixes). Its sha256 is now pinned in
+`patches/linux/7.2.13/linux.hash`, taken from kernel.org's signed `sha256sums.asc`:
+Buildroot ships hashes only for its own default kernel versions, so the custom 7.2
+tarball had been downloaded without any check.
+
 ### Changed — the COSMIC portal backend is 1.9.0 and part of the cosmic package (2026-10-28)
 
 `xdg-desktop-portal-cosmic` (screenshots, screen casting, the file chooser, settings for
