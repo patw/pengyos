@@ -68,8 +68,8 @@ ca-certificates emSign blacklist (20260816+nmu1 is the Debian upload it was take
 
 Patches a recipe carries in its **own** directory are not listed here, because they
 are not delivered through `BR2_GLOBAL_PATCH_DIR`. `package/hplip-pengyos/` carries four
-(2 regenerated from Buildroot's, 2 authored here), `package/ffmpeg-pengyos/` carries
+(2 regenerated from Buildroot's, 2 authored here) and `package/ffmpeg-pengyos/` carries
 two upstream CVE fixes on 9.0.2 (declared in its own `.mk`; ledger entry
-`ffmpeg-9.0.2-fork`), and `package/openssh-pengyos/` carries none.
+`ffmpeg-9.0.2-fork`).
 
 Each entry names its own expiry in the ledger.

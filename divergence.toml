@@ -52,10 +52,11 @@ schema = 1
 fork_budget = 10
 
 # Budget: at most 10 maintained forks (kind = "fork") at any time.
-# Current fork count: 8 (openssh-pengyos, ffmpeg-pengyos, hplip-pengyos 2026-10-19;
-# upower-pengyos 2026-10-20; libdisplay-info-pengyos 2026-10-23; uutils-findutils,
-# distrobox, xdg-utils 2026-10-27). build-fix entries are not counted. The gate's
-# count is authoritative; this line is the human copy.
+# Current fork count: 7 (ffmpeg-pengyos, hplip-pengyos 2026-10-19; upower-pengyos
+# 2026-10-20; libdisplay-info-pengyos 2026-10-23; uutils-findutils, distrobox,
+# xdg-utils 2026-10-27). openssh-pengyos (2026-10-19) expired with Buildroot
+# 2026.08.1 on 2026-10-28. build-fix entries are not counted. The gate's count is
+# authoritative; this line is the human copy.
 # Enforced by the gate from 2026-10-19: scripts/pengyos_gate.py:check_fork_budget counts
 # kind = "fork" entries against `fork_budget` above and fails past it. It also fails a
 # fork whose observe_source is pkg-stats, because pkg-stats cannot see a fork at all -
@@ -385,55 +386,6 @@ closes = [
 expiry = "Buildroot pins gst-plugins-good outside the NVD range of CVE-2026-73433/73434; pkg-stats then reports the ignores as stale and the patch set is deleted"
 observe_source = "pkg-stats"
 upstream_status = "merged"
-
-[[divergence]]
-id        = "openssh-10.6p1-fork"
-kind      = "fork"
-component = "openssh-pengyos"
-pinned_version = "10.6p1"
-editions  = ["pengyos-core", "pengyos-server", "pengyos-server-nvidia",
-             "pengyos-desktop", "pengyos-desktop-nvidia"]
-carried_since = "2026-10-19"
-recipe        = "buildroot-external/package/openssh-pengyos"
-
-# Five OpenSSH CVEs, all of them "OpenSSH before 10.6", all of them remote-facing, two of
-# them unauthenticated against an sshd that listens on TCP 22 in every edition. NVD names
-# no fix commit for any of the five - only https://www.openssh.com/txt/release-10.6 - so
-# there is nothing to carry as a patch, and buildroot-external/patches/README.md rule 1
-# forbids writing our own fix into somebody else's package. The fix is the version, and a
-# stock version cannot be moved from a br2-external tree (proven the hard way on 2026-10-05,
-# recorded in tools/pengyos-nightly/pengyos_nightly/edits.py). A fork is the shape that is
-# left, and the ladder's own rule is that a named fork with an expiry is the preferred
-# shape for anything longer-lived than an emergency.
-closes = [
-  "CVE-2026-106585",  # P0, remote, unauth: max packet length not enforced during decompression
-  "CVE-2026-106582",  # P0, remote, unauth: LZ77 dictionary coder usable ("Crossing the Streams")
-  "CVE-2026-106583",  # P1: a $ or \ in a command-line username injects (ssh)
-  "CVE-2026-106586",  # P1: authorized_keys `restrict` does not apply to tunnel forwarding
-  "CVE-2026-106552",  # P1: an sftp server can trigger directory traversal on a recursive copy
-]
-
-# The cost, written where it can be seen. mosh selects BR2_PACKAGE_OPENSSH
-# (package/mosh/Config.in:20), and a Kconfig select outranks a defconfig line: with mosh
-# in the config, BR2_PACKAGE_OPENSSH=y comes back no matter what the layer says, so the
-# vulnerable 10.5p1 is built and installed beside the fork - two packages writing the same
-# /usr/sbin/sshd, and pkg-stats reporting the vulnerable version as present. Verified on
-# 2026-10-19: configuring pengyos-server with mosh enabled yields both symbols; with mosh
-# off it yields only openssh-pengyos. mosh is therefore switched off in
-# configs/layers/server.config (Server, and Desktop through it).
-cost = "mosh is dropped from Server and Desktop - it is the only package that selects stock openssh"
-
-# The tarball's hash is upstream's own, published base64-encoded in the 10.6 release notes
-# (SHA256 (openssh-10.6p1.tar.gz) = qdyVZd/+hkD2TYY80poyvEo9vewFZqf8RMXW7nZ9Xzk=) and
-# confirmed against the download on 2026-10-19. Not self-attested.
-provenance = "https://www.openssh.com/txt/release-10.6 + openssh-10.6p1.tar.gz.sig"
-
-# The expiry is a Buildroot release, not a date: the fork ends the moment Buildroot ships
-# a version that closes these CVEs, at which point the recipe, the defconfig lines, the
-# mosh line and the observe source all go back the way they came.
-expiry = "Buildroot releases with openssh >= 10.6p1: delete buildroot-external/package/openssh-pengyos, restore the BR2_PACKAGE_OPENSSH lines in configs/layers/core.config, re-enable BR2_PACKAGE_MOSH in configs/layers/server.config, and remove the openssh-fork observe source from pengyos-nightly"
-observe_source = "pengyos-nightly observe, source id openssh-fork: git ls-remote --tags https://github.com/openssh/openssh-portable compared to OPENSSH_PENGYOS_VERSION (sources.openssh_fork_findings, added 2026-10-19 with the fixture tests/fixtures/ls-remote-openssh.txt). pkg-stats cannot see a fork - it scans the stock recipe, and the stock recipe is switched off."
-upstream_status = "released"
 
 [[divergence]]
 id        = "podman-v5.7.0-cve-2026"

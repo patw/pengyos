@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Removed — `openssh-pengyos`: stock OpenSSH 10.6p1 again, and mosh is back (2026-10-28)
+
+The openssh fork (2026-10-19) existed because Buildroot 2026.08 pinned 10.5p1, with two
+remote unauthenticated sshd CVEs fixed in 10.6. Buildroot 2026.08.1 ships 10.6p1, the
+fork's ledger expiry, so every edition is back on the stock recipe: the fork was a
+faithful copy of it with the version moved (same configure, same `sshd.service`,
+`S50sshd` and sysusers file), so sshd itself does not change. mosh returns to Server and
+Desktop: it selects stock openssh, which is why the fork had to switch it off. The
+nightly's `openssh-fork` observe source goes too; pkg-stats sees the stock recipe.
+Forks: 7 of the budget's 10.
+
 ### Security — Buildroot 2026.08.1 (2026-10-28)
 
 The tree moves from Buildroot 2026.08 to its first point release, 2026.08.1 (tag

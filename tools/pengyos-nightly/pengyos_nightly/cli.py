@@ -101,24 +101,10 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
                                              "https://github.com/patw/PengyR"])),
             pver))
 
-    # OpenSSH: our fork (package/openssh-pengyos) is what ships and the stock recipe is
-    # switched off, so pkg-stats never sees it. This is the observe_source the divergence
-    # ledger entry names; without it the fork rots silently - the PengyR case, with an
-    # exposed sshd attached.
-    openssh_mk = repo / "buildroot-external/package/openssh-pengyos/openssh-pengyos.mk"
-    over = sources.mk_value(openssh_mk.read_text(), "OPENSSH_PENGYOS_VERSION") \
-        if openssh_mk.exists() else None
-    if over:
-        findings += guard("openssh-fork", lambda: sources.openssh_fork_findings(
-            sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags",
-                                             "https://github.com/openssh/openssh-portable"])),
-            over))
-
     # ffmpeg: our fork (package/ffmpeg-pengyos) is what ships and the stock recipe is
-    # switched off, so pkg-stats never sees it - the same blindness the openssh fork
-    # has, on the Desktop's media path. divergence.toml -> ffmpeg-9.0.2-fork names
-    # this as its observe_source. ffmpeg publishes no git tags, so the source is the
-    # release directory listing.
+    # switched off, so pkg-stats never sees it, on the Desktop's media path.
+    # divergence.toml -> ffmpeg-9.0.2-fork names this as its observe_source. ffmpeg
+    # publishes no git tags, so the source is the release directory listing.
     ffmpeg_mk = repo / "buildroot-external/package/ffmpeg-pengyos/ffmpeg-pengyos.mk"
     fver = sources.mk_value(ffmpeg_mk.read_text(), "FFMPEG_PENGYOS_VERSION") \
         if ffmpeg_mk.exists() else None

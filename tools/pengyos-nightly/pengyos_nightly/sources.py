@@ -153,44 +153,14 @@ def pengyr_findings(tags: Iterable[str], current: str) -> list[dict]:
              "note": note}]
 
 
-def openssh_fork_findings(tags: Iterable[str], current: str) -> list[dict]:
-    """OpenSSH portable, observed for the fork that ships it (`openssh-pengyos`).
+def ffmpeg_fork_findings(html: str, current: str) -> list[dict]:
+    """ffmpeg, observed for the fork that ships it (`ffmpeg-pengyos`).
 
     A fork is invisible to Buildroot's pkg-stats: it scans the stock recipe, and the
     stock recipe is switched off. So nothing in the toolchain notices our pin going
     stale - the PengyR case (images shipped 1.10.0 while upstream was at 1.11.1 and
     nothing said so), which is exactly the failure `divergence.toml` requires an
-    `observe_source` to prevent. For OpenSSH the cost of that silence is a remote
-    unauthenticated sshd CVE sitting in every image with no signal.
-
-    Upstream tags portable releases `V_10_6_P1`; the recipe pins `10.6p1`, so the tag
-    is normalized to the string the recipe would carry. A new patch release (10.6p2)
-    is routine - the loop may bump it; a new minor is major, because sshd is the
-    exposed service of every edition and a series change is a human decision.
-    """
-    def normalize(tag: str) -> str | None:
-        m = re.fullmatch(r"V_(\d+)_(\d+)_P(\d+)", tag)
-        return f"{m.group(1)}.{m.group(2)}p{m.group(3)}" if m else None
-
-    versions = [v for v in (normalize(t) for t in tags) if v]
-    newer = [v for v in versions if vkey(v) > vkey(current)]
-    if not newer:
-        return []
-    best = max(newer, key=vkey)
-    kind = bump_kind(current, best)
-    return [{"lane": kind, "component": "openssh-pengyos", "current": current,
-             "available": best,
-             "note": (f"OpenSSH patch release (fork: {current} -> {best})"
-                      if kind == "routine"
-                      else f"new OpenSSH series ({current} -> {best})")}]
-
-
-def ffmpeg_fork_findings(html: str, current: str) -> list[dict]:
-    """ffmpeg, observed for the fork that ships it (`ffmpeg-pengyos`).
-
-    Same reason as `openssh_fork_findings`: pkg-stats scans the stock recipe, the
-    stock recipe is switched off, so nothing in the toolchain notices our 9.0.2 pin
-    going stale while ffmpeg publishes a release that closes a CVE we carry the fork
+    `observe_source` to prevent. Here: nothing would notice our 9.0.2 pin going stale while ffmpeg publishes a release that closes a CVE we carry the fork
     for. The ledger names this as the fork's `observe_source`.
 
     ffmpeg publishes no tag list a `git ls-remote` can read; the release directory at
@@ -225,7 +195,7 @@ def ffmpeg_fork_findings(html: str, current: str) -> list[dict]:
 def hplip_fork_findings(html: str, current: str) -> list[dict]:
     """hplip, observed for the fork that ships it (`hplip-pengyos`).
 
-    Same reason as `openssh_fork_findings` and `ffmpeg_fork_findings`: pkg-stats
+    Same reason as `ffmpeg_fork_findings`: pkg-stats
     scans the stock recipe, the stock recipe is switched off, so nothing in the
     toolchain notices our 3.26.6 pin going stale while hplip publishes a release
     that closes a CVE we carry the fork for. divergence.toml -> hplip-3.26.6-fork
@@ -258,7 +228,7 @@ def hplip_fork_findings(html: str, current: str) -> list[dict]:
 def upower_fork_findings(tags: Iterable[str], current: str) -> list[dict]:
     """UPower, observed for the fork that ships it (`upower-pengyos`).
 
-    Same reason as `openssh_fork_findings`: pkg-stats scans the stock recipe, the
+    Same reason as `ffmpeg_fork_findings`: pkg-stats scans the stock recipe, the
     stock recipe is switched off, so nothing in the toolchain notices our 1.91.5 pin
     going stale. For upower the stock recipe is no help even when it is on - Buildroot
     has not touched it since 2022 - and NVD lists no CPE for upower, so there is no
