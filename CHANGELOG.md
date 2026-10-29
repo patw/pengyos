@@ -17,6 +17,19 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — Buildroot's compiler cache in every edition (2026-10-29)
+
+`BR2_CCACHE=y` in the core layer, cache in `$HOME/.buildroot-ccache` (40 GB cap),
+relative paths on, so the five editions share it. A clean all-five build only has to
+compile what is common to them once: last night's took ~12 h, and Desktop NVIDIA
+compiled the same ~3.4 h of packages Desktop had just compiled. The first edition of
+a clean build after a toolchain change (glibc in 26.10.49) still misses, since every
+preprocessed source changes. pengyos-build ignores the host-ccache dependency this
+adds to every package, which would otherwise have dircleaned every built package.
+Existing output dirs start using it for packages rebuilt from now on; target
+compiles go through it after their next clean build (the toolchain wrapper is built
+with the toolchain).
+
 ### Changed — rtkit 0.14 from its new upstream; bolt stops matching Bolt CMS (2026-10-28)
 
 rtkit moves from 0.13 (2020, github.com/heftig) to 0.14, released where upstream now

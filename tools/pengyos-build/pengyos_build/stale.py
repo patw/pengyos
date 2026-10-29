@@ -130,14 +130,22 @@ def parse_show_info(text: str) -> dict[str, set[str]]:
     return {name: set(entry.get("dependencies") or ()) for name, entry in info.items()}
 
 
+#: Dependencies that change how a package is built, never what it builds.
+#: ``BR2_CCACHE`` adds host-ccache to every package's dependency list; counting
+#: it would dirclean every built package in the tree (a full rebuild) just for
+#: turning the compiler cache on or off.
+BUILD_TOOL_DEPS = frozenset({"host-ccache"})
+
+
 def dependency_changes(
     old_deps: dict[str, set[str]], new_deps: dict[str, set[str]], build: Path
 ) -> tuple[Path, ...]:
-    """Build dirs of built packages whose resolved dependency set changed."""
+    """Build dirs of built packages whose resolved dependency set changed
+    (ignoring :data:`BUILD_TOOL_DEPS`)."""
     dirs = _build_dirs(build)
     stale = []
     for name in sorted(old_deps.keys() & new_deps.keys()):
-        if old_deps[name] == new_deps[name]:
+        if old_deps[name] - BUILD_TOOL_DEPS == new_deps[name] - BUILD_TOOL_DEPS:
             continue
         path = _dir_for(_normalize(name), dirs)
         if path is not None:
