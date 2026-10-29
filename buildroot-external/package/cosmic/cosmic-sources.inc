@@ -2,128 +2,128 @@
 # the libcosmic pin, scripts/cosmic-locks and board/desktop/cosmic-patches.
 # Do not edit: change those and rerun the script.
 
-COSMIC_VERSION = e532608498a7
-COSMIC_SITE = https://github.com/pop-os/cosmic-comp/archive/0fbd4574ef4caf74769a617d205fd1fc909ac9b1
-COSMIC_SOURCE = cosmic-comp-0fbd4574ef4caf74769a617d205fd1fc909ac9b1.tar.gz
+COSMIC_VERSION = 900282e2ec36
+COSMIC_SITE = https://github.com/pop-os/cosmic-comp/archive/8cb1802caada438bb5cc7670dfabdaca5fad0502
+COSMIC_SOURCE = cosmic-comp-8cb1802caada438bb5cc7670dfabdaca5fad0502.tar.gz
 COSMIC_EXTRA_DOWNLOADS = \
-	https://github.com/pop-os/cosmic-session/archive/1e4f10b5821982688e4a8a39f819be0bc2ad3e74/cosmic-session-1e4f10b5821982688e4a8a39f819be0bc2ad3e74.tar.gz \
-	https://github.com/pop-os/cosmic-panel/archive/b5cc19e351b82eed999097ced1ff267d27bf8e7a/cosmic-panel-b5cc19e351b82eed999097ced1ff267d27bf8e7a.tar.gz \
-	https://github.com/pop-os/cosmic-applets/archive/82e7cd814addb0641959b634227fe550374e195b/cosmic-applets-82e7cd814addb0641959b634227fe550374e195b.tar.gz \
-	https://github.com/pop-os/cosmic-launcher/archive/cc3d42bcc8fbcb67e6312f2766394e18b4d937d5/cosmic-launcher-cc3d42bcc8fbcb67e6312f2766394e18b4d937d5.tar.gz \
-	https://github.com/pop-os/cosmic-settings/archive/7421ff0ab482c942eef23fbe9280edacfbeb35cc/cosmic-settings-7421ff0ab482c942eef23fbe9280edacfbeb35cc.tar.gz \
-	https://github.com/pop-os/cosmic-settings-daemon/archive/f97bee648c579b5fe2f2000bf3d129f1a7b08f17/cosmic-settings-daemon-f97bee648c579b5fe2f2000bf3d129f1a7b08f17.tar.gz \
-	https://github.com/pop-os/cosmic-notifications/archive/aa4dac2702506395ab76da1f6755e03b2ccb0db8/cosmic-notifications-aa4dac2702506395ab76da1f6755e03b2ccb0db8.tar.gz \
-	https://github.com/pop-os/cosmic-osd/archive/3faadf56bdaea4b088ea8dc5e808b167cec86de3/cosmic-osd-3faadf56bdaea4b088ea8dc5e808b167cec86de3.tar.gz \
-	https://github.com/pop-os/cosmic-osk/archive/38e962576f1893e6452d4c273c41149c432191b2/cosmic-osk-38e962576f1893e6452d4c273c41149c432191b2.tar.gz \
-	https://github.com/pop-os/cosmic-idle/archive/c95d066b5b640509a6369634b669ca60dc50e168/cosmic-idle-c95d066b5b640509a6369634b669ca60dc50e168.tar.gz \
-	https://github.com/pop-os/cosmic-bg/archive/9d82a34dab4e73d90ba66c9f72d18d0f9b8be208/cosmic-bg-9d82a34dab4e73d90ba66c9f72d18d0f9b8be208.tar.gz \
-	https://github.com/pop-os/cosmic-randr/archive/6e8e795970fa06d434af22775e415b517f7552d3/cosmic-randr-6e8e795970fa06d434af22775e415b517f7552d3.tar.gz \
-	https://github.com/pop-os/cosmic-screenshot/archive/5ddcf1804192ff98823bd37a778286db5a00f3dd/cosmic-screenshot-5ddcf1804192ff98823bd37a778286db5a00f3dd.tar.gz \
-	https://github.com/pop-os/xdg-desktop-portal-cosmic/archive/2f41161176368840c67e2de9b8a24786accb100c/xdg-desktop-portal-cosmic-2f41161176368840c67e2de9b8a24786accb100c.tar.gz \
-	https://github.com/pop-os/cosmic-greeter/archive/bfb2745176e3fd0824e008d3efb2b37bce5ae0db/cosmic-greeter-bfb2745176e3fd0824e008d3efb2b37bce5ae0db.tar.gz \
-	https://github.com/pop-os/cosmic-term/archive/9129277bed1e810418a3138d683c1bc15656234f/cosmic-term-9129277bed1e810418a3138d683c1bc15656234f.tar.gz \
-	https://github.com/pop-os/cosmic-files/archive/d1f0af78e64f9e8ddb52c486913d53a234ce3cf2/cosmic-files-d1f0af78e64f9e8ddb52c486913d53a234ce3cf2.tar.gz \
-	https://github.com/pop-os/cosmic-edit/archive/bfc98bf21930fe5d9c32b7c238442499191b6319/cosmic-edit-bfc98bf21930fe5d9c32b7c238442499191b6319.tar.gz \
-	https://github.com/pop-os/cosmic-store/archive/c6e57a18a8abaf4ae6b5755576982839f8e53900/cosmic-store-c6e57a18a8abaf4ae6b5755576982839f8e53900.tar.gz \
-	https://github.com/pop-os/cosmic-player/archive/66b3f34335a500ce5dc93880d06f7ae94905872f/cosmic-player-66b3f34335a500ce5dc93880d06f7ae94905872f.tar.gz \
-	https://github.com/pop-os/cosmic-app-library/archive/0a3996de82c264095ade047661f7a3088f99013e/cosmic-app-library-0a3996de82c264095ade047661f7a3088f99013e.tar.gz \
-	https://github.com/pop-os/cosmic-workspaces-epoch/archive/28e257daa86643aee4166f192fb3e000ac3f7605/cosmic-workspaces-epoch-28e257daa86643aee4166f192fb3e000ac3f7605.tar.gz \
-	https://github.com/pop-os/cosmic-viewer/archive/d820ab36b84d0fe97b9e1fb96683b9597f03ac83/cosmic-viewer-d820ab36b84d0fe97b9e1fb96683b9597f03ac83.tar.gz \
-	https://github.com/pop-os/cosmic-monitor/archive/fdcc323f533137430fa5609a6986daebda2d5741/cosmic-monitor-fdcc323f533137430fa5609a6986daebda2d5741.tar.gz \
-	https://github.com/pop-os/launcher/archive/6390080a98a4a59b4e8196d28de97d3cb4d138ec/pop-launcher-6390080a98a4a59b4e8196d28de97d3cb4d138ec.tar.gz \
-	https://github.com/pop-os/cosmic-icons/archive/343c007f37cd71716e68f01c43ecf2764b7f7c47/cosmic-icons-343c007f37cd71716e68f01c43ecf2764b7f7c47.tar.gz \
-	https://github.com/pop-os/cosmic-sound-theme/archive/7aabe449093787163c74c25aa1bd4663fb4c324c/cosmic-sound-theme-7aabe449093787163c74c25aa1bd4663fb4c324c.tar.gz \
+	https://github.com/pop-os/cosmic-session/archive/4b0a0a24e98b9e755b6a7146e4cb29539cacda0a/cosmic-session-4b0a0a24e98b9e755b6a7146e4cb29539cacda0a.tar.gz \
+	https://github.com/pop-os/cosmic-panel/archive/ca20ce3185b3b4404f429d59d429c40b58a2ddef/cosmic-panel-ca20ce3185b3b4404f429d59d429c40b58a2ddef.tar.gz \
+	https://github.com/pop-os/cosmic-applets/archive/328d142faac17c9cc3e00d434d05060411c007ea/cosmic-applets-328d142faac17c9cc3e00d434d05060411c007ea.tar.gz \
+	https://github.com/pop-os/cosmic-launcher/archive/b6c2ed7d1224a94568b083162ea6b79409ef111b/cosmic-launcher-b6c2ed7d1224a94568b083162ea6b79409ef111b.tar.gz \
+	https://github.com/pop-os/cosmic-settings/archive/f1d00fc06e18203e880771617657067c10c43321/cosmic-settings-f1d00fc06e18203e880771617657067c10c43321.tar.gz \
+	https://github.com/pop-os/cosmic-settings-daemon/archive/655b14fb9572dd7f7231ec6c343c63984e99741a/cosmic-settings-daemon-655b14fb9572dd7f7231ec6c343c63984e99741a.tar.gz \
+	https://github.com/pop-os/cosmic-notifications/archive/382927dc48964f3b098429ad6b836cc4b7e7ecf2/cosmic-notifications-382927dc48964f3b098429ad6b836cc4b7e7ecf2.tar.gz \
+	https://github.com/pop-os/cosmic-osd/archive/4f96e98981712f02b98f704a6f19c4c6a58b378b/cosmic-osd-4f96e98981712f02b98f704a6f19c4c6a58b378b.tar.gz \
+	https://github.com/pop-os/cosmic-osk/archive/6b146a2b0a23d88ae84223ad06c6813bda5a9386/cosmic-osk-6b146a2b0a23d88ae84223ad06c6813bda5a9386.tar.gz \
+	https://github.com/pop-os/cosmic-idle/archive/6d6f07af60bb307882cdcbd0bda0a6fc76bd0df3/cosmic-idle-6d6f07af60bb307882cdcbd0bda0a6fc76bd0df3.tar.gz \
+	https://github.com/pop-os/cosmic-bg/archive/9520e16758693bc2f6845d52680f236d548edda2/cosmic-bg-9520e16758693bc2f6845d52680f236d548edda2.tar.gz \
+	https://github.com/pop-os/cosmic-randr/archive/f1a97655c97e8799bf4a37a8f5103a8ab5e5068d/cosmic-randr-f1a97655c97e8799bf4a37a8f5103a8ab5e5068d.tar.gz \
+	https://github.com/pop-os/cosmic-screenshot/archive/45549f7e940d495ecee9268f58824668814e970c/cosmic-screenshot-45549f7e940d495ecee9268f58824668814e970c.tar.gz \
+	https://github.com/pop-os/xdg-desktop-portal-cosmic/archive/f448ddfb296bf7bb23517b24b2f532559a334a1c/xdg-desktop-portal-cosmic-f448ddfb296bf7bb23517b24b2f532559a334a1c.tar.gz \
+	https://github.com/pop-os/cosmic-greeter/archive/80e8a104b75a01ab8df52bca7b8bde6dbcdb8133/cosmic-greeter-80e8a104b75a01ab8df52bca7b8bde6dbcdb8133.tar.gz \
+	https://github.com/pop-os/cosmic-term/archive/699ac42384b917029082d45a01a9261a4ba75c45/cosmic-term-699ac42384b917029082d45a01a9261a4ba75c45.tar.gz \
+	https://github.com/pop-os/cosmic-files/archive/3cc4b8003e8d08349c7ced8a9cdd10cdfa45d38c/cosmic-files-3cc4b8003e8d08349c7ced8a9cdd10cdfa45d38c.tar.gz \
+	https://github.com/pop-os/cosmic-edit/archive/4ac1cc84f784d4f89327f3d3459af2633ceb4f12/cosmic-edit-4ac1cc84f784d4f89327f3d3459af2633ceb4f12.tar.gz \
+	https://github.com/pop-os/cosmic-store/archive/16b1667e43c634318a99995c8eb77c23603ae560/cosmic-store-16b1667e43c634318a99995c8eb77c23603ae560.tar.gz \
+	https://github.com/pop-os/cosmic-player/archive/34a41f247a37eb681dd5c27c832e2d1f3c1dc1e4/cosmic-player-34a41f247a37eb681dd5c27c832e2d1f3c1dc1e4.tar.gz \
+	https://github.com/pop-os/cosmic-app-library/archive/3651caff79bcf36f7c16ba5ed4f41de530c7b1a7/cosmic-app-library-3651caff79bcf36f7c16ba5ed4f41de530c7b1a7.tar.gz \
+	https://github.com/pop-os/cosmic-workspaces-epoch/archive/cb953ea0e6fb45ac8f62f9c52f1347c971388e03/cosmic-workspaces-epoch-cb953ea0e6fb45ac8f62f9c52f1347c971388e03.tar.gz \
+	https://github.com/pop-os/cosmic-viewer/archive/300210f1c7d86ba14a43602e40dd5fe1deb16703/cosmic-viewer-300210f1c7d86ba14a43602e40dd5fe1deb16703.tar.gz \
+	https://github.com/pop-os/cosmic-monitor/archive/d79ff440dfa899ea6e9a3019dcfd9f9e8a44448d/cosmic-monitor-d79ff440dfa899ea6e9a3019dcfd9f9e8a44448d.tar.gz \
+	https://github.com/pop-os/launcher/archive/86c2639ba82f4d846c801abe84fcea8ae8e7d716/pop-launcher-86c2639ba82f4d846c801abe84fcea8ae8e7d716.tar.gz \
+	https://github.com/pop-os/cosmic-icons/archive/f1a282a0822aed1f0083dd2ab2e6c65bd5b401eb/cosmic-icons-f1a282a0822aed1f0083dd2ab2e6c65bd5b401eb.tar.gz \
+	https://github.com/pop-os/cosmic-sound-theme/archive/bf5335fe1af0cb3bee83e1ad2371410ee434658d/cosmic-sound-theme-bf5335fe1af0cb3bee83e1ad2371410ee434658d.tar.gz \
 	https://github.com/pop-os/cosmic-workspaces/archive/6d90fb4f453b5ad68ba94fdf534d66085a7e4f52/cosmic-workspaces-6d90fb4f453b5ad68ba94fdf534d66085a7e4f52.tar.gz \
 	https://github.com/pop-os/cosmic-protocols/archive/c0cff4db14c37ed954983158e4055aa94c7741d9/cosmic-protocols-c0cff4db14c37ed954983158e4055aa94c7741d9.tar.gz \
-	https://github.com/pop-os/libcosmic/archive/87ab8179e1bd9880239c340855ae8862034bd0e8/libcosmic-87ab8179e1bd9880239c340855ae8862034bd0e8.tar.gz \
+	https://github.com/pop-os/libcosmic/archive/430f3d48a97d8779f9c1985473912e594ccca1ae/libcosmic-430f3d48a97d8779f9c1985473912e594ccca1ae.tar.gz \
 
 COSMIC_COMPONENTS = cosmic-comp cosmic-session cosmic-panel cosmic-applets cosmic-launcher cosmic-settings cosmic-settings-daemon cosmic-notifications cosmic-osd cosmic-osk cosmic-idle cosmic-bg cosmic-randr cosmic-screenshot xdg-desktop-portal-cosmic cosmic-greeter cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player cosmic-app-library cosmic-workspaces-epoch cosmic-viewer cosmic-monitor pop-launcher cosmic-icons cosmic-sound-theme cosmic-workspaces cosmic-protocols libcosmic
 COSMIC_CARGO_COMPONENTS = cosmic-comp cosmic-session cosmic-panel cosmic-applets cosmic-launcher cosmic-settings cosmic-settings-daemon cosmic-notifications cosmic-osd cosmic-osk cosmic-idle cosmic-bg cosmic-randr cosmic-screenshot xdg-desktop-portal-cosmic cosmic-greeter cosmic-term cosmic-files cosmic-edit cosmic-store cosmic-player cosmic-app-library cosmic-workspaces-epoch cosmic-viewer cosmic-monitor pop-launcher
-COSMIC_COMMIT_cosmic-comp = 0fbd4574ef4caf74769a617d205fd1fc909ac9b1
-COSMIC_DATE_cosmic-comp = 2026-09-22
+COSMIC_COMMIT_cosmic-comp = 8cb1802caada438bb5cc7670dfabdaca5fad0502
+COSMIC_DATE_cosmic-comp = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-comp = build --release
-COSMIC_COMMIT_cosmic-session = 1e4f10b5821982688e4a8a39f819be0bc2ad3e74
-COSMIC_DATE_cosmic-session = 2026-09-23
+COSMIC_COMMIT_cosmic-session = 4b0a0a24e98b9e755b6a7146e4cb29539cacda0a
+COSMIC_DATE_cosmic-session = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-session = build --release
-COSMIC_COMMIT_cosmic-panel = b5cc19e351b82eed999097ced1ff267d27bf8e7a
-COSMIC_DATE_cosmic-panel = 2026-09-23
+COSMIC_COMMIT_cosmic-panel = ca20ce3185b3b4404f429d59d429c40b58a2ddef
+COSMIC_DATE_cosmic-panel = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-panel = build --release
-COSMIC_COMMIT_cosmic-applets = 82e7cd814addb0641959b634227fe550374e195b
-COSMIC_DATE_cosmic-applets = 2026-09-23
+COSMIC_COMMIT_cosmic-applets = 328d142faac17c9cc3e00d434d05060411c007ea
+COSMIC_DATE_cosmic-applets = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-applets = build --release
-COSMIC_COMMIT_cosmic-launcher = cc3d42bcc8fbcb67e6312f2766394e18b4d937d5
-COSMIC_DATE_cosmic-launcher = 2026-09-17
+COSMIC_COMMIT_cosmic-launcher = b6c2ed7d1224a94568b083162ea6b79409ef111b
+COSMIC_DATE_cosmic-launcher = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-launcher = build --release
-COSMIC_COMMIT_cosmic-settings = 7421ff0ab482c942eef23fbe9280edacfbeb35cc
-COSMIC_DATE_cosmic-settings = 2026-09-22
+COSMIC_COMMIT_cosmic-settings = f1d00fc06e18203e880771617657067c10c43321
+COSMIC_DATE_cosmic-settings = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-settings = build --release
-COSMIC_COMMIT_cosmic-settings-daemon = f97bee648c579b5fe2f2000bf3d129f1a7b08f17
-COSMIC_DATE_cosmic-settings-daemon = 2026-09-23
+COSMIC_COMMIT_cosmic-settings-daemon = 655b14fb9572dd7f7231ec6c343c63984e99741a
+COSMIC_DATE_cosmic-settings-daemon = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-settings-daemon = build --release
-COSMIC_COMMIT_cosmic-notifications = aa4dac2702506395ab76da1f6755e03b2ccb0db8
-COSMIC_DATE_cosmic-notifications = 2026-09-16
+COSMIC_COMMIT_cosmic-notifications = 382927dc48964f3b098429ad6b836cc4b7e7ecf2
+COSMIC_DATE_cosmic-notifications = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-notifications = build --release
-COSMIC_COMMIT_cosmic-osd = 3faadf56bdaea4b088ea8dc5e808b167cec86de3
-COSMIC_DATE_cosmic-osd = 2026-09-15
+COSMIC_COMMIT_cosmic-osd = 4f96e98981712f02b98f704a6f19c4c6a58b378b
+COSMIC_DATE_cosmic-osd = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-osd = build --release
-COSMIC_COMMIT_cosmic-osk = 38e962576f1893e6452d4c273c41149c432191b2
-COSMIC_DATE_cosmic-osk = 2026-09-22
+COSMIC_COMMIT_cosmic-osk = 6b146a2b0a23d88ae84223ad06c6813bda5a9386
+COSMIC_DATE_cosmic-osk = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-osk = build --release
-COSMIC_COMMIT_cosmic-idle = c95d066b5b640509a6369634b669ca60dc50e168
-COSMIC_DATE_cosmic-idle = 2026-02-13
+COSMIC_COMMIT_cosmic-idle = 6d6f07af60bb307882cdcbd0bda0a6fc76bd0df3
+COSMIC_DATE_cosmic-idle = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-idle = build --release
-COSMIC_COMMIT_cosmic-bg = 9d82a34dab4e73d90ba66c9f72d18d0f9b8be208
-COSMIC_DATE_cosmic-bg = 2026-09-11
+COSMIC_COMMIT_cosmic-bg = 9520e16758693bc2f6845d52680f236d548edda2
+COSMIC_DATE_cosmic-bg = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-bg = build --release
-COSMIC_COMMIT_cosmic-randr = 6e8e795970fa06d434af22775e415b517f7552d3
-COSMIC_DATE_cosmic-randr = 2026-02-13
+COSMIC_COMMIT_cosmic-randr = f1a97655c97e8799bf4a37a8f5103a8ab5e5068d
+COSMIC_DATE_cosmic-randr = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-randr = build --release
-COSMIC_COMMIT_cosmic-screenshot = 5ddcf1804192ff98823bd37a778286db5a00f3dd
-COSMIC_DATE_cosmic-screenshot = 2026-08-24
+COSMIC_COMMIT_cosmic-screenshot = 45549f7e940d495ecee9268f58824668814e970c
+COSMIC_DATE_cosmic-screenshot = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-screenshot = build --release
-COSMIC_COMMIT_xdg-desktop-portal-cosmic = 2f41161176368840c67e2de9b8a24786accb100c
-COSMIC_DATE_xdg-desktop-portal-cosmic = 2026-09-15
+COSMIC_COMMIT_xdg-desktop-portal-cosmic = f448ddfb296bf7bb23517b24b2f532559a334a1c
+COSMIC_DATE_xdg-desktop-portal-cosmic = 2026-10-20
 COSMIC_CARGO_ARGS_xdg-desktop-portal-cosmic = build --release
-COSMIC_COMMIT_cosmic-greeter = bfb2745176e3fd0824e008d3efb2b37bce5ae0db
-COSMIC_DATE_cosmic-greeter = 2026-09-26
+COSMIC_COMMIT_cosmic-greeter = 80e8a104b75a01ab8df52bca7b8bde6dbcdb8133
+COSMIC_DATE_cosmic-greeter = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-greeter = build --release --workspace
-COSMIC_COMMIT_cosmic-term = 9129277bed1e810418a3138d683c1bc15656234f
-COSMIC_DATE_cosmic-term = 2026-09-23
+COSMIC_COMMIT_cosmic-term = 699ac42384b917029082d45a01a9261a4ba75c45
+COSMIC_DATE_cosmic-term = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-term = build --release
-COSMIC_COMMIT_cosmic-files = d1f0af78e64f9e8ddb52c486913d53a234ce3cf2
-COSMIC_DATE_cosmic-files = 2026-09-23
+COSMIC_COMMIT_cosmic-files = 3cc4b8003e8d08349c7ced8a9cdd10cdfa45d38c
+COSMIC_DATE_cosmic-files = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-files = build --release -p cosmic-files && cargo build --release -p cosmic-files-applet
-COSMIC_COMMIT_cosmic-edit = bfc98bf21930fe5d9c32b7c238442499191b6319
-COSMIC_DATE_cosmic-edit = 2026-09-23
+COSMIC_COMMIT_cosmic-edit = 4ac1cc84f784d4f89327f3d3459af2633ceb4f12
+COSMIC_DATE_cosmic-edit = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-edit = build --release
-COSMIC_COMMIT_cosmic-store = c6e57a18a8abaf4ae6b5755576982839f8e53900
-COSMIC_DATE_cosmic-store = 2026-09-15
+COSMIC_COMMIT_cosmic-store = 16b1667e43c634318a99995c8eb77c23603ae560
+COSMIC_DATE_cosmic-store = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-store = build --release
-COSMIC_COMMIT_cosmic-player = 66b3f34335a500ce5dc93880d06f7ae94905872f
-COSMIC_DATE_cosmic-player = 2026-09-15
+COSMIC_COMMIT_cosmic-player = 34a41f247a37eb681dd5c27c832e2d1f3c1dc1e4
+COSMIC_DATE_cosmic-player = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-player = build --release
-COSMIC_COMMIT_cosmic-app-library = 0a3996de82c264095ade047661f7a3088f99013e
-COSMIC_DATE_cosmic-app-library = 2026-09-16
+COSMIC_COMMIT_cosmic-app-library = 3651caff79bcf36f7c16ba5ed4f41de530c7b1a7
+COSMIC_DATE_cosmic-app-library = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-app-library = build --release
-COSMIC_COMMIT_cosmic-workspaces-epoch = 28e257daa86643aee4166f192fb3e000ac3f7605
-COSMIC_DATE_cosmic-workspaces-epoch = 2026-09-15
+COSMIC_COMMIT_cosmic-workspaces-epoch = cb953ea0e6fb45ac8f62f9c52f1347c971388e03
+COSMIC_DATE_cosmic-workspaces-epoch = 2026-09-30
 COSMIC_CARGO_ARGS_cosmic-workspaces-epoch = build --release
-COSMIC_COMMIT_cosmic-viewer = d820ab36b84d0fe97b9e1fb96683b9597f03ac83
-COSMIC_DATE_cosmic-viewer = 2026-09-23
+COSMIC_COMMIT_cosmic-viewer = 300210f1c7d86ba14a43602e40dd5fe1deb16703
+COSMIC_DATE_cosmic-viewer = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-viewer = build --release
-COSMIC_COMMIT_cosmic-monitor = fdcc323f533137430fa5609a6986daebda2d5741
-COSMIC_DATE_cosmic-monitor = 2026-09-22
+COSMIC_COMMIT_cosmic-monitor = d79ff440dfa899ea6e9a3019dcfd9f9e8a44448d
+COSMIC_DATE_cosmic-monitor = 2026-10-20
 COSMIC_CARGO_ARGS_cosmic-monitor = build --release
-COSMIC_COMMIT_pop-launcher = 6390080a98a4a59b4e8196d28de97d3cb4d138ec
-COSMIC_DATE_pop-launcher = 2026-08-24
+COSMIC_COMMIT_pop-launcher = 86c2639ba82f4d846c801abe84fcea8ae8e7d716
+COSMIC_DATE_pop-launcher = 2026-10-20
 COSMIC_CARGO_ARGS_pop-launcher = build --release -p pop-launcher-bin
-COSMIC_COMMIT_cosmic-icons = 343c007f37cd71716e68f01c43ecf2764b7f7c47
-COSMIC_DATE_cosmic-icons = 2026-08-31
-COSMIC_COMMIT_cosmic-sound-theme = 7aabe449093787163c74c25aa1bd4663fb4c324c
-COSMIC_DATE_cosmic-sound-theme = 2026-07-01
+COSMIC_COMMIT_cosmic-icons = f1a282a0822aed1f0083dd2ab2e6c65bd5b401eb
+COSMIC_DATE_cosmic-icons = 2026-09-30
+COSMIC_COMMIT_cosmic-sound-theme = bf5335fe1af0cb3bee83e1ad2371410ee434658d
+COSMIC_DATE_cosmic-sound-theme = 2026-09-30
 COSMIC_COMMIT_cosmic-workspaces = 6d90fb4f453b5ad68ba94fdf534d66085a7e4f52
 COSMIC_DATE_cosmic-workspaces = 2024-05-23
 COSMIC_COMMIT_cosmic-protocols = c0cff4db14c37ed954983158e4055aa94c7741d9
 COSMIC_DATE_cosmic-protocols = 2026-09-11
-COSMIC_COMMIT_libcosmic = 87ab8179e1bd9880239c340855ae8862034bd0e8
-COSMIC_DATE_libcosmic = 2026-09-16
+COSMIC_COMMIT_libcosmic = 430f3d48a97d8779f9c1985473912e594ccca1ae
+COSMIC_DATE_libcosmic = 2026-10-19

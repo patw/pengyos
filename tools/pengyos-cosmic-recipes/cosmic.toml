@@ -42,7 +42,7 @@ deps = []
 name = "libcosmic"
 group = "core"
 git_url = "https://github.com/pop-os/libcosmic"
-tag = "87ab8179e1bd9880239c340855ae8862034bd0e8"
+tag = "430f3d48a97d8779f9c1985473912e594ccca1ae"
 license = "MPL-2.0"
 features = []
 binaries = []
@@ -54,8 +54,8 @@ name = "cosmic-comp"
 group = "core"
 git_url = "https://github.com/pop-os/cosmic-comp"
 # cosmic-comp releases are tagged `epoch-*`, which the shared `is_pinned`
-# predicate does not accept, so pin to the epoch-1.8.0 commit SHA instead.
-tag = "0fbd4574ef4caf74769a617d205fd1fc909ac9b1"
+# predicate does not accept, so pin to the epoch-1.11.0 commit SHA instead.
+tag = "8cb1802caada438bb5cc7670dfabdaca5fad0502"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-comp"]
@@ -65,7 +65,7 @@ deps = ["libcosmic", "cosmic-protocols"]
 name = "cosmic-session"
 group = "core"
 git_url = "https://github.com/pop-os/cosmic-session"
-tag = "1e4f10b5821982688e4a8a39f819be0bc2ad3e74"
+tag = "4b0a0a24e98b9e755b6a7146e4cb29539cacda0a"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-session"]
@@ -82,8 +82,8 @@ name = "cosmic-greeter"
 group = "login"
 git_url = "https://github.com/pop-os/cosmic-greeter"
 # cosmic-greeter releases are tagged `epoch-*`, which the shared `is_pinned`
-# predicate does not accept, so pin to the epoch-1.8.0 commit SHA instead.
-tag = "bfb2745176e3fd0824e008d3efb2b37bce5ae0db"
+# predicate does not accept, so pin to the epoch-1.11.0 commit SHA instead.
+tag = "80e8a104b75a01ab8df52bca7b8bde6dbcdb8133"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-greeter"]
@@ -99,7 +99,7 @@ deps = ["libcosmic"]
 # ---------------------------------------------------------------------------
 #
 # These are the interactive shell components. Every one is pinned to the
-# epoch-1.8.0 commit SHA (the `epoch-*` tag is not pinned by `is_pinned`).
+# epoch-1.11.0 commit SHA (the `epoch-*` tag is not pinned by `is_pinned`).
 # `cosmic-randr` and `cosmic-bg` ship MPL-2.0; `cosmic-icons` is an icon theme
 # (CC-BY-SA-4.0, no Rust, no binary). Inter-component deps are the COSMIC crates
 # each Cargo.toml pulls from `pop-os/*` (libcosmic, cosmic-protocols, and the
@@ -110,7 +110,7 @@ deps = ["libcosmic"]
 name = "cosmic-panel"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-panel"
-tag = "b5cc19e351b82eed999097ced1ff267d27bf8e7a"
+tag = "ca20ce3185b3b4404f429d59d429c40b58a2ddef"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-panel"]
@@ -122,7 +122,7 @@ deps = ["libcosmic", "cosmic-protocols"]
 name = "cosmic-launcher"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-launcher"
-tag = "cc3d42bcc8fbcb67e6312f2766394e18b4d937d5"
+tag = "b6c2ed7d1224a94568b083162ea6b79409ef111b"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-launcher"]
@@ -134,7 +134,7 @@ deps = ["libcosmic"]
 name = "cosmic-applets"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-applets"
-tag = "82e7cd814addb0641959b634227fe550374e195b"
+tag = "328d142faac17c9cc3e00d434d05060411c007ea"
 license = "GPL-3.0-only"
 features = []
 # cosmic-applets is a workspace of applets; the ones enabled by default are
@@ -161,7 +161,7 @@ deps = ["libcosmic", "cosmic-protocols"]
 name = "cosmic-bg"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-bg"
-tag = "9d82a34dab4e73d90ba66c9f72d18d0f9b8be208"
+tag = "9520e16758693bc2f6845d52680f236d548edda2"
 license = "MPL-2.0"
 features = []
 binaries = ["cosmic-bg"]
@@ -173,7 +173,7 @@ deps = ["libcosmic"]
 name = "cosmic-randr"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-randr"
-tag = "6e8e795970fa06d434af22775e415b517f7552d3"
+tag = "f1a97655c97e8799bf4a37a8f5103a8ab5e5068d"
 license = "MPL-2.0"
 features = []
 binaries = ["cosmic-randr"]
@@ -185,7 +185,7 @@ deps = []
 name = "cosmic-settings"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-settings"
-tag = "7421ff0ab482c942eef23fbe9280edacfbeb35cc"
+tag = "f1d00fc06e18203e880771617657067c10c43321"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-settings"]
@@ -205,7 +205,7 @@ deps = [
 name = "cosmic-settings-daemon"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-settings-daemon"
-tag = "f97bee648c579b5fe2f2000bf3d129f1a7b08f17"
+tag = "655b14fb9572dd7f7231ec6c343c63984e99741a"
 license = "GPL-3.0-or-later"
 features = []
 binaries = ["cosmic-settings-daemon"]
@@ -217,7 +217,7 @@ deps = ["libcosmic", "cosmic-comp"]
 name = "cosmic-osd"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-osd"
-tag = "3faadf56bdaea4b088ea8dc5e808b167cec86de3"
+tag = "4f96e98981712f02b98f704a6f19c4c6a58b378b"
 license = "GPL-3.0-or-later"
 features = []
 binaries = ["cosmic-osd"]
@@ -235,7 +235,7 @@ deps = [
 name = "cosmic-notifications"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-notifications"
-tag = "aa4dac2702506395ab76da1f6755e03b2ccb0db8"
+tag = "382927dc48964f3b098429ad6b836cc4b7e7ecf2"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-notifications"]
@@ -247,7 +247,7 @@ deps = ["libcosmic", "cosmic-panel"]
 name = "cosmic-idle"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-idle"
-tag = "c95d066b5b640509a6369634b669ca60dc50e168"
+tag = "6d6f07af60bb307882cdcbd0bda0a6fc76bd0df3"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-idle"]
@@ -260,7 +260,7 @@ name = "cosmic-icons"
 group = "shell"
 git_url = "https://github.com/pop-os/cosmic-icons"
 # An icon theme (no Rust): pinned to a concrete commit on `main`.
-tag = "343c007f37cd71716e68f01c43ecf2764b7f7c47"
+tag = "f1a282a0822aed1f0083dd2ab2e6c65bd5b401eb"
 license = "CC-BY-SA-4.0"
 features = []
 binaries = []
@@ -272,7 +272,7 @@ deps = []
 # ---------------------------------------------------------------------------
 #
 # These are the COSMIC desktop applications. Every one is a Rust cargo component
-# pinned to its epoch-1.8.0 commit SHA (the `epoch-*` tag is not pinned by
+# pinned to its epoch-1.11.0 commit SHA (the `epoch-*` tag is not pinned by
 # `is_pinned`). Licenses are GPL-3.0-only (verified against each Cargo.toml
 # `license` field or, where absent, the repo's GPLv3 LICENSE file). Inter-component
 # deps are the COSMIC crates each Cargo.toml pulls from `pop-os/*` (libcosmic,
@@ -290,8 +290,8 @@ name = "cosmic-files"
 group = "apps"
 git_url = "https://github.com/pop-os/cosmic-files"
 # Files ships no `epoch-*` tag that `is_pinned` rejects — pin to the
-# epoch-1.8.0 commit SHA.
-tag = "d1f0af78e64f9e8ddb52c486913d53a234ce3cf2"
+# epoch-1.11.0 commit SHA.
+tag = "3cc4b8003e8d08349c7ced8a9cdd10cdfa45d38c"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-files"]
@@ -304,7 +304,7 @@ deps = ["libcosmic", "cosmic-protocols"]
 name = "cosmic-edit"
 group = "apps"
 git_url = "https://github.com/pop-os/cosmic-edit"
-tag = "bfc98bf21930fe5d9c32b7c238442499191b6319"
+tag = "4ac1cc84f784d4f89327f3d3459af2633ceb4f12"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-edit"]
@@ -316,7 +316,7 @@ deps = ["cosmic-files", "libcosmic"]
 name = "cosmic-term"
 group = "apps"
 git_url = "https://github.com/pop-os/cosmic-term"
-tag = "9129277bed1e810418a3138d683c1bc15656234f"
+tag = "699ac42384b917029082d45a01a9261a4ba75c45"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-term"]
@@ -328,7 +328,7 @@ deps = ["cosmic-files", "libcosmic"]
 name = "cosmic-store"
 group = "apps"
 git_url = "https://github.com/pop-os/cosmic-store"
-tag = "c6e57a18a8abaf4ae6b5755576982839f8e53900"
+tag = "16b1667e43c634318a99995c8eb77c23603ae560"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-store"]
@@ -341,7 +341,7 @@ deps = ["cosmic-panel", "libcosmic"]
 name = "cosmic-screenshot"
 group = "apps"
 git_url = "https://github.com/pop-os/cosmic-screenshot"
-tag = "5ddcf1804192ff98823bd37a778286db5a00f3dd"
+tag = "45549f7e940d495ecee9268f58824668814e970c"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-screenshot"]
@@ -353,7 +353,7 @@ deps = []
 name = "cosmic-player"
 group = "apps"
 git_url = "https://github.com/pop-os/cosmic-player"
-tag = "66b3f34335a500ce5dc93880d06f7ae94905872f"
+tag = "34a41f247a37eb681dd5c27c832e2d1f3c1dc1e4"
 license = "GPL-3.0-only"
 features = []
 binaries = ["cosmic-player"]

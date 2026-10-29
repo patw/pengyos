@@ -20,26 +20,26 @@
 # than one invocation — see cosmic-files below for why that is load-bearing.
 #
 # name	repository	commit	cargo arguments
-cosmic-comp	https://github.com/pop-os/cosmic-comp	0fbd4574ef4caf74769a617d205fd1fc909ac9b1	build --release
-cosmic-session	https://github.com/pop-os/cosmic-session	1e4f10b5821982688e4a8a39f819be0bc2ad3e74	build --release
-cosmic-panel	https://github.com/pop-os/cosmic-panel	b5cc19e351b82eed999097ced1ff267d27bf8e7a	build --release
-cosmic-applets	https://github.com/pop-os/cosmic-applets	82e7cd814addb0641959b634227fe550374e195b	build --release
-cosmic-launcher	https://github.com/pop-os/cosmic-launcher	cc3d42bcc8fbcb67e6312f2766394e18b4d937d5	build --release
-cosmic-settings	https://github.com/pop-os/cosmic-settings	7421ff0ab482c942eef23fbe9280edacfbeb35cc	build --release
-cosmic-settings-daemon	https://github.com/pop-os/cosmic-settings-daemon	f97bee648c579b5fe2f2000bf3d129f1a7b08f17	build --release
-cosmic-notifications	https://github.com/pop-os/cosmic-notifications	aa4dac2702506395ab76da1f6755e03b2ccb0db8	build --release
-cosmic-osd	https://github.com/pop-os/cosmic-osd	3faadf56bdaea4b088ea8dc5e808b167cec86de3	build --release
+cosmic-comp	https://github.com/pop-os/cosmic-comp	8cb1802caada438bb5cc7670dfabdaca5fad0502	build --release
+cosmic-session	https://github.com/pop-os/cosmic-session	4b0a0a24e98b9e755b6a7146e4cb29539cacda0a	build --release
+cosmic-panel	https://github.com/pop-os/cosmic-panel	ca20ce3185b3b4404f429d59d429c40b58a2ddef	build --release
+cosmic-applets	https://github.com/pop-os/cosmic-applets	328d142faac17c9cc3e00d434d05060411c007ea	build --release
+cosmic-launcher	https://github.com/pop-os/cosmic-launcher	b6c2ed7d1224a94568b083162ea6b79409ef111b	build --release
+cosmic-settings	https://github.com/pop-os/cosmic-settings	f1d00fc06e18203e880771617657067c10c43321	build --release
+cosmic-settings-daemon	https://github.com/pop-os/cosmic-settings-daemon	655b14fb9572dd7f7231ec6c343c63984e99741a	build --release
+cosmic-notifications	https://github.com/pop-os/cosmic-notifications	382927dc48964f3b098429ad6b836cc4b7e7ecf2	build --release
+cosmic-osd	https://github.com/pop-os/cosmic-osd	4f96e98981712f02b98f704a6f19c4c6a58b378b	build --release
 # cosmic-osk: the on-screen keyboard. cosmic-session starts it at every login and
 # the panel's OSK applet toggles it; until 26.10.23 it was not in this list, so the
 # session logged "failed to start cosmic-osk" and the applet drove nothing.
-cosmic-osk	https://github.com/pop-os/cosmic-osk	38e962576f1893e6452d4c273c41149c432191b2	build --release
-cosmic-idle	https://github.com/pop-os/cosmic-idle	c95d066b5b640509a6369634b669ca60dc50e168	build --release
-cosmic-bg	https://github.com/pop-os/cosmic-bg	9d82a34dab4e73d90ba66c9f72d18d0f9b8be208	build --release
-cosmic-randr	https://github.com/pop-os/cosmic-randr	6e8e795970fa06d434af22775e415b517f7552d3	build --release
-cosmic-screenshot	https://github.com/pop-os/cosmic-screenshot	5ddcf1804192ff98823bd37a778286db5a00f3dd	build --release
-xdg-desktop-portal-cosmic	https://github.com/pop-os/xdg-desktop-portal-cosmic	2f41161176368840c67e2de9b8a24786accb100c	build --release
-cosmic-greeter	https://github.com/pop-os/cosmic-greeter	bfb2745176e3fd0824e008d3efb2b37bce5ae0db	build --release --workspace
-cosmic-term	https://github.com/pop-os/cosmic-term	9129277bed1e810418a3138d683c1bc15656234f	build --release
+cosmic-osk	https://github.com/pop-os/cosmic-osk	6b146a2b0a23d88ae84223ad06c6813bda5a9386	build --release
+cosmic-idle	https://github.com/pop-os/cosmic-idle	6d6f07af60bb307882cdcbd0bda0a6fc76bd0df3	build --release
+cosmic-bg	https://github.com/pop-os/cosmic-bg	9520e16758693bc2f6845d52680f236d548edda2	build --release
+cosmic-randr	https://github.com/pop-os/cosmic-randr	f1a97655c97e8799bf4a37a8f5103a8ab5e5068d	build --release
+cosmic-screenshot	https://github.com/pop-os/cosmic-screenshot	45549f7e940d495ecee9268f58824668814e970c	build --release
+xdg-desktop-portal-cosmic	https://github.com/pop-os/xdg-desktop-portal-cosmic	f448ddfb296bf7bb23517b24b2f532559a334a1c	build --release
+cosmic-greeter	https://github.com/pop-os/cosmic-greeter	80e8a104b75a01ab8df52bca7b8bde6dbcdb8133	build --release --workspace
+cosmic-term	https://github.com/pop-os/cosmic-term	699ac42384b917029082d45a01a9261a4ba75c45	build --release
 # cosmic-files (the file manager) and cosmic-files-applet (the desktop) are ONE
 # cargo workspace, and the applet depends on the app crate with `desktop-applet`.
 # Building them in a single `--workspace` invocation lets cargo feature-unify
@@ -49,17 +49,17 @@ cosmic-term	https://github.com/pop-os/cosmic-term	9129277bed1e810418a3138d683c1b
 # 2026-10-06 in QEMU; see CHANGELOG). Build the app and the applet as TWO
 # invocations, app FIRST: the app binary must never be compiled with the feature.
 # The cosmic package fails the build if the app binary carries it anyway.
-cosmic-files	https://github.com/pop-os/cosmic-files	d1f0af78e64f9e8ddb52c486913d53a234ce3cf2	build --release -p cosmic-files && cargo build --release -p cosmic-files-applet
-cosmic-edit	https://github.com/pop-os/cosmic-edit	bfc98bf21930fe5d9c32b7c238442499191b6319	build --release
-cosmic-store	https://github.com/pop-os/cosmic-store	c6e57a18a8abaf4ae6b5755576982839f8e53900	build --release
-cosmic-player	https://github.com/pop-os/cosmic-player	66b3f34335a500ce5dc93880d06f7ae94905872f	build --release
-cosmic-app-library	https://github.com/pop-os/cosmic-app-library	0a3996de82c264095ade047661f7a3088f99013e	build --release
-cosmic-workspaces-epoch	https://github.com/pop-os/cosmic-workspaces-epoch	28e257daa86643aee4166f192fb3e000ac3f7605	build --release
-cosmic-viewer	https://github.com/pop-os/cosmic-viewer	d820ab36b84d0fe97b9e1fb96683b9597f03ac83	build --release
-cosmic-monitor	https://github.com/pop-os/cosmic-monitor	fdcc323f533137430fa5609a6986daebda2d5741	build --release
-pop-launcher	https://github.com/pop-os/launcher	6390080a98a4a59b4e8196d28de97d3cb4d138ec	build --release -p pop-launcher-bin
-cosmic-icons	https://github.com/pop-os/cosmic-icons	343c007f37cd71716e68f01c43ecf2764b7f7c47	-
-cosmic-sound-theme	https://github.com/pop-os/cosmic-sound-theme	7aabe449093787163c74c25aa1bd4663fb4c324c	-
+cosmic-files	https://github.com/pop-os/cosmic-files	3cc4b8003e8d08349c7ced8a9cdd10cdfa45d38c	build --release -p cosmic-files && cargo build --release -p cosmic-files-applet
+cosmic-edit	https://github.com/pop-os/cosmic-edit	4ac1cc84f784d4f89327f3d3459af2633ceb4f12	build --release
+cosmic-store	https://github.com/pop-os/cosmic-store	16b1667e43c634318a99995c8eb77c23603ae560	build --release
+cosmic-player	https://github.com/pop-os/cosmic-player	34a41f247a37eb681dd5c27c832e2d1f3c1dc1e4	build --release
+cosmic-app-library	https://github.com/pop-os/cosmic-app-library	3651caff79bcf36f7c16ba5ed4f41de530c7b1a7	build --release
+cosmic-workspaces-epoch	https://github.com/pop-os/cosmic-workspaces-epoch	cb953ea0e6fb45ac8f62f9c52f1347c971388e03	build --release
+cosmic-viewer	https://github.com/pop-os/cosmic-viewer	300210f1c7d86ba14a43602e40dd5fe1deb16703	build --release
+cosmic-monitor	https://github.com/pop-os/cosmic-monitor	d79ff440dfa899ea6e9a3019dcfd9f9e8a44448d	build --release
+pop-launcher	https://github.com/pop-os/launcher	86c2639ba82f4d846c801abe84fcea8ae8e7d716	build --release -p pop-launcher-bin
+cosmic-icons	https://github.com/pop-os/cosmic-icons	f1a282a0822aed1f0083dd2ab2e6c65bd5b401eb	-
+cosmic-sound-theme	https://github.com/pop-os/cosmic-sound-theme	bf5335fe1af0cb3bee83e1ad2371410ee434658d	-
 cosmic-workspaces	https://github.com/pop-os/cosmic-workspaces	6d90fb4f453b5ad68ba94fdf534d66085a7e4f52	-
 cosmic-protocols	https://github.com/pop-os/cosmic-protocols	c0cff4db14c37ed954983158e4055aa94c7741d9	-
-libcosmic	https://github.com/pop-os/libcosmic	87ab8179e1bd9880239c340855ae8862034bd0e8	-
+libcosmic	https://github.com/pop-os/libcosmic	430f3d48a97d8779f9c1985473912e594ccca1ae	-

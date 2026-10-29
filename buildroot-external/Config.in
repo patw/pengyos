@@ -64,7 +64,6 @@ menu "PengyOS (external tree)"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/ffmpegthumbnailer/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/font-noto-cjk/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/plymouth/Config.in"
-	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cosmic-sound-theme/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libnotify/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/libqalculate/Config.in"
 	# Core userland: our own recipe for uutils/coreutils, the Rust coreutils

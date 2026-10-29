@@ -17,6 +17,31 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — COSMIC is epoch-1.11.0, and the sound theme is part of the cosmic package (2026-10-28)
+
+Every COSMIC component moves from epoch-1.9.0 to epoch-1.11.0 (upstream 2026-10-20;
+1.10.0 was skipped), and the libcosmic coherence pin from `87ab8179` to `430f3d48`
+(2026-10-19), the rev the 1.11.0 components' own locks resolve to. For this image:
+hybrid-graphics fixes (the panel and workspaces no longer render on the NVIDIA GPU;
+games launched from the App Library or the launcher go to the discrete one, via
+switcheroo-control), modal dialogs that stay above their parent (xdg-dialog-v1), a
+greeter that cancels the PAM session on a wrong password, idle no longer suspending on
+AC when told not to, on-screen keyboard and input-method fixes, escape closing menus
+the first time, touchpad tap-and-drag and drag-lock settings, and drawing tablets
+mapped to a display. All 26 cargo components were relocked against the pin: about 100
+crates.io version moves, two new crates (`stacker` and `psm`, through cosmic-edit), no
+new git source, and every libcosmic entry at the one rev. cosmic-workspaces and
+cosmic-protocols did not move.
+
+Nine of the ten COSMIC patches apply unchanged. cosmic-notifications 0001 (the
+daemon's wait for the panel) is rebased: upstream raised it from 1 s to 10 s (#181);
+we keep 30 s until a cold USB-stick boot is proven on 10 s.
+
+`cosmic-sound-theme` was its own meson recipe as well as a source-only row of the
+cosmic package, so the nightly offered it as an update separate from the epoch. The
+package now installs it (the `stereo` dir, `index.theme`, and the `Pop` alias that
+cosmic-settings-daemon still plays its battery sounds from) and the recipe is gone.
+
 ### Changed — the COSMIC portal backend is 1.9.0 and part of the cosmic package (2026-10-28)
 
 `xdg-desktop-portal-cosmic` (screenshots, screen casting, the file chooser, settings for

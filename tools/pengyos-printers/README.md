@@ -1,7 +1,7 @@
 # pengyos-printers — "Printers"
 
 Add and remove printers, see and manage the print queue, and print a test page
-on the PengyOS Desktop. COSMIC Settings (epoch 1.9) has no printer page; before
+on the PengyOS Desktop. COSMIC Settings (epoch 1.11) has no printer page; before
 this app the "Printers" launcher opened CUPS' web pages in a browser.
 
 - **Printers**: each with its model, connection, status in words ("Ready ·

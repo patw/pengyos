@@ -14,9 +14,8 @@
 # the dependency it replaces; cosmic-greeter's commented-out libcosmic patch block
 # and its live cosmic-protocols patches both use it).
 #
-# 87ab8179e1bd9880239c340855ae8862034bd0e8 - libcosmic 2026-09-15 ("chain tasks
-# where not already done"). Chosen because it is what cosmic-greeter and
-# cosmic-settings resolve to at epoch-1.9, and it sits inside the 2026-09-14..22
-# cluster the epoch-1.9 shell core uses. Proven to build: cosmic-idle, whose own
-# lock pinned a 2025-10-13 libcosmic, compiles against this rev.
-87ab8179e1bd9880239c340855ae8862034bd0e8
+# 430f3d48a97d8779f9c1985473912e594ccca1ae - libcosmic 2026-10-19 ("fix(scrollable):
+# apply padding to scrollbar instead of scrollable"). Chosen because it is what the
+# epoch-1.11.0 components' own locks resolve to: 348 of the 380 libcosmic entries
+# across them (checked 2026-10-28). Before it: 87ab8179 (2026-09-15), for epoch-1.9.
+430f3d48a97d8779f9c1985473912e594ccca1ae

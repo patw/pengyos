@@ -1,14 +1,14 @@
 From: Pat Wendorf <dungeons@gmail.com>
 Subject: [PATCH] applet: wait longer for the panel connection
 
-The daemon gave the panel 1 s to connect over the private socket that
-cosmic-session hands both of them. A panel that is slow to start (cold
-start from a USB stick, first-boot load) missed it: the daemon moved on,
-the panel then failed "to connect to the notifications daemon" and never
-started its applets -- an empty desktop with no panel or dock. See
-pop-os/cosmic-panel#635; #404 raised the panel-side timeout only.
+Upstream raised the daemon's wait for the panel from 1 s to 10 s in
+epoch-1.11.0 (pop-os/cosmic-notifications#181). We used 30 s before that
+fix, for a panel that is slow to start (cold start from a USB stick,
+first-boot load): a panel that misses the handshake never starts its
+applets -- an empty desktop with no panel or dock. Kept at 30 s until a
+cold USB boot is proven on upstream's 10 s; then this patch is dropped.
 
-Upstream: not submitted
+Upstream: fixed with a shorter timeout in #181; not submitted
 ---
 diff --git a/src/subscriptions/applet.rs b/src/subscriptions/applet.rs
 index 56bd9bd..55d97ae 100644
@@ -18,11 +18,11 @@ index 56bd9bd..55d97ae 100644
  pub async fn setup_panel_conn(tx: Sender<Input>) -> Result<Connection> {
      let socket = setup_panel_socket()?;
      let guid = Guid::generate();
-+    // Wait for the panel as long as it may take to start: with 1 s, a panel
-+    // slow to come up (cold start from USB, first-boot load) missed the
-+    // handshake, and without it the panel never started its applets.
++    // Wait for the panel as long as it may take to start: a panel slow to
++    // come up (cold start from USB, first-boot load) that misses the
++    // handshake never starts its applets. Upstream's 10 s is unproven there.
      let conn = tokio::time::timeout(
--        tokio::time::Duration::from_secs(1),
+-        tokio::time::Duration::from_secs(10),
 +        tokio::time::Duration::from_secs(30),
          Builder::socket(socket)
              .p2p()

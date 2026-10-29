@@ -29,8 +29,8 @@
 include $(BR2_EXTERNAL_PENGYOS_PATH)/package/cosmic/cosmic-sources.inc
 
 # legal-info writes this inside single quotes: no apostrophe.
-COSMIC_LICENSE = GPL-3.0-only (COSMIC components), GPL-3.0-or-later (xdg-desktop-portal-cosmic), MPL-2.0 (libcosmic), vendored crates under their own licenses (not listed)
-COSMIC_LICENSE_FILES = cosmic-comp/LICENSE
+COSMIC_LICENSE = GPL-3.0-only (COSMIC components), GPL-3.0-or-later (xdg-desktop-portal-cosmic), MPL-2.0 (libcosmic), CC-BY-SA-4.0 (cosmic-sound-theme), vendored crates under their own licenses (not listed)
+COSMIC_LICENSE_FILES = cosmic-comp/LICENSE cosmic-sound-theme/LICENSE
 # Buildroot extracts nothing itself: every archive goes to $(@D)/<component>.
 COSMIC_SRCDIR = $(@D)
 COSMIC_DEPENDENCIES = \
@@ -146,6 +146,7 @@ define COSMIC_INSTALL_TARGET_CMDS
 	)
 	$(INSTALL) -D -m 0755 $(COSMIC_RELEASE)/pop-launcher-bin $(TARGET_DIR)/usr/bin/pop-launcher
 	$(COSMIC_INSTALL_PORTAL_ICONS)
+	$(COSMIC_INSTALL_SOUND_THEME)
 endef
 
 # The portal ships its own icons (the screenshot dialog's selection / window /
@@ -155,6 +156,19 @@ endef
 define COSMIC_INSTALL_PORTAL_ICONS
 	cd $(@D)/xdg-desktop-portal-cosmic/data/icons && find . -type f -exec \
 		$(INSTALL) -D -m 0644 {} $(TARGET_DIR)/usr/share/icons/hicolor/{} \;
+endef
+
+# COSMIC's system sounds: what upstream's meson.build installs (the stereo dir and
+# index.theme with its name filled in), plus a `Pop` alias, because
+# cosmic-settings-daemon plays its battery sounds from a theme named "Pop"
+# (hardcoded, still so at epoch-1.11.0). It was its own meson package until
+# 2026-10-28, which the nightly offered as a separate update from the epoch.
+define COSMIC_INSTALL_SOUND_THEME
+	mkdir -p $(TARGET_DIR)/usr/share/sounds/COSMIC
+	cp -a $(@D)/cosmic-sound-theme/src/stereo $(TARGET_DIR)/usr/share/sounds/COSMIC/
+	sed 's/@ThemeName@/COSMIC/g' $(@D)/cosmic-sound-theme/src/index.theme.in \
+		> $(TARGET_DIR)/usr/share/sounds/COSMIC/index.theme
+	ln -sfn COSMIC $(TARGET_DIR)/usr/share/sounds/Pop
 endef
 
 $(eval $(generic-package))

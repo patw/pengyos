@@ -1,7 +1,7 @@
 # pengyos-gamepads — "Gamepads"
 
 See the gamepads and joysticks the machine has attached, and test their
-controls. COSMIC Settings (epoch 1.9) has no page for controllers: until now a
+controls. COSMIC Settings (epoch 1.11) has no page for controllers: until now a
 pad was invisible until a game opened it, and checking a stick, a dead button
 or a stuck trigger meant launching Steam and finding a pad setup screen.
 
