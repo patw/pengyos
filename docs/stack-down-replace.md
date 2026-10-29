@@ -106,10 +106,10 @@ them.
 component we build from our own tree or our own pinned source with our own changes,
 outside a stock Buildroot recipe) at any time. The count lives in `divergence.toml`
 (`fork_budget`), and `scripts/pengyos_gate.py:check_fork_budget` fails the repo past
-it. On 2026-10-27 it is **8**: `upower-pengyos`, `ffmpeg-pengyos`, `hplip-pengyos`,
+it. On 2026-10-28 it is **7**: `upower-pengyos`, `ffmpeg-pengyos`, `hplip-pengyos`,
+`libdisplay-info-pengyos`, `uutils-findutils`, `distrobox` and `xdg-utils`.
 `openssh-pengyos` (carried from 2026-10-19 with the operator's sign-off under the
-Tier-2 rule below), `libdisplay-info-pengyos`, `uutils-findutils`, `distrobox` and
-`xdg-utils`. The last three are authored recipes that carry a behaviour fix of our
+Tier-2 rule below) expired on 2026-10-28, when Buildroot 2026.08.1 shipped 10.6p1. The last three are authored recipes that carry a behaviour fix of our
 own, ledgered on 2026-10-27 when the gate began asking about recipe patches.
 Host-built COSMIC is *not* a fork under this definition. It is an unbuilt
 dependency, and it is the thing Band 2/3 work should convert into recipes.

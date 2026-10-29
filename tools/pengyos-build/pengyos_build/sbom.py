@@ -162,7 +162,7 @@ def generate_sbom(
     if not legal_info.is_dir():
         raise SbomError(
             f"make legal-info exited 0 but produced no {legal_info} "
-            "(is this a configured Buildroot 2026.08 tree?)"
+            "(is this a configured Buildroot 2026.08.x tree?)"
         )
 
     # 2. show-info (metadata JSON on stdout).

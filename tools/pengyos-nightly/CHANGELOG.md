@@ -6,6 +6,12 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed — the openssh-fork observe source
+Buildroot 2026.08.1 ships OpenSSH 10.6p1, which ends the `openssh-pengyos` fork (its
+ledger expiry). Stock openssh is back, and pkg-stats sees a stock recipe, so the
+`openssh-fork` source (`sources.openssh_fork_findings`, its wiring in `observe`, its
+tests and the `ls-remote-openssh.txt` fixture) went with the fork.
+
 ### Security — a fix is carried only from the package's own upstream repo
 Found by the 2026-10-28 audit: the patch lane fetched whatever URL an NVD reference
 named, and NVD references are data anyone with a CNA can write.

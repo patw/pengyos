@@ -8,7 +8,7 @@ was at 1.11.1 and nothing said so), and divergence.toml requires every fork to n
 an observe_source to prevent it. divergence.toml -> ffmpeg-9.0.2-fork names this one.
 
 ffmpeg publishes no git tags, so the source is the release directory listing at
-https://ffmpeg.org/releases/ — a frozen fixture, same rule as the openssh and PengyR
+https://ffmpeg.org/releases/ — a frozen fixture, same rule as the PengyR
 ones: the comparison is what is tested, not whatever upstream ships next.
 
 Run: python3 -m pytest tests -q   (from tools/pengyos-nightly)

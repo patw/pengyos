@@ -751,7 +751,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--repo", default=".")
     r.add_argument("--mode", choices=("fast", "full"), default="fast")
     r.add_argument("--base", default="main", help="scope to changes since this ref ('none' = unscoped)")
-    r.add_argument("--buildroot", default=os.path.expanduser("~/build/pengyos/buildroot-2026.08"))
+    r.add_argument("--buildroot", default=os.path.expanduser("~/build/pengyos/buildroot-2026.08.1"))
     r.add_argument("--buildroot-out", default=os.path.expanduser("~/build/pengyos/output/pengyos-server"))
     r.add_argument("--json", dest="json_out")
     r.add_argument("--junit")

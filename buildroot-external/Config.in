@@ -76,12 +76,6 @@ menu "PengyOS (external tree)"
 	# sudo-rs, the Rust sudo (Server): Buildroot 2026.08 has only the C sudo.
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/sudo-rs/Config.in"
 
-	# SSH: our fork of Buildroot's openssh, pinned at 10.6p1. It replaces the
-	# stock package in every edition, so the stock symbol is switched off in
-	# configs/layers/core.config. divergence.toml -> openssh-10.6p1-fork carries
-	# the reason and the expiry that ends it.
-	source "$BR2_EXTERNAL_PENGYOS_PATH/package/openssh-pengyos/Config.in"
-
 	# Media: our fork of Buildroot's ffmpeg, pinned at 9.0.2 (25 P0/P1 CVE
 	# matches sit in 6.1.5 and seventeen name no upstream commit). ffmpeg is a
 	# library, so the plugins that link it are redirected to the fork too:
