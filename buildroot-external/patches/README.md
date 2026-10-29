@@ -51,22 +51,20 @@ copy of it.
 
 | Package | Version | Patches | Ledger entry | Closes |
 |---|---|---|---|---|
-| libxml2 | 2.15.3 | 7 | `libxml2-2.15.3-cve-2026` | CVE-2026-86137, -86138, -86139, -86140, -86142, -86143, -86144 |
 | gst1-plugins-good | 1.24.13 | 12 | `gst1-plugins-good-1.24.13-cve-2026-73433` | CVE-2026-73433, CVE-2026-73434 (avidemux 0001-0006; 4 of the 6 are the upstream series the two fixes sit in); CVE-2026-46469, -46470 (qtdemux 0007, one hunk re-rooted); CVE-2026-1940 (wavparse 0008-0012, one upstream series) |
 | gst1-plugins-base | 1.24.13 | 1 | `gst1-plugins-base-1.24.13-cve-2026-18297` | CVE-2026-18297 (opusdec) |
 | gst1-plugins-bad | 1.24.13 | 1 | `gst1-plugins-bad-1.24.13-cve-2026-2923` | CVE-2026-2923 (attributed here from gstreamer1 by the fix's own paths) |
 | gst1-libav-pengyos | 1.24.13 | 1 | `gst1-libav-pengyos-1.24.13-ffmpeg9` | nothing — a build fix that follows from the ffmpeg 9 fork, not a CVE |
 | podman | v5.7.0 | 2 | `podman-v5.7.0-cve-2026` | CVE-2026-55686, CVE-2026-57231 (image env host leak) |
 | libsndfile | 1.2.2 | 2 | `libsndfile-1.2.2-cve-2026` | CVE-2026-37555 (IMA ADPCM WAV), CVE-2025-52194 (IRCAM); applied after Buildroot's own 14 |
-| ca-certificates | 20260223 | 1 | `ca-certificates-20260223-emudhra-blacklist` | nothing — a trust-store removal, not a CVE: blacklists "emSign ECC Root CA - G3" and "Comodo AAA Services root" (Debian 20260816+nmu1, #1151413) |
 
-Two of these are not CVE fixes. The gst1-libav-pengyos one is allowed by rule 1 for the
+One of these is not a CVE fix. The gst1-libav-pengyos one is allowed by rule 1 for the
 same reason the ffmpeg and hplip fork patches are: it is carried on a recipe we author.
-The ca-certificates one is Debian's own upload (20260816+nmu1) carried unchanged on the
-pinned 20260223, so it is the upstream fix; it declares nothing to pkg-stats because it
-closes no CVE. The upower capacity_level set that used to sit here was deleted
+The upower capacity_level set that used to sit here was deleted
 on 2026-10-20 when upower became a fork at 1.91.5, which carries the fix itself
-(`divergence.toml` -> `upower-1.91.5-fork`).
+(`divergence.toml` -> `upower-1.91.5-fork`). Two sets expired with Buildroot 2026.08.1
+(2026-10-28): libxml2's seven CVE fixes (2.15.4 contains all seven) and the
+ca-certificates emSign blacklist (20260816+nmu1 is the Debian upload it was taken from).
 
 Patches a recipe carries in its **own** directory are not listed here, because they
 are not delivered through `BR2_GLOBAL_PATCH_DIR`. `package/hplip-pengyos/` carries four
@@ -74,6 +72,4 @@ are not delivered through `BR2_GLOBAL_PATCH_DIR`. `package/hplip-pengyos/` carri
 two upstream CVE fixes on 9.0.2 (declared in its own `.mk`; ledger entry
 `ffmpeg-9.0.2-fork`), and `package/openssh-pengyos/` carries none.
 
-Expiry for the libxml2 entry: a Buildroot point release (2026.08.1 or newer) that pins
-libxml2 ≥ 2.15.4, at which point the patch set is deleted. Each other entry names its
-own expiry in the ledger.
+Each entry names its own expiry in the ledger.

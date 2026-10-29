@@ -3,20 +3,20 @@
 # relative to this file, and its validator forbids '..' components).
 [[targets]]
 name = "pengyos-core"
-br_version = "2026.08"
+br_version = "2026.08.1"
 external_tree = "buildroot-external"
 defconfig = "pengyos_core_defconfig"
 
 [[targets]]
 name = "pengyos-server"
-br_version = "2026.08"
+br_version = "2026.08.1"
 external_tree = "buildroot-external"
 defconfig = "pengyos_server_defconfig"
 
 # Desktop: the Server/Core systemd base + the COSMIC desktop.
 [[targets]]
 name = "pengyos-desktop"
-br_version = "2026.08"
+br_version = "2026.08.1"
 external_tree = "buildroot-external"
 defconfig = "pengyos_desktop_defconfig"
 
@@ -25,7 +25,7 @@ defconfig = "pengyos_desktop_defconfig"
 # os-release says IMAGE_ID=pengyos-server-nvidia, so it has its own update feed.
 [[targets]]
 name = "pengyos-server-nvidia"
-br_version = "2026.08"
+br_version = "2026.08.1"
 external_tree = "buildroot-external"
 defconfig = "pengyos_server_nvidia_defconfig"
 board = "server"
@@ -38,7 +38,7 @@ board = "server"
 # `pengyos-desktop-nvidia lint`.
 [[targets]]
 name = "pengyos-desktop-nvidia"
-br_version = "2026.08"
+br_version = "2026.08.1"
 external_tree = "buildroot-external"
 defconfig = "pengyos_desktop_nvidia_defconfig"
 board = "desktop"

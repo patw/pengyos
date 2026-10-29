@@ -285,8 +285,10 @@ class TestRepoTargetsToml:
         targets = load_targets(repo / "targets.toml")
         assert len(targets) >= 1
         server = get_target(targets, "pengyos-server")
-        # Buildroot pin: 2026.08 (needs the 7.1 headers series; 2026.02.3 lacks it).
-        assert server.br_version == "2026.08"
+        # Buildroot pin: 2026.08.1 (the 2026.08 series has the 7.1 headers; 2026.02.3
+        # lacks them). Every target pins the same tree.
+        assert server.br_version == "2026.08.1"
+        assert {t.br_version for t in targets} == {"2026.08.1"}
         assert server.defconfig == "pengyos_server_defconfig"
         assert server.external_tree == repo / "buildroot-external"
 

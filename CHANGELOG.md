@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Security — Buildroot 2026.08.1 (2026-10-28)
+
+The tree moves from Buildroot 2026.08 to its first point release, 2026.08.1 (tag
+signed by the release manager; 281 commits, 178 packages). It is mostly security
+bumps: glibc (2.44-36 to 2.44-57, four CVEs), OpenSSL, OpenSSH, expat, libpng, libxml2,
+libheif, libpcap, libseccomp, bubblewrap, mbedtls, go, Python and more. glibc moving
+means the toolchain changes, so every edition is built clean.
+
+Two carried patch sets reach their expiry and are deleted with their ledger entries:
+libxml2's seven CVE fixes (2.15.4 contains all seven; six reverse-apply cleanly and the
+NXT bounds check is upstream's own, with a follow-up) and the ca-certificates emSign
+blacklist (20260816+nmu1, the Debian upload it was taken from, blacklists both roots
+itself). podman stays at v5.7.0, so its patch set stays. Our `external.mk` overrides of
+changed packages (glibc, lvm2, NetworkManager, python3, podman, ca-certificates) all
+append and still apply. The vendored Kconfig symbol list is regenerated from the new
+tree (four symbols added, none removed).
+
 ### Changed — the COSMIC portal backend is 1.9.0 and part of the cosmic package (2026-10-28)
 
 `xdg-desktop-portal-cosmic` (screenshots, screen casting, the file chooser, settings for

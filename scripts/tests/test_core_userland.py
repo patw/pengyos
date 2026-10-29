@@ -21,7 +21,7 @@ resolved:
    disappears;
 4. the fragments are named in the generated defconfigs (a later layer replaces the
    list, it does not append);
-5. every symbol a layer sets exists in Buildroot 2026.08, or is declared by this
+5. every symbol a layer sets exists in Buildroot 2026.08.1, or is declared by this
    external tree;
 6. /bin/sh is bash, not BusyBox ash.
 
@@ -51,7 +51,7 @@ DEFCONFIGS = ("pengyos_core_defconfig", "pengyos_server_defconfig",
               "pengyos_desktop_nvidia_defconfig")
 
 BB_SYMBOLS = Path(__file__).resolve().parent / "fixtures" / "busybox-1.38.0-symbols.txt"
-BR_SYMBOLS = Path(__file__).resolve().parent / "fixtures" / "buildroot-2026.08-symbols.txt"
+BR_SYMBOLS = Path(__file__).resolve().parent / "fixtures" / "buildroot-2026.08.1-symbols.txt"
 
 # What GNU coreutils put in Core before the switch. uutils must ship every one of
 # them, or the image loses a command it has always had.
@@ -355,7 +355,7 @@ def test_the_tools_agents_reach_for_are_not_busybox_applets():
 # --- 3. nothing in the layers is a made-up symbol ----------------------------
 def test_every_layer_symbol_resolves():
     """Buildroot ignores an unknown BR2_ name in a defconfig — silently. Check
-    every symbol the layers set against the pinned 2026.08 list, plus the symbols
+    every symbol the layers set against the pinned 2026.08.1 list, plus the symbols
     this external tree declares in its own Config.in files."""
     known = {ln.strip() for ln in BR_SYMBOLS.read_text().splitlines()
              if ln.strip() and not ln.startswith("#")}
@@ -363,7 +363,7 @@ def test_every_layer_symbol_resolves():
     for layer in (LAYER_CORE, LAYER_SERVER, LAYER_DESKTOP):
         unknown = [s for s in _layer_symbols(layer.read_text())
                    if s not in known and s not in external]
-        assert not unknown, f"{layer.name} sets symbols Buildroot 2026.08 does not define: {unknown}"
+        assert not unknown, f"{layer.name} sets symbols Buildroot 2026.08.1 does not define: {unknown}"
 
 
 # --- 4. /bin/sh is bash ------------------------------------------------------

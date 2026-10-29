@@ -65,60 +65,6 @@ fork_budget = 10
 # is what its own header promises and the gate did not do.
 
 [[divergence]]
-id        = "libxml2-2.15.3-cve-2026"
-kind      = "patch-set"
-component = "libxml2"
-pinned_version = "2.15.3"
-editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
-carried_since = "2026-10-05"
-carried_in    = ["26.10.8"]
-patches_dir   = "buildroot-external/patches/libxml2/2.15.3"
-
-# NVD placed 2.15.3 inside each affected range and named one upstream commit per
-# CVE; that is what made the patch shape admissible at all (pengyos-nightly
-# guards: evidence_required, fix_commits_available).
-closes = [
-  "CVE-2026-86137",  # 76fe08d97de8  xmlregexp: out-of-bounds read in the NXT macro
-  "CVE-2026-86138",  # a4cba4b5b5a8  dict: overflow in xmlDictAddQString
-  "CVE-2026-86139",  # 8edbbdb09f24  uri: length check in xmlURIEscapeStr
-  "CVE-2026-86140",  # d1686f91dbda  valid: bounds checks in xmlSnprintfElements
-  "CVE-2026-86142",  # 6b3a736c0edc  xpointer: overflow in xmlXPtrEvalXPtrPart
-  "CVE-2026-86143",  # 90f293ba74d2  io: int overflow before writeCallback
-  "CVE-2026-86144",  # b63cd517afec  xinclude: propagate parse flags
-]
-upstream_fixes = [
-  "76fe08d97de8", "a4cba4b5b5a8", "8edbbdb09f24", "d1686f91dbda",
-  "6b3a736c0edc", "90f293ba74d2", "b63cd517afec",
-]
-
-# The version that would have closed all seven with no divergence at all. Recorded
-# because it is the reason this entry has an expiry instead of a permanent home.
-natural_fix = "2.15.4"
-
-expiry = "Buildroot 2026.08.1 (or a newer Buildroot line) pins libxml2 >= 2.15.4; at that point the patch set is deleted"
-observe_source = "pkg-stats"
-upstream_status = "not-offered"
-
-# Known cost, stated rather than discovered: a patch set does not move the version,
-# so every version-based reader misreads it. pkg-stats does not see patches reached
-# through BR2_GLOBAL_PATCH_DIR at all (support/scripts/pkg-stats:250 walks only the
-# package's own directory), so libxml2 reported "affected by CVEs" and "newer version
-# 2.15.4 available upstream" even after 26.10.8 shipped the fixes.
-#
-# Declared 2026-10-07: LIBXML2_IGNORE_CVES names all seven CVEs, each preceded by a
-# comment naming its patch file, in buildroot-external/patches/cve-declarations.mk
-# (included from external.mk). Verified against the real tree - `make printvars
-# VARS=LIBXML2_IGNORE_CVES` in output/pengyos-desktop now reports all seven, and
-# `make libxml2-dirclean && make libxml2-patch` still applies all seven cleanly, so the
-# declaration is inert for the build. pkg-stats suppresses each CVE from the next scan
-# onward and will flag the entries as stale ignores once a Buildroot line pins
-# libxml2 >= 2.15.4 - the expiry signal doing its job. The gate
-# (scripts/pengyos_gate.py:check_patch_declarations) now fails the repo if a patch set
-# in this ledger is not declared, or declares a CVE the ledger does not close - and
-# pengyos-nightly writes that declaration itself now, from the patches that survived its
-# own pre-flight.
-
-[[divergence]]
 id        = "upower-1.91.5-fork"
 kind      = "fork"
 component = "upower-pengyos"
@@ -608,38 +554,6 @@ upstream_fixes = ["178ae5ac20db"]
 
 # Same GStreamer lockstep as gst1-plugins-good/-bad: the stack bump retires all three.
 expiry = "Buildroot pins gst-plugins-base >= 1.28.5 (the advisory's fixed version): delete buildroot-external/patches/gst1-plugins-base and its GST1_PLUGINS_BASE_IGNORE_CVES line"
-observe_source = "pkg-stats"
-upstream_status = "merged"
-
-[[divergence]]
-id        = "ca-certificates-20260223-emudhra-blacklist"
-kind      = "patch-set"
-component = "ca-certificates"
-pinned_version = "20260223"
-editions  = ["pengyos-core", "pengyos-server", "pengyos-server-nvidia", "pengyos-desktop", "pengyos-desktop-nvidia"]
-carried_since = "2026-10-22"
-patches_dir   = "buildroot-external/patches/ca-certificates/20260223"
-
-# Not a CVE: a trust-store removal. Compromised eMudhra/emSign intermediates chain to
-# "emSign ECC Root CA - G3", which 20260223 exports into /etc/ssl/certs. Debian's NMU
-# 20260816+nmu1 (Closes: #1151413) blacklists that root and "Comodo AAA Services root";
-# the patch is that upload's whole blacklist.txt hunk, so the file matches Debian's
-# byte for byte. Debian's blacklist rather than our own wording, so rule 1 of
-# patches/README.md holds: it is the upstream fix.
-#
-# Verified by building the package's own `make all` on the pinned tarball with and
-# without the patch: 144 -> 143 exported roots, the one removed being
-# emSign_ECC_Root_CA_-_G3.crt. "Comodo AAA Services root" was already not exported
-# (Mozilla withdrew its TLS trust bit, and certdata2pem.py exports server-auth roots
-# only), so that line changes nothing today; it is kept to match Debian. The other
-# emSign roots (G1, C1, C3) stay, as they do in Debian and in certifi 2026.10.19.
-#
-# The global patch dir is keyed by version, so a Buildroot bump past 20260223 stops
-# applying this silently rather than failing: the expiry check is that the new pin
-# carries the blacklist line itself.
-closes = []
-upstream_fixes = ["Debian ca-certificates 20260816+nmu1"]
-expiry = "Buildroot pins ca-certificates >= 20260816+nmu1 (check its mozilla/blacklist.txt names \"emSign ECC Root CA - G3\"): delete buildroot-external/patches/ca-certificates"
 observe_source = "pkg-stats"
 upstream_status = "merged"
 
