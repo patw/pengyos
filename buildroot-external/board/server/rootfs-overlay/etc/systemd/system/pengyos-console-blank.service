@@ -1,0 +1,23 @@
+# PengyOS Server: switch the console's screen off after 5 idle minutes.
+#
+# A laptop server sits with its (often cracked) panel lit forever otherwise:
+# the kernel's console blanking is off by default (consoleblank=0). ESC [ 9 ; n ]
+# (console_codes(4)) sets the blank timeout, for every virtual console; with a
+# real GPU driver (i915, amdgpu, xe) a blanked console turns the display and its
+# backlight off. Any key turns it back on.
+#
+# Server only (the Desktop's screen is the compositor's) and not on the install
+# stick, whose installer screen must stay readable during an install.
+[Unit]
+Description=Switch the console screen off after 5 idle minutes
+ConditionOSRelease=|VARIANT_ID=server
+ConditionOSRelease=|VARIANT_ID=server-nvidia
+ConditionKernelCommandLine=pengyos.data
+After=systemd-vconsole-setup.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "printf '\\033[9;5]' > /dev/tty1"
+
+[Install]
+WantedBy=multi-user.target

@@ -5,3 +5,9 @@
 # same disk and keep 7 copies, which filled Desktops' drives. `enable *` would
 # arm it at image build from its [Install] section, so it is named here.
 disable pengyos-backup.timer
+
+# Wi-Fi on the Server is one wpa_supplicant-nl80211@<iface>.service per card,
+# enabled by the installer. The D-Bus wpa_supplicant (`-u`, for NetworkManager)
+# would otherwise be enabled too and sit idle; the Desktop enables it again in
+# 10-pengyos-hardware.preset (read first).
+disable wpa_supplicant.service
