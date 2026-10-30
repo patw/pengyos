@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-APPSTREAM_VERSION = 1.2.1
+APPSTREAM_VERSION = 1.2.2
 APPSTREAM_SOURCE = AppStream-$(APPSTREAM_VERSION).tar.xz
 APPSTREAM_SITE = https://www.freedesktop.org/software/appstream/releases
 # The release tarball's paths start with "./AppStream-<version>/".

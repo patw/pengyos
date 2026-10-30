@@ -1,3 +1,5 @@
 # Computed locally from the release tarball (2026-10-02)
-sha256  7df664fd3ad3b1640c6a0ff77fa84f9fabe264111bf1fe8f5df3444d6d4caaca  AppStream-1.2.1.tar.xz
+# From https://www.freedesktop.org/software/appstream/releases/AppStream-1.2.2.tar.xz
+sha256  2f4f7c29095b905b4347829e39971ef8134d2d5aba663383268bab3bfeab45a9  AppStream-1.2.2.tar.xz
 sha256  20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95  COPYING
+
