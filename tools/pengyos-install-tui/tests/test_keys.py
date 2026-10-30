@@ -108,7 +108,7 @@ def test_github_server_error():
 
 def test_no_network_says_check_the_cable():
     err = urllib.error.URLError(OSError("Network is unreachable"))
-    with pytest.raises(KeyFetchError, match="network cable"):
+    with pytest.raises(KeyFetchError, match="on the network"):
         fetch_keys(parse_source("patw"), opener=Opener(error=err))
 
 
@@ -169,7 +169,7 @@ def test_ssh_ipv6_host_is_passed_bare():
     ("ssh: connect to host behoserver port 22: Connection refused", KeyFetchError,
      "does not accept SSH"),
     ("ssh: connect to host behoserver port 22: Connection timed out", KeyFetchError,
-     "network cable"),
+     "on the network"),
     ("cat: .ssh/authorized_keys: No such file or directory", KeyFetchError,
      "has no ~/.ssh/authorized_keys"),
     ("something odd", KeyFetchError, "failed: something odd"),

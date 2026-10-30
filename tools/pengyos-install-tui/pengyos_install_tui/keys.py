@@ -132,7 +132,7 @@ def _download(url: str, label: str, opener: Callable, timeout: float) -> str:
     except (urllib.error.URLError, OSError, ValueError) as exc:
         reason = getattr(exc, "reason", exc)
         raise KeyFetchError(
-            f"could not reach {label} ({reason}); is a network cable plugged in?"
+            f"could not reach {label} ({reason}); is this machine on the network?"
         ) from None
 
 
@@ -191,7 +191,7 @@ def _ssh(src: KeySource, password: str, run: Callable, timeout: float) -> Import
         except FileNotFoundError:
             raise KeyFetchError("ssh is not available on this installer") from None
         except subprocess.TimeoutExpired:
-            raise KeyFetchError(f"{src.target} did not answer; is a network cable plugged in?") \
+            raise KeyFetchError(f"{src.target} did not answer; is this machine on the network?") \
                 from None
     err = (r.stderr or "").strip()
     if r.returncode != 0:
@@ -203,7 +203,7 @@ def _ssh(src: KeySource, password: str, run: Callable, timeout: float) -> Import
         if "connection refused" in low:
             raise KeyFetchError(f"{src.target} does not accept SSH connections")
         if any(s in low for s in ("timed out", "no route", "unreachable")):
-            raise KeyFetchError(f"could not reach {src.target}; is a network cable plugged in?")
+            raise KeyFetchError(f"could not reach {src.target}; is this machine on the network?")
         if "no such file" in low:
             raise KeyFetchError(f"{src.label} has no ~/.ssh/authorized_keys")
         last = err.splitlines()[-1] if err else f"exit {r.returncode}"

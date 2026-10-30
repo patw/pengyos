@@ -7,6 +7,16 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A Wi-Fi page** (`wifi.py`), on machines with a Wi-Fi card: a laptop server
+  may have no Ethernet port, and the SSH key import needs the network. It lists
+  the networks in range (`iw`), asks a secured one's password, and joins with
+  `wpa_supplicant-nl80211@<iface>` + networkd, writing the config the installed
+  system keeps (the engine copies it). A wrong password, an out-of-range
+  network, no DHCP address and a Wi-Fi switch turned off are each said so; a
+  failed attempt leaves nothing configured. In the line-by-line installer:
+  numbered networks, `r` to scan again, Enter at the password to skip Wi-Fi.
+  The page list is now computed as answers change (the password page comes
+  and goes with the network chosen).
 - **More places to import SSH keys from.** The SSH page's "Import keys from"
   takes a GitHub username, an `http(s)://` URL (any authorized_keys-style file),
   or `user@host[:port]`: the installer asks for that machine's password and

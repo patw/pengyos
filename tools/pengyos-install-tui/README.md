@@ -20,7 +20,15 @@ up front.
 2. **Computer name**: defaults to `pengyos`.
 3. **Account**: username and password (typed twice, masked). The password is
    also set for root.
-4. **SSH access**: "Import keys from" takes one of
+4. **Wi-Fi** (only on a machine with a Wi-Fi card): the networks in range,
+   strongest first, with "No Wi-Fi" (and whether a cable is connected) and
+   "Scan again". A secured network then asks for its password. The installer
+   joins it right away (the SSH page's key import may need it) with
+   `wpa_supplicant-nl80211@<iface>` and networkd, and the install engine
+   carries that config to the new system, so it is on the same network after
+   the reboot. A soft rfkill block is cleared; a wrong password is said so.
+   Hidden networks and WPA-Enterprise are left to `wpa_cli` afterwards.
+5. **SSH access**: "Import keys from" takes one of
    - a GitHub username (`patw` or `gh:patw`): fetches
      `https://github.com/<name>.keys`, the way `ssh-import-id gh:<name>` does;
    - an `http(s)://` URL: any authorized_keys-style file, e.g. on a NAS;
@@ -33,11 +41,11 @@ up front.
    `command="..."`) are skipped and counted in the review. sshd is key-only,
    so leaving everything empty is allowed only after a warning: the machine can
    then be used only from its own keyboard.
-5. **Pengy**: the assistant's base URL, API key (masked) and model. Optional:
+6. **Pengy**: the assistant's base URL, API key (masked) and model. Optional:
    leave the URL empty and Pengy keeps the image's defaults.
-6. **Logging in** (Desktop images only): log in automatically or ask for the
+7. **Logging in** (Desktop images only): log in automatically or ask for the
    password (the default).
-7. **Review**: the summary. Type `erase` to install.
+8. **Review**: the summary. Type `erase` to install.
 
 Then a progress page, and a last page that says how to reach the machine
 (`ssh <user>@<hostname>`).
@@ -73,6 +81,7 @@ pengyos_install_tui/
   screen.py    # full screen: App (keys in, frames out; no curses) + the curses driver
   plain.py     # the line-by-line fallback
   keys.py      # import SSH keys: GitHub, a URL, or user@host over SSH
+  wifi.py      # scan and join Wi-Fi (iw, wpa_supplicant, networkd)
   install.py   # load the medium, pick a front-end, run the install
   cli.py       # argparse
 tests/
@@ -81,6 +90,7 @@ tests/
   test_terminal.py     # the real curses driver in a pseudo-terminal
   test_install.py      # the plain front-end end to end (fake disks and install)
   test_keys.py         # key sources, with a fake opener and a fake ssh
+  test_wifi.py         # scan parsing, configs, joining, with fake sysfs and commands
   test_scaffold.py     # package and CLI wiring
   test_github_ready.py # README/LICENSE/CHANGELOG/.gitignore/pyproject contract
 ```

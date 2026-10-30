@@ -17,6 +17,45 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — an old laptop runs as a Server (2026-10-30)
+
+A Server is homelab hardware, and that includes a laptop with a cracked screen and a
+dead battery, installed at its own keyboard and then left in a corner (US-SRV-12). The
+Server kernel lacked most laptop hardware: Intel Wi-Fi had firmware but no op mode
+(`IWLWIFI` without `IWLMVM`, so no wlan interface), RTL8153 USB Ethernet dongles had no
+driver, and there was no Wi-Fi client at all. Most of it was in the Desktop's layers;
+it now sits in the Server's, and the Desktop inherits it.
+
+- **Kernel** (`board/server/linux.fragment`): Wi-Fi (Intel DVM/MVM/MLD, MediaTek
+  MT7921/7925, ath9k, ath12k, Realtek rtlwifi/rtw88/rtw89), USB Ethernet (RTL8152,
+  ASIX, CDC/NCM/RNDIS, iPhone), older wired NICs (atl1c, atl1e, alx, tg3), UAS, USB4,
+  USB-C (UCSI), eMMC behind ACPI SD hosts (Atom laptops' internal disk), the
+  intel-hid/vbtn power button, and the ThinkPad/IdeaPad/ASUS/HP/Dell/Acer platform
+  drivers. ath9k, rtlwifi, the older NICs and ACPI eMMC are new to the Desktop too.
+- **Firmware and Wi-Fi client** (`server.config`): the Desktop's Wi-Fi firmware, plus
+  Intel cards back to the 1000/5000/6000 series (the first 6000s through
+  `external.mk`), QCA9377, Realtek 81xx/87xx and the RTL815x dongles; wpa_supplicant
+  (+ `wpa_cli`, WPA3) and `iw`. networkd addresses any Wi-Fi interface
+  (`20-pengyos-wireless.network`). The D-Bus `wpa_supplicant.service`, which only
+  NetworkManager uses, is preset off on the Server and stays on for the Desktop.
+- **The installer joins Wi-Fi** on machines with a card, before the SSH page's key
+  import, and the engine carries the network to the installed system
+  (`wpa_supplicant-nl80211@<iface>` enabled).
+- **Laptop care, Server only**: closing the lid does nothing
+  (`60-pengyos-lid.conf`; the Desktop's copy keeps suspend); the console switches the
+  screen off after 5 idle minutes (`pengyos-console-blank`); the battery stops
+  charging at 80% (`pengyos-battery-limit`, `/etc/pengyos/battery.conf`) where the
+  platform driver offers a limit.
+
+Tested in QEMU on the built image with a simulated Wi-Fi card and access point
+(`mac80211_hwsim`, hostapd): wrong then right password, `user@host` key import over
+Wi-Fi, install, and the installed system rejoining the network at boot. The key
+import's "is a network cable plugged in?" errors now ask whether the machine is on the
+network.
+
+Not covered: legacy-BIOS-only and 32-bit-UEFI machines (the stick boots 64-bit UEFI
+only).
+
 ### Changed — a full-screen console installer for Core/Server (2026-10-30)
 
 The install stick's tty1 installer (`pengyos-install-tui` 0.2.0) is now a full-screen

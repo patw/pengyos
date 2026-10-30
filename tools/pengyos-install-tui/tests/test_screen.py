@@ -325,3 +325,68 @@ def test_keys_from_another_machine(manifest, fetcher):
     press(app, "enter", "enter", "enter")
     assert "2 keys (2 from pat@behoserver, 1 line skipped)" in screen(app)
     assert app.s.answers().authorized_keys == HOST_KEYS
+
+
+# ------------------------------------------------------------------- Wi-Fi
+from conftest import WIFI_PASSWORD, FakeWifi  # noqa: E402
+
+
+def wifi_app(manifest, **kw):
+    w = FakeWifi(**kw)
+    s = Session(manifest, DISKS, fetch_keys=FakeFetch(), wifi=w)
+    return App(s, install=FakeInstall(), payload="/p"), w
+
+
+def to_wifi(app):
+    press(app, "enter", "enter")
+    type_(app, "pat"); press(app, "enter")
+    type_(app, "hunter22"); press(app, "enter")
+    type_(app, "hunter22")
+    app.key("enter")  # the scan is a job: the driver draws "Looking ..." first
+
+
+def test_wifi_scan_join_and_wrong_password(manifest):
+    app, w = wifi_app(manifest, wired="")
+    to_wifi(app)
+    assert app.page.key == "wifi" and "Looking for Wi-Fi networks" in screen(app)
+    job, app.pending = app.pending, None
+    job()
+    text = screen(app)
+    assert "1. No Wi-Fi" in text and "no network cable connected" in text
+    assert "2. Home" in text and "secured" in text and "4. Scan again" in text
+    press(app, "down", "enter")                     # Home
+    assert app.page.key == "wifi_password" and "Password for Home" in screen(app)
+    type_(app, "wrong password")
+    app.key("enter")
+    assert "Connecting to Home" in screen(app)
+    job, app.pending = app.pending, None
+    job()
+    assert app.page.key == "wifi_password" and "refused the password" in screen(app)
+    press(app, "ctrl-u"); type_(app, WIFI_PASSWORD); press(app, "enter")
+    assert app.page.key == "ssh"
+    press(app, "esc", "esc")                        # back to the list: Home is kept
+    assert app.page.key == "wifi" and app.row == 1
+
+
+def test_wifi_rescan_and_skip(manifest):
+    app, w = wifi_app(manifest, wired="10.0.0.9")
+    to_wifi(app)
+    press(app)  # nothing typed; run the pending scan
+    job, app.pending = app.pending, None
+    job()
+    press(app, "up", "enter")                       # "Scan again" (wraps from row 0)
+    assert w.scans == 2 and app.page.key == "wifi"
+    press(app, "1", "enter")                        # No Wi-Fi
+    assert app.page.key == "ssh" and w.joined == []
+    press(app, "tab", "tab", "enter", "enter", "enter", "enter", "enter")
+    assert "wired (10.0.0.9)" in screen(app)
+
+
+def test_wifi_screens_fit(manifest):
+    app, w = wifi_app(manifest)
+    to_wifi(app)
+    press(app)
+    for _ in range(2):
+        for r, c, t, _s in app.render(24, 80).draws:
+            assert r < 24 and c + len(t) <= 80
+        press(app, "down", "enter")

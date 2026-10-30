@@ -75,6 +75,12 @@ EFIVARS = "/sys/firmware/efi/efivars"
 #: Where the live session's NetworkManager keeps the profiles people created
 #: (the image ships none), carried over to the installed system.
 LIVE_NM_CONNECTIONS = "/etc/NetworkManager/system-connections"
+#: The Server's live-session Wi-Fi: one wpa_supplicant-nl80211-<iface>.conf per
+#: interface joined (pengyos-install-tui's Wi-Fi page, or wpa_cli by hand).
+LIVE_WPA_SUPPLICANT = "/etc/wpa_supplicant"
+WPA_UNIT_TEMPLATE = "usr/lib/systemd/system/wpa_supplicant-nl80211@.service"
+# An interface name (IFNAMSIZ: 15), and never one that starts with a dot.
+_WPA_CONF_RE = re.compile(r"^wpa_supplicant-nl80211-([A-Za-z0-9_-][A-Za-z0-9_.-]{0,14})\.conf$")
 #: Groups that make the created user the desktop's owner: admin (wheel: polkit +
 #: sudo's pam_wheel; sudo: the sudoers group rule), the seat (seatd -g seat), and
 #: devices. Only those the image defines are used.
@@ -615,6 +621,7 @@ def install_image(
     run: Runner = _default_run,
     disks: list[Disk] | None = None,
     nm_connections: str = LIVE_NM_CONNECTIONS,
+    wifi_configs: str = LIVE_WPA_SUPPLICANT,
 ) -> None:
     """Install the payload onto *target* in the partitioned layout, and provision it.
 
@@ -747,7 +754,8 @@ def install_image(
         # The image's /dev is an empty directory: useradd and friends want the real one.
         _run(run, ["mount", "--bind", "/dev", f"{root}/dev"], "mounting /dev for the chroot")
         mounted.append(f"{root}/dev")
-        _provision(root, answers, run, nm_connections, esp_partuuid=partuuid_esp)
+        _provision(root, answers, run, nm_connections, esp_partuuid=partuuid_esp,
+                   wifi_configs=wifi_configs)
     finally:
         for point in reversed(mounted):
             run(["umount", point], check=False)
@@ -756,7 +764,8 @@ def install_image(
 
 
 def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
-               nm_connections: str = LIVE_NM_CONNECTIONS, esp_partuuid: str = "") -> None:
+               nm_connections: str = LIVE_NM_CONNECTIONS, esp_partuuid: str = "",
+               wifi_configs: str = LIVE_WPA_SUPPLICANT) -> None:
     # SSH host keys are per machine: drop any the image carries (images built
     # before sshd-keygen.service baked one shared set); first boot makes new ones.
     for key in (root / "etc" / "ssh").glob("ssh_host_*"):
@@ -868,6 +877,29 @@ def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
             target = dest / profile.name
             target.write_bytes(profile.read_bytes())
             os.chmod(target, 0o600)
+
+    # The Server's equivalent (wpa_supplicant + networkd, no NetworkManager): the
+    # live session's per-interface wpa_supplicant config, and that interface's
+    # wpa_supplicant-nl80211@<iface>.service enabled; networkd gives it an address
+    # (20-pengyos-wireless.network). Interface names are the kernel's predictable
+    # ones, so they are the same after the reboot. Root-only: they hold the
+    # Wi-Fi password.
+    src = Path(wifi_configs)
+    template = root / WPA_UNIT_TEMPLATE
+    confs = sorted(src.glob("wpa_supplicant-nl80211-*.conf")) if src.is_dir() else []
+    for conf in confs:
+        m = _WPA_CONF_RE.match(conf.name)
+        if not m or not template.exists():
+            continue
+        dest = root / "etc" / "wpa_supplicant" / conf.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(conf.read_bytes())
+        os.chmod(dest, 0o600)
+        wants = root / "etc" / "systemd" / "system" / "multi-user.target.wants"
+        wants.mkdir(parents=True, exist_ok=True)
+        link = wants / f"wpa_supplicant-nl80211@{m.group(1)}.service"
+        if not link.is_symlink():
+            link.symlink_to("/" + WPA_UNIT_TEMPLATE)
 
     # The ESP on /efi, mounted on first access: fwupd stages UEFI capsule
     # updates there (and a future updater puts kernels there). Root-only.
