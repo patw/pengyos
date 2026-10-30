@@ -2,7 +2,8 @@
 # The console installer on the install stick (Server; the Desktop runs its GUI).
 # Started by /etc/profile.d/pengyos-installer.sh for root's autologin on tty1.
 # Mounts the stick's payload partition and runs `pengyos-install-tui install`;
-# quitting drops to the root shell, a finished install offers the reboot.
+# quitting drops to the root shell, a finished install restarts the machine
+# (--reboot: the installer's last page says to pull the stick, then reboots).
 PAYLOAD=/run/pengyos/payload
 LABEL=/dev/disk/by-label/PENGYOS-PAYLOAD
 
@@ -14,6 +15,14 @@ while [ ! -e "$LABEL" ] && [ $i -lt 15 ]; do sleep 1; i=$((i + 1)); done
 # Keep kernel messages (btrfs, ext4 mounts during the install) off the screen.
 dmesg -n 1 2>/dev/null || true
 
+# The installer draws full screen from 80x24. With the 16x32 console font
+# (vconsole.conf) an old 1366x768 panel is 85x24 and a 1024x768 one only 64x24:
+# drop to the 8x16 font there rather than fall back to line-by-line prompts.
+set -- $(stty size 2>/dev/null)
+if [ "${1:-24}" -lt 24 ] || [ "${2:-80}" -lt 80 ]; then
+    setfont latarcyrheb-sun16 2>/dev/null || true
+fi
+
 mkdir -p "$PAYLOAD"
 if ! mountpoint -q "$PAYLOAD" && ! mount -o ro "$LABEL" "$PAYLOAD"; then
     echo "pengyos: could not mount the install payload ($LABEL)" >&2
@@ -21,12 +30,7 @@ if ! mountpoint -q "$PAYLOAD" && ! mount -o ro "$LABEL" "$PAYLOAD"; then
 fi
 
 while :; do
-    if pengyos-install-tui install; then
-        printf '\nRemove the USB stick, then press Enter to reboot. '
-        read -r _ || true
-        systemctl reboot
-        exit 0
-    fi
+    pengyos-install-tui install --reboot && exit 0
     printf '\nEnter: run the installer again.  "shell": a root shell instead. '
     read -r answer || exit 0
     [ "$answer" = shell ] && exit 0

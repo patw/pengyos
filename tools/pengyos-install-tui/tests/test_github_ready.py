@@ -3,8 +3,8 @@
 The repo must be publishable as a clean public project at all times. These
 tests assert the *artifacts* of that contract live on disk:
 
-* ``README.md`` — present, non-trivial, and it names the tool + both
-  subcommands.
+* ``README.md`` — present, non-trivial, and it names the tool and its
+  ``install`` command.
 * ``LICENSE`` — MIT, and carrying the exact ``Copyright (c) 2026 Pat Wendorf``
   line the spec pins.
 * ``CHANGELOG.md`` — present, with a ``[Unreleased]`` section (Keep a
@@ -43,10 +43,10 @@ def test_readme_present_and_descriptive():
     # Non-trivial and actually about the tool.
     assert len(text) > 200
     assert "pengyos-install-tui" in text
-    # Both subcommands are documented.
-    assert "run" in text and "auto" in text
-    # The install target is spelled out.
-    assert "PengyOS Core" in text
+    # The command is documented.
+    assert "pengyos-install-tui install" in text
+    # The install targets are spelled out.
+    assert "Core" in text and "Server" in text
     # Points at the spec/implementation docs (docs kept in sync).
     assert "spec.md" in text
 
@@ -116,16 +116,10 @@ def test_test_suite_collectable():
     assert sum(counts) > 0
 
 
-def test_readme_documents_subcommand_options():
-    """The README is the user-facing doc — it must spell out the real CLI.
-
-    Naming the tool and both subcommands (``test_readme_present_and_descriptive``)
-    is not enough: a README that never shows *how* to invoke a subcommand is not
-    a shipped doc. The three documented entry points are ``run --answers``,
-    ``auto --config`` and the shared ``--json``.
-    """
+def test_readme_documents_the_install_options():
+    """The README is the user-facing doc — it must spell out the real CLI."""
     text = _text("README.md")
-    for needle in ("--answers", "--config", "--json"):
+    for needle in ("--payload", "--plain", "--reboot"):
         assert needle in text, f"README should document the {needle} option"
 
 

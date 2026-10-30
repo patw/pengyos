@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-install-tui"
-version = "0.1.0"
-description = "Guided Core/Server installer wizard + unattended --auto for PengyOS: a pure, offline-testable wizard state machine (disk, edition, layout, user, network, confirm) driving pengyos-install, plus a non-interactive install.toml front-end."
+version = "0.2.0"
+description = "The PengyOS console installer for Core and Server: a full-screen (curses) installer with a line-by-line fallback, driving the pengyos-install engine. Fetches SSH keys from GitHub."
 readme = "README.md"
 requires-python = ">=3.11"  # tests read pyproject with tomllib; the live stick ships python3.11+
 license = { text = "MIT" }
@@ -15,10 +15,9 @@ authors = [
 keywords = [
     "pengyos",
     "installer",
-    "wizard",
     "tui",
-    "unattended",
     "core",
+    "curses",
     "server",
 ]
 classifiers = [
