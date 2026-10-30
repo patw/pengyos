@@ -1,50 +1,82 @@
-# PengyOS install-tui — the guided Core/Server installer + unattended --auto
+# PengyOS install-tui — the console installer for Core and Server
 
 ## Summary
-A guided text installer for Core/Server over console/serial/SSH: a testable prompt/state model (disk, edition, layout, user, network, confirm) driving pengyos-install, plus a non-interactive `--auto install.toml`.
+The installer the Core/Server install stick runs on tty1: a full-screen (curses)
+installer with a line-by-line fallback, driving the `pengyos-install image`
+engine.
 
 ## Purpose
-US-CORE-1 + 'a normal way to install': Core/Server must install unattended (fleet) or guided (a person) without a GUI. The wizard logic must be offline-testable so the loop can verify it without a terminal.
+US-CORE-1 + "a normal way to install". A Server is a homelab machine: desktop
+PCs, mini PCs, an old laptop. It is installed with a monitor and keyboard
+attached, then run headless and reached over SSH, by its owner or by an agent
+(Pengy, Claude Code). So the installer must:
+
+- work on the bare Linux console, where nothing can be pasted, and on old
+  1024x768/1366x768 panels;
+- leave the machine reachable over SSH, which is key-only, without anyone typing
+  a public key by hand;
+- install exactly what the GUI installs (same engine, same validation).
+
+Unattended / fleet installs are a non-goal (see below).
 
 ## Deliverable
-A Python package `pengyos_install_tui`: `model` (the wizard state machine — steps, validation, back-navigation, derived answers — pure and offline-testable), `run` (render the model on stdin/stdout), and `auto` (parse `install.toml` into the same answer set the interactive path produces).
+The Python package `pengyos_install_tui`:
+
+- `session`: the pages (disk, name, account, ssh, pengy, [login], review),
+  their fields, and the rules. Pure: no terminal, no disks, no network (the
+  key fetcher is injected).
+- `screen`: the full-screen front-end. `App` (normalised key names in, `Frame`s
+  out) holds all the behaviour and never imports curses; `run_screen` is the
+  thin curses driver.
+- `plain`: the line-by-line front-end over the same session.
+- `keys`: fetch `https://github.com/<user>.keys`.
+- `install`: load the payload manifest and disks, pick a front-end, install.
 
 ## Interface
-- pengyos-install-tui run [--answers answers.json]
-- pengyos-install-tui auto --config install.toml [--json]
+- `pengyos-install-tui install [--payload DIR] [--plain] [--reboot]`
+- Exit 0 installed; 1 not installed (quit, not confirmed, or failed); 2 usage.
 
-### `install.toml` schema
-Five fields, each key matching a wizard step (see `pengyos_install_tui.model`):
+Front-end choice: full screen when stdin and stdout are TTYs, `TERM` has a
+terminfo entry and the terminal is at least 80x24; otherwise plain. `--plain`
+forces plain.
 
-| field     | accept(s) | notes |
-|-----------|-----------|-------|
-| `target`  | device path string | `/dev/sdX`, `/dev/nvmeNnM`, … (block-device shape); existence/size injected via `probe` |
-| `edition` | `"core"` \| `"server"` | case-insensitive, stored lower-cased |
-| `layout`  | `"single-root"` \| `"ab-split"` | case-insensitive |
-| `user`    | username string **or** `{username, uid?}` | bare username or mapping |
-| `network` | `"dhcp"` \| `"static"` **or** `{mode, address?, gateway?, nameservers?}` | `static` requires `address`; `nameservers` normalised to a list |
-
-A missing required field, an invalid value, or a file that cannot be read/parsed
-is a reported error (exit 1), never a crash. Unknown keys are ignored. `auto`
-produces the **exact** `Plan` the interactive path produces for the same inputs.
+## Rules
+- Every field is validated by `pengyos_install.image.ProvisionAnswers.validate`
+  (hostname, username, password ≥ 6 chars, SSH key lines, Pengy URL/key/model).
+- Disks: the boot stick, mounted disks and disks under `MIN_DISK` are listed with
+  the reason and cannot be chosen. One usable disk is preselected.
+- SSH: GitHub keys and a pasted key combine. Each fetched key is tagged
+  `<user>@github`. A fetch error (no such user, no keys, no network) stays on the
+  page with the reason. No key at all needs a second Enter after a warning.
+- Pengy: optional. A key or model without a base URL is refused.
+- Nothing is written before the user types `erase`. A failed install returns to
+  the review page with the answers kept.
 
 ## Verification (tests are first-class)
-- the state machine path is deterministic; back-navigation returns to the prior step.
-- auto(config) equals the interactive answer set for the same inputs.
-- an invalid answer is rejected with a message, not a crash.
+- `session`: every page's rules, offline.
+- `screen.App`: whole installs driven by key names, asserted on rendered frames,
+  including back navigation, quit, failure and every screen fitting 80x24.
+- `test_terminal`: the real curses driver in a pty (keys in, a logged frame out).
+- `plain`: whole installs over fake stdin.
+- Under QEMU (docs/qemu-testing.md §5b): the stick's tty1 path installs a disk
+  that boots, with the chosen hostname, user, keys and Pengy settings.
 
-**GitHub-ready contract** (assert with a `test_github_ready`):
-README.md, LICENSE (MIT, "Copyright (c) 2026 Pat Wendorf"), CHANGELOG.md,
-`.gitignore`, and a full green test suite. Docs are authored — keep them in sync.
+**GitHub-ready contract** (asserted by `test_github_ready`): README.md, LICENSE
+(MIT, "Copyright (c) 2026 Pat Wendorf"), CHANGELOG.md, `.gitignore`, and a full
+green test suite.
 
 ## Acceptance criteria
-- `pengyos-install-tui auto` produces the same plan inputs as the interactive path; the model is fully offline-testable.
 - `pytest -q` green; test_github_ready green.
+- An installer stick boots to the full-screen installer on tty1 and installs.
 
 ## Non-goals
-- The GUI (a separate Rust task)
-- Actually running an install (drives pengyos-install; not executed in tests)
+- Unattended installs (`install.toml`, answer files). The `run` / `auto` answer-set
+  commands were removed in 0.2.0: they described layouts and editions the engine
+  cannot install, and nothing consumed them.
+- Wi-Fi setup, RAID, custom partitioning: the engine's only layout is the whole
+  disk.
+- The GUI (`tools/pengyos-install-gui`).
 
 ## Constraints
-- Runs as a non-root user with no network at test time. Mock external tools; use
-  committed fixtures. Real system integration is opt-in via `PENGYOS_IT=1`.
+- Standard library only; Python ≥ 3.11.
+- Tests run as a non-root user with no network.

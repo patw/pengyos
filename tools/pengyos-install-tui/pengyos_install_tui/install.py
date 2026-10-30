@@ -1,20 +1,23 @@
-"""``pengyos-install-tui install`` — the interactive console installer.
+"""``pengyos-install-tui install`` — the console installer.
 
-Runs on the live medium's console (or over serial / SSH) and installs through
-the same engine as the GUI, :mod:`pengyos_install.image`:
+Runs on the live medium and installs its image through the same engine as the
+GUI (:mod:`pengyos_install.image`). The pages and rules live in
+:mod:`~pengyos_install_tui.session`; this module loads the medium, picks a
+front-end and runs the install:
 
-    disk  ->  computer name  ->  user  ->  password  ->  SSH key
-          ->  Pengy endpoint (optional; Enter skips it)
-          ->  automatic login (Desktop only; default no)  ->  confirm ("erase")  ->  install
+* full screen (:mod:`~pengyos_install_tui.screen`) on any terminal of at least
+  80x24 — the Linux console the stick boots to, or an SSH session;
+* line by line (:mod:`~pengyos_install_tui.plain`) otherwise, or with ``--plain``.
 
-Unlike ``run`` / ``auto`` (which only produce an answer set), this erases the
-chosen disk. Every prompt re-asks with the reason on bad input, and Ctrl-C /
-EOF before the confirmation leaves the disks untouched.
+Nothing is written before the user types the confirmation word; quitting or
+EOF before that leaves every disk untouched.
 """
 
 from __future__ import annotations
 
 import getpass
+import os
+import subprocess
 import sys
 from typing import Callable, TextIO
 
@@ -24,36 +27,6 @@ except ImportError:  # pragma: no cover - exercised only on a broken install
     engine = None  # type: ignore[assignment]
 
 __all__ = ["run_install"]
-
-
-class Aborted(Exception):
-    """The user left the installer before confirming."""
-
-
-def _ask(prompt: str, inp: Callable[[str], str], out: TextIO, *, default: str = "",
-         check: Callable[[str], str | None] = lambda v: None, optional: bool = False) -> str:
-    while True:
-        suffix = f" [{default}]" if default else ""
-        try:
-            value = inp(f"{prompt}{suffix}: ").strip() or default
-        except EOFError:
-            raise Aborted() from None
-        if not value and optional:
-            return ""
-        problem = "a value is required" if not value else check(value)
-        if problem is None:
-            return value
-        out.write(f"  {problem}\n")
-
-
-def _answers_problem(**kw) -> str | None:
-    base = dict(hostname="pengyos", username="user", password="xxxxxx")
-    base.update(kw)
-    try:
-        engine.ProvisionAnswers(**base).validate()
-    except engine.ImageInstallError as exc:
-        return str(exc)
-    return None
 
 
 def _progress(out: TextIO) -> Callable[[str, float, str], None]:
@@ -74,6 +47,40 @@ def _progress(out: TextIO) -> Callable[[str, float, str], None]:
     return report
 
 
+def _run_plain(session, *, inp, secret, out, payload, install, reboot) -> int:
+    from pengyos_install_tui.plain import Aborted, ask_plain
+
+    if not session.selectable():
+        for d in session.disks:
+            out.write(f"  {d.path:<14} {d.size_label:>9}  {d.model or '-'}"
+                      f"  ({session.disk_note(d) or 'not usable'})\n")
+        out.write("\nNo disk to install to was found.\n")
+        return 1
+    try:
+        confirmed = ask_plain(session, inp=inp, secret=secret, out=out)
+    except (Aborted, KeyboardInterrupt):
+        out.write("\nInstaller quit; nothing was changed.\n")
+        return 1
+    if not confirmed:
+        out.write("Nothing was changed.\n")
+        return 1
+    try:
+        install(session.disk.path, session.answers(), payload_dir=payload, confirm=True,
+                report=_progress(out))
+    except engine.ImageInstallError as exc:
+        out.write(f"\nThe install failed: {exc}\n")
+        return 1
+    if not reboot:
+        out.write("\nPengyOS is installed. Remove the USB stick and reboot.\n")
+        return 0
+    try:
+        inp("\nPengyOS is installed. Remove the USB stick, then press Enter to restart. ")
+    except (EOFError, KeyboardInterrupt):
+        pass
+    subprocess.run(["systemctl", "reboot"], check=False)
+    return 0
+
+
 def run_install(
     *,
     inp: Callable[[str], str] = input,
@@ -82,117 +89,46 @@ def run_install(
     payload: str | None = None,
     disks: list | None = None,
     install: Callable | None = None,
+    fetch_keys: Callable[[str], str] | None = None,
+    plain: bool | None = None,
+    reboot: bool = False,
 ) -> int:
+    """Run the installer; *plain* None picks the front-end from the terminal.
+
+    *reboot*: restart the machine once the install is done and the user has
+    pressed Enter (the install stick's launcher passes ``--reboot``).
+    """
     if engine is None:
         out.write("pengyos-install-tui: the pengyos-install engine is not installed\n")
         return 1
+    from pengyos_install_tui.session import Session
+
     install = install or engine.install_image
     try:
-        try:
-            manifest = engine.Manifest.load(engine.find_payload(payload))
-        except engine.ImageInstallError as exc:
-            out.write(f"pengyos-install-tui: {exc}\n")
-            return 1
-        out.write(f"\nPengyOS {manifest.edition} installer (image {manifest.version})\n\n")
-
-        disks = engine.list_disks() if disks is None else disks
-        choices = [d for d in disks if not d.is_boot and not d.mounted]
-        out.write("Disks:\n")
-        for d in disks:
-            if d in choices:
-                tag = f"  {choices.index(d) + 1})"
-                note = " (removable)" if d.removable else ""
-            else:
-                tag = "    "
-                note = " (running system)" if d.is_boot else " (in use)"
-            out.write(f"{tag} {d.path:<14} {d.size_label:>9}  {d.model or '-'}{note}\n")
-        if not choices:
-            out.write("\nNo disk to install to was found.\n")
-            return 1
-        out.write("\n")
-
-        def pick(v: str) -> str | None:
-            if v.isdigit() and 1 <= int(v) <= len(choices):
-                if choices[int(v) - 1].size_bytes < engine.MIN_DISK:
-                    return "that disk is too small for PengyOS"
-                return None
-            return f"enter a number from 1 to {len(choices)}"
-
-        disk = choices[int(_ask("Install to disk number", inp, out,
-                                default="1" if len(choices) == 1 else "", check=pick)) - 1]
-        hostname = _ask("Computer name", inp, out, default="pengyos",
-                        check=lambda v: _answers_problem(hostname=v))
-        username = _ask("Username", inp, out, check=lambda v: _answers_problem(username=v))
-        while True:
-            try:
-                password = secret("Password (also used for root): ")
-                again = secret("Repeat the password: ")
-            except EOFError:
-                raise Aborted() from None
-            problem = _answers_problem(password=password)
-            if problem:
-                out.write(f"  {problem}\n")
-            elif password != again:
-                out.write("  the passwords do not match\n")
-            else:
-                break
-        # sshd accepts keys only (password logins over SSH are off), so without
-        # a key this user can log in at the console but not over SSH.
-        key = _ask(f"SSH public key for {username} (paste one line; Enter to skip)", inp, out,
-                   check=lambda v: _answers_problem(authorized_keys=v), optional=True)
-        # The assistant ships unconfigured (its defaults are the local endpoint,
-        # no key, no model). This page is optional on purpose: plenty of people
-        # have no endpoint to point at during an install, and an empty base URL
-        # means "leave Pengy exactly as the image ships it".
-        base_url = _ask(
-            "Pengy base URL (OpenAI-compatible, e.g. http://127.0.0.1:11434/v1; Enter to skip)",
-            inp, out, check=lambda v: _answers_problem(pengy_base_url=v), optional=True,
-        )
-        api_key = model = ""
-        if base_url:
-            api_key = _ask(
-                "Pengy API key (Enter for none — local endpoints need none)",
-                secret, out, check=lambda v: _answers_problem(
-                    pengy_base_url=base_url, pengy_api_key=v), optional=True,
-            )
-            model = _ask(
-                "Pengy model name (Enter to choose later)", inp, out,
-                check=lambda v: _answers_problem(
-                    pengy_base_url=base_url, pengy_api_key=api_key, pengy_model=v),
-                optional=True,
-            )
-        # A Desktop starts at its login screen; skipping it is opt-in (Ubuntu's
-        # "Log in automatically").
-        autologin = False
-        if manifest.edition == "desktop":
-            autologin = _ask("Log in automatically, skipping the login screen? [y/N]", inp, out,
-                             optional=True).strip().lower() in ("y", "yes")
-
-        out.write(
-            f"\n  disk:      {disk.path}  {disk.size_label}  {disk.model or ''}\n"
-            f"  computer:  {hostname}\n  user:      {username}\n"
-            f"  ssh key:   {key.split()[0] + ' ...' + key[-24:] if key else 'none (console login only)'}\n"
-            f"  pengy:     {base_url + ('  model ' + model if model else '') if base_url else 'not configured (Pengy keeps its defaults)'}\n"
-            + (f"  login:     {'automatic' if autologin else 'password required'}\n"
-               if manifest.edition == "desktop" else "")
-            + "\n"
-            f"EVERYTHING on {disk.path} will be erased.\n"
-        )
-        if _ask("Type 'erase' to install, anything else to quit", inp, out).lower() != "erase":
-            out.write("Nothing was changed.\n")
-            return 1
-    except (Aborted, KeyboardInterrupt):
-        out.write("\nInstaller quit; nothing was changed.\n")
-        return 1
-
-    answers = engine.ProvisionAnswers(hostname=hostname, username=username, password=password,
-                                      authorized_keys=key, autologin=autologin,
-                                      pengy_base_url=base_url, pengy_api_key=api_key,
-                                      pengy_model=model)
-    try:
-        install(disk.path, answers, payload_dir=payload, confirm=True, report=_progress(out))
+        manifest = engine.Manifest.load(engine.find_payload(payload))
     except engine.ImageInstallError as exc:
-        out.write(f"\nThe install failed: {exc}\n")
+        out.write(f"pengyos-install-tui: {exc}\n")
         return 1
-    out.write("\nPengyOS is installed. Remove the USB stick and reboot.\n")
-    return 0
+    disks = engine.list_disks() if disks is None else disks
+    session = Session(manifest, disks, **({"fetch_keys": fetch_keys} if fetch_keys else {}))
+
+    if plain is None:
+        from pengyos_install_tui.screen import can_run_screen
+
+        plain = not can_run_screen(sys.stdin, out, os.environ.get("TERM"))
+    if plain:
+        return _run_plain(session, inp=inp, secret=secret, out=out, payload=payload,
+                          install=install, reboot=reboot)
+
+    from pengyos_install_tui.screen import App, run_screen
+
+    app = App(session, install=install, payload=payload, reboot=reboot)
+    rc = run_screen(app)
+    if rc == 0:
+        if reboot:
+            subprocess.run(["systemctl", "reboot"], check=False)
+    elif app.mode == "failed" or app._before_quit == "failed":
+        out.write(f"The install failed: {app.failure}\n")
+    else:
+        out.write("Installer quit; nothing was changed.\n")
+    return rc

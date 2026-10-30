@@ -7,6 +7,37 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A full-screen installer** (`screen.py`, curses from the stdlib) for
+  `install` on any terminal of at least 80x24: arrow-key disk list (unusable
+  disks shown with the reason, not numbered), forms with masked passwords and
+  inline errors, Esc to go back, a review page, a progress bar, and a last page
+  saying how to reach the machine (`ssh <user>@<hostname>`). Ctrl-C asks before
+  quitting. A failed install returns to the review with the answers kept. The
+  behaviour is `App` (key names in, frames out), tested without a terminal; a
+  pty test drives the real curses driver.
+- **SSH keys from GitHub** (`keys.py`): the SSH page fetches
+  `https://github.com/<user>.keys`, because nothing can be pasted at a bare
+  console and sshd is key-only. Fetched keys are tagged `<user>@github` and
+  combine with a pasted key. Skipping SSH entirely now needs a second Enter
+  after a warning.
+- `install --plain` (line by line, also chosen automatically without a TTY, with
+  `TERM=dumb` or under 80x24) and `install --reboot` (restart after the last
+  page; the stick's launcher passes it, so the reboot prompt moved out of the
+  shell script).
+
+### Changed
+- `session.py` holds the pages, fields and rules once for both front-ends;
+  `install.py` only loads the medium, picks a front-end and installs.
+- The plain front-end wraps to the terminal's width.
+- Version 0.2.0.
+
+### Removed
+- **`run` and `auto`** (`model.py`, `run.py`, `auto.py` and their tests): the
+  answer-set wizard and `install.toml` parser described editions, layouts and
+  network settings the engine cannot install, and nothing consumed them.
+  PengyOS Server is installed by a person at a keyboard, not unattended.
+
+### Added
 - **The `pengy` step in the wizard, and the console installer's Pengy page.**
   `WIZARD_ORDER` is `target → edition → layout → user → network → pengy →
   confirm`; `pengy` is the one step in `REQUIRED_STEPS`-less territory — an

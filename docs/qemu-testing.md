@@ -266,8 +266,14 @@ qemu-system-x86_64 … -device qemu-xhci,id=xhci -device usb-tablet -device usb-
 ```
 
 - The GUI (`pengyos-install-gui`) opens by itself in the live session; the console
-  installer is `pengyos-install-tui install` (serial/SSH); both run
-  `pengyos-install image`. The stick is listed but not selectable.
+  installer is `pengyos-install-tui install` (full screen on tty1, or run it over
+  serial/SSH; `--plain` for line-by-line prompts); both run `pengyos-install image`.
+  The stick is listed but not selectable.
+- Watching the Server's tty1 installer: use `-vga none -device
+  bochs-display,edid=on,xres=1024,yres=768` and QMP `screendump` (`format=png`).
+  With `-vga std` the guest's simpledrm console and QEMU's VGA mode disagree and
+  the screendump is garbage. 1024x768 is also the small-panel case: the launcher
+  drops to the 8x16 font (128x48) because the 16x32 font gives only 64x24.
 - **Restart now** exits QEMU (`-no-reboot`); boot again with only `target.img`
   (`bootindex=1`). Expect the layout of `docs/state-layout.md`: `/` read-only
   from root-a (8 GiB), `/data` = partition 4, `/etc` an overlay, `/var` `/home`

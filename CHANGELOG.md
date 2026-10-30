@@ -17,6 +17,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — a full-screen console installer for Core/Server (2026-10-30)
+
+The install stick's tty1 installer (`pengyos-install-tui` 0.2.0) is now a full-screen
+curses installer instead of a run of prompts: an arrow-key disk list that says why a
+disk can't be used, forms with inline errors, Esc to go back, a review, a progress bar,
+and a last page saying how to reach the machine. The SSH page fetches the user's public
+keys from GitHub (`https://github.com/<user>.keys`), because a Server is installed at a
+bare console where nothing can be pasted, and its sshd is key-only. Skipping SSH now
+takes a second Enter after a warning. The launcher (`console-installer`) drops to the
+8x16 console font when the 16x32 one leaves less than 80x24 (old 1024x768 laptop
+panels), and the installer falls back to line-by-line prompts on anything smaller or
+without a terminal. The unused `run`/`auto` answer-set commands are gone. Tested under
+QEMU: the stick's own tty1 path installed a disk that booted with the chosen hostname,
+user, GitHub and pasted keys, and Pengy settings.
+
 ### Added — Buildroot's compiler cache in every edition (2026-10-29)
 
 `BR2_CCACHE=y` in the core layer, cache in `$HOME/.buildroot-ccache` (40 GB cap),

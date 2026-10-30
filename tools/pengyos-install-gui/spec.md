@@ -14,7 +14,7 @@ A Rust workspace `pengyos-install-gui`: a `model` crate holding the whole wizard
 - pengyos-install-gui --answers a.json      # render from a scripted answer set (smoke, headless)
 
 ## Verification (tests are first-class)
-- the model state machine is deterministic; back-nav and validation match pengyos-install-tui's model.
+- the model state machine is deterministic; back-nav and validation are tested headless.
 - derived install.toml/layout is golden for a scripted answer set.
 - scripted (no-display) mode completes without a window.
 
