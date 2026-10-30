@@ -18,7 +18,9 @@ from dataclasses import dataclass
 from typing import Callable
 
 from pengyos_install import image as engine
-from pengyos_install_tui.keys import KeyFetchError, github_keys, valid_github_user
+from pengyos_install_tui.keys import (
+    Imported, KeyFetchError, KeySource, PasswordRefused, fetch_keys, parse_source,
+)
 
 __all__ = ["Field", "Page", "Option", "Session", "CONFIRM_WORD", "DEFAULTS"]
 
@@ -80,14 +82,14 @@ ACCOUNT = Page(
 )
 SSH = Page(
     "ssh", "SSH access",
-    "SSH on PengyOS accepts keys only, never passwords. Fetch your public keys "
-    "from GitHub (needs a network cable plugged in), paste one, or leave both "
-    "empty to log in at this keyboard only.",
+    "SSH on PengyOS accepts keys only, never passwords. Import public keys from a "
+    "GitHub user, a URL, or user@host (another machine's authorized_keys, copied "
+    "with its password); paste one; or leave all empty to log in here only.",
     (
-        Field("github_user", "GitHub username", "fetches github.com/<name>.keys",
+        Field("key_source", "Import keys from", "GitHub user, http(s):// URL or user@host",
               optional=True),
-        Field("ssh_key", "Or a public key", "ssh-ed25519 AAAA... you@host",
-              optional=True),
+        Field("key_password", "Password", "only for user@host", secret=True, optional=True),
+        Field("ssh_key", "Or paste a key", "ssh-ed25519 AAAA... you@host", optional=True),
     ),
 )
 PENGY = Page(
@@ -135,12 +137,12 @@ def _answers_problem(**kw) -> str | None:
 class Session:
     """Everything the user has answered so far, and the rules for each answer.
 
-    ``fetch_keys(user) -> str`` is injected so tests (and the front-ends) never
-    reach the network unless they mean to.
+    ``fetch_keys(source, password) -> Imported`` is injected so tests never
+    reach the network.
     """
 
     def __init__(self, manifest: engine.Manifest, disks: list[engine.Disk], *,
-                 fetch_keys: Callable[[str], str] = github_keys) -> None:
+                 fetch_keys: Callable[[KeySource, str], Imported] = fetch_keys) -> None:
         self.edition = manifest.edition
         self.version = manifest.version
         self.disks = list(disks)
@@ -148,10 +150,11 @@ class Session:
         self.values: dict[str, str] = dict(DEFAULTS)
         self.disk: engine.Disk | None = None
         self.autologin = False
-        #: authorized_keys lines fetched from GitHub on the ssh page.
-        self.github_keys = ""
-        #: The GitHub user those keys were fetched for (to refetch on a change).
-        self._fetched_for = ""
+        #: Keys imported on the ssh page, and where from.
+        self.imported: Imported | None = None
+        self.imported_from: KeySource | None = None
+        #: (source text, password) of that import, to import again on a change.
+        self._fetched_for: tuple[str, str] | None = None
         #: Set once the user was warned that skipping SSH means console only.
         self.ssh_skip_warned = False
         choices = self.selectable()
@@ -229,8 +232,9 @@ class Session:
             return _answers_problem(password=value)
         if key == "password2":
             return None if value == v.get("password", "") else "the passwords do not match"
-        if key == "github_user":
-            return None if valid_github_user(value) else "that is not a GitHub username"
+        if key == "key_source":
+            return None if parse_source(value) else \
+                "type a GitHub username, an http(s):// URL, or user@host"
         if key == "ssh_key":
             return _answers_problem(authorized_keys=value)
         if key == "pengy_base_url":
@@ -249,15 +253,40 @@ class Session:
 
         The value is kept even when it is refused, so a front-end shows what was
         typed; :meth:`finish` re-checks every field before a page completes."""
-        value = value.strip() if key not in ("password", "password2") else value
+        value = value.strip() if key not in ("password", "password2", "key_password") else value
         self.values[key] = value
         return self.check(key, value)
 
     def needs_network(self, page: Page) -> bool:
         """True when finishing *page* will fetch from the network (the front-end
         shows a 'fetching' notice first)."""
-        user = self.values.get("github_user", "")
-        return page.key == "ssh" and bool(user) and user != self._fetched_for
+        return page.key == "ssh" and self._import_wanted() not in (None, self._fetched_for)
+
+    def key_source(self) -> KeySource | None:
+        return parse_source(self.values.get("key_source", ""))
+
+    def field_text(self, f: Field) -> tuple[str, str]:
+        """The (label, hint) to show for *f* given the answers so far."""
+        if f.key == "key_password":
+            src = self.key_source()
+            if src and src.needs_password:
+                return (f"Password for {src.label}", "")
+        return (f.label, f.hint)
+
+    def field_active(self, key: str) -> bool:
+        """False for a field the current answers make irrelevant (the plain
+        front-end skips those): the password unless keys come from user@host."""
+        if key == "key_password":
+            src = self.key_source()
+            return bool(src and src.needs_password)
+        return True
+
+    def _import_wanted(self) -> tuple[str, str] | None:
+        src = self.key_source()
+        if src is None:
+            return None
+        password = self.values.get("key_password", "") if src.needs_password else ""
+        return (self.values.get("key_source", ""), password)
 
     def finish(self, page: Page) -> tuple[str, str] | None:
         """Cross-field rules for a whole page, once each field is valid.
@@ -273,15 +302,19 @@ class Session:
             if problem:
                 return (f.key, problem)
         if page.key == "ssh":
-            user = v.get("github_user", "")
-            if not user:
-                self.github_keys = self._fetched_for = ""
-            elif user != self._fetched_for:
+            src, wanted = self.key_source(), self._import_wanted()
+            if src is None:
+                self.imported = self.imported_from = self._fetched_for = None
+            elif src.needs_password and not v.get("key_password"):
+                return ("key_password", f"enter the password for {src.label}")
+            elif wanted != self._fetched_for:
                 try:
-                    self.github_keys = self.fetch_keys(user)
+                    self.imported = self.fetch_keys(src, wanted[1])
                 except KeyFetchError as exc:
-                    return ("github_user", str(exc))
-                self._fetched_for = user
+                    self.imported = self.imported_from = self._fetched_for = None
+                    field = "key_password" if isinstance(exc, PasswordRefused) else "key_source"
+                    return (field, str(exc))
+                self.imported_from, self._fetched_for = src, wanted
             if not self.authorized_keys and not self.ssh_skip_warned:
                 self.ssh_skip_warned = True
                 # On the page's last field, so one more Enter skips.
@@ -295,7 +328,7 @@ class Session:
     # ------------------------------------------------------------ results
     @property
     def authorized_keys(self) -> str:
-        lines = [self.github_keys, self.values.get("ssh_key", "")]
+        lines = [self.imported.keys if self.imported else "", self.values.get("ssh_key", "")]
         return "\n".join(line for line in lines if line)
 
     def answers(self) -> engine.ProvisionAnswers:
@@ -318,9 +351,11 @@ class Session:
             ssh = "no key: console login only"
         else:
             sources = []
-            if self.github_keys:
-                n = len(self.github_keys.splitlines())
-                sources.append(f"{n} from github.com/{self._fetched_for}")
+            if self.imported:
+                skipped = (f", {self.imported.skipped} line"
+                           f"{'s' if self.imported.skipped != 1 else ''} skipped"
+                           if self.imported.skipped else "")
+                sources.append(f"{self.imported.count} from {self.imported_from.label}{skipped}")
             if self.values.get("ssh_key"):
                 sources.append("1 pasted")
             ssh = f"{len(keys)} key{'s' if len(keys) != 1 else ''} ({', '.join(sources)})"

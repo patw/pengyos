@@ -4,7 +4,7 @@ by key names and read back from rendered frames — no terminal needed."""
 from __future__ import annotations
 
 import pytest
-from conftest import DISKS, GH_KEYS, FakeGitHub
+from conftest import DISKS, GH_KEYS, HOST_KEYS, HOST_PASSWORD, FakeFetch
 
 from pengyos_install.image import Disk, ImageInstallError
 from pengyos_install_tui.keys import KeyFetchError
@@ -24,8 +24,8 @@ class FakeInstall:
         kw["report"]("done", 1.0, "done")
 
 
-def make_app(manifest, *, disks=DISKS, github=None, install=None, reboot=False):
-    s = Session(manifest, disks, fetch_keys=github or FakeGitHub())
+def make_app(manifest, *, disks=DISKS, fetcher=None, install=None, reboot=False):
+    s = Session(manifest, disks, fetch_keys=fetcher or FakeFetch())
     return App(s, install=install or FakeInstall(), payload="/p", reboot=reboot)
 
 
@@ -45,16 +45,17 @@ def screen(app, h=24, w=80):
     return "\n".join(app.render(h, w).text())
 
 
-def fill_to_review(app, *, github_user="patw"):
+def fill_to_review(app, *, source="patw", password=""):
     press(app, "enter")                         # disk (preselected)
     press(app, "enter")                         # name: keep "pengyos"
     type_(app, "pat"); press(app, "enter")
     type_(app, "hunter22"); press(app, "enter")
     type_(app, "hunter22"); press(app, "enter")
-    if github_user:
-        type_(app, github_user)
+    type_(app, source)
+    press(app, "tab")
+    type_(app, password)
     press(app, "tab", "enter")                  # ssh
-    if not github_user:
+    if not source:
         press(app, "enter")                     # acknowledge the skip warning
     press(app, "enter", "enter", "enter")       # pengy: all empty
 
@@ -113,9 +114,9 @@ def test_a_long_model_name_is_cut_before_the_note(manifest):
     assert "(the installer stick)" in screen(make_app(manifest, disks=disks))
 
 
-def test_full_install(manifest, github):
+def test_full_install(manifest, fetcher):
     inst = FakeInstall()
-    app = make_app(manifest, github=github, install=inst)
+    app = make_app(manifest, fetcher=fetcher, install=inst)
     fill_to_review(app)
     text = screen(app)
     assert "Ready to install" in text
@@ -187,20 +188,20 @@ def test_skipping_ssh_needs_a_second_enter(manifest):
     type_(app, "pat"); press(app, "enter")
     type_(app, "hunter22"); press(app, "enter")
     type_(app, "hunter22"); press(app, "enter")
-    press(app, "tab", "enter")
+    press(app, "tab", "tab", "enter")
     assert app.page.key == "ssh" and "own keyboard" in screen(app)
     press(app, "enter", "enter")
     assert app.page.key == "pengy"
 
 
 def test_github_fetch_shows_a_notice_then_the_error(manifest):
-    gh = FakeGitHub(error=KeyFetchError("could not reach github.com (down)"))
-    app = make_app(manifest, github=gh)
+    gh = FakeFetch(error=KeyFetchError("could not reach github.com (down)"))
+    app = make_app(manifest, fetcher=gh)
     press(app, "enter", "enter")
     type_(app, "pat"); press(app, "enter")
     type_(app, "hunter22"); press(app, "enter")
     type_(app, "hunter22"); press(app, "enter")
-    type_(app, "patw"); press(app, "tab")
+    type_(app, "patw"); press(app, "tab", "tab")
     app.key("enter")  # not running the job yet: the driver draws this frame first
     assert "Fetching keys from github.com/patw" in screen(app)
     job, app.pending = app.pending, None
@@ -298,3 +299,29 @@ def test_every_screen_fits(request, edition, h, w):
 
 def test_too_small_screen_says_so(manifest):
     assert "at least 80x24" in screen(make_app(manifest), 20, 64)
+
+
+def test_keys_from_another_machine(manifest, fetcher):
+    app = make_app(manifest, fetcher=fetcher)
+    press(app, "enter", "enter")
+    type_(app, "pat"); press(app, "enter")
+    type_(app, "hunter22"); press(app, "enter")
+    type_(app, "hunter22"); press(app, "enter")
+    type_(app, "pat@behoserver"); press(app, "tab")
+    assert "Password for pat@behoserver" in screen(app)
+    press(app, "tab", "enter")                    # no password yet
+    assert app.focus == 1 and "enter the password for pat@behoserver" in screen(app)
+    type_(app, "wrong"); press(app, "tab")
+    app.key("enter")
+    assert "Connecting to pat@behoserver" in screen(app)
+    job, app.pending = app.pending, None
+    job()
+    assert app.focus == 1 and "refused the password" in screen(app)
+    assert "wrong" not in screen(app)             # masked
+    press(app, *["backspace"] * 5)
+    type_(app, HOST_PASSWORD); press(app, "tab", "enter")
+    assert app.page.key == "pengy"
+    assert fetcher.calls == [("pat@behoserver", "wrong"), ("pat@behoserver", HOST_PASSWORD)]
+    press(app, "enter", "enter", "enter")
+    assert "2 keys (2 from pat@behoserver, 1 line skipped)" in screen(app)
+    assert app.s.answers().authorized_keys == HOST_KEYS

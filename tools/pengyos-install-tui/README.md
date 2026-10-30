@@ -20,11 +20,19 @@ up front.
 2. **Computer name**: defaults to `pengyos`.
 3. **Account**: username and password (typed twice, masked). The password is
    also set for root.
-4. **SSH access**: a GitHub username (its keys are fetched from
-   `https://github.com/<name>.keys`, the way `ssh-import-id gh:<name>` does),
-   a pasted public key, or both. sshd is key-only, so leaving both empty is
-   allowed only after a warning: the machine can then be used only from its
-   own keyboard.
+4. **SSH access**: "Import keys from" takes one of
+   - a GitHub username (`patw` or `gh:patw`): fetches
+     `https://github.com/<name>.keys`, the way `ssh-import-id gh:<name>` does;
+   - an `http(s)://` URL: any authorized_keys-style file, e.g. on a NAS;
+   - `user@host` or `user@host:port`: another machine that takes a password
+     over SSH. The installer asks for that password (masked) and copies the
+     machine's whole `~/.ssh/authorized_keys`, so whoever can log in there can
+     log in here. The host key is accepted on first sight (a LAN machine).
+
+   A pasted key can be added too. Lines with options (`from="..."`,
+   `command="..."`) are skipped and counted in the review. sshd is key-only,
+   so leaving everything empty is allowed only after a warning: the machine can
+   then be used only from its own keyboard.
 5. **Pengy**: the assistant's base URL, API key (masked) and model. Optional:
    leave the URL empty and Pengy keeps the image's defaults.
 6. **Logging in** (Desktop images only): log in automatically or ask for the
@@ -64,7 +72,7 @@ pengyos_install_tui/
   session.py   # the pages, fields and rules: pure, no I/O, shared by both front-ends
   screen.py    # full screen: App (keys in, frames out; no curses) + the curses driver
   plain.py     # the line-by-line fallback
-  keys.py      # fetch SSH keys from GitHub
+  keys.py      # import SSH keys: GitHub, a URL, or user@host over SSH
   install.py   # load the medium, pick a front-end, run the install
   cli.py       # argparse
 tests/
@@ -72,7 +80,7 @@ tests/
   test_screen.py       # the full-screen App driven by key names, read from frames
   test_terminal.py     # the real curses driver in a pseudo-terminal
   test_install.py      # the plain front-end end to end (fake disks and install)
-  test_keys.py         # GitHub fetch with a fake opener
+  test_keys.py         # key sources, with a fake opener and a fake ssh
   test_scaffold.py     # package and CLI wiring
   test_github_ready.py # README/LICENSE/CHANGELOG/.gitignore/pyproject contract
 ```

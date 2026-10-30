@@ -56,8 +56,9 @@ def _form_page(session: Session, page, inp, secret, out: TextIO) -> None:
     while True:
         while i < len(fields):
             f = fields[i]
-            if page.key == "pengy" and f.key != "pengy_base_url" \
-                    and not session.values.get("pengy_base_url"):
+            if not session.field_active(f.key) or (
+                    page.key == "pengy" and f.key != "pengy_base_url"
+                    and not session.values.get("pengy_base_url")):
                 session.set(f.key, "")
                 i += 1
                 continue
@@ -66,9 +67,11 @@ def _form_page(session: Session, page, inp, secret, out: TextIO) -> None:
             if session.check(f.key, current):
                 current = DEFAULTS.get(f.key, "")
             shown = f" [{current}]" if current and not f.secret else ""
-            hint = f" ({f.hint})" if f.hint and not shown else ""
-            skip = "; Enter to skip" if f.optional else ""
-            raw = _read(secret if f.secret else inp, f"{f.label}{hint}{skip}{shown}: ")
+            label, hint = session.field_text(f)
+            hint = f" ({hint})" if hint and not shown else ""
+            skip = "; Enter to skip" if f.optional and session.field_active(f.key) \
+                and f.key != "key_password" else ""
+            raw = _read(secret if f.secret else inp, f"{label}{hint}{skip}{shown}: ")
             if not raw.strip() and not f.secret:
                 raw = "" if f.optional else current
             problem = session.set(f.key, raw)

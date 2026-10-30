@@ -244,7 +244,9 @@ class App:
             self.pending = self._install
             return
         if self.s.needs_network(self.page):
-            self.notice = ("ok", f"Fetching keys from github.com/{self.s.values['github_user']} ...")
+            src = self.s.key_source()
+            verb = "Connecting to" if src.kind == "ssh" else "Fetching keys from"
+            self.notice = ("ok", f"{verb} {src.label} ...")
             self.pending = self._finish
         else:
             self._finish()
@@ -356,11 +358,12 @@ class App:
         box = min(INPUT_W, width - 2)
         for i, f in enumerate(self.page.fields):
             focused = i == self.focus
-            fr.put(row, x, f.label, "title" if focused else "normal")
+            label, hint = self.s.field_text(f)
+            fr.put(row, x, label, "title" if focused else "normal")
             note, style = self.errors.get(f.key), "error"
             if note is None:
-                note, style = f.hint, "hint"
-            col = x + len(f.label) + 2
+                note, style = hint, "hint"
+            col = x + len(label) + 2
             below = []
             if note and len(note) > x + width - col and style == "error":
                 below, note = textwrap.wrap(note, width), ""

@@ -53,19 +53,31 @@ def desktop_manifest(desktop_payload):
     return Manifest.load(desktop_payload)
 
 
-class FakeGitHub:
-    """fetch_keys stand-in: records the users asked for."""
+HOST_KEYS = ("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHost1 pat@laptop\n"
+             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHost2 pat@desktop")
+HOST_PASSWORD = "behopass"
 
-    def __init__(self, keys: str = GH_KEYS, error: Exception | None = None):
-        self.keys, self.error, self.calls = keys, error, []
 
-    def __call__(self, user: str) -> str:
-        self.calls.append(user)
+class FakeFetch:
+    """fetch_keys stand-in: GitHub and URLs give GH_KEYS; user@host gives
+    HOST_KEYS (one line skipped) for HOST_PASSWORD and refuses anything else."""
+
+    def __init__(self, error: Exception | None = None):
+        self.error, self.calls = error, []
+
+    def __call__(self, src, password):
+        from pengyos_install_tui.keys import Imported, PasswordRefused
+
+        self.calls.append((src.label, password))
         if self.error:
             raise self.error
-        return self.keys
+        if src.kind == "ssh":
+            if password != HOST_PASSWORD:
+                raise PasswordRefused(f"{src.label} refused the password")
+            return Imported(HOST_KEYS, skipped=1)
+        return Imported(GH_KEYS)
 
 
 @pytest.fixture
-def github():
-    return FakeGitHub()
+def fetcher():
+    return FakeFetch()
