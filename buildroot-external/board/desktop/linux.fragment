@@ -91,21 +91,7 @@ CONFIG_DRM_FBDEV_EMULATION=y
 # Built in (no firmware needed). VMD: Intel "RAID/VMD" mode hides NVMe behind it.
 CONFIG_BLK_DEV_NVME=y
 CONFIG_VMD=y
-# --- Wi-Fi ---------------------------------------------------------------------
-# Modules, like i915: a built-in driver probes before the rootfs is mounted and
-# never finds its firmware. Intel (CNVi AX1xx/AX2xx, 9xxx, AX2xx PCIe),
-# MediaTek MT7921/7922, Realtek rtw88. Firmware: BR2_PACKAGE_LINUX_FIRMWARE_*.
-CONFIG_WLAN=y
-CONFIG_WLAN_VENDOR_INTEL=y
-CONFIG_IWLWIFI=m
-CONFIG_IWLMVM=m
-CONFIG_WLAN_VENDOR_MEDIATEK=y
-CONFIG_MT7921E=m
-CONFIG_WLAN_VENDOR_REALTEK=y
-CONFIG_RTW88=m
-CONFIG_RTW88_8822BE=m
-CONFIG_RTW88_8822CE=m
-CONFIG_RTW88_8821CE=m
+# Wi-Fi drivers: server/linux.fragment (laptops as servers).
 # --- Laptop input: I2C touchpads / touchscreens ------------------------------
 # The DesignWare options sit under I2C_DESIGNWARE_CORE: without it both lines
 # below were silently dropped (no touchpad on Intel/AMD laptops).
@@ -257,30 +243,14 @@ CONFIG_HID_STEAM=m
 CONFIG_HID_APPLE=m
 CONFIG_HID_LOGITECH_DJ=m
 CONFIG_INPUT_UINPUT=m
-# USB networking: Realtek/ASIX Ethernet dongles, phone tethering (RNDIS/CDC/NCM).
-CONFIG_USB_USBNET=m
-CONFIG_USB_RTL8152=m
-CONFIG_USB_NET_AX8817X=m
-CONFIG_USB_NET_AX88179_178A=m
-CONFIG_USB_NET_CDCETHER=m
-CONFIG_USB_NET_CDC_NCM=m
-CONFIG_USB_NET_RNDIS_HOST=m
-CONFIG_USB_IPHETH=m
-# Fast USB storage (UAS), USB4 / Thunderbolt.
-CONFIG_USB_UAS=m
-CONFIG_USB4=m
+# USB Ethernet dongles, tethering, UAS and USB4: server/linux.fragment.
 # Monitor control over DDC/CI (ddcutil) and DisplayPort AUX.
 CONFIG_I2C_CHARDEV=m
 CONFIG_DRM_DISPLAY_DP_AUX_CHARDEV=y
 
 # --- Laptops: USB-C, power modes, thermal, speaker amps (2026-10-17) -------------
 # Found missing in a diff against Ubuntu's config, on a Legion 5 15ARH7H:
-# USB-C ports through the firmware's UCSI interface (ACPI USBC000 had no
-# driver): port roles, power delivery, DisplayPort alt mode where the OS drives it.
-CONFIG_TYPEC=m
-CONFIG_TYPEC_UCSI=m
-CONFIG_UCSI_ACPI=m
-CONFIG_TYPEC_DP_ALTMODE=m
+# USB-C (UCSI): server/linux.fragment.
 # Power modes (quiet/balanced/performance, Fn+Q) come through platform_profile,
 # which power-profiles-daemon drives. Legion laptops set it through the Lenovo
 # GameZone WMI interface, newer AMD laptops through AMD PMF; neither was built,
@@ -338,39 +308,14 @@ CONFIG_SND_SOC_INTEL_SOF_ES8336_MACH=m
 # against the hardware a tester is likely to own; all modules, loaded by udev
 # only where the device exists. Firmware: desktop.config / external.mk.
 # GPU: xe (Lunar Lake / Panther Lake, Battlemage) is in server/linux.fragment.
-# Wi-Fi 7: Intel BE200/BE201/BE211 run the MLD op mode (iwl-drv.c sends Wi-Fi 7
-# parts to iwlmld only when it is built); MediaTek MT7925 (common on 2024+ AMD
-# laptops), Qualcomm WCN7850 (ath12k), and the Realtek rtw89 parts budget
-# laptops ship besides the 8852BE.
-CONFIG_IWLMLD=m
-CONFIG_MT7925E=m
-CONFIG_ATH12K=m
-CONFIG_RTW89_8851BE=m
-CONFIG_RTW89_8852AE=m
-CONFIG_RTW89_8852CE=m
-CONFIG_RTW89_8922AE=m
+# Wi-Fi 7 (iwlmld, MT7925, ath12k, rtw89): server/linux.fragment.
 # Suspend: without the PMC drivers s2idle never reaches the deep package states
 # on modern AMD and Intel laptops (battery drains in suspend). Intel PMC core
 # sits behind PMT telemetry.
 CONFIG_AMD_PMC=m
 CONFIG_INTEL_PMT_TELEMETRY=m
 CONFIG_INTEL_PMC_CORE=m
-# Power button, hotkeys and tablet mode on many Intel laptops go through these.
-CONFIG_INTEL_HID_EVENT=m
-CONFIG_INTEL_VBTN=m
-# Laptop platform drivers: Fn keys, mic-mute LED, keyboard backlight, battery
-# charge limits, platform profiles.
-CONFIG_THINKPAD_ACPI=m
-CONFIG_IDEAPAD_LAPTOP=m
-CONFIG_ASUS_WMI=m
-CONFIG_ASUS_NB_WMI=m
-CONFIG_X86_PLATFORM_DRIVERS_HP=y
-CONFIG_HP_WMI=m
-CONFIG_X86_PLATFORM_DRIVERS_DELL=y
-CONFIG_DELL_SMBIOS=m
-CONFIG_DELL_LAPTOP=m
-CONFIG_DELL_WMI=m
-CONFIG_ACER_WMI=m
+# Power button (intel-hid/vbtn) and laptop platform drivers: server/linux.fragment.
 # Audio: the smart speaker amplifiers behind HDA on many 2022+ ASUS/Lenovo/HP/
 # Dell laptops (silent internal speakers without them), the Cirrus CS8409
 # bridge (Dell, Apple), and the digital mic on Ryzen 7040 and later (ACP 6.3+,
