@@ -9,7 +9,8 @@
 #                    download-publish for every target built (staged: the
 #                    download page lists only releases promoted to stable).
 #                    Needs $PENGYOS_RELEASE_KEY.
-#   --push           rsync the site dir to $PENGYOS_SITE_REMOTE (host:path/).
+#   --push           rsync the site dir to $PENGYOS_SITE_REMOTE (host:path/),
+#                    retrying while the host is away (scripts/push-site.sh).
 #                    Implies --publish.
 #   --channel C      update channel for --publish (default: testing)
 #   --notes FILE     release notes for update-publish
@@ -54,7 +55,7 @@ while [ $# -gt 0 ]; do
         --skip-cosmic) SKIP_COSMIC=1 ;;
         --no-boot-check) BOOT_CHECK=0 ;;
         --allow-dirty) ALLOW_DIRTY=1 ;;
-        -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
         -*) echo "release: unknown option $1" >&2; exit 2 ;;
         *) TARGETS+=("$1") ;;
     esac
@@ -150,7 +151,7 @@ fi
 
 if [ "${PUSH}" = 1 ]; then
     say "push ${SITE}/ -> ${PENGYOS_SITE_REMOTE}"
-    rsync -a "${SITE}/update" "${SITE}/download" "${PENGYOS_SITE_REMOTE}"
+    "${REPO}/scripts/push-site.sh" "${SITE}" "${PENGYOS_SITE_REMOTE}"   # retries a host that is away
 fi
 
 say "done: ${TARGETS[*]} at ${VERSION}"
