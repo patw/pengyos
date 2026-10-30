@@ -1,0 +1,62 @@
+#!/bin/sh
+# pengyos-battery-limit CONF: set every battery's charge limit to LIMIT from CONF.
+# Run at boot by pengyos-battery-limit.service; see /etc/pengyos/battery.conf.
+# PENGYOS_POWER_SUPPLY replaces /sys/class/power_supply (tests).
+PS=${PENGYOS_POWER_SUPPLY:-/sys/class/power_supply}
+WAIT=${PENGYOS_BATTERY_WAIT:-30}
+LIMIT=80
+[ -r "${1:-}" ] && . "$1"
+case "$LIMIT" in
+    off) LIMIT=100 ;;
+    *[!0-9]* | '') echo "LIMIT=$LIMIT in ${1:-} is not a number from 20 to 100" >&2; exit 1 ;;
+esac
+if [ "$LIMIT" -lt 20 ] || [ "$LIMIT" -gt 100 ]; then
+    echo "LIMIT=$LIMIT in ${1:-} is not a number from 20 to 100" >&2
+    exit 1
+fi
+
+batteries() {
+    for b in "$PS"/*; do
+        [ "$(cat "$b/type" 2>/dev/null)" = Battery ] && echo "$b"
+    done
+}
+
+[ -n "$(batteries)" ] || { echo "no battery: nothing to limit"; exit 0; }
+
+# The platform driver adds the threshold files when it loads, which udev may
+# still be doing this early in boot: give it up to 30 seconds.
+i=0
+while [ $i -lt "$WAIT" ]; do
+    for b in $(batteries); do
+        [ -e "$b/charge_control_end_threshold" ] && break 2
+    done
+    sleep 1
+    i=$((i + 1))
+done
+
+rc=0
+for b in $(batteries); do
+    name=${b##*/}
+    end=$b/charge_control_end_threshold
+    start=$b/charge_control_start_threshold
+    if [ ! -e "$end" ]; then
+        echo "$name: this laptop offers no charge limit (no charge_control_end_threshold)"
+        continue
+    fi
+    # Charging restarts below the start threshold, which must stay under the
+    # end one: lower it first when it is not.
+    if [ -e "$start" ] && [ "$LIMIT" -lt 100 ] && [ "$(cat "$start")" -ge "$LIMIT" ]; then
+        echo $((LIMIT - 5)) > "$start" || rc=1
+    fi
+    if echo "$LIMIT" > "$end"; then
+        echo "$name: charges up to $(cat "$end")%"
+    else
+        echo "$name: could not set the charge limit to $LIMIT%" >&2
+        rc=1
+    fi
+    # Dell applies the thresholds only in its Custom charging mode.
+    if [ -w "$b/charge_types" ] && grep -q Custom "$b/charge_types"; then
+        echo Custom > "$b/charge_types" 2>/dev/null || true
+    fi
+done
+exit $rc

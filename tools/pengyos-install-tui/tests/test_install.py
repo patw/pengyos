@@ -150,3 +150,36 @@ def test_keys_from_another_machine(payload):
     assert calls[0][1].authorized_keys == HOST_KEYS
     assert "2 keys (2 from pat@behoserver, 1 line skipped)" in out
     assert HOST_PASSWORD not in out
+
+
+def test_wifi_line_by_line(payload):
+    from conftest import WIFI_PASSWORD, FakeWifi
+
+    w = FakeWifi()
+    lines = iter(["1", "box", "pat", "7", "r", "1", "", KEY, "", "erase"])
+    secrets = iter(["hunter22", "hunter22", "wrong password", WIFI_PASSWORD])
+    out = io.StringIO()
+    calls = []
+    rc = run_install(inp=lambda p: next(lines), secret=lambda p: next(secrets), out=out,
+                     payload=payload, disks=DISKS, plain=True, wifi=w, fetch_keys=FakeFetch(),
+                     install=lambda t, a, **k: calls.append(a))
+    text = out.getvalue()
+    assert rc == 0 and w.scans == 2
+    assert "0) No Wi-Fi" in text and "1) Home" in text and "r) Scan again" in text
+    assert "enter a number from 0 to 2, or r" in text
+    assert "Connecting to Home ..." in text and "Home refused the password" in text
+    assert "Wi-Fi Home (wlp2s0, 192.168.1.77)" in text
+    assert w.joined[-1] == ("wlp2s0", "Home", WIFI_PASSWORD)
+
+
+def test_wifi_password_enter_skips_wifi(payload):
+    from conftest import FakeWifi
+
+    w = FakeWifi()
+    lines = iter(["1", "box", "pat", "1", KEY, "", "erase"])
+    secrets = iter(["hunter22", "hunter22", ""])
+    out = io.StringIO()
+    rc = run_install(inp=lambda p: next(lines), secret=lambda p: next(secrets), out=out,
+                     payload=payload, disks=DISKS, plain=True, wifi=w, fetch_keys=FakeFetch(),
+                     install=lambda *a, **k: None)
+    assert rc == 0 and w.joined == [] and "none yet" in out.getvalue()

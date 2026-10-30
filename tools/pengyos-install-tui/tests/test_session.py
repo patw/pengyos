@@ -204,3 +204,78 @@ def test_answers_and_review(manifest, fetcher):
     assert review["Disk"] == "/dev/vda  20.0 GB  QEMU"
     assert review["Pengy"].startswith("not set up")
     assert "Login" not in review
+
+
+# ------------------------------------------------------------------- Wi-Fi
+from conftest import WIFI_PASSWORD, FakeWifi  # noqa: E402
+from pengyos_install_tui.session import WIFI, WIFI_PASSWORD as WIFI_PW_PAGE  # noqa: E402
+
+
+def wifi_session(manifest, **kw):
+    w = FakeWifi(**kw)
+    return Session(manifest, DISKS, fetch_keys=FakeFetch(), wifi=w), w
+
+
+def keys(s):
+    return [p.key for p in s.pages()]
+
+
+def test_no_wifi_pages_without_a_wifi_card(manifest):
+    s, _ = wifi_session(manifest, interfaces=())
+    assert "wifi" not in keys(s)
+    assert dict(s.review())["Network"] == "wired"
+    assert "wifi" not in keys(make(manifest))  # no backend at all
+
+
+def test_wifi_pages_come_before_ssh(manifest):
+    s, w = wifi_session(manifest, wired="10.0.0.9")
+    assert keys(s) == ["disk", "name", "account", "wifi", "ssh", "pengy", "review"]
+    assert s.scan() is None and w.scans == 1
+    opts = s.options(WIFI)
+    assert [o.label for o in opts] == ["No Wi-Fi", "Home", "Cafe", "Scan again"]
+    assert opts[0].note == "wired: 10.0.0.9" and opts[1].note == "####  secured"
+    assert s.is_rescan(WIFI, 3) and not s.is_rescan(WIFI, 2)
+
+
+def test_a_secured_network_asks_for_its_password(manifest):
+    s, w = wifi_session(manifest)
+    s.scan()
+    assert s.choose(WIFI, 1) is None and not s.needs_network(WIFI)
+    assert keys(s)[4] == "wifi_password"
+    assert s.finish(WIFI) is None and w.joined == []
+    assert s.field_text(WIFI_PW_PAGE.fields[0]) == ("Password for Home", "")
+    assert s.set("wifi_password", "short") == "Wi-Fi passwords are 8 to 63 characters"
+    s.set("wifi_password", "wrong password")
+    assert s.needs_network(WIFI_PW_PAGE)
+    assert s.finish(WIFI_PW_PAGE) == ("wifi_password", "Home refused the password")
+    s.set("wifi_password", WIFI_PASSWORD)
+    assert s.finish(WIFI_PW_PAGE) is None and not s.needs_network(WIFI_PW_PAGE)
+    assert dict(s.review())["Network"] == "Wi-Fi Home (wlp2s0, 192.168.1.77)"
+    assert s.finish(WIFI_PW_PAGE) is None and len(w.joined) == 2  # not joined twice
+
+
+def test_an_open_network_is_joined_from_the_list(manifest):
+    s, w = wifi_session(manifest)
+    s.scan()
+    s.choose(WIFI, 2)
+    assert "wifi_password" not in keys(s) and s.needs_network(WIFI)
+    assert s.finish(WIFI) is None and w.joined == [("wlp2s0", "Cafe", "")]
+    assert s.chosen(WIFI) == 2
+
+
+def test_changing_your_mind_leaves_the_network(manifest):
+    s, w = wifi_session(manifest)
+    s.scan()
+    s.choose(WIFI, 2)
+    s.finish(WIFI)
+    s.choose(WIFI, 0)
+    assert w.forgotten == ["wlp2s0"] and "wifi_password" not in keys(s)
+    assert dict(s.review())["Network"].startswith("none yet")
+
+
+def test_scan_problems(manifest):
+    s, _ = wifi_session(manifest, scan_error="Wi-Fi is switched off by the laptop's Wi-Fi switch")
+    assert "Wi-Fi switch" in s.scan()
+    assert [o.label for o in s.options(WIFI)] == ["No Wi-Fi", "Scan again"]
+    s, _ = wifi_session(manifest, networks=[])
+    assert "no Wi-Fi networks found" in s.scan()

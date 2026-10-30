@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **The Server's live-session Wi-Fi comes along**, like the Desktop's
+  NetworkManager profiles: each `/etc/wpa_supplicant/wpa_supplicant-nl80211-<iface>.conf`
+  (written by pengyos-install-tui's Wi-Fi page) is copied root-only, and
+  `wpa_supplicant-nl80211@<iface>.service` is enabled, so a Wi-Fi-only laptop is
+  on the same network after the reboot. Only names that are interface names are
+  taken; the image's own `wpa_supplicant.conf` is not. `install_image(...,
+  wifi_configs=)` points it elsewhere (tests).
+
 ### Changed
 - **The owner is not put in a `sudo` group any more.** `USER_GROUPS` drops
   `sudo`: the image's PAM file only admits `wheel` to sudo, so the group

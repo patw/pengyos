@@ -268,6 +268,26 @@ build uses all GPUs; `llama-server` runs as a service across reboots and image u
 the default Server image stays free of the proprietary driver; behoserver updates from
 the `pengyos-server-nvidia` feed.
 
+**US-SRV-12 — Turn an old laptop into a server.**
+> *As the self-hoster, I want a laptop with a cracked screen and a dead battery to run
+> PengyOS Server in a corner: installed at its own keyboard, then left with the lid shut
+> and reached over SSH.*
+
+How: the Server carries the laptop hardware the Desktop has (Wi-Fi back to 2008-era
+cards, USB Ethernet dongles, USB-C/Thunderbolt docks, eMMC disks, the power button,
+the ThinkPad/Lenovo/ASUS/HP/Dell/Acer platform drivers). The installer joins Wi-Fi when
+the machine has a card (`wpa_supplicant` + networkd, carried over to the installed
+system). Closing the lid does nothing (`60-pengyos-lid.conf`), the console switches the
+screen off after 5 idle minutes (`pengyos-console-blank`), and the battery stops
+charging at 80% (`pengyos-battery-limit`, `/etc/pengyos/battery.conf`) where the
+laptop's driver offers a limit.
+**Acceptance:** a Wi-Fi-only laptop installs over Wi-Fi (SSH keys imported over it) and
+is on the same network after the reboot; with the lid shut it stays up and reachable;
+the screen goes dark when idle; `cat /sys/class/power_supply/BAT0/charge_control_end_threshold`
+says 80 on a ThinkPad. Not covered: legacy-BIOS-only and 32-bit-UEFI machines (the
+installer stick boots 64-bit UEFI only), hidden Wi-Fi networks and WPA-Enterprise in the
+installer (`wpa_cli` after).
+
 ---
 
 ## 3. PengyOS **Desktop** — “the daily driver”

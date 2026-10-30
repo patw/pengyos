@@ -23,7 +23,8 @@ CORE   = the base: systemd, key-only sshd, Python 3, a default-deny firewall
          (pengyos-firewall opens a port), chrony, firmware
 SERVER = Core + tmux/mosh/zsh/git/ripgrep/fd/bat/eza/zoxide/jq (+ fzf, starship and the zsh plugins on the comfort profile), rootless podman,
          distrobox, backup + monitoring timers,
-         the daily update check, pengy-web
+         the daily update check, pengy-web, Wi-Fi (wpa_supplicant), laptop-as-server
+         care (lid ignored, battery limit, screen off when idle)
 DESKTOP= Server + every port above 1024 open, the COSMIC Wayland session, PipeWire, BlueZ, CUPS, Wi-Fi,
          Mesa/Vulkan, Flatpak + Flathub, Plymouth splash, the Pengy app
 ```
@@ -154,6 +155,23 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
   `systemd-run --user --on-active=2h CMD`. Check a schedule with
   `systemd-analyze calendar '...'`; the `crontab` command prints the mapping.
   Cron inside a distrobox guest never fires (no init there).
+- **Wi-Fi on the Server is wpa_supplicant + networkd, not NetworkManager.**
+  One `wpa_supplicant-nl80211@<iface>.service` per Wi-Fi interface, config in
+  `/etc/wpa_supplicant/wpa_supplicant-nl80211-<iface>.conf` (root-only: it holds
+  the password; the installer writes it for the network it joined). Join or
+  change networks with `sudo wpa_cli -i <iface>` (`scan`, `scan_results`,
+  `add_network`, `set_network`, `save_config`); networkd gives the address
+  (`networkctl status <iface>`). `iw dev` shows the radio and its link. There
+  is no `nmcli` on the Server.
+- **A laptop server ignores its lid, holds its battery at 80% and blanks its
+  screen.** Closing the lid does nothing (`/usr/lib/systemd/logind.conf.d/
+  60-pengyos-lid.conf`; override in `/etc/systemd/logind.conf.d/`). The charge
+  limit is `LIMIT=` in `/etc/pengyos/battery.conf` (100 = charge to full), applied
+  by `sudo systemctl restart pengyos-battery-limit` and only where the laptop's
+  platform driver offers `charge_control_end_threshold` (`journalctl -u
+  pengyos-battery-limit` says which). The console screen switches off after 5
+  idle minutes (`pengyos-console-blank.service`); a key brings it back. None of
+  this runs on the Desktop.
 - **sshd is key-only** (password logins over SSH are off). A user with no key in
   `~/.ssh/authorized_keys` can log in at the console and not over SSH.
 - **The Desktop's COSMIC pieces are built on the build host**, not in the image;

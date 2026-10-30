@@ -12,7 +12,7 @@ import shutil
 import textwrap
 from typing import Callable, TextIO
 
-from pengyos_install_tui.session import CONFIRM_WORD, DEFAULTS, Session
+from pengyos_install_tui.session import CONFIRM_WORD, DEFAULTS, WIFI, Session
 
 __all__ = ["Aborted", "ask_plain"]
 
@@ -71,7 +71,12 @@ def _form_page(session: Session, page, inp, secret, out: TextIO) -> None:
             hint = f" ({hint})" if hint and not shown else ""
             skip = "; Enter to skip" if f.optional and session.field_active(f.key) \
                 and f.key != "key_password" else ""
+            if f.key == "wifi_password":
+                skip = "; Enter to skip Wi-Fi"
             raw = _read(secret if f.secret else inp, f"{label}{hint}{skip}{shown}: ")
+            if f.key == "wifi_password" and not raw:
+                session.choose(WIFI, 0)  # no Wi-Fi after all
+                return
             if not raw.strip() and not f.secret:
                 raw = "" if f.optional else current
             problem = session.set(f.key, raw)
@@ -81,6 +86,8 @@ def _form_page(session: Session, page, inp, secret, out: TextIO) -> None:
                     i -= 1  # ask for both passwords again
                 continue
             i += 1
+        if session.needs_network(page):
+            out.write(f"  {_busy(session, page)}\n")
         bad = session.finish(page)
         if bad is None:
             return
@@ -91,6 +98,43 @@ def _form_page(session: Session, page, inp, secret, out: TextIO) -> None:
             i -= 1
 
 
+def _busy(session: Session, page) -> str:
+    if page.key in ("wifi", "wifi_password"):
+        return f"Connecting to {session.network.ssid} ..."
+    src = session.key_source()
+    verb = "Connecting to" if src.kind == "ssh" else "Fetching keys from"
+    return f"{verb} {src.label} ..."
+
+
+def _wifi_page(session: Session, page, inp, out: TextIO) -> None:
+    while True:
+        if session.networks is None:
+            out.write("  Looking for Wi-Fi networks ...\n")
+            problem = session.scan()
+            if problem:
+                out.write(f"  {problem}\n")
+        opts = session.options(page)[:-1]  # the last row is "Scan again": r
+        for n, o in enumerate(opts):
+            note = f"  ({o.note})" if o.note else ""
+            out.write(f"  {n:>2}) {o.label}{note}\n")
+        out.write("   r) Scan again\n")
+        raw = _read(inp, "Wi-Fi network number [0]: ").strip().lower() or "0"
+        if raw == "r":
+            session.networks = None
+            continue
+        if not raw.isdigit() or int(raw) >= len(opts):
+            out.write(f"  enter a number from 0 to {len(opts) - 1}, or r\n")
+            continue
+        session.choose(page, int(raw))
+        if session.needs_network(page):
+            out.write(f"  {_busy(session, page)}\n")
+            bad = session.finish(page)
+            if bad:
+                out.write(f"  {bad[1]}\n")
+                continue
+        return
+
+
 def ask_plain(session: Session, *, inp: Callable[[str], str], secret: Callable[[str], str],
               out: TextIO) -> bool:
     """Ask every page. True once the user typed the confirmation word; False if
@@ -98,7 +142,10 @@ def ask_plain(session: Session, *, inp: Callable[[str], str], secret: Callable[[
     # Wrap to the terminal (a 1024x768 console with the big font is 64 wide).
     width = max(40, min(76, shutil.get_terminal_size((80, 24)).columns - 1))
     out.write(f"\n{session.title} installer\n")
-    for page in session.pages():
+    i = 0
+    while True:
+        page = session.pages()[i]  # recomputed: the Wi-Fi choice adds or drops a page
+        i += 1
         out.write(f"\n== {page.title} ==\n")
         out.write(textwrap.fill(page.intro, width) + "\n\n")
         if page.key == "review":
@@ -107,8 +154,9 @@ def ask_plain(session: Session, *, inp: Callable[[str], str], secret: Callable[[
             out.write(f"\nEVERYTHING on {session.disk.path} will be erased.\n")
             answer = _read(inp, f"Type '{CONFIRM_WORD}' to install, anything else to quit: ")
             return answer.strip().lower() == CONFIRM_WORD
-        if page.choice:
+        if page.key == "wifi":
+            _wifi_page(session, page, inp, out)
+        elif page.choice:
             _choice_page(session, page, inp, out)
         else:
             _form_page(session, page, inp, secret, out)
-    return False  # pragma: no cover - the review page always returns

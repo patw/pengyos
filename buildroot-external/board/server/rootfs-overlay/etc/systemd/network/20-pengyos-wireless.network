@@ -1,0 +1,10 @@
+# PengyOS Server: an address for any Wi-Fi interface wpa_supplicant has joined
+# (wpa_supplicant-nl80211@<iface>.service, which the installer enables for the
+# network it joined, or `wpa_cli` by hand). Short Wi-Fi drops while roaming
+# between access points keep the address.
+[Match]
+Type=wlan
+
+[Network]
+DHCP=yes
+IgnoreCarrierLoss=3s

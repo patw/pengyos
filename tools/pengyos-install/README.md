@@ -87,7 +87,9 @@ pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
   desktop log them in at boot (`/etc/pengyos/autologin.conf`, changeable later
   with `pengyos-autologin`), give them the SSH public keys in
   `--authorized-keys FILE` (the Server's sshd accepts keys only), set the user's and root's password (random salt each), copy the
-  live session's NetworkManager profiles (e.g. the Wi-Fi joined on the stick),
+  live session's NetworkManager profiles (e.g. the Wi-Fi joined on the stick)
+  or, on the Server, its `wpa_supplicant-nl80211-<iface>.conf` with that
+  interface's `wpa_supplicant-nl80211@` unit enabled,
   and — when an endpoint was given — seed the user's
   `~/.config/pengy/settings.json` with it (`--pengy-base-url`, `--pengy-api-key`
   / `--pengy-api-key-stdin`, `--pengy-model`; mode 0600, owned by the user, plus

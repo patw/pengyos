@@ -99,7 +99,6 @@ class App:
         self.install = install
         self.payload = payload
         self.reboot = reboot
-        self.pages = session.pages()
         self.mode = "page" if session.selectable() else "nodisk"
         self.index = 0
         self.focus = 0
@@ -117,6 +116,12 @@ class App:
         self._before_quit = "page"
 
     # ------------------------------------------------------------ helpers
+    @property
+    def pages(self) -> list[Page]:
+        """The session's pages now: the Wi-Fi password page comes and goes with
+        the network chosen."""
+        return self.s.pages()
+
     @property
     def page(self) -> Page:
         return self.pages[self.index]
@@ -143,6 +148,25 @@ class App:
         self.errors.clear()
         if self.page.key == "review":
             self.editor("confirm").key("ctrl-u")
+        if self.page.key == "wifi" and self.s.networks is None:
+            self._start_scan()
+
+    def _start_scan(self) -> None:
+        self.notice = ("ok", "Looking for Wi-Fi networks ...")
+        self.pending = self._scan
+
+    def _scan(self) -> None:
+        problem = self.s.scan()
+        self.row = self._first_row(self.page)
+        self.notice = ("error", problem) if problem else None
+
+    def _busy(self) -> str:
+        """The notice shown while finishing the current page talks to the network."""
+        if self.page.key in ("wifi", "wifi_password"):
+            return f"Connecting to {self.s.network.ssid} ..."
+        src = self.s.key_source()
+        verb = "Connecting to" if src.kind == "ssh" else "Fetching keys from"
+        return f"{verb} {src.label} ..."
 
     def _store(self, i: int) -> str | None:
         f = self.page.fields[i]
@@ -200,11 +224,17 @@ class App:
             self.row = enabled[int(k) - 1]
             self.notice = None
         elif k == "enter":
+            if self.s.is_rescan(self.page, self.row):
+                self._start_scan()
+                return
             problem = self.s.choose(self.page, self.row)
             if problem:
                 self.notice = ("error", problem)
+            elif self.s.needs_network(self.page):
+                self.notice = ("ok", self._busy())
+                self.pending = self._finish
             else:
-                self._go(self.index + 1)
+                self._finish()
         elif k == "esc":
             self._back()
 
@@ -244,9 +274,7 @@ class App:
             self.pending = self._install
             return
         if self.s.needs_network(self.page):
-            src = self.s.key_source()
-            verb = "Connecting to" if src.kind == "ssh" else "Fetching keys from"
-            self.notice = ("ok", f"{verb} {src.label} ...")
+            self.notice = ("ok", self._busy())
             self.pending = self._finish
         else:
             self._finish()

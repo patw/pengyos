@@ -155,6 +155,12 @@ endif
 ifeq ($(BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E),y)
 LINUX_FIRMWARE_FILES += intel/iwlwifi/iwlwifi-so-a0-gf4-a0*.{ucode,pnvm}
 endif
+# The first 6000 series (Centrino Advanced-N 6200 / Ultimate-N 6300, 6250 WiMAX)
+# has no Buildroot option; Buildroot's 6000G2A/B are the later 6205/6235. These
+# cards are in a lot of 2010-2012 ThinkPads (server.config: laptops as servers).
+ifeq ($(BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6000G2A),y)
+LINUX_FIRMWARE_FILES += intel/iwlwifi/iwlwifi-6000-4.ucode intel/iwlwifi/iwlwifi-6050-5.ucode
+endif
 # Intel Wi-Fi 7 beyond the BE200 (IWLWIFI_7 ships only gl-c0-fm-c0): BE201 and
 # the Meteor/Arrow Lake CNVi ("bz") and Lunar Lake ("sc") pairings. Kernel 7.2
 # asks for core API 106 first for these MACs (cfg/bz.c, cfg/sc.c; 102 is the

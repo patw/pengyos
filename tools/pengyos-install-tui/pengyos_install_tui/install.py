@@ -92,11 +92,16 @@ def run_install(
     fetch_keys: Callable[[str], str] | None = None,
     plain: bool | None = None,
     reboot: bool = False,
+    wifi=None,
 ) -> int:
     """Run the installer; *plain* None picks the front-end from the terminal.
 
     *reboot*: restart the machine once the install is done and the user has
     pressed Enter (the install stick's launcher passes ``--reboot``).
+
+    *wifi*: the Wi-Fi backend (:class:`pengyos_install_tui.wifi.Wifi`). By default
+    the live system's own, only when installing from the medium itself (no
+    *payload* given): the Wi-Fi pages then appear on machines with a Wi-Fi card.
     """
     if engine is None:
         out.write("pengyos-install-tui: the pengyos-install engine is not installed\n")
@@ -110,7 +115,12 @@ def run_install(
         out.write(f"pengyos-install-tui: {exc}\n")
         return 1
     disks = engine.list_disks() if disks is None else disks
-    session = Session(manifest, disks, **({"fetch_keys": fetch_keys} if fetch_keys else {}))
+    if wifi is None and payload is None:
+        from pengyos_install_tui.wifi import Wifi
+
+        wifi = Wifi()
+    kw = {"fetch_keys": fetch_keys} if fetch_keys else {}
+    session = Session(manifest, disks, wifi=wifi, **kw)
 
     if plain is None:
         from pengyos_install_tui.screen import can_run_screen

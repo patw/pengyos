@@ -81,3 +81,45 @@ class FakeFetch:
 @pytest.fixture
 def fetcher():
     return FakeFetch()
+
+
+WIFI_PASSWORD = "correct horse"
+
+
+class FakeWifi:
+    """The live system's Wi-Fi: one interface, two networks in range. "Home" takes
+    WIFI_PASSWORD; "Cafe" is open; everything joined is recorded."""
+
+    def __init__(self, interfaces=("wlp2s0",), networks=None, wired="", scan_error=None):
+        from pengyos_install_tui.wifi import Network
+
+        self._interfaces = list(interfaces)
+        self.networks = networks if networks is not None else [
+            Network("Home", -48.0, True), Network("Cafe", -70.0, False)]
+        self.wired, self.scan_error = wired, scan_error
+        self.scans, self.joined, self.forgotten = 0, [], []
+
+    def interfaces(self):
+        return self._interfaces
+
+    def wired_address(self):
+        return self.wired
+
+    def scan(self, iface):
+        from pengyos_install_tui.wifi import WifiError
+
+        self.scans += 1
+        if self.scan_error:
+            raise WifiError(self.scan_error)
+        return list(self.networks)
+
+    def connect(self, iface, ssid, password):
+        from pengyos_install_tui.wifi import WrongPassword
+
+        self.joined.append((iface, ssid, password))
+        if ssid == "Home" and password != WIFI_PASSWORD:
+            raise WrongPassword(f"{ssid} refused the password")
+        return "192.168.1.77"
+
+    def forget(self, iface):
+        self.forgotten.append(iface)

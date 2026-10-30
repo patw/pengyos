@@ -479,6 +479,52 @@ BR2_PACKAGE_ETHTOOL=y
 # - Firmware for the xe GPU driver (server/linux.fragment): US-SRV-9 transcoding
 #   on Battlemage / Lunar Lake and later.
 BR2_PACKAGE_LINUX_FIRMWARE_XE=y
+# - Laptops as servers (2026-10-30): an old laptop is installed at its own
+#   keyboard and then runs headless, often on Wi-Fi or a USB Ethernet dongle.
+#   The drivers are in server/linux.fragment; this is their firmware and the
+#   Wi-Fi client. Moved from desktop.config (the Desktop inherits them), plus
+#   the 2008-2016 cards neither edition had. Intel: 1000/100/105/135/2000/2030
+#   (DVM), 5000, 6000/6050 (external.mk) and 6000g2 (6205/6235), 3160/3168,
+#   7260/7265, 8260, then 22000 (AX200/201), the "so" CNVi and Wi-Fi 7; MediaTek
+#   MT7921/7922/7925; Qualcomm QCA9377 (ath10k, budget 2016-2019 laptops) and
+#   WCN7850 (ath12k); Realtek rtlwifi (81xx/87xx/88xx) and the RTL8152/8153/8156
+#   USB Ethernet dongles.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_100=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_105=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_135=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_1000=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_2000=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_2030=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_3160=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_3168=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_5000=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6000G2A=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6000G2B=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7260=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7265D=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8000C=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22000=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7921=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7922=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7925=y
+BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_10K_QCA9377=y
+BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_WCN7850=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_81XX=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_87XX=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_88XX=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_815X=y
+#   The Wi-Fi client: wpa_supplicant over nl80211, one wpa_supplicant-nl80211@
+#   <iface>.service per Wi-Fi interface (the installer enables it for the
+#   network it joined), networkd for the address (20-pengyos-wireless.network).
+#   wpa_cli to scan and join by hand or from Pengy, WPA3 (SAE) for current
+#   routers; iw to see the radio, its link and the regulatory domain. The
+#   Desktop adds D-Bus, EAP and autoscan for NetworkManager.
+BR2_PACKAGE_WPA_SUPPLICANT=y
+BR2_PACKAGE_WPA_SUPPLICANT_CLI=y
+BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y
+BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
+BR2_PACKAGE_IW=y
 # - Python wheels (US-SRV-10): the manylinux policy lets a wheel assume the host
 #   has libGL.so.1 and five X11 client libraries, so wheels never bundle them.
 #   Without them `uv add opencv-python` installed and then failed at import
@@ -754,13 +800,7 @@ BR2_PACKAGE_XCB_UTIL_WM=y
 # the GPU wedged (no hardware GL). i915 is a module (=m in linux.fragment) so it
 # loads after the rootfs and can find these; a built-in driver with no
 # initramfs never does.
-# Wi-Fi firmware for the drivers in linux.fragment (the N100's Intel CNVi had no
-# driver or firmware: no wlan interface at all).
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22000=y
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7=y
-BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7921=y
-BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7922=y
-BR2_PACKAGE_LINUX_FIRMWARE_RTL_88XX=y
+# Wi-Fi firmware: server.config (laptops as servers).
 # The wireless regulatory database (cfg80211: "regulatory.db failed with error
 # -2" without it -> world-roaming limits), and the Realtek r8169 NIC firmware
 # (rtl8168h-2.fw on the N100; it runs without, but the vendor fixes are in it).
@@ -772,13 +812,11 @@ BR2_PACKAGE_LINUX_FIRMWARE_RTL_88XX_BT=y
 BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7921_BT=y
 BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7922_BT=y
 # Firmware for the drivers linux.fragment added for hardware outside the fleet
-# (2026-10-11): MediaTek MT7925 Wi-Fi + Bluetooth, Qualcomm WCN7850 (ath12k);
-# the xe GPU firmware is in server.config. Intel Wi-Fi 7, the Qualcomm WCN7850
-# Bluetooth and the laptop speaker amplifiers have no Buildroot option:
-# external.mk installs those files.
-BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7925=y
+# (2026-10-11): MediaTek MT7925 Bluetooth; its Wi-Fi half and the Qualcomm
+# WCN7850 (ath12k) are in server.config, like the xe GPU firmware. Intel Wi-Fi
+# 7, the Qualcomm WCN7850 Bluetooth and the laptop speaker amplifiers have no
+# Buildroot option: external.mk installs those files.
 BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7925_BT=y
-BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_WCN7850=y
 
 # --- Input: libinput ------------------------------------------------------------
 # cosmic-comp links libinput.so.10. It used to arrive only because Weston
@@ -829,18 +867,14 @@ BR2_PACKAGE_SEATD_DAEMON=y
 # section pointed at tools/pengyos-desktop-net, retired: its overlay files were
 # not read by anything.)
 #
-# Wi-Fi backend: wpa_supplicant is a real Buildroot 2026.08 symbol and configures
-# cleanly (it selects BR2_PACKAGE_WPA_SUPPLICANT_NL80211, the driver interface
-# NetworkManager's wpa_supplicant plugin drives).
-BR2_PACKAGE_WPA_SUPPLICANT=y
+# Wi-Fi backend: wpa_supplicant (server.config, where the Server's networkd
+# drives it); NetworkManager's plugin drives it over nl80211 here.
 # NetworkManager drives wpa_supplicant over D-Bus (it starts it as `-u`); built
 # without D-Bus it printed its usage and exited, so on the N100 NM showed the
 # Wi-Fi as enabled but "unavailable" with no networks ("Failed to D-Bus activate
 # wpa_supplicant service"). WPA3 (SAE) for current routers, EAP for WPA2/3-
 # Enterprise (work/campus networks), autoscan for roaming.
 BR2_PACKAGE_WPA_SUPPLICANT_DBUS=y
-BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y
-BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
 BR2_PACKAGE_WPA_SUPPLICANT_EAP=y
 BR2_PACKAGE_WPA_SUPPLICANT_AUTOSCAN=y
 # NetworkManager is THE network service on the Desktop (the wpa_supplicant
@@ -1195,7 +1229,6 @@ BR2_PACKAGE_HWDATA_USB_IDS=y
 BR2_PACKAGE_HWDATA_PNP_IDS=y
 BR2_PACKAGE_I2C_TOOLS=y
 BR2_PACKAGE_HDPARM=y
-BR2_PACKAGE_IW=y
 BR2_PACKAGE_LSHW=y
 # Our packages (buildroot-external/package): phones over MTP (and gvfs's MTP
 # backend, external.mk), monitor control over DDC/CI, Thunderbolt/USB4 authorization.

@@ -83,7 +83,7 @@ Chosen once, inherited everywhere.
 | **Shell** | **bash** (Core); **zsh** added on Server, wired to the comfort profile (`/etc/pengyos/shell/profile`: starship prompt, fzf, zoxide, aliases) + the zsh plugins (autosuggestions, syntax highlighting) | GPL-3.0 / MIT | nushell, fish, oh-my-zsh (a git-checkout framework with an update ping; the curated profile ships its feel instead) | 🟢 |
 | **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (stock Buildroot recipe, not enabled) | 🟢 / 🔵 broker |
 | **Devices, logs** | systemd-udevd, systemd-journald | LGPL-2.1 | eudev, rsyslog | 🟢 |
-| **Network** | **systemd-networkd + resolved** (Core/Server); **NetworkManager** on Desktop | LGPL-2.1 / GPL-2.0 | — | 🟢 |
+| **Network** | **systemd-networkd + resolved** (Core/Server), with **wpa_supplicant** for Wi-Fi on the Server (one `wpa_supplicant-nl80211@<iface>` per interface); **NetworkManager** on Desktop, driving the same wpa_supplicant | LGPL-2.1 / GPL-2.0 / BSD-3-Clause | iwd on the Server (a second Wi-Fi stack beside the Desktop's wpa_supplicant, and no plain-text control interface for the installer) | 🟢 |
 | **Firewall** | **nftables**, default-deny inbound in every edition (Core layer; Desktop: ports above 1024 open, as Fedora Workstation; rootful podman bridges and published ports allowed). A machine opens its own ports with `pengyos-firewall`, one rule file each in `/etc/pengyos/nftables.d/` | GPL-2.0 | iptables, firewalld | 🟢 |
 | **Storage** | **A/B ext4 system slots** (read-only) + a **btrfs `data`** partition; `/etc` an overlay on `data` | GPL-2.0 | btrfs root with snapshots (designed, parked) | 🟢 |
 | **Swap** | zram (`zram-generator`) | MIT | swap partition | 🟢 |

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -210,7 +211,8 @@ def test_install_image_autologin_opt_in(tmp_path, monkeypatch):
     monkeypatch.setattr(im, "EFIVARS", str(tmp_path / "no-efivars"))
     answers = ProvisionAnswers("desk", "pat", "hunter22", autologin=True)
     install_image(str(target), answers, payload_dir=str(payload), confirm=True, run=FakeRun(root),
-                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"))
+                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"),
+                  wifi_configs=str(tmp_path / "none"))
     text = (root / "etc/pengyos/autologin.conf").read_text()
     assert "[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=pat\n" in text
 
@@ -237,6 +239,13 @@ def test_install_image_end_to_end(tmp_path, monkeypatch):
     live_nm.mkdir()
     (live_nm / "Home WiFi.nmconnection").write_text("[wifi-security]\npsk=secret\n")
     (live_nm / "notes.txt").write_text("not a profile")
+    live_wpa = tmp_path / "live-wpa"
+    live_wpa.mkdir()
+    (live_wpa / "wpa_supplicant-nl80211-wlp2s0.conf").write_text('network={\n\tpsk="secret"\n}\n')
+    (live_wpa / "wpa_supplicant.conf").write_text("the image's default, not a joined network")
+    (live_wpa / "wpa_supplicant-nl80211-../x.conf".replace("/", "_")).write_text("bad name")
+    (root / "usr" / "lib" / "systemd" / "system").mkdir(parents=True)
+    (root / "usr" / "lib" / "systemd" / "system" / "wpa_supplicant-nl80211@.service").touch()
     for f in ("ssh_host_ed25519_key", "ssh_host_ed25519_key.pub", "sshd_config"):
         (root / "etc" / "ssh" / f).write_text("x")
     monkeypatch.setattr(im, "TARGET_ESP", str(esp_dir))
@@ -251,6 +260,7 @@ def test_install_image_end_to_end(tmp_path, monkeypatch):
         report=lambda p, f, m: phases.append(p),
         disks=[Disk("vda", str(target), BIG)],
         nm_connections=str(live_nm),
+        wifi_configs=str(live_wpa),
     )
 
     # The user owns the desktop: admin + seat groups (only those the image has),
@@ -265,6 +275,14 @@ def test_install_image_end_to_end(tmp_path, monkeypatch):
     nm = root / "etc/NetworkManager/system-connections"
     assert [p.name for p in nm.iterdir()] == ["Home WiFi.nmconnection"]
     assert (nm / "Home WiFi.nmconnection").stat().st_mode & 0o777 == 0o600
+    # The Server's: the joined interface's wpa_supplicant config, root-only, and
+    # its wpa_supplicant-nl80211@ unit enabled; the image's own default and a
+    # name that is not an interface stay behind.
+    wpa = root / "etc/wpa_supplicant"
+    assert [p.name for p in wpa.iterdir()] == ["wpa_supplicant-nl80211-wlp2s0.conf"]
+    assert (wpa / "wpa_supplicant-nl80211-wlp2s0.conf").stat().st_mode & 0o777 == 0o600
+    link = root / "etc/systemd/system/multi-user.target.wants/wpa_supplicant-nl80211@wlp2s0.service"
+    assert os.readlink(link) == "/usr/lib/systemd/system/wpa_supplicant-nl80211@.service"
 
     # The artifacts landed byte for byte in their partitions.
     assert (tmp_path / "vda1").read_bytes() == esp
@@ -372,7 +390,8 @@ def test_server_install_keys_and_no_desktop_session(tmp_path, monkeypatch):
                                autologin=True)
     run = FakeRun(root)
     install_image(str(target), answers, payload_dir=str(payload), confirm=True, run=run,
-                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"))
+                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"),
+                  wifi_configs=str(tmp_path / "none"))
 
     assert not (root / "etc/pengyos/autologin.conf").exists()
     auth = root / "home/pat/.ssh/authorized_keys"
@@ -496,7 +515,8 @@ def test_install_image_seeds_the_pengy_config(tmp_path, monkeypatch):
                                pengy_api_key="ollama", pengy_model="qwen3:8b")
     run = FakeRun(root)
     install_image(str(target), answers, payload_dir=str(payload), confirm=True, run=run,
-                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"))
+                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"),
+                  wifi_configs=str(tmp_path / "none"))
 
     settings = root / "home/pat/.config/pengy/settings.json"
     assert json.loads(settings.read_text())["model"] == "qwen3:8b"
@@ -525,6 +545,7 @@ def test_install_image_skips_pengy_when_not_configured(tmp_path, monkeypatch):
     monkeypatch.setattr(im, "EFIVARS", str(tmp_path / "no-efivars"))
     run = FakeRun(root)
     install_image(str(target), ANSWERS, payload_dir=str(payload), confirm=True, run=run,
-                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"))
+                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"),
+                  wifi_configs=str(tmp_path / "none"))
     assert not (root / "home/pat/.config").exists()
     assert not any(".config/pengy" in " ".join(c) for c in run.calls)

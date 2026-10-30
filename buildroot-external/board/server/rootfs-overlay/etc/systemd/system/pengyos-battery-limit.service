@@ -1,0 +1,20 @@
+# PengyOS Server: stop a laptop's battery charging past a limit (80% by default,
+# /etc/pengyos/battery.conf). A laptop server is on AC all the time, and a pack
+# held at 100% wears out and can swell. The limit is the battery's
+# charge_control_end_threshold, offered by the laptop's platform driver
+# (thinkpad_acpi, ideapad, asus-wmi, dell-laptop, ...); a machine without a
+# battery, or whose driver offers no limit, logs that and does nothing.
+#
+# Server only: on the Desktop a laptop is carried around and charges to full.
+[Unit]
+Description=Limit laptop battery charging
+ConditionOSRelease=|VARIANT_ID=server
+ConditionOSRelease=|VARIANT_ID=server-nvidia
+After=systemd-udev-trigger.service systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/pengyos/pengyos-battery-limit /etc/pengyos/battery.conf
+
+[Install]
+WantedBy=multi-user.target

@@ -4,6 +4,9 @@
 enable thermald.service
 enable power-profiles-daemon.service
 enable smartd.service
+# NetworkManager's Wi-Fi backend. The Server preset disables it (its Wi-Fi is
+# per-interface units); this file is read first, so the Desktop keeps it.
+enable wpa_supplicant.service
 enable fwupd-refresh.timer
 # Printing: CUPS starts on demand (socket/path activation); cups-browsed finds
 # network printers. UDisks2 and bolt are D-Bus activated.

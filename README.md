@@ -16,7 +16,7 @@ small human–AI team can build an operating system and keep it maintained.
 | Edition | What's on it |
 |---|---|
 | Core | The base: systemd, key-only SSH, Python 3, a default-deny nftables firewall (`pengyos-firewall` opens a port), chrony, storage tools, a broad firmware set. Core utilities in Rust (uutils), and the text/search tools from their own projects — find, grep, sed, gawk, diff, patch, xargs, time, unzip, tar, tree, lsof, less — not BusyBox's cut-down applets. No editors, no containers, no GUI. About 224 MB of RAM at idle. |
-| Server | Core plus tmux, mosh, zsh (with the comfort profile: starship prompt, fzf, zoxide, autosuggestions + syntax highlighting), git, ripgrep, fd, bat, eza and jq; rootless podman; distrobox; a metrics timer and an opt-in backup timer; the daily update check; and Pengy in a browser (`pengy-web`). |
+| Server | Core plus tmux, mosh, zsh (with the comfort profile: starship prompt, fzf, zoxide, autosuggestions + syntax highlighting), git, ripgrep, fd, bat, eza and jq; rootless podman; distrobox; a metrics timer and an opt-in backup timer; the daily update check; and Pengy in a browser (`pengy-web`). It also runs on an old laptop: Wi-Fi (joined in the installer, `wpa_cli` after), USB Ethernet dongles, the lid ignored, the battery held at 80%, and the screen switched off when idle. |
 | Desktop | Server plus the full COSMIC session (compositor, panel, launcher, files, terminal, editor, store) behind a login screen, PipeWire audio, Bluetooth codecs, CUPS printing, Wi-Fi, Xwayland and Vulkan, a boot splash, Flatpak from Flathub (Firefox lands on first boot), 21 wallpapers, the Pengy desktop app and the mdit Markdown editor. Its firewall opens ports above 1024 (LAN games, Steam Remote Play, LocalSend) like Fedora Workstation. |
 | Server NVIDIA | Server plus CUDA, `nvidia-smi`, persistence mode, and GPUs inside podman containers through CDI. |
 | Desktop NVIDIA | Desktop plus the NVIDIA driver and its Vulkan and GL userspace, for Turing and newer. |
@@ -27,8 +27,9 @@ Any 64-bit PC that starts in UEFI mode, which is roughly anything from the last 
 years. Intel and AMD graphics are in the base image. An NVIDIA card needs one of the
 NVIDIA editions, and those need Turing or newer (GTX 16, RTX 20 and anything after),
 which is where NVIDIA's open kernel modules stop. Wi-Fi from Intel, Realtek, MediaTek,
-Qualcomm and Broadcom is covered by the firmware set Core ships. The desktop has been
-built and used daily on laptops and mini PCs, so that's what it behaves best on.
+Qualcomm/Atheros and Broadcom works on the Server and the Desktop, back to the cards in
+2008-era laptops. The desktop has been built and used daily on laptops and mini PCs, so
+that's what it behaves best on.
 
 ## Trying it
 

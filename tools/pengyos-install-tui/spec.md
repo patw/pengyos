@@ -29,6 +29,8 @@ The Python package `pengyos_install_tui`:
   out) holds all the behaviour and never imports curses; `run_screen` is the
   thin curses driver.
 - `plain`: the line-by-line front-end over the same session.
+- `wifi`: scan (`iw`) and join (`wpa_supplicant-nl80211@<iface>` + networkd)
+  Wi-Fi, writing the config the installed system uses.
 - `keys`: import keys from GitHub (`https://github.com/<user>.keys`), an
   `http(s)://` URL, or `user@host[:port]` (that machine's `~/.ssh/authorized_keys`
   over SSH with a password).
@@ -57,6 +59,14 @@ forces plain.
   the reason; a refused password puts the cursor on the password. No key at all
   needs a second Enter after a warning.
 - Pengy: optional. A key or model without a base URL is refused.
+- Wi-Fi: the pages exist only when the live system has a Wi-Fi interface, and
+  come before SSH. The network is joined before the next page (an open one from
+  the list, a secured one on the password page): it writes
+  `/etc/wpa_supplicant/wpa_supplicant-nl80211-<iface>.conf` (0600; SSID in hex;
+  WPA2 and WPA3-SAE with the same passphrase), restarts that unit, and waits
+  for the association and a DHCP address. Any failure removes the config, so the
+  engine (which copies it and enables the unit on the new system) never carries
+  a broken one. Choosing "No Wi-Fi" after joining leaves the network.
 - Nothing is written before the user types `erase`. A failed install returns to
   the review page with the answers kept.
 
@@ -81,8 +91,8 @@ green test suite.
 - Unattended installs (`install.toml`, answer files). The `run` / `auto` answer-set
   commands were removed in 0.2.0: they described layouts and editions the engine
   cannot install, and nothing consumed them.
-- Wi-Fi setup, RAID, custom partitioning: the engine's only layout is the whole
-  disk.
+- Hidden Wi-Fi networks and WPA-Enterprise (left to `wpa_cli` after the install).
+- RAID, custom partitioning: the engine's only layout is the whole disk.
 - The GUI (`tools/pengyos-install-gui`).
 
 ## Constraints

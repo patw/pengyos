@@ -100,3 +100,103 @@ CONFIG_DRM_HYPERV=m
 # by xe only (i915 does not bind them). US-SRV-9 transcodes on /dev/dri, and the
 # Arc cards are the usual transcoding card. Firmware: server.config.
 CONFIG_DRM_XE=m
+
+# --- Laptops as servers (2026-10-30) -------------------------------------------
+# An old laptop (cracked screen, dead battery) is a normal PengyOS Server: it is
+# installed at its own keyboard and then runs in a corner over SSH. Most laptop
+# hardware support had landed in desktop/linux.fragment, so on the Server Intel
+# Wi-Fi had firmware but no op mode, USB Ethernet dongles (RTL8153) had no
+# driver, and there were no charge limits. Moved here (Desktop inherits them),
+# plus older chips neither edition had. All modules, loaded only where the device
+# exists; firmware in server.config.
+#
+# Wi-Fi. Modules, like i915: a built-in driver probes before the rootfs is
+# mounted and never finds its firmware. Intel: DVM for the 2008-2013 cards
+# (1000/5000/6000/6205/6235/100/2200), MVM for 7260 to AX2xx and the CNVi parts,
+# MLD for Wi-Fi 7 (iwl-drv.c sends BE200/BE201/BE211 to iwlmld only when it is
+# built). MediaTek MT7921/7922/7925. Qualcomm/Atheros ath9k (the 2008-2015
+# AR9xxx cards; no firmware), ath12k (WCN7850). Realtek: rtlwifi for the
+# RTL8188/8192/8723/8821 cards in budget laptops of the same era, rtw88 and
+# rtw89 after them.
+CONFIG_WLAN=y
+CONFIG_WLAN_VENDOR_INTEL=y
+CONFIG_IWLWIFI=m
+CONFIG_IWLDVM=m
+CONFIG_IWLMVM=m
+CONFIG_IWLMLD=m
+CONFIG_WLAN_VENDOR_MEDIATEK=y
+CONFIG_MT7921E=m
+CONFIG_MT7925E=m
+CONFIG_WLAN_VENDOR_ATH=y
+CONFIG_ATH9K=m
+CONFIG_ATH9K_PCI=y
+CONFIG_ATH12K=m
+CONFIG_WLAN_VENDOR_REALTEK=y
+CONFIG_RTL_CARDS=m
+CONFIG_RTL8192CE=m
+CONFIG_RTL8192SE=m
+CONFIG_RTL8192DE=m
+CONFIG_RTL8723AE=m
+CONFIG_RTL8723BE=m
+CONFIG_RTL8188EE=m
+CONFIG_RTL8192EE=m
+CONFIG_RTL8821AE=m
+CONFIG_RTW88=m
+CONFIG_RTW88_8822BE=m
+CONFIG_RTW88_8822CE=m
+CONFIG_RTW88_8723DE=m
+CONFIG_RTW88_8821CE=m
+CONFIG_RTW89_8851BE=m
+CONFIG_RTW89_8852AE=m
+CONFIG_RTW89_8852CE=m
+CONFIG_RTW89_8922AE=m
+# Wired NICs of 2008-2015 consumer and business laptops that core's list
+# (r8169, e1000e, igb/igc, sky2) misses: Atheros/Killer (atl1c, atl1e, alx) and
+# Broadcom NetXtreme (tg3: older Dell/HP business laptops).
+CONFIG_NET_VENDOR_ATHEROS=y
+CONFIG_ATL1C=m
+CONFIG_ATL1E=m
+CONFIG_ALX=m
+CONFIG_NET_VENDOR_BROADCOM=y
+CONFIG_TIGON3=m
+# USB Ethernet dongles, the usual fix for a laptop without an Ethernet port:
+# Realtek RTL8152/8153/8156 (most USB-A and USB-C adapters and docks), ASIX,
+# and CDC/NCM/RNDIS (phones and other dongles), iPhone tethering.
+CONFIG_USB_USBNET=m
+CONFIG_USB_RTL8152=m
+CONFIG_USB_NET_AX8817X=m
+CONFIG_USB_NET_AX88179_178A=m
+CONFIG_USB_NET_CDCETHER=m
+CONFIG_USB_NET_CDC_NCM=m
+CONFIG_USB_NET_RNDIS_HOST=m
+CONFIG_USB_IPHETH=m
+# Fast USB storage (UAS), USB4 / Thunderbolt (docks with Ethernet behind them),
+# USB-C ports through the firmware's UCSI interface (ACPI USBC000 had no
+# driver): port roles, power delivery, DisplayPort alt mode where the OS drives it.
+CONFIG_USB_UAS=m
+CONFIG_USB4=m
+CONFIG_TYPEC=m
+CONFIG_TYPEC_UCSI=m
+CONFIG_UCSI_ACPI=m
+CONFIG_TYPEC_DP_ALTMODE=m
+# eMMC behind an ACPI SD host controller: the internal disk of Bay Trail to
+# Gemini Lake Atom/Celeron laptops. Without it the installer finds no disk.
+CONFIG_MMC_SDHCI_ACPI=m
+# The power button on many Intel laptops reports through intel-hid / intel-vbtn:
+# without them pressing it does nothing instead of a clean shutdown.
+CONFIG_INTEL_HID_EVENT=m
+CONFIG_INTEL_VBTN=m
+# Laptop platform drivers: battery charge limits (charge_control_*_threshold,
+# which pengyos-battery-limit sets), fans, Fn keys, keyboard backlight,
+# platform profiles.
+CONFIG_THINKPAD_ACPI=m
+CONFIG_IDEAPAD_LAPTOP=m
+CONFIG_ASUS_WMI=m
+CONFIG_ASUS_NB_WMI=m
+CONFIG_X86_PLATFORM_DRIVERS_HP=y
+CONFIG_HP_WMI=m
+CONFIG_X86_PLATFORM_DRIVERS_DELL=y
+CONFIG_DELL_SMBIOS=m
+CONFIG_DELL_LAPTOP=m
+CONFIG_DELL_WMI=m
+CONFIG_ACER_WMI=m
