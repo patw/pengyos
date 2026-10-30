@@ -22,15 +22,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 The install stick's tty1 installer (`pengyos-install-tui` 0.2.0) is now a full-screen
 curses installer instead of a run of prompts: an arrow-key disk list that says why a
 disk can't be used, forms with inline errors, Esc to go back, a review, a progress bar,
-and a last page saying how to reach the machine. The SSH page fetches the user's public
-keys from GitHub (`https://github.com/<user>.keys`), because a Server is installed at a
-bare console where nothing can be pasted, and its sshd is key-only. Skipping SSH now
+and a last page saying how to reach the machine. The SSH page imports public keys, because a
+Server is installed at a bare console where nothing can be pasted, and its sshd is
+key-only: from a GitHub user (`https://github.com/<user>.keys`), from any
+`http(s)://` URL, or from `user@host`, another machine that takes a password, whose
+`~/.ssh/authorized_keys` is copied over SSH. Skipping SSH now
 takes a second Enter after a warning. The launcher (`console-installer`) drops to the
 8x16 console font when the 16x32 one leaves less than 80x24 (old 1024x768 laptop
 panels), and the installer falls back to line-by-line prompts on anything smaller or
 without a terminal. The unused `run`/`auto` answer-set commands are gone. Tested under
 QEMU: the stick's own tty1 path installed a disk that booted with the chosen hostname,
-user, GitHub and pasted keys, and Pengy settings.
+user, keys (from GitHub, pasted, and copied from a password-SSH host) and Pengy
+settings.
 
 ### Added — Buildroot's compiler cache in every edition (2026-10-29)
 

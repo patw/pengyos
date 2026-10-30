@@ -79,7 +79,7 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-guest`](pengyos-guest/) | Declarative distrobox/podman guests (Lane 4) — the dev box: `pengyos-guest enter dev`. Ships in Server/Desktop images with the `dev` (and on NVIDIA `cuda`) guest. |
 | [`pengyos-install`](pengyos-install/) | The edition-agnostic install engine for PengyOS. |
 | [`pengyos-install-gui`](pengyos-install-gui/) | A libcosmic-native graphical installer for PengyOS Desktop. It drives pengyos-install through a pure, headless view… |
-| [`pengyos-install-tui`](pengyos-install-tui/) | The Core/Server console installer: full screen (curses) with a line-by-line fallback; fetches SSH keys from GitHub. |
+| [`pengyos-install-tui`](pengyos-install-tui/) | The Core/Server console installer: full screen (curses) with a line-by-line fallback; imports SSH keys from GitHub, a URL or another machine. |
 | [`pengyos-layout`](pengyos-layout/) | The declarative disk/layout planner for PengyOS installs (ESP + A/B + data, optional LUKS2). |
 | [`pengyos-nightly`](pengyos-nightly/) | The nightly maintenance loop: observe upstream, triage CVEs with the local model, email a report, batch the allowed fixes into one boot-checked testing release, and a web page to approve or deny what it recommends. |
 | [`pengyos-postmortem`](pengyos-postmortem/) | Why did that session end? One read-only command over the journal. Shipped on Server and Desktop. |

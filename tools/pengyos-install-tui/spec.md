@@ -29,7 +29,9 @@ The Python package `pengyos_install_tui`:
   out) holds all the behaviour and never imports curses; `run_screen` is the
   thin curses driver.
 - `plain`: the line-by-line front-end over the same session.
-- `keys`: fetch `https://github.com/<user>.keys`.
+- `keys`: import keys from GitHub (`https://github.com/<user>.keys`), an
+  `http(s)://` URL, or `user@host[:port]` (that machine's `~/.ssh/authorized_keys`
+  over SSH with a password).
 - `install`: load the payload manifest and disks, pick a front-end, install.
 
 ## Interface
@@ -45,9 +47,15 @@ forces plain.
   (hostname, username, password ≥ 6 chars, SSH key lines, Pengy URL/key/model).
 - Disks: the boot stick, mounted disks and disks under `MIN_DISK` are listed with
   the reason and cannot be chosen. One usable disk is preselected.
-- SSH: GitHub keys and a pasted key combine. Each fetched key is tagged
-  `<user>@github`. A fetch error (no such user, no keys, no network) stays on the
-  page with the reason. No key at all needs a second Enter after a warning.
+- SSH: imported keys and a pasted key combine. GitHub keys are tagged
+  `<user>@github`; other sources keep their comments. Only lines the engine
+  accepts as keys are kept (options lines are skipped and counted). For
+  `user@host` the password goes to ssh through `SSH_ASKPASS` (never argv, never
+  disk), ssh runs without a controlling terminal, password logins only, and the
+  host key is trusted on first use into a throwaway known_hosts. An import error
+  (no such user, refused password, no network, no file) stays on the page with
+  the reason; a refused password puts the cursor on the password. No key at all
+  needs a second Enter after a warning.
 - Pengy: optional. A key or model without a base URL is refused.
 - Nothing is written before the user types `erase`. A failed install returns to
   the review page with the answers kept.

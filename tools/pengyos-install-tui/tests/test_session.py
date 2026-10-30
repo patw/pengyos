@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import pytest
-from conftest import DISKS, GH_KEYS, KEY, FakeGitHub
+from conftest import DISKS, GH_KEYS, HOST_KEYS, HOST_PASSWORD, KEY, FakeFetch
 
 from pengyos_install.image import Disk
 from pengyos_install_tui.keys import KeyFetchError
 from pengyos_install_tui.session import ACCOUNT, DISK, LOGIN, NAME, PENGY, SSH, Session
 
 
-def make(manifest, github=None, disks=DISKS):
-    return Session(manifest, disks, fetch_keys=github or FakeGitHub())
+def make(manifest, fetcher=None, disks=DISKS):
+    return Session(manifest, disks, fetch_keys=fetcher or FakeFetch())
 
 
 def page(s, key):
@@ -65,7 +65,8 @@ def test_mounted_disk_is_in_use(manifest):
     ("username", "Pat", "invalid username"),
     ("username", "root", "invalid username"),
     ("password", "short", "at least 6"),
-    ("github_user", "-nope", "not a GitHub username"),
+    ("key_source", "-nope", "GitHub username, an http(s):// URL, or user@host"),
+    ("key_source", "ftp://nas/keys", "GitHub username, an http(s):// URL, or user@host"),
     ("ssh_key", "not-a-key", "not an SSH public key"),
     ("pengy_base_url", "not a url", "invalid Pengy base URL"),
     ("pengy_model", "two words", "invalid Pengy model"),
@@ -93,38 +94,72 @@ def test_passwords_must_match(manifest):
     assert s.finish(ACCOUNT) is None
 
 
-def test_ssh_fetches_github_keys_once(manifest, github):
-    s = make(manifest, github)
-    s.set("github_user", "patw")
-    assert s.needs_network(SSH)
+def test_ssh_fetches_github_keys_once(manifest, fetcher):
+    s = make(manifest, fetcher)
+    s.set("key_source", "patw")
+    assert s.needs_network(SSH) and not s.field_active("key_password")
     assert s.finish(SSH) is None
-    assert github.calls == ["patw"] and s.authorized_keys == GH_KEYS
+    assert fetcher.calls == [("github.com/patw", "")] and s.authorized_keys == GH_KEYS
     assert not s.needs_network(SSH)
-    assert s.finish(SSH) is None and github.calls == ["patw"]  # not fetched twice
+    assert s.finish(SSH) is None and len(fetcher.calls) == 1  # not fetched twice
 
 
-def test_ssh_github_and_pasted_key_combine(manifest, github):
-    s = make(manifest, github)
-    s.set("github_user", "patw")
+def test_ssh_github_and_pasted_key_combine(manifest, fetcher):
+    s = make(manifest, fetcher)
+    s.set("key_source", "gh:patw")
     s.set("ssh_key", KEY)
     assert s.finish(SSH) is None
     assert s.authorized_keys.splitlines() == GH_KEYS.splitlines() + [KEY]
-    ssh = dict(s.review())["SSH"]
-    assert ssh == "3 keys (2 from github.com/patw, 1 pasted)"
+    assert dict(s.review())["SSH"] == "3 keys (2 from github.com/patw, 1 pasted)"
 
 
-def test_ssh_fetch_failure_points_at_the_github_field(manifest):
-    s = make(manifest, FakeGitHub(error=KeyFetchError("could not reach github.com")))
-    s.set("github_user", "patw")
-    assert s.finish(SSH) == ("github_user", "could not reach github.com")
+def test_ssh_keys_from_a_url(manifest, fetcher):
+    s = make(manifest, fetcher)
+    s.set("key_source", "http://nas.lan/keys")
+    assert s.finish(SSH) is None
+    assert fetcher.calls == [("http://nas.lan/keys", "")]
+    assert "from http://nas.lan/keys" in dict(s.review())["SSH"]
+
+
+def test_ssh_keys_from_another_machine(manifest, fetcher):
+    s = make(manifest, fetcher)
+    s.set("key_source", "pat@behoserver")
+    assert s.field_active("key_password")
+    label, hint = s.field_text(SSH.fields[1])
+    assert label == "Password for pat@behoserver" and hint == ""
+    assert s.finish(SSH) == ("key_password", "enter the password for pat@behoserver")
+    assert fetcher.calls == []
+    s.set("key_password", "wrong")
+    assert s.finish(SSH) == ("key_password", "pat@behoserver refused the password")
+    s.set("key_password", HOST_PASSWORD)
+    assert s.needs_network(SSH)
+    assert s.finish(SSH) is None and s.authorized_keys == HOST_KEYS
+    assert dict(s.review())["SSH"] == "2 keys (2 from pat@behoserver, 1 line skipped)"
+    # The password is never part of what gets installed.
+    assert HOST_PASSWORD not in repr(s.answers())
+
+
+def test_a_new_password_imports_again(manifest, fetcher):
+    s = make(manifest, fetcher)
+    s.set("key_source", "pat@behoserver")
+    s.set("key_password", HOST_PASSWORD)
+    s.finish(SSH)
+    s.set("key_password", HOST_PASSWORD + "x")
+    assert s.needs_network(SSH)
+
+
+def test_ssh_fetch_failure_points_at_the_source_field(manifest):
+    s = make(manifest, FakeFetch(error=KeyFetchError("could not reach github.com")))
+    s.set("key_source", "patw")
+    assert s.finish(SSH) == ("key_source", "could not reach github.com")
     assert s.authorized_keys == ""
 
 
-def test_ssh_clearing_the_github_user_drops_its_keys(manifest, github):
-    s = make(manifest, github)
-    s.set("github_user", "patw")
+def test_ssh_clearing_the_source_drops_its_keys(manifest, fetcher):
+    s = make(manifest, fetcher)
+    s.set("key_source", "patw")
     s.finish(SSH)
-    s.set("github_user", "")
+    s.set("key_source", "")
     s.set("ssh_key", KEY)
     assert s.finish(SSH) is None and s.authorized_keys == KEY
 
@@ -156,10 +191,10 @@ def test_desktop_login_choice(desktop_manifest):
     assert dict(s.review())["Login"] == "automatic"
 
 
-def test_answers_and_review(manifest, github):
-    s = make(manifest, github)
+def test_answers_and_review(manifest, fetcher):
+    s = make(manifest, fetcher)
     for k, v in [("hostname", "box"), ("username", "pat"), ("password", "hunter22"),
-                 ("password2", "hunter22"), ("github_user", "patw")]:
+                 ("password2", "hunter22"), ("key_source", "patw")]:
         assert s.set(k, v) is None
     s.finish(SSH)
     a = s.answers()

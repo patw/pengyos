@@ -5,12 +5,12 @@ from __future__ import annotations
 import io
 
 import pytest
-from conftest import DISKS, GH_KEYS, KEY, FakeGitHub
+from conftest import DISKS, GH_KEYS, HOST_KEYS, HOST_PASSWORD, KEY, FakeFetch
 
 from pengyos_install_tui.install import run_install
 
 
-def _drive(payload, lines, secrets, install=None, github=None, disks=DISKS):
+def _drive(payload, lines, secrets, install=None, fetcher=None, disks=DISKS):
     lines, secrets = iter(lines), iter(secrets)
     calls = []
 
@@ -23,7 +23,7 @@ def _drive(payload, lines, secrets, install=None, github=None, disks=DISKS):
         secret=lambda prompt: next(secrets),
         out=out, payload=payload, disks=disks,
         install=install or fake_install,
-        fetch_keys=github or FakeGitHub(),
+        fetch_keys=fetcher or FakeFetch(),
         plain=True,
     )
     return rc, out.getvalue(), calls
@@ -57,10 +57,11 @@ def test_full_install_with_reprompts(payload):
 
 
 def test_github_keys(payload):
-    gh = FakeGitHub()
+    gh = FakeFetch()
     rc, out, calls = _drive(payload, ["1", "box", "pat", "patw", "", "", "erase"],
-                            ["hunter22", "hunter22"], github=gh)
-    assert rc == 0 and gh.calls == ["patw"]
+                            ["hunter22", "hunter22"], fetcher=gh)
+    assert rc == 0 and gh.calls == [("github.com/patw", "")]
+    assert "Password for" not in out  # only asked for user@host
     ((_, answers, _),) = calls
     assert answers.authorized_keys == GH_KEYS
     assert "2 keys (2 from github.com/patw)" in out
@@ -138,3 +139,14 @@ def test_not_a_terminal_falls_back_to_plain(payload, monkeypatch):
     rc = run_install(inp=lambda p: next(answers), secret=lambda p: next(secrets), out=out,
                      payload=payload, disks=DISKS, install=lambda *a, **k: None)
     assert rc == 1 and "== Choose a disk ==" in out.getvalue()
+
+
+def test_keys_from_another_machine(payload):
+    f = FakeFetch()
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "pat@behoserver", "", "", "", "erase"],
+                            ["hunter22", "hunter22", "wrong", HOST_PASSWORD], fetcher=f)
+    assert rc == 0 and "refused the password" in out
+    assert f.calls == [("pat@behoserver", "wrong"), ("pat@behoserver", HOST_PASSWORD)]
+    assert calls[0][1].authorized_keys == HOST_KEYS
+    assert "2 keys (2 from pat@behoserver, 1 line skipped)" in out
+    assert HOST_PASSWORD not in out

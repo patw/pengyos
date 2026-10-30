@@ -47,7 +47,7 @@ CHILD = textwrap.dedent("""
         return frame
 
     App.render = logged
-    s = Session(Manifest.load({payload!r}), disks, fetch_keys=lambda u: "")
+    s = Session(Manifest.load({payload!r}), disks, fetch_keys=lambda s, p: None)
     sys.exit(run_screen(App(s, install=install)))
 """)
 
@@ -134,7 +134,7 @@ def test_install_through_the_real_terminal(tmp_path, payload, term):
     t.read_until("Create your account")
     t.send("pat\rhunter22\rhunter22\r")
     t.read_until("SSH access")
-    t.send("\t\r")
+    t.send("\t\t\r")
     t.read_until("own keyboard")
     t.send("\r")
     t.read_until("Set up Pengy")

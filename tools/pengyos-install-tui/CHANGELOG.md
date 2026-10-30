@@ -7,6 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **More places to import SSH keys from.** The SSH page's "Import keys from"
+  takes a GitHub username, an `http(s)://` URL (any authorized_keys-style file),
+  or `user@host[:port]`: the installer asks for that machine's password and
+  copies its `~/.ssh/authorized_keys` over SSH, for people without a GitHub
+  account who already have a machine that takes passwords. Lines with options
+  are skipped and counted in the review. `keys.fetch_keys(source, password)`
+  replaces `github_keys(user)`.
 - **A full-screen installer** (`screen.py`, curses from the stdlib) for
   `install` on any terminal of at least 80x24: arrow-key disk list (unusable
   disks shown with the reason, not numbered), forms with masked passwords and
