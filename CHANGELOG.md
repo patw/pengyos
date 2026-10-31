@@ -30,6 +30,10 @@ already used. `live-installer` refuses to run on an installed system even if sta
 other way. The Firefox setup had the same mistake inverted (skipped on an installed machine
 with a stick plugged in) and now runs on any installed system. A gate test keeps the
 stick's label from being used as the live test again.
+Checked under QEMU on a Desktop installer stick built from this change: on its own it
+opened the installer (session check 5/5, screenshot); booted with `pengyos.data=` on the
+kernel line, systemd logged "PengyOS installer (live USB) skipped, unmet condition check
+ConditionKernelCommandLine=!pengyos.data", and automatic login was off.
 
 ### Fixed — startup apps that need X11 (Steam) failed at login (2026-10-31)
 
