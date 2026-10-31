@@ -62,9 +62,16 @@ CONFIG_VFIO_PCI=m
 # --- Gaps found against a distro kernel (2026-10-17) ----------------------------
 # SR-IOV: a server NIC's (or GPU's) virtual functions, for VMs and containers.
 CONFIG_PCI_IOV=y
-# SMB/CIFS client: `mount -t cifs` for Windows and NAS shares (the Desktop's file
-# manager goes through gvfs/libsmbclient instead, but fstab mounts need this).
+# SMB/CIFS client: `mount -t cifs` / mount.cifs (cifs-utils, server.config) for
+# Windows and NAS shares. The Desktop's Files goes through gvfs, whose SMB
+# backend needs samba4 (desktop.config); until 26.10.51 this comment claimed
+# that half too, and it was never built.
 CONFIG_CIFS=m
+# SMB3 server in the kernel (ksmbd), with ksmbd-tools' daemon for users and
+# shares; managed by pengyos-shares, off until a share exists (US-SRV-14).
+# Chosen over Samba's smbd: a Server builds no Samba at all, and SMB2.1/3 covers
+# every client a homelab has (Windows 10/11, macOS, Linux, phones).
+CONFIG_SMB_SERVER=m
 
 # --- An unattended box: health, watchdog, VM guest, GPU (2026-10-25) -----------
 # Measured against the 26.10.40 Server kernel next to the Desktop's: these had

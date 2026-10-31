@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The suite drives the shipped script against a sandbox root with a fake
+# systemctl, and the real pengyos-firewall with its fake nft, so it needs no
+# root, no ksmbd and no build.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-shares"
+expect = "exit0"
+timeout = 600

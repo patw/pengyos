@@ -78,6 +78,23 @@ def test_exec_any_respects_the_executable_bit(cdf, tmp_path):
     assert problems and "no executable by that name" in problems[0]
 
 
+def test_absolute_symlinks_resolve_inside_the_rootfs(cdf, tmp_path):
+    # ksmbd-tools installs usr/bin/ksmbd.mountd -> /usr/libexec/ksmbd.tools;
+    # the link must be followed into the target, not the build host's /usr.
+    target = tmp_path / "target"
+    (target / "usr/bin").mkdir(parents=True)
+    (target / "usr/libexec").mkdir(parents=True)
+    tool = target / "usr/libexec/ksmbd.tools"
+    tool.write_text("#!/bin/sh\n")
+    tool.chmod(0o755)
+    (target / "usr/bin/ksmbd.mountd").symlink_to("/usr/libexec/ksmbd.tools")
+    (target / "usr/bin/ksmbd.gone").symlink_to("/usr/libexec/ksmbd.missing")
+    req = features(tmp_path, "exec-any ksmbd.mountd\nexec usr/bin/ksmbd.mountd\n")
+    assert cdf.check(target, [req]) == []
+    problems = cdf.check(target, [features(tmp_path, "exec-any ksmbd.gone\n")])
+    assert problems and "no executable by that name" in problems[0]
+
+
 def test_exists_covers_plain_data_files(cdf, tmp_path):
     target = tmp_path / "target"
     (target / "usr/lib/udev/rules.d").mkdir(parents=True)

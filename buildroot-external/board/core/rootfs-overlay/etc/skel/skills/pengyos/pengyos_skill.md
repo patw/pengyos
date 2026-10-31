@@ -106,6 +106,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-install-tui` | the console installer (`install`) |
 | `pengyos-autologin on\|off` | Desktop: skip the login screen at boot and the lock screen on sleep/idle |
 | `pengyos-webui status\|on\|off` | Server/Desktop: serve the Pengy web UI as a user, on `http://127.0.0.1:5000` (no login — see Gotchas) |
+| `pengyos-shares status\|add\|remove\|passwd` | Server/Desktop: share folders over SMB (the kernel's ksmbd; no Samba server) — see Gotchas |
 | `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers |
 | `distrobox create\|enter` | a full distro userspace sharing `$HOME` |
 | `flatpak install flathub <app>` | third-party GUI apps (Desktop) |
@@ -163,6 +164,15 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
   `add_network`, `set_network`, `save_config`); networkd gives the address
   (`networkctl status <iface>`). `iw dev` shows the radio and its link. There
   is no `nmcli` on the Server.
+- **SMB: ksmbd serves, Samba only on the Desktop as a client.** Share a folder
+  with `sudo pengyos-shares add NAME /path [--read-only] [--user U]`, then
+  `sudo pengyos-shares passwd U` (a share password, NOT the login one; `--stdin`
+  for scripts). It owns `/etc/ksmbd/ksmbd.conf` + `ksmbdpwd.db`, enables
+  `ksmbd.service` with the first share and opens 445 to LAN ranges only; the last
+  `remove` undoes both. No guest shares, no SMB1. To mount someone else's share:
+  `mount.cifs` with `credentials=` (a 0600 file; the kernel alone ignores that
+  option and fails with -13), or `smb://host/share` in Files on the Desktop.
+  `smbclient -L host -U user` (Desktop) tells "the share" from "this machine".
 - **A laptop server ignores its lid, holds its battery at 80% and blanks its
   screen.** Closing the lid does nothing (`/usr/lib/systemd/logind.conf.d/
   60-pengyos-lid.conf`; override in `/etc/systemd/logind.conf.d/`). The charge

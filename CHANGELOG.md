@@ -17,6 +17,35 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — SMB: Files opens network shares, and Servers share folders (2026-10-30)
+
+PengyOS had no SMB story at all, and nothing said so. On the Desktop, `smb://` in Files
+failed with "Location is not mountable": Buildroot builds gvfs's SMB backend only when
+samba4 is selected, and nothing selected it, so no Desktop image ever had `gvfsd-smb`.
+The Server fragment's comment claimed the Desktop's file manager covered SMB. And there
+was no way to share a folder from any edition (found by Pengy on 2026-10-30, mounting
+miniserv's `/data` from behopc).
+
+- **Desktop, client** (US-DSK-17): `BR2_PACKAGE_SAMBA4`, for gvfs's SMB backend
+  (libsmbclient) and `smbclient`; Samba's Python bindings are configured out
+  (`external.mk`: nothing uses them without the AD DC, and they are much of its build).
+  Samba's server units (`smb`, `nmb`, `winbind`, `samba`, `samba-bgqd`) are preset off:
+  `preset-all` enables any unit no preset names, so selecting the package alone would
+  have started smbd on every Desktop. `features-required.txt` now fails the build
+  without `gvfsd-smb`, `gvfsd-smb-browse` and `smbclient`.
+- **Server (and Desktop), mounting** (US-SRV-13): cifs-utils, for `mount.cifs` and its
+  `credentials=` files. The kernel's own parser ignores that option without a word, so a
+  credentials-file mount went out anonymous and failed with -13.
+- **Server (and Desktop), sharing** (US-SRV-14): the kernel's SMB3 server
+  (`CONFIG_SMB_SERVER=m`, ksmbd) with ksmbd-tools, driven by the new `pengyos-shares`
+  (`add`, `remove`, `passwd`, `status`; `tools/pengyos-shares`). No Samba server is
+  built. `ksmbd.service` is preset off; the first share enables it and opens 445/tcp to
+  private addresses only through `pengyos-firewall`, and the last one undoes both.
+  Logins only: no guest shares, and share passwords are separate from login passwords.
+- The Core preset's comment said systemd's presets end in `enable *`; they don't. An
+  unnamed unit is enabled because that is systemd's default, so every package with a
+  daemon needs a preset line.
+
 ### Added — an old laptop runs as a Server (2026-10-30)
 
 A Server is homelab hardware, and that includes a laptop with a cracked screen and a

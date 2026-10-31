@@ -62,6 +62,21 @@ def wanted_exec_dirs(target: Path) -> list[Path]:
     return dirs
 
 
+def in_target(target: Path, path: Path) -> Path:
+    """Follow PATH's symlinks the way the booted image would.
+
+    Packages often install absolute links (ksmbd-tools: usr/bin/ksmbd.mountd ->
+    /usr/libexec/ksmbd.tools), which on the build host would point outside the
+    rootfs. Re-root those under TARGET; relative links resolve as they are.
+    """
+    for _ in range(40):
+        if not path.is_symlink():
+            return path
+        link = Path(os.readlink(path))
+        path = target / str(link).lstrip("/") if link.is_absolute() else path.parent / link
+    return path
+
+
 def parse_features(path: Path) -> list[tuple[int, str, list[str], str]]:
     checks = []
     for lineno, raw in enumerate(path.read_text().splitlines(), 1):
@@ -84,7 +99,7 @@ def run_check(target: Path, kind: str, args: list[str]) -> str | None:
         if len(args) != 2:
             return "contains needs <path> <needle>"
         rel, needle = args
-        path = target / rel.lstrip("/")
+        path = in_target(target, target / rel.lstrip("/"))
         if not path.is_file():
             return f"{rel}: missing"
         if needle.encode() not in path.read_bytes():
@@ -94,7 +109,7 @@ def run_check(target: Path, kind: str, args: list[str]) -> str | None:
         if len(args) != 1:
             return "exec needs <path>"
         rel = args[0]
-        path = target / rel.lstrip("/")
+        path = in_target(target, target / rel.lstrip("/"))
         if not path.is_file():
             return f"{rel}: missing"
         if not os.access(path, os.X_OK):
@@ -105,7 +120,7 @@ def run_check(target: Path, kind: str, args: list[str]) -> str | None:
             return "exec-any needs <basename>"
         name = args[0]
         for d in wanted_exec_dirs(target):
-            candidate = d / name
+            candidate = in_target(target, d / name)
             if candidate.is_file() and os.access(candidate, os.X_OK):
                 return None
         return f"{name}: no executable by that name in bin, sbin, usr/bin, usr/sbin, usr/libexec/*"
@@ -113,7 +128,7 @@ def run_check(target: Path, kind: str, args: list[str]) -> str | None:
         if len(args) != 1:
             return "exists needs <path>"
         rel = args[0]
-        if not (target / rel.lstrip("/")).exists():
+        if not in_target(target, target / rel.lstrip("/")).exists():
             return f"{rel}: missing"
         return None
     return f"unknown check {kind!r}"

@@ -525,6 +525,15 @@ BR2_PACKAGE_WPA_SUPPLICANT_CLI=y
 BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y
 BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
 BR2_PACKAGE_IW=y
+# SMB, both directions, without Samba (US-SRV-13, US-SRV-14). cifs-utils gives
+# mount.cifs, which reads `credentials=` files: the kernel's own cifs option
+# parser ignores that option without a word, so an fstab mount with a 0600
+# credentials file went out anonymous and failed with -13. ksmbd-tools is the
+# userspace half of the kernel's SMB3 server (CONFIG_SMB_SERVER); pengyos-shares
+# drives it. ksmbd.service is preset off: nothing listens on 445 until a share
+# exists.
+BR2_PACKAGE_CIFS_UTILS=y
+BR2_PACKAGE_KSMBD_TOOLS=y
 # - Python wheels (US-SRV-10): the manylinux policy lets a wheel assume the host
 #   has libGL.so.1 and five X11 client libraries, so wheels never bundle them.
 #   Without them `uv add opencv-python` installed and then failed at import

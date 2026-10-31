@@ -288,6 +288,33 @@ says 80 on a ThinkPad. Not covered: legacy-BIOS-only and 32-bit-UEFI machines (t
 installer stick boots 64-bit UEFI only), hidden Wi-Fi networks and WPA-Enterprise in the
 installer (`wpa_cli` after).
 
+**US-SRV-13 — Mount another machine's share from fstab.**
+> *As the self-hoster, I want a NAS or Windows share mounted at boot with its password in a
+> root-only file, so backups and media paths are just paths.*
+
+How: the kernel's cifs client (`CONFIG_CIFS=m`) plus `mount.cifs` from cifs-utils, which
+reads `credentials=` files. The kernel's own option parser does not know that option and
+drops it without a word, so before cifs-utils the mount went out anonymous and failed with
+`-13`.
+**Acceptance:** an fstab line `//nas/media /data/media cifs credentials=/etc/pengyos/nas.cred,_netdev,nofail,uid=1000 0 0`
+with a 0600 credentials file mounts at boot; with the NAS off, boot still finishes (no failed
+unit, no hang); the password appears in no world-readable file and no process's arguments.
+
+**US-SRV-14 — Share a folder with the house.**
+> *As the self-hoster, I want to share `/data/media` with the Windows and Mac machines in
+> the house with one command, without opening it to guests or the internet.*
+
+How: the kernel's SMB3 server (`CONFIG_SMB_SERVER`, ksmbd) with ksmbd-tools, driven by
+`pengyos-shares` (`add`, `remove`, `passwd`, `status`). No Samba server is built.
+`ksmbd.service` is preset off; the first share enables it and opens 445/tcp to private
+addresses only (`pengyos-firewall`), the last one undoes both. Every share needs a login:
+an account on the machine, with a share password separate from its login password.
+**Acceptance:** after `sudo pengyos-shares add media /data/media` and `passwd`, Windows
+opens `\\host\media` and macOS `smb://host/media` with that password, reading and writing
+as that account; a wrong password and an anonymous connection are refused; a fresh install
+and a machine whose last share was removed have nothing listening on 445. Not covered:
+network discovery (Windows' Network view, mDNS), guest shares, SMB1.
+
 ---
 
 ## 3. PengyOS **Desktop** — “the daily driver”
@@ -535,6 +562,20 @@ key, model, system message) owned by the user and readable only by them; install
 skipped leaves **no** config file and Pengy still starts, pointing at its own defaults; a
 fresh home has `~/skills/skill_index.md` with the two skills; a malformed endpoint is
 re-prompted with a reason, never accepted.
+
+**US-DSK-17 — Open the household's network shares in Files.**
+> *As the daily-driver user, I want to open the shares my other machines expose, so this
+> machine is part of the house and not an island.*
+
+How: gvfs's SMB backend, which Buildroot builds only when samba4 is selected (the Desktop
+selects it for the client library; Samba's server units are preset off), so Files mounts
+`smb://host/share` like any other location. Credentials go to the Secret Service (libsecret
++ oo7) when "remember" is ticked. The Desktop shares its own folders with `pengyos-shares`
+(US-SRV-14), not Samba.
+**Acceptance:** an `smb://` address typed into Files asks for a password and opens the
+share, read and write; an unreachable host fails with a network error, never "Location is
+not mountable"; a remembered password survives a reboot; nothing on a Desktop listens on
+445 until a folder is shared.
 
 ---
 

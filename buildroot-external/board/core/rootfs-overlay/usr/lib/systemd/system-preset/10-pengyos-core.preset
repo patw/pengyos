@@ -1,5 +1,7 @@
-# PengyOS (every edition). Presets are read in name order, first match wins, so
-# this comes before Buildroot's and systemd's "enable *".
+# PengyOS (every edition). Presets are read in name order, first match wins.
+# A unit no preset file names is ENABLED by Buildroot's `systemctl preset-all`
+# (systemd's default for an unmatched unit), so every package that ships a
+# daemon with an [Install] section needs a deliberate line somewhere.
 #
 # xfsprogs is in the image to mount XFS disks from other systems; no PengyOS
 # partition is XFS. Its weekly xfs_scrub_all.timer found nothing to do on every

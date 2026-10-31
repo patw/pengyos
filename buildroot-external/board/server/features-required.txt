@@ -27,3 +27,11 @@ exists    usr/lib/libXext.so.6                     # BR2_PENGYOS_MANYLINUX_LIBS
 exists    usr/lib/libXrender.so.1                  # BR2_PENGYOS_MANYLINUX_LIBS
 exists    usr/lib/libSM.so.6                       # BR2_PENGYOS_MANYLINUX_LIBS
 exists    usr/lib/libICE.so.6                      # BR2_PENGYOS_MANYLINUX_LIBS
+
+# --- SMB, both directions, without Samba (US-SRV-13, US-SRV-14) -----------------
+exec-any  mount.cifs                               # fstab `credentials=` (the kernel ignores it) — BR2_PACKAGE_CIFS_UTILS
+exec-any  ksmbd.mountd                             # the SMB3 server's user/share daemon — BR2_PACKAGE_KSMBD_TOOLS
+exec-any  ksmbd.control                            # reload/shutdown, ksmbd.service's ExecReload — BR2_PACKAGE_KSMBD_TOOLS
+exists    usr/lib/systemd/system/ksmbd.service     # pengyos-shares enables it — BR2_PACKAGE_KSMBD_TOOLS (systemd unit dir)
+exec      usr/bin/pengyos-shares                   # board/server overlay
+

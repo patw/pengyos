@@ -1,5 +1,5 @@
 # PengyOS Server (and every edition built on it). Presets are read in name order,
-# first match wins, so this comes before Buildroot's and systemd's "enable *".
+# first match wins; a unit no file names is enabled (see 10-pengyos-core.preset).
 #
 # The backup timer is opt-in. Its defaults tar all of /etc and /home onto the
 # same disk and keep 7 copies, which filled Desktops' drives. `enable *` would
@@ -11,3 +11,14 @@ disable pengyos-backup.timer
 # would otherwise be enabled too and sit idle; the Desktop enables it again in
 # 10-pengyos-hardware.preset (read first).
 disable wpa_supplicant.service
+
+# SMB servers stay off. ksmbd.service (ksmbd-tools) is enabled by pengyos-shares
+# when the first share is added, and disabled again with the last one. Samba's
+# own server units come with the Desktop's samba4, which is there only for the
+# client library: preset-all would otherwise start smbd on every Desktop.
+disable ksmbd.service
+disable smb.service
+disable nmb.service
+disable winbind.service
+disable samba.service
+disable samba-bgqd.service
