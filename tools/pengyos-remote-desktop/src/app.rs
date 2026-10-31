@@ -157,7 +157,7 @@ impl cosmic::Application for App {
             body.push(self.view_connect(s));
         }
         body.push(self.view_password());
-        let content = column::with_children(body).spacing(spacing.space_m).max_width(560);
+        let content = column::with_children(body).spacing(spacing.space_m).max_width(600);
         container(widget::scrollable(content))
             .width(Length::Fill)
             .height(Length::Fill)
@@ -200,10 +200,19 @@ impl App {
         let mut sec = section().title("Connecting");
         sec = sec.add(item("Computer", text::body(s.connect_to().join("\n"))));
         sec = sec.add(item("User name", text::body(s.user.clone())));
-        if let Some(fp) = &s.fingerprint {
-            sec = sec.add(text::caption(format!(
-                "The other computer asks you to trust this one's certificate once. It should show SHA-256 {fp}."
-            )));
+        if let Some(fp) = s.fingerprint_lines() {
+            sec = sec.add(
+                column::with_children([
+                    text::body("Certificate").into(),
+                    text::caption(
+                        "The other computer asks you to trust this one's certificate once. \
+                         Its SHA-256 fingerprint should be:",
+                    )
+                    .into(),
+                    text::monotext(fp).into(),
+                ])
+                .spacing(4),
+            );
         }
         let ask: Element<'_, Message> = if s.consent_saved {
             item::builder("Permission")

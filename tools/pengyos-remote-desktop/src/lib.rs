@@ -73,6 +73,14 @@ impl Status {
         out
     }
 
+    /// The certificate fingerprint as two lines of 16 bytes: one unbroken
+    /// 95-character token cannot wrap, and ran off the window's edge.
+    pub fn fingerprint_lines(&self) -> Option<String> {
+        let fp = self.fingerprint.as_deref()?;
+        let bytes: Vec<&str> = fp.split(':').collect();
+        Some(bytes.chunks(16).map(|c| c.join(":")).collect::<Vec<_>>().join("\n"))
+    }
+
     /// One sentence on where things stand.
     pub fn headline(&self) -> String {
         match (self.enabled, self.running()) {
