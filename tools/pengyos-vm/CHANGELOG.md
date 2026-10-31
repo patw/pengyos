@@ -16,6 +16,10 @@ and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
 ### Changed
 - `pengyos-vm ssh` uses a VM's own key when it has one (a kept `run`).
+- When the user manager is going down (shutdown, reboot, last logout without
+  linger) a VM gets 30 s to shut down, not 100 s, and `qemu.log` says it was
+  asked to. `pengyos-vm-shutdown-notice.service` says on the console which VMs a
+  shutdown is waiting for.
 
 ## [0.2.0] - 2026-10-31
 

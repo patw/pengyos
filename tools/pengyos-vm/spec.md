@@ -26,6 +26,11 @@
   with VNC (`BR2_PACKAGE_LIBVNCSERVER`). The firewall's forward chain accepts
   `pengyos-br0 → pengyos-br0` (br_netfilter is active on the Server).
 
+- `_powerdown` waits `--timeout` (100 s), or 30 s (`SHUTDOWN_WAIT`) when the user
+  manager reports `stopping`. `pengyos-vm-shutdown-notice.service` (system,
+  `After=user.slice`, so it stops as a shutdown begins) prints the running
+  pengyos-vm QEMU processes (`-name N,process=pengyos-vm-N`) and their owners to
+  the console.
 - `run`: a VM named `run-XXXXXX` (or `--name`) in `~/vms` like any other, with
   `run_owner` (the run's PID) in `vm.json`. Its disk is a qcow2 overlay
   (`qemu-img create -b`) of the image converted once into

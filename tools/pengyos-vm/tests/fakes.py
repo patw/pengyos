@@ -43,6 +43,10 @@ if NAME == "systemctl":
         now = state.read_text() if state.exists() else "inactive"
         print(now)
         sys.exit(0 if now == "active" else 3)
+    if verb == "is-system-running":
+        st = ROOT / "system-state"
+        print(st.read_text().strip() if st.exists() else "running")
+        sys.exit(0)
     if verb == "is-enabled":
         on = (units / (unit + ".enabled")).exists()
         print("enabled" if on else "disabled")

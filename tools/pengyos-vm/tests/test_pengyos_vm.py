@@ -31,6 +31,7 @@ UNIT = BOARD / "server" / "rootfs-overlay" / "usr" / "lib" / "systemd" / "user" 
 HERE = Path(__file__).resolve().parent
 FAKES = ("systemctl", "qemu-img", "networkctl", "ip", "ssh", "ssh-keygen", "journalctl", "loginctl")
 NIC_MAC = "54:e1:ad:5a:60:8a"
+QEMU_BIN = "/usr/bin/qemu-system-x86_64"
 
 
 class Box:
@@ -484,6 +485,76 @@ def test_ssh_into_a_kept_run_uses_its_key(box: Box):
     argv = json.loads(box.run("ssh", "job").stdout)
     assert argv[2:4] == ["-i", str(box.home / "vms" / "job" / "id_ed25519")]
     assert argv[-1] == "root@127.0.0.1"
+
+
+# ----------------------------------------------------------------- shutdown
+NOTICE = BOARD / "server" / "rootfs-overlay" / "usr" / "libexec" / "pengyos" / "pengyos-vm-shutdown-notice"
+NOTICE_UNIT = BOARD / "server" / "rootfs-overlay" / "usr" / "lib" / "systemd" / "system" / "pengyos-vm-shutdown-notice.service"
+
+
+def fake_qmp(path: Path):
+    """A QEMU monitor that takes system_powerdown and then exits (closes)."""
+    import socket
+    import threading
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(str(path))
+    srv.listen(1)
+
+    def serve():
+        conn, _ = srv.accept()
+        f = conn.makefile("rwb", buffering=0)
+        f.write(b'{"QMP": {}}\n')
+        for _ in range(2):
+            f.readline()
+            f.write(b'{"return": {}}\n')
+        conn.close()
+        srv.close()
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    return t
+
+
+@pytest.mark.parametrize("state,wait", [("running", "100s"), ("stopping", "30s")])
+def test_powerdown_waits_less_when_everything_is_going_down(box: Box, state, wait):
+    box.run("create", "deb", "--iso", str(box.iso))
+    (box.root / "system-state").write_text(state)
+    t = fake_qmp(box.home / "vms" / "deb" / "qmp.sock")
+    cp = box.run("_powerdown", "deb")
+    t.join(5)
+    assert f"deb: asked the guest to shut down; it is switched off after {wait}" in cp.stderr
+
+
+def test_shutdown_notice_names_the_running_vms(tmp_path: Path):
+    proc = tmp_path / "proc"
+    for pid, argv in {
+        "101": [QEMU_BIN, "-name", "core1,process=pengyos-vm-core1", "-m", "1024M"],
+        "102": ["/usr/bin/sshd", "-D"],
+        "103": [QEMU_BIN, "-name", "other"],  # QEMU, but not one of pengyos-vm's
+        "104": [QEMU_BIN, "-name", "web,process=pengyos-vm-web"],
+    }.items():
+        (proc / pid).mkdir(parents=True)
+        (proc / pid / "cmdline").write_bytes("\0".join(argv).encode() + b"\0")
+    (proc / "self").mkdir()
+    import pwd
+    me = pwd.getpwuid(os.getuid()).pw_name
+    out = subprocess.run(["python3", str(NOTICE), "--proc", str(proc)],
+                         capture_output=True, text=True, check=True).stdout
+    assert out == (f"Waiting for 2 virtual machines to shut down: core1 ({me}), web ({me}). "
+                   f"A guest that ignores the power button is switched off after 30 s.\n")
+    for pid in ("101", "104"):
+        shutil.rmtree(proc / pid)
+    assert subprocess.run(["python3", str(NOTICE), "--proc", str(proc)],
+                          capture_output=True, text=True, check=True).stdout == ""
+
+
+def test_the_notice_matches_the_tool_and_speaks_on_the_console():
+    import re
+    wait = re.search(r"^SHUTDOWN_WAIT = (\d+)$", SCRIPT.read_text(), re.M).group(1)
+    assert f"WAIT = {wait}" in NOTICE.read_text()
+    unit = NOTICE_UNIT.read_text()
+    assert "StandardOutput=journal+console" in unit and "After=user.slice" in unit
+    assert "ExecStop=/usr/libexec/pengyos/pengyos-vm-shutdown-notice" in unit
+    assert os.access(NOTICE, os.X_OK)
 
 
 # ------------------------------------------------------------------ bridge

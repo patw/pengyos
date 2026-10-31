@@ -40,6 +40,7 @@ contains  usr/share/polkit-1/actions/org.freedesktop.login1.policy  set-self-lin
 exists    etc/polkit-1/rules.d/60-pengyos-linger.rules   # users set their own linger — server overlay
 exec      usr/bin/pengyos-vm                       # board/server overlay
 exists    usr/lib/systemd/user/pengyos-vm@.service   # board/server overlay
+exec      usr/libexec/pengyos/pengyos-vm-shutdown-notice   # says on the console which VMs a shutdown waits for
 exec      usr/bin/pengy-vmm                        # board/server overlay
 exists    usr/lib/systemd/user/pengy-vmm.service   # board/server overlay
 exec      usr/bin/qemu-system-x86_64               # pengyos-vm runs it — BR2_PACKAGE_QEMU_SYSTEM

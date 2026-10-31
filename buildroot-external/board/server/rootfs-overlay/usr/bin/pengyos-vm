@@ -97,6 +97,8 @@ SIZE_RE = re.compile(r"^(\d+)([KMGT]?)i?B?$", re.I)
 SSH_PORT_BASE = 2201
 ESCAPE = b"\x1d"  # Ctrl-]
 DEFAULTS = {"memory": "2G", "cpus": 2, "disk": "20G"}
+# How long a VM may take to shut down when the host is shutting down.
+SHUTDOWN_WAIT = 30
 RUN_DEFAULTS = {"memory": "1G", "disk": "8G", "boot_timeout": 180}
 RUN_DIR = "/root/run"
 DURATION_RE = re.compile(r"^(\d+)([smhd]?)$")
@@ -599,18 +601,35 @@ def qmp(vm: VM, command: str) -> socket.socket | None:
         return None
 
 
+def host_stopping() -> bool:
+    """Is everything going down, not just this VM: the user manager is stopping
+    (a shutdown or reboot, or the last logout without linger)? Asked of the user
+    manager, which still answers then; the system bus may already be gone."""
+    cp = user_systemctl("is-system-running", check=False)
+    return cp.stdout.strip() == "stopping"
+
+
 def cmd_powerdown(a) -> int:
-    """ExecStop: press the power button, wait for the guest to shut down."""
+    """ExecStop: press the power button, wait for the guest to shut down.
+
+    When everything is going down, the wait is SHUTDOWN_WAIT: a guest
+    that ignores the power button would otherwise hold the reboot for the full
+    timeout, with nothing on the screen to say why."""
     vm = VM(a.name).load()
+    timeout = a.timeout
+    if host_stopping():
+        timeout = min(timeout, SHUTDOWN_WAIT)
     s = qmp(vm, "system_powerdown")
     if not s:
         return 0
-    s.settimeout(a.timeout)
+    print(f"{vm.name}: asked the guest to shut down; it is switched off after {timeout:.0f}s",
+          file=sys.stderr)
+    s.settimeout(timeout)
     try:
         while s.recv(4096):
             pass
     except OSError:
-        print(f"{vm.name} did not shut down within {a.timeout:.0f}s; stopping it",
+        print(f"{vm.name} did not shut down within {timeout:.0f}s; switching it off",
               file=sys.stderr)
     finally:
         s.close()

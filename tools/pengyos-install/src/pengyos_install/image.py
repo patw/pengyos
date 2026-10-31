@@ -133,9 +133,9 @@ ROOT_TYPE = "4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709"
 #: audit=0: nothing here reads kernel audit records (no auditd), and without a
 #: reader the kernel prints each one (every PAM login) over the console.
 #: splash: show the Plymouth boot splash (Desktop; inert where Plymouth is not
-#: installed). plymouth.ignore-serial-consoles: where there is a serial console
-#: it comes last, so it is /dev/console, and Plymouth would otherwise fall back
-#: to text output. The serial console itself is not here: grub.cfg adds it only
+#: installed). plymouth.ignore-serial-consoles: under QEMU the serial console
+#: comes last, so it is /dev/console, and Plymouth would otherwise fall back to
+#: text output (on real hardware the screen is named last again). The serial console itself is not here: grub.cfg adds it only
 #: when GRUB finds a real UART (see render_grub_cfg).
 KERNEL_ARGS = ("ro rootwait init=/usr/lib/pengyos/preinit pengyos.data=4 audit=0 "
                "splash plymouth.ignore-serial-consoles console=tty0")
@@ -503,7 +503,10 @@ def render_grub_cfg(slots: dict[str, str], kernel_args: str = KERNEL_ARGS) -> st
     serial driver finds a real UART at COM1: a phantom port there made a
     ThinkPad L14 Gen 1 AMD boot for minutes behind a black screen (2026-10-03).
     Off QEMU (SMBIOS vendor), it comes with ``loglevel=4``: at 115200 baud every
-    kernel message costs ~6 ms, ~5 s of black screen per boot (2026-10-04).
+    kernel message costs ~6 ms, ~5 s of black screen per boot (2026-10-04); and
+    ``console=tty0`` is named again after it, so the screen is /dev/console and
+    shows systemd's boot and shutdown status, which otherwise went only to the
+    serial port (2026-10-31: a shutdown waiting on a VM looked hung).
     ``kernel_args`` may carry an older grub.cfg's fixed serial console or the
     variable itself; both are dropped before the variable is appended."""
     kernel_args = " ".join(a for a in kernel_args.split() if a not in _SERIAL_ARGS)
@@ -531,13 +534,14 @@ def render_grub_cfg(slots: dict[str, str], kernel_args: str = KERNEL_ARGS) -> st
         "    save_env pengyos_try",
         "fi",
         "# A serial console only where GRUB finds a real UART at COM1; on real",
-        "# hardware (not QEMU) with loglevel=4, so kernel messages don't crawl out of it.",
+        "# hardware (not QEMU) with loglevel=4, so kernel messages don't crawl out of it,",
+        "# and the screen named again after it, so systemd's status shows on the screen.",
         'set pengyos_serial=""',
         "if serial --unit=0 --speed=115200; then",
         '    set pengyos_serial="console=ttyS0,115200"',
         "    smbios --type 1 --get-string 4 --set pengyos_vendor",
         '    if [ "${pengyos_vendor}" != "QEMU" ]; then',
-        '        set pengyos_serial="loglevel=4 console=ttyS0,115200"',
+        '        set pengyos_serial="loglevel=4 console=ttyS0,115200 console=tty0"',
         "    fi",
         "fi",
         "",

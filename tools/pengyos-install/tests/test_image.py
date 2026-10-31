@@ -52,11 +52,13 @@ def test_render_grub_cfg():
 
 
 def test_render_grub_cfg_quiets_the_kernel_on_a_real_uart_but_not_qemu():
+    # ...and names the screen again after the UART there, so the screen is
+    # /dev/console and shows systemd's status (QEMU: the serial port is).
     cfg = render_grub_cfg({"a": "x"})
     quiet = (
         '    smbios --type 1 --get-string 4 --set pengyos_vendor\n'
         '    if [ "${pengyos_vendor}" != "QEMU" ]; then\n'
-        '        set pengyos_serial="loglevel=4 console=ttyS0,115200"\n'
+        '        set pengyos_serial="loglevel=4 console=ttyS0,115200 console=tty0"\n'
         '    fi\nfi\n'
     )
     assert quiet in cfg and cfg.index(quiet) < cfg.index("menuentry")

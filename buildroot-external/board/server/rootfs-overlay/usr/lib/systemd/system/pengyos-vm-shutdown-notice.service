@@ -1,0 +1,16 @@
+# Says on the console which VMs a shutdown or reboot is waiting for (pengyos-vm).
+# It does nothing at boot; it is ordered after user.slice so that it stops (and
+# speaks) as the shutdown begins, while the users' managers are stopping their VMs.
+[Unit]
+Description=Show which virtual machines a shutdown waits for
+After=user.slice
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/libexec/pengyos/pengyos-vm-shutdown-notice
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target
