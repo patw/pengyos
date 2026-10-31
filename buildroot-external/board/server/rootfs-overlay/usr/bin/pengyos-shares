@@ -1,0 +1,472 @@
+#!/usr/bin/env python3
+"""pengyos-shares - share this machine's folders on the network over SMB.
+
+    pengyos-shares status [--json]
+    sudo pengyos-shares add NAME PATH [--read-only] [--user USER]... [--comment TEXT]
+    sudo pengyos-shares remove NAME
+    sudo pengyos-shares passwd USER [--stdin]
+    sudo pengyos-shares deluser USER
+
+The server is the kernel's own SMB3 server, ksmbd, with ksmbd-tools' daemon
+(ksmbd.service). PengyOS ships no Samba server: SMB2.1/3 is what Windows 10/11,
+macOS, Linux and phones speak, and a Server then builds no Samba at all.
+
+Nothing listens on 445 until there is a share. `add` writes the share into
+/etc/ksmbd/ksmbd.conf, opens 445/tcp to private (LAN) addresses through
+pengyos-firewall, and enables ksmbd.service. `remove` of the last share
+disables the service and closes the port again. /etc survives OS updates, so
+shares and share passwords do too.
+
+Every share needs a login: there are no guest shares. A share user is an
+existing account on this machine (files are created as that account), with a
+separate share password set by `passwd`, kept as an NT hash in
+/etc/ksmbd/ksmbdpwd.db (0600): it is not the login password, and changing one
+does not change the other.
+
+--root DIR (anywhere on the line) is the test hook: every file goes under DIR,
+DIR/usr/bin/systemctl and DIR/usr/bin/pengyos-firewall are run instead of the
+real ones, and the root guard is lifted because nothing outside DIR is touched.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import getpass
+import json
+import os
+import re
+import struct
+import subprocess
+import sys
+from pathlib import Path
+
+PROG = "pengyos-shares"
+UNIT = "ksmbd.service"
+CONF = "etc/ksmbd/ksmbd.conf"
+PWDDB = "etc/ksmbd/ksmbdpwd.db"
+MARK = "# Managed by pengyos-shares."
+PORT = "445"
+# "LAN only": the private and link-local ranges. A share is never opened to the
+# internet by this tool; `pengyos-firewall allow 445 --from CIDR` adds others
+# (a VPN's range, say) by hand.
+LAN = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fd00::/8", "fe80::/10")
+# A share's own keys, in the order they are written. Others found in the file
+# (added by hand) are kept, after these.
+SHARE_KEYS = ("comment", "path", "read only", "valid users", "guest ok", "browseable")
+NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
+RESERVED = {"global", "homes", "printers", "ipc$"}
+# Folders that are the system, not data: sharing them is refused.
+SYSTEM_DIRS = ("/usr", "/etc", "/boot", "/proc", "/sys", "/dev", "/run", "/efi")
+MIN_PASSWORD = 8
+
+
+class Misuse(Exception):
+    """Exit 2 with this message; nothing has been written."""
+
+
+# --------------------------------------------------------------------- MD4
+# The NT hash is MD4 of the UTF-16LE password. hashlib's md4 comes from
+# OpenSSL's legacy provider, which is often not loaded, so this is the RFC 1320
+# algorithm itself.
+def _md4(data: bytes) -> bytes:
+    def rol(x: int, n: int) -> int:
+        x &= 0xFFFFFFFF
+        return ((x << n) | (x >> (32 - n))) & 0xFFFFFFFF
+
+    msg = data + b"\x80" + b"\x00" * ((55 - len(data)) % 64) + struct.pack("<Q", len(data) * 8)
+    a, b, c, d = 0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476
+    for off in range(0, len(msg), 64):
+        x = struct.unpack("<16I", msg[off:off + 64])
+        aa, bb, cc, dd = a, b, c, d
+        f = lambda x_, y, z: (x_ & y) | (~x_ & z)  # noqa: E731
+        g = lambda x_, y, z: (x_ & y) | (x_ & z) | (y & z)  # noqa: E731
+        h = lambda x_, y, z: x_ ^ y ^ z  # noqa: E731
+        for i in range(16):
+            k, s = i, (3, 7, 11, 19)[i % 4]
+            a, b, c, d = d, rol(a + f(b, c, d) + x[k], s), b, c
+        for i in range(16):
+            k, s = (i % 4) * 4 + i // 4, (3, 5, 9, 13)[i % 4]
+            a, b, c, d = d, rol(a + g(b, c, d) + x[k] + 0x5A827999, s), b, c
+        for i in range(16):
+            k = (0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15)[i]
+            s = (3, 9, 11, 15)[i % 4]
+            a, b, c, d = d, rol(a + h(b, c, d) + x[k] + 0x6ED9EBA1, s), b, c
+        a, b, c, d = [(p + q) & 0xFFFFFFFF for p, q in zip((a, b, c, d), (aa, bb, cc, dd))]
+    return struct.pack("<4I", a, b, c, d)
+
+
+def nt_hash(password: str) -> str:
+    """ksmbdpwd.db's password field: base64 of MD4(UTF-16LE(password))."""
+    return base64.b64encode(_md4(password.encode("utf-16-le"))).decode()
+
+
+# ------------------------------------------------------------------ the box
+class Box:
+    """This machine, or a sandbox under --root."""
+
+    def __init__(self, root: str | None) -> None:
+        self.root = Path(root) if root else None
+        self.base = self.root or Path("/")
+
+    def path(self, rel: str) -> Path:
+        return self.base / rel
+
+    def _bin(self, name: str) -> list[str]:
+        if self.root:
+            return [str(self.root / "usr/bin" / name)]
+        return [name]
+
+    def systemctl(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        r = subprocess.run([*self._bin("systemctl"), *args], capture_output=True, text=True)
+        if check and r.returncode != 0:
+            raise RuntimeError(f"systemctl {' '.join(args)} failed: {(r.stderr or '').strip()}")
+        return r
+
+    def _query(self, verb: str) -> bool:
+        try:
+            return self.systemctl(verb, "--quiet", UNIT, check=False).returncode == 0
+        except FileNotFoundError:  # no systemd (a container): nothing is running
+            return False
+
+    def active(self) -> bool:
+        return self._query("is-active")
+
+    def enabled(self) -> bool:
+        return self._query("is-enabled")
+
+    def firewall(self, *args: str) -> None:
+        argv = [*self._bin("pengyos-firewall"), *args]
+        if self.root:
+            argv += ["--root", str(self.root)]
+        r = subprocess.run(argv, capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"pengyos-firewall {' '.join(args)} failed: {(r.stderr or '').strip()}")
+
+    def hostname(self) -> str:
+        try:
+            name = self.path("etc/hostname").read_text().strip()
+        except OSError:
+            name = ""
+        return name or os.uname().nodename
+
+    def accounts(self) -> dict[str, tuple[int, str]]:
+        """Login accounts: name -> (uid, home), from /etc/passwd."""
+        out = {}
+        try:
+            lines = self.path("etc/passwd").read_text().splitlines()
+        except OSError:
+            return out
+        for line in lines:
+            f = line.split(":")
+            if len(f) < 7 or not f[2].isdigit():
+                continue
+            uid = int(f[2])
+            if 1000 <= uid < 60000:
+                out[f[0]] = (uid, f[5])
+        return out
+
+
+# ------------------------------------------------------------ ksmbd.conf
+def parse_conf(text: str) -> dict[str, dict[str, str]]:
+    """Sections -> {key: value}; keys lowercased with single spaces, as ksmbd reads them."""
+    sections: dict[str, dict[str, str]] = {}
+    cur = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line[0] in "#;":
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            cur = sections.setdefault(line[1:-1].strip(), {})
+            continue
+        if cur is not None and "=" in line:
+            k, v = line.split("=", 1)
+            cur[" ".join(k.lower().split())] = v.strip()
+    return sections
+
+
+def render_conf(host: str, shares: dict[str, dict[str, str]]) -> str:
+    netbios = re.sub(r"[^A-Za-z0-9-]", "", host).upper()[:15] or "PENGYOS"
+    lines = [
+        MARK,
+        "# `pengyos-shares add/remove` rewrite this file. A share's extra keys added",
+        "# by hand are kept; [global] is the tool's. See ksmbd.conf(5).",
+        "[global]",
+        f"\tnetbios name = {netbios}",
+        f"\tserver string = PengyOS ({host})",
+        "\tworkgroup = WORKGROUP",
+        # Logins only: no guest, no anonymous listing of shares or users.
+        "\tmap to guest = never",
+        "\trestrict anonymous = 2",
+        # Windows 11 24H2 requires signing from the servers it connects to.
+        "\tserver signing = auto",
+        "",
+    ]
+    for name, keys in shares.items():
+        lines.append(f"[{name}]")
+        ordered = [k for k in SHARE_KEYS if k in keys] + [k for k in keys if k not in SHARE_KEYS]
+        lines += [f"\t{k} = {keys[k]}" for k in ordered]
+        lines.append("")
+    return "\n".join(lines)
+
+
+def load_shares(box: Box) -> dict[str, dict[str, str]]:
+    p = box.path(CONF)
+    if not p.exists():
+        return {}
+    text = p.read_text()
+    if MARK not in text and parse_conf(text):
+        raise Misuse(f"/{CONF} was not written by {PROG}; move it aside first "
+                     f"(its shares are not carried over)")
+    return {k: v for k, v in parse_conf(text).items() if k.lower() != "global"}
+
+
+def save_shares(box: Box, shares: dict[str, dict[str, str]]) -> None:
+    p = box.path(CONF)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".new")
+    tmp.write_text(render_conf(box.hostname(), shares))
+    tmp.chmod(0o644)
+    tmp.replace(p)
+
+
+# ------------------------------------------------------------ ksmbdpwd.db
+def load_users(box: Box) -> dict[str, str]:
+    p = box.path(PWDDB)
+    if not p.exists():
+        return {}
+    out = {}
+    for line in p.read_text().splitlines():
+        if ":" in line:
+            name, h = line.split(":", 1)
+            out[name] = h
+    return out
+
+
+def save_users(box: Box, users: dict[str, str]) -> None:
+    p = box.path(PWDDB)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".new")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write("".join(f"{n}:{h}\n" for n, h in users.items()))
+    os.chmod(tmp, 0o600)
+    tmp.replace(p)
+
+
+# ----------------------------------------------------------------- server
+def apply(box: Box, shares: dict, say) -> None:
+    """Bring the service and the firewall in line with *shares*."""
+    if shares:
+        for cidr in LAN:
+            box.firewall("allow", f"{PORT}/tcp", "--from", cidr)
+        if box.active():
+            box.systemctl("reload", UNIT)
+        else:
+            box.systemctl("enable", "--now", UNIT)
+            say(f"Started {UNIT}; port {PORT} is open to LAN addresses only.")
+    else:
+        box.systemctl("disable", "--now", UNIT)
+        for cidr in LAN:
+            box.firewall("remove", f"{PORT}/tcp", "--from", cidr)
+        say(f"No shares left: stopped {UNIT} and closed port {PORT}.")
+
+
+def reload_users(box: Box) -> None:
+    if box.active():
+        box.systemctl("reload", UNIT)
+
+
+# --------------------------------------------------------------- commands
+def check_name(name: str) -> str:
+    if not NAME_RE.match(name) or name.lower() in RESERVED:
+        raise Misuse(f"bad share name {name!r}: 1-32 letters, digits, '.', '_' or '-', "
+                     f"starting with a letter or digit (not global/homes/printers)")
+    return name
+
+
+def check_path(box: Box, path: str) -> str:
+    if not path.startswith("/"):
+        raise Misuse(f"{path}: give the folder's full path (it starts with /)")
+    norm = os.path.normpath(path)
+    if norm == "/" or any(norm == d or norm.startswith(d + "/") for d in SYSTEM_DIRS):
+        raise Misuse(f"{norm} is part of the system, not data; share a folder under "
+                     f"/home, /data or /var instead")
+    if not box.path(norm.lstrip("/")).is_dir():
+        raise Misuse(f"{norm} is not a folder on this machine")
+    return norm
+
+
+def cmd_add(box: Box, a, say) -> int:
+    name = check_name(a.name)
+    path = check_path(box, a.path)
+    accounts = box.accounts()
+    users = a.user or ([os.environ["SUDO_USER"]] if os.environ.get("SUDO_USER") else [])
+    if not users:
+        raise Misuse("say who may use the share: --user NAME (repeatable)")
+    for u in users:
+        if u not in accounts:
+            raise Misuse(f"{u} is not an account on this machine "
+                         f"(share users are login accounts, uid 1000 and up)")
+    shares = load_shares(box)
+    clash = next((n for n in shares if n.lower() == name.lower() and n != name), None)
+    if clash:
+        raise Misuse(f"there is already a share called {clash}")
+    keys = dict(shares.get(name, {}))
+    if a.comment is not None:
+        keys["comment"] = a.comment
+    keys.update({"path": path, "read only": "yes" if a.read_only else "no",
+                 "valid users": " ".join(dict.fromkeys(users)),
+                 "guest ok": "no", "browseable": "yes"})
+    existed = name in shares
+    shares[name] = keys
+    save_shares(box, shares)
+    apply(box, shares, say)
+    host = box.hostname()
+    say(f"{'Updated' if existed else 'Shared'} {path} as {name} "
+        f"({'read-only' if a.read_only else 'read-write'}, for {', '.join(users)}).")
+    say(f"  Windows: \\\\{host}\\{name}    macOS/Linux: smb://{host}/{name}")
+    no_pw = [u for u in users if u not in load_users(box)]
+    for u in no_pw:
+        say(f"  {u} has no share password yet: sudo {PROG} passwd {u}")
+    return 0
+
+
+def cmd_remove(box: Box, a, say) -> int:
+    shares = load_shares(box)
+    if a.name not in shares:
+        say(f"No share called {a.name}; nothing to do.")
+        return 0
+    del shares[a.name]
+    save_shares(box, shares)
+    apply(box, shares, say)
+    say(f"Stopped sharing {a.name}. The folder and its files are untouched.")
+    return 0
+
+
+def read_password(a) -> str:
+    if a.stdin:
+        pw = sys.stdin.readline().rstrip("\n")
+    else:
+        pw = getpass.getpass(f"New share password for {a.user}: ")
+        if getpass.getpass("Repeat it: ") != pw:
+            raise Misuse("the passwords did not match; nothing changed")
+    if len(pw) < MIN_PASSWORD:
+        raise Misuse(f"a share password needs at least {MIN_PASSWORD} characters")
+    if len(pw.encode()) > 128:
+        raise Misuse("a share password can be at most 128 bytes")
+    return pw
+
+
+def cmd_passwd(box: Box, a, say) -> int:
+    if a.user not in box.accounts():
+        raise Misuse(f"{a.user} is not an account on this machine "
+                     f"(share users are login accounts, uid 1000 and up)")
+    pw = read_password(a)
+    users = load_users(box)
+    users[a.user] = nt_hash(pw)
+    save_users(box, users)
+    reload_users(box)
+    say(f"Set the share password for {a.user} (not their login password).")
+    return 0
+
+
+def cmd_deluser(box: Box, a, say) -> int:
+    users = load_users(box)
+    if a.user not in users:
+        say(f"{a.user} has no share password; nothing to do.")
+        return 0
+    del users[a.user]
+    save_users(box, users)
+    reload_users(box)
+    say(f"Removed {a.user}'s share password: they can no longer connect.")
+    return 0
+
+
+def cmd_status(box: Box, a, say) -> int:
+    shares = load_shares(box)
+    users = load_users(box)
+    host = box.hostname()
+    state = {
+        "service": UNIT,
+        "active": box.active(),
+        "enabled": box.enabled(),
+        "host": host,
+        "shares": [{"name": n,
+                    "path": k.get("path", ""),
+                    "read_only": k.get("read only", "no").lower() in ("yes", "true", "1"),
+                    "users": k.get("valid users", "").split(),
+                    "comment": k.get("comment", "")} for n, k in shares.items()],
+        "users": sorted(users),
+    }
+    if a.json:
+        print(json.dumps(state, indent=2))
+        return 0
+    say(f"SMB sharing: {'on' if state['active'] else 'off'} ({UNIT} "
+        f"{'active' if state['active'] else 'inactive'}, "
+        f"{'enabled' if state['enabled'] else 'disabled'})")
+    if not shares:
+        say(f"No shares. Add one: sudo {PROG} add NAME /path/to/folder")
+    for s in state["shares"]:
+        mode = "read-only" if s["read_only"] else "read-write"
+        missing = [u for u in s["users"] if u not in users]
+        say(f"  {s['name']:<16} {s['path']}  ({mode}; {', '.join(s['users']) or 'nobody'})")
+        say(f"  {'':<16} \\\\{host}\\{s['name']}   smb://{host}/{s['name']}")
+        for u in missing:
+            say(f"  {'':<16} {u} has no share password: sudo {PROG} passwd {u}")
+    say(f"Share passwords set for: {', '.join(state['users']) or 'nobody'}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog=PROG, description="Share folders on the network over SMB.")
+    p.add_argument("--root", help=argparse.SUPPRESS)
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("status", help="what is shared, and with whom")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("add", help="share a folder (or change a share)")
+    s.add_argument("name")
+    s.add_argument("path")
+    s.add_argument("--read-only", action="store_true")
+    s.add_argument("--user", action="append", help="an account that may use it (repeatable; "
+                                                    "default: you)")
+    s.add_argument("--comment")
+    s = sub.add_parser("remove", help="stop sharing (the folder is untouched)")
+    s.add_argument("name")
+    s = sub.add_parser("passwd", help="set an account's share password")
+    s.add_argument("user")
+    s.add_argument("--stdin", action="store_true", help="read it from one line of stdin")
+    s = sub.add_parser("deluser", help="remove an account's share password")
+    s.add_argument("user")
+
+    args = list(sys.argv[1:] if argv is None else argv)
+    # --root is accepted anywhere on the line, like pengyos-firewall's.
+    root = None
+    for i, x in enumerate(args):
+        if x == "--root" and i + 1 < len(args):
+            root = args[i + 1]
+            del args[i:i + 2]
+            break
+        if x.startswith("--root="):
+            root = x.split("=", 1)[1]
+            del args[i]
+            break
+    a = p.parse_args(args)
+    box = Box(root)
+    if a.cmd != "status" and not root and os.geteuid() != 0:
+        print(f"{PROG}: {a.cmd} changes the system; run it with sudo", file=sys.stderr)
+        return 2
+    cmd = {"status": cmd_status, "add": cmd_add, "remove": cmd_remove,
+           "passwd": cmd_passwd, "deluser": cmd_deluser}[a.cmd]
+    try:
+        return cmd(box, a, print)
+    except Misuse as e:
+        print(f"{PROG}: {e}", file=sys.stderr)
+        return 2
+    except RuntimeError as e:
+        print(f"{PROG}: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

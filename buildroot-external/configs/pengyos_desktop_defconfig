@@ -36,6 +36,12 @@ BR2_x86_64=y
 # with any dynamic glibc toolchain.)
 BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
 BR2_TOOLCHAIN_HAS_THREADS=y
+# The locale /etc/locale.conf names (LANG=C.UTF-8). Without it Core and Server
+# had no locale at all (`locale -a`: C, POSIX): tmux refused to start ("invalid
+# LC_ALL, LC_CTYPE or LANG"), mosh-server likewise, and Python's
+# setlocale(LC_ALL, "") failed. Found trying tmux on a ThinkPad Server,
+# 2026-10-30. A few hundred KB; the Desktop layer replaces it with ~50 locales.
+# BR2_GENERATE_LOCALE: set by the desktop layer
 
 # --- Reproducible builds -----------------------------------------------------
 # UTC + C locale, fixed kernel build user/host/timestamp, SOURCE_DATE_EPOCH
@@ -525,6 +531,15 @@ BR2_PACKAGE_WPA_SUPPLICANT_CLI=y
 BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y
 BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
 BR2_PACKAGE_IW=y
+# SMB, both directions, without Samba (US-SRV-13, US-SRV-14). cifs-utils gives
+# mount.cifs, which reads `credentials=` files: the kernel's own cifs option
+# parser ignores that option without a word, so an fstab mount with a 0600
+# credentials file went out anonymous and failed with -13. ksmbd-tools is the
+# userspace half of the kernel's SMB3 server (CONFIG_SMB_SERVER); pengyos-shares
+# drives it. ksmbd.service is preset off: nothing listens on 445 until a share
+# exists.
+BR2_PACKAGE_CIFS_UTILS=y
+BR2_PACKAGE_KSMBD_TOOLS=y
 # - Python wheels (US-SRV-10): the manylinux policy lets a wheel assume the host
 #   has libGL.so.1 and five X11 client libraries, so wheels never bundle them.
 #   Without them `uv add opencv-python` installed and then failed at import
@@ -1196,6 +1211,13 @@ BR2_PACKAGE_OO7=y
 # shape (no text I-beam, no resize arrows); X11 apps got the bare X cursor.
 BR2_PACKAGE_POP_CURSOR_THEME=y
 BR2_PACKAGE_GVFS=y
+# SMB client for Files (US-DSK-17). gvfs.mk has no SMB switch of its own: it
+# builds gvfsd-smb/-smb-browse (-Dsmb=true) only when samba4 is selected, so
+# until 26.10.51 smb:// in Files said "Location is not mountable" on every
+# Desktop. samba4 is here for libsmbclient (and smbclient, for diagnosis); its
+# server units are preset off in board/server's 10-pengyos-server.preset. A
+# Desktop shares folders with the kernel's ksmbd (pengyos-shares), not smbd.
+BR2_PACKAGE_SAMBA4=y
 BR2_PACKAGE_DOSFSTOOLS_FATLABEL=y
 BR2_PACKAGE_NTFS_3G=y
 BR2_PACKAGE_NTFS_3G_NTFSPROGS=y

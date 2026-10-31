@@ -17,6 +17,77 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — found on a ThinkPad Server: installer restart, late sshd, pengy-web, Quadlet (2026-10-30)
+
+Found installing a Server on a ThinkPad from the stick.
+
+- **"Remove the USB stick, then press Enter to restart" crashed** with
+  `OSError: [Errno 5] Input/output error: 'systemctl'`: `systemctl` lived on
+  the stick that had just been pulled. Both installers (console and Desktop
+  GUI) now open `/proc/sysrq-trigger` while the stick is still in. On Enter
+  they sync, remount everything read-only and have the kernel restart the
+  machine, which needs nothing from the stick, whether it's pulled or not.
+  `systemctl reboot` is only the fallback when the trigger can't be opened.
+  The new disk was already unmounted and synced, so the crash never damaged an
+  install.
+- **sshd came up two minutes after boot on machines with an unplugged network
+  port.** `systemd-networkd-wait-online` waited for every link, including an
+  empty Ethernet port beside Wi-Fi, until its 2-minute timeout. sshd waits for
+  network-online, so it waited too. It now waits for any one link (`--any`).
+- **networkd no longer takes a hostname from DHCP.** The installer names the
+  machine, and a DHCP-offered name was refused with "Could not set hostname:
+  Access denied" on every boot.
+- **`pengyos-webui on` never started pengy-web.** The unit had
+  `WorkingDirectory=%h`, but in a system unit `%h` is the manager's home
+  (`/root`) regardless of `User=`, so every start failed at CHDIR (Permission
+  denied) and the service restart-looped. It is now `WorkingDirectory=~`, the
+  `User=`'s home.
+- **Quadlet is in the image.** Buildroot built only `cmd/podman`, so a
+  `.container` file did nothing, and US-SRV-9's "containers managed by systemd,
+  up after a reboot with nobody logged in" could not work. `quadlet` is now
+  built and linked as the system and user generator, with
+  `podman-user-wait-network-online.service`. Tested on the ThinkPad: MongoDB 8
+  as a rootless Quadlet service with linger came back after a reboot,
+  reachable from the LAN through `pengyos-firewall` with its data intact.
+- **tmux and mosh never started on Core or Server.** `/etc/locale.conf` says
+  `LANG=C.UTF-8`, but only the Desktop generated locales, so `locale -a` listed
+  just C and POSIX. tmux refused ("invalid LC_ALL, LC_CTYPE or LANG"), and so
+  did Python's `setlocale(LC_ALL, "")`. Core now generates `C.UTF-8` (468 KB),
+  and the Server's feature list checks for it.
+- **SSH sessions had no `LANG`.** A console login inherits it from systemd; an
+  SSH one got nothing, interactive or not. The Server's sshd PAM stack now
+  reads `/etc/locale.conf` through `pam_env`, the way Debian does. Core still
+  uses Buildroot's own sshd PAM file, which has no `pam_env`.
+
+### Added — SMB: Files opens network shares, and Servers share folders (2026-10-30)
+
+PengyOS had no SMB story at all, and nothing said so. On the Desktop, `smb://` in Files
+failed with "Location is not mountable": Buildroot builds gvfs's SMB backend only when
+samba4 is selected, and nothing selected it, so no Desktop image ever had `gvfsd-smb`.
+The Server fragment's comment claimed the Desktop's file manager covered SMB. And there
+was no way to share a folder from any edition (found by Pengy on 2026-10-30, mounting
+miniserv's `/data` from behopc).
+
+- **Desktop, client** (US-DSK-17): `BR2_PACKAGE_SAMBA4`, for gvfs's SMB backend
+  (libsmbclient) and `smbclient`; Samba's Python bindings are configured out
+  (`external.mk`: nothing uses them without the AD DC, and they are much of its build).
+  Samba's server units (`smb`, `nmb`, `winbind`, `samba`, `samba-bgqd`) are preset off:
+  `preset-all` enables any unit no preset names, so selecting the package alone would
+  have started smbd on every Desktop. `features-required.txt` now fails the build
+  without `gvfsd-smb`, `gvfsd-smb-browse` and `smbclient`.
+- **Server (and Desktop), mounting** (US-SRV-13): cifs-utils, for `mount.cifs` and its
+  `credentials=` files. The kernel's own parser ignores that option without a word, so a
+  credentials-file mount went out anonymous and failed with -13.
+- **Server (and Desktop), sharing** (US-SRV-14): the kernel's SMB3 server
+  (`CONFIG_SMB_SERVER=m`, ksmbd) with ksmbd-tools, driven by the new `pengyos-shares`
+  (`add`, `remove`, `passwd`, `status`; `tools/pengyos-shares`). No Samba server is
+  built. `ksmbd.service` is preset off; the first share enables it and opens 445/tcp to
+  private addresses only through `pengyos-firewall`, and the last one undoes both.
+  Logins only: no guest shares, and share passwords are separate from login passwords.
+- The Core preset's comment said systemd's presets end in `enable *`; they don't. An
+  unnamed unit is enabled because that is systemd's default, so every package with a
+  daemon needs a preset line.
+
 ### Added — an old laptop runs as a Server (2026-10-30)
 
 A Server is homelab hardware, and that includes a laptop with a cracked screen and a

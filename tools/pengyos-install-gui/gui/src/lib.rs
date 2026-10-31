@@ -23,6 +23,7 @@
 //!   behind the `cosmic` feature) maps the same [`screen::ScreenView`] onto
 //!   COSMIC widgets, so both front-ends render one and the same screen state.
 
+pub mod restart;
 pub mod router;
 pub mod screen;
 

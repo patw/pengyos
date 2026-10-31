@@ -33,6 +33,13 @@ exec-any  btattach                                 # UART/SPI-attached adapters 
 exec-any  hcitool                                  # the tools every BT guide starts with — BR2_PACKAGE_BLUEZ5_UTILS_DEPRECATED
 exec-any  sdptool                                  # "what is this device?" without pairing — BR2_PACKAGE_BLUEZ5_UTILS_DEPRECATED
 
+# --- Network shares in Files -------------------------------------------------
+# gvfs builds its SMB backend only when samba4 is selected; without it smb:// in
+# Files fails at the scheme ("Location is not mountable") before any packet.
+exec      usr/libexec/gvfsd-smb                    # smb://host/share — BR2_PACKAGE_SAMBA4 (gvfs -Dsmb=true)
+exec      usr/libexec/gvfsd-smb-browse             # smb:// browsing — BR2_PACKAGE_SAMBA4
+exec-any  smbclient                                # "is it the share or this machine?" — BR2_PACKAGE_SAMBA4
+
 # --- Controllers on the kernel side -------------------------------------------
 exists    usr/lib/modules-load.d/steam-uinput.conf  # /dev/uinput for Steam Input — BR2_PACKAGE_STEAM_DEVICES
 exists    usr/lib/udev/rules.d/90-pengyos-joystick.rules  # /dev/input/jsN readable by the seat — board/desktop overlay

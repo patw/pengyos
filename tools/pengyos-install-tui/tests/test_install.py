@@ -7,7 +7,7 @@ import io
 import pytest
 from conftest import DISKS, GH_KEYS, HOST_KEYS, HOST_PASSWORD, KEY, FakeFetch
 
-from pengyos_install_tui.install import run_install
+from pengyos_install_tui.install import Restart, run_install
 
 
 def _drive(payload, lines, secrets, install=None, fetcher=None, disks=DISKS):
@@ -183,3 +183,30 @@ def test_wifi_password_enter_skips_wifi(payload):
                      payload=payload, disks=DISKS, plain=True, wifi=w, fetch_keys=FakeFetch(),
                      install=lambda *a, **k: None)
     assert rc == 0 and w.joined == [] and "none yet" in out.getvalue()
+
+
+def test_restart_comes_from_the_kernel(tmp_path):
+    """The hardware report: systemctl lived on the pulled stick (EIO)."""
+    trigger = tmp_path / "sysrq-trigger"
+    trigger.write_text("")
+    runs = []
+    Restart(sysrq=str(trigger), run=lambda *a, **k: runs.append(a), pause=lambda s: None)()
+    assert runs == [] and trigger.read_text() == "ub"
+
+
+def test_restart_without_the_trigger_falls_back_to_systemctl(tmp_path):
+    runs = []
+    Restart(sysrq=str(tmp_path / "none" / "sysrq-trigger"),
+            run=lambda argv, **k: runs.append(argv))()
+    assert runs == [["systemctl", "reboot"]]
+
+
+def test_plain_install_restarts_through_restart(payload):
+    lines = iter(["1", "box", "pat", "", KEY, "", "erase", ""])
+    secrets = iter(["hunter22", "hunter22"])
+    seen = []
+    rc = run_install(inp=lambda p: next(lines), secret=lambda p: next(secrets),
+                     out=io.StringIO(), payload=payload, disks=DISKS, plain=True,
+                     install=lambda *a, **k: None, fetch_keys=FakeFetch(),
+                     reboot=True, restart=lambda: seen.append("restart"))
+    assert rc == 0 and seen == ["restart"]

@@ -1,0 +1,46 @@
+#!/bin/sh
+# pengyos-shares test helper: a fake `systemctl` for the --root sandbox.
+#
+# Serves both pengyos-shares (ksmbd.service: enable/disable --now, is-active,
+# is-enabled, reload) and the real pengyos-firewall it calls (nftables.service:
+# is-active, reload). A unit is active while
+# <sandbox>/var/lib/fake-systemd/active/<unit> exists and enabled while
+# .../enabled/<unit> does. Every call is appended to
+# <sandbox>/var/log/fake-systemctl.log. Exit codes follow systemd's.
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+ACTIVE="$ROOT/var/lib/fake-systemd/active"
+ENABLED="$ROOT/var/lib/fake-systemd/enabled"
+LOG="$ROOT/var/log/fake-systemctl.log"
+mkdir -p "$ACTIVE" "$ENABLED" "$ROOT/var/log"
+echo "systemctl $*" >> "$LOG"
+
+cmd=""; unit=""; now=0; quiet=0
+for a in "$@"; do
+    case "$a" in
+        is-active|is-enabled|reload|enable|disable) cmd=$a ;;
+        --now) now=1 ;;
+        --quiet|-q) quiet=1 ;;
+        --no-pager) ;;
+        *.service) unit=$a ;;
+        *) echo "fake-systemctl: unsupported: $*" >&2; exit 2 ;;
+    esac
+done
+[ -n "$cmd" ] && [ -n "$unit" ] || { echo "fake-systemctl: unsupported: $*" >&2; exit 2; }
+
+case "$cmd" in
+    is-active|is-enabled)
+        dir=$ACTIVE; word=active; no=inactive
+        [ "$cmd" = is-enabled ] && { dir=$ENABLED; word=enabled; no=disabled; }
+        if [ -e "$dir/$unit" ]; then [ $quiet = 1 ] || echo $word; exit 0; fi
+        [ $quiet = 1 ] || echo $no
+        exit 3 ;;
+    reload)
+        [ -e "$ACTIVE/$unit" ] || { echo "$unit not active" >&2; exit 1; }
+        exit 0 ;;
+    enable)
+        touch "$ENABLED/$unit"; [ $now = 1 ] && touch "$ACTIVE/$unit"; exit 0 ;;
+    disable)
+        rm -f "$ENABLED/$unit"; [ $now = 1 ] && rm -f "$ACTIVE/$unit"; exit 0 ;;
+esac

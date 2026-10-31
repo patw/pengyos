@@ -82,6 +82,31 @@ define PENGYOS_PODMAN_INSTALL_ROOTLESSPORT
 	$(INSTALL) -D -m 0755 $(@D)/bin/rootlessport $(TARGET_DIR)/usr/libexec/podman/rootlessport
 endef
 PODMAN_POST_INSTALL_TARGET_HOOKS += PENGYOS_PODMAN_INSTALL_ROOTLESSPORT
+
+# Quadlet: the systemd generator that turns ~/.config/containers/systemd/*.container
+# (and /etc/containers/systemd/) into services, which is how a Server runs
+# containers at boot (US-SRV-9). Buildroot did not build it, so a .container
+# file did nothing. Installed the way podman's own `make install` does: the
+# binary in /usr/libexec/podman, linked as the system and user generators, plus
+# the user unit Quadlet's user services wait on for the network.
+define PENGYOS_PODMAN_BUILD_QUADLET
+	cd $(@D); $(HOST_GO_TARGET_ENV) $(PODMAN_GO_ENV) \
+		$(GO_BIN) build -v $(PODMAN_BUILD_OPTS) \
+		-o $(@D)/bin/quadlet $(PODMAN_GOMOD)/cmd/quadlet
+endef
+PODMAN_POST_BUILD_HOOKS += PENGYOS_PODMAN_BUILD_QUADLET
+define PENGYOS_PODMAN_INSTALL_QUADLET
+	$(INSTALL) -D -m 0755 $(@D)/bin/quadlet $(TARGET_DIR)/usr/libexec/podman/quadlet
+	mkdir -p $(TARGET_DIR)/usr/lib/systemd/system-generators \
+		$(TARGET_DIR)/usr/lib/systemd/user-generators
+	ln -sf ../../../libexec/podman/quadlet \
+		$(TARGET_DIR)/usr/lib/systemd/system-generators/podman-system-generator
+	ln -sf ../../../libexec/podman/quadlet \
+		$(TARGET_DIR)/usr/lib/systemd/user-generators/podman-user-generator
+	$(INSTALL) -D -m 0644 $(@D)/contrib/systemd/user/podman-user-wait-network-online.service \
+		$(TARGET_DIR)/usr/lib/systemd/user/podman-user-wait-network-online.service
+endef
+PODMAN_POST_INSTALL_TARGET_HOOKS += PENGYOS_PODMAN_INSTALL_QUADLET
 endif
 
 # ca-certificates: the bundle (/etc/ssl/certs/ca-certificates.crt) is built at
@@ -112,6 +137,14 @@ define PENGYOS_PYTHON_PIP_SYSTEM_CERTS
 		$(TARGET_DIR)/usr/lib/python$(PYTHON3_VERSION_MAJOR)/site-packages/pip/_vendor/certifi/cacert.pem
 endef
 PYTHON_PIP_POST_INSTALL_TARGET_HOOKS += PENGYOS_PYTHON_PIP_SYSTEM_CERTS
+endif
+
+# samba4: the Desktop selects it only so gvfs builds its SMB backend
+# (libsmbclient) and for smbclient. samba4.mk builds Samba's Python bindings
+# whenever the image has python3, which the Desktop does; nothing uses them
+# without the AD DC (off), and they are a large share of Samba's build time.
+ifeq ($(BR2_PACKAGE_SAMBA4)$(BR2_PACKAGE_SAMBA4_AD_DC),y)
+SAMBA4_CONF_OPTS += --disable-python
 endif
 
 # polkit: Buildroot hardcodes -Dsession_tracking=ConsoleKit, so polkit could not

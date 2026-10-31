@@ -8,3 +8,8 @@ Type=wlan
 [Network]
 DHCP=yes
 IgnoreCarrierLoss=3s
+
+# The installer gives the machine its name (/etc/hostname); a DHCP-offered
+# name would only be refused ("Could not set hostname: Access denied").
+[DHCPv4]
+UseHostname=no

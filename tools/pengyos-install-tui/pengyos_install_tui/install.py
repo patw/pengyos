@@ -19,6 +19,7 @@ import getpass
 import os
 import subprocess
 import sys
+import time
 from typing import Callable, TextIO
 
 try:
@@ -26,7 +27,41 @@ try:
 except ImportError:  # pragma: no cover - exercised only on a broken install
     engine = None  # type: ignore[assignment]
 
-__all__ = ["run_install"]
+__all__ = ["Restart", "run_install"]
+
+SYSRQ = "/proc/sysrq-trigger"
+
+
+class Restart:
+    """Restart the machine once the install is done, stick or no stick.
+
+    The last screen asks for the USB stick to be pulled before Enter, and with
+    it goes every file of the live system: ``systemctl reboot`` failed with EIO
+    on real hardware, and even when it runs from cache a clean shutdown needs
+    the stick at every step. So the restart comes from the kernel alone: the
+    sysrq trigger is opened here, before the prompt, and Enter syncs, remounts
+    everything read-only and reboots. The engine has already unmounted and
+    synced the new disk, and the live session has nothing else worth saving.
+    ``systemctl reboot`` is only the fallback when the trigger cannot be opened.
+    """
+
+    def __init__(self, sysrq: str = SYSRQ, run: Callable = subprocess.run,
+                 pause: Callable[[float], None] = time.sleep) -> None:
+        self.run, self.pause = run, pause
+        try:
+            self.trigger: TextIO | None = open(sysrq, "w")
+        except OSError:
+            self.trigger = None
+
+    def __call__(self) -> None:
+        if self.trigger is None:
+            self.run(["systemctl", "reboot"], check=False)
+            return
+        os.sync()
+        for key, wait in (("u", 1.0), ("b", 0.0)):  # u: remount read-only, b: reboot
+            self.trigger.write(key)
+            self.trigger.flush()
+            self.pause(wait)
 
 
 def _progress(out: TextIO) -> Callable[[str, float, str], None]:
@@ -47,7 +82,7 @@ def _progress(out: TextIO) -> Callable[[str, float, str], None]:
     return report
 
 
-def _run_plain(session, *, inp, secret, out, payload, install, reboot) -> int:
+def _run_plain(session, *, inp, secret, out, payload, install, reboot, restart) -> int:
     from pengyos_install_tui.plain import Aborted, ask_plain
 
     if not session.selectable():
@@ -73,11 +108,12 @@ def _run_plain(session, *, inp, secret, out, payload, install, reboot) -> int:
     if not reboot:
         out.write("\nPengyOS is installed. Remove the USB stick and reboot.\n")
         return 0
+    restart = restart or Restart()
     try:
         inp("\nPengyOS is installed. Remove the USB stick, then press Enter to restart. ")
     except (EOFError, KeyboardInterrupt):
         pass
-    subprocess.run(["systemctl", "reboot"], check=False)
+    restart()
     return 0
 
 
@@ -93,11 +129,13 @@ def run_install(
     plain: bool | None = None,
     reboot: bool = False,
     wifi=None,
+    restart: Callable[[], None] | None = None,
 ) -> int:
     """Run the installer; *plain* None picks the front-end from the terminal.
 
     *reboot*: restart the machine once the install is done and the user has
-    pressed Enter (the install stick's launcher passes ``--reboot``).
+    pressed Enter (the install stick's launcher passes ``--reboot``), through
+    *restart* (default :class:`Restart`).
 
     *wifi*: the Wi-Fi backend (:class:`pengyos_install_tui.wifi.Wifi`). By default
     the live system's own, only when installing from the medium itself (no
@@ -128,15 +166,17 @@ def run_install(
         plain = not can_run_screen(sys.stdin, out, os.environ.get("TERM"))
     if plain:
         return _run_plain(session, inp=inp, secret=secret, out=out, payload=payload,
-                          install=install, reboot=reboot)
+                          install=install, reboot=reboot, restart=restart)
 
     from pengyos_install_tui.screen import App, run_screen
 
+    if reboot:
+        restart = restart or Restart()
     app = App(session, install=install, payload=payload, reboot=reboot)
     rc = run_screen(app)
     if rc == 0:
         if reboot:
-            subprocess.run(["systemctl", "reboot"], check=False)
+            restart()
     elif app.mode == "failed" or app._before_quit == "failed":
         out.write(f"The install failed: {app.failure}\n")
     else:
