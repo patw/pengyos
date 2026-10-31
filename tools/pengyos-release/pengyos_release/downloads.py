@@ -9,16 +9,17 @@
             downloads.json                 what index.html lists
 
 Desktop, Desktop NVIDIA, Server and Server NVIDIA ship their *installer* stick (live system +
-installer); Core ships its disk image (no installer: it runs from what it is
-written to).
+installer). Core is not offered (2026-10-31): it is the base the other editions are
+built on and is still built and smoke-tested with every release, but as a download it
+had no installer, no way in over SSH, no updates and a 1 GB root on any disk. Older
+releases' Core files stay on the site, unlisted.
 
 ``download-publish`` runs with every release, testing included, because the
 images must come from the build that was boot-checked. ``index.html`` lists
 only **stable** ones: per edition, the newest version whose update release
 (``<site>/update/<image>/<version>/release.json``) is on stable, so a testing
 release stays off the page until ``update-promote --channel stable``, which
-regenerates it. Core has no update feed; its image counts as stable once any
-edition of the same version is.
+regenerates it.
 """
 
 from __future__ import annotations
@@ -45,9 +46,6 @@ EDITIONS = {
     "pengyos-server-nvidia": ("Server NVIDIA", "The Server with NVIDIA's driver for GPU computing: CUDA, "
                               "<code>nvidia-smi</code> and GPUs in containers, for GeForce RTX 20 cards "
                               "and newer. No graphics; boots into a console installer."),
-    "pengyos-core": ("Core", "The minimal base for tinkerers: no installer and no updates yet. It runs "
-                     "from whatever disk you write it to; log in as root with password "
-                     "<code>pengyos</code> and change it."),
 }
 ORDER = list(EDITIONS)
 
@@ -108,7 +106,8 @@ def publish_downloads(builds: list[Path], site: Path, key: Path, *, force: bool 
     old = dest / "downloads.json"
     if old.exists():  # keep editions published earlier for this version
         have = {e["image"] for e in listing}
-        listing += [e for e in json.loads(old.read_text())["images"] if e["image"] not in have]
+        listing += [e for e in json.loads(old.read_text())["images"]
+                    if e["image"] not in have and e["image"] in EDITIONS]
     listing.sort(key=lambda e: ORDER.index(e["image"]))
 
     sums = "".join(f"{e['sha256']}  {e['file']}\n" for e in listing).encode()
@@ -124,13 +123,12 @@ def publish_downloads(builds: list[Path], site: Path, key: Path, *, force: bool 
 
 
 def _stable(site: Path) -> set[tuple[str, str]]:
-    """(image, version) pairs on the stable update channel; Core rides along with its version."""
+    """(image, version) pairs on the stable update channel."""
     pairs = set()
     for rj in (site / "update").glob("*/*/release.json"):
         rel = json.loads(rj.read_text())
         if "stable" in rel.get("channels", []):
             pairs.add((rel["image"], rel["version"]))
-    pairs |= {("pengyos-core", v) for _, v in pairs}
     return pairs
 
 
@@ -142,11 +140,13 @@ def listed(site: Path) -> tuple[list[dict], list[dict]]:
     current = {}
     for r in releases:
         for e in r["images"]:
+            if e["image"] not in EDITIONS:  # no longer offered (Core)
+                continue
             if (e["image"], r["version"]) in stable and e["image"] not in current:
                 current[e["image"]] = {**e, "version": r["version"]}
     shown = {e["version"] for e in current.values()}
     older = [r for r in releases if r["version"] not in shown
-             and any((e["image"], r["version"]) in stable for e in r["images"])]
+             and any((e["image"], r["version"]) in stable and e["image"] in EDITIONS for e in r["images"])]
     return sorted(current.values(), key=lambda e: ORDER.index(e["image"])), older
 
 
