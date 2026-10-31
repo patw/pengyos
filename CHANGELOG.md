@@ -17,6 +17,20 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — an installer stick left plugged in opened the installer on an installed Desktop (2026-10-31)
+
+behopc, an installed Desktop NVIDIA, rebooted into 26.10.52 with an installer stick in a USB
+port and came up with the graphical installer open, running as root. The installer could
+have offered the machine's second disk as a target. `pengyos-live-installer.service`
+decided a boot was live because a `PENGYOS-PAYLOAD` partition existed, and an installed
+machine with the stick plugged in has one too. The bug dates back to the earliest images.
+It now also requires a live kernel line: installed systems always boot with `pengyos.data=`,
+the test `greetd-config`, the PipeWire root drop-ins and the Server's console installer
+already used. `live-installer` refuses to run on an installed system even if started some
+other way. The Firefox setup had the same mistake inverted (skipped on an installed machine
+with a stick plugged in) and now runs on any installed system. A gate test keeps the
+stick's label from being used as the live test again.
+
 ### Fixed — startup apps that need X11 (Steam) failed at login (2026-10-31)
 
 Steam, added to the startup apps on behotv, showed "The unofficial Steam Flatpak app

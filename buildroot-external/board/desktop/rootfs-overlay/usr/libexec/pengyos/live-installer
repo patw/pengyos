@@ -1,9 +1,16 @@
 #!/bin/sh
 # PengyOS live USB: mount the install payload and start the graphical installer
 # inside the running COSMIC session. Started by pengyos-live-installer.service,
-# which only runs when the PENGYOS-PAYLOAD partition exists (i.e. on the
-# installer stick, never on an installed disk).
+# which only runs on a live boot (no pengyos.data= on the kernel line) with the
+# PENGYOS-PAYLOAD partition present (the installer stick).
 set -eu
+
+# Never on an installed system, whatever starts this: there, a plugged-in
+# installer stick has the label too (the unit checks the same thing).
+if grep -q 'pengyos\.data=' /proc/cmdline; then
+    echo "live-installer: this is an installed system (pengyos.data= on the kernel line); not starting the installer" >&2
+    exit 0
+fi
 
 MNT=/run/pengyos/payload
 mkdir -p "$MNT"
