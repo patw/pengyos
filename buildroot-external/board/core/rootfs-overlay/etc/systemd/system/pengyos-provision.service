@@ -1,0 +1,18 @@
+# PengyOS Core: SSH keys and a hostname from the EFI partition (or the
+# system.hostname credential), and the root filesystem grown to the disk, before
+# sshd. See /usr/libexec/pengyos/pengyos-provision.
+[Unit]
+Description=PengyOS: provision a freshly written Core (keys, hostname, disk size)
+DefaultDependencies=no
+After=local-fs.target systemd-tmpfiles-setup.service
+Before=sshd.service systemd-hostnamed.service multi-user.target
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ImportCredential=system.hostname
+ExecStart=/usr/libexec/pengyos/pengyos-provision
+
+[Install]
+WantedBy=multi-user.target
