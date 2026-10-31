@@ -17,6 +17,24 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — `pengyos-vm`: virtual machines without QEMU command lines (2026-10-31)
+
+Running a VM on a Server meant a long `qemu-system-x86_64` line, a tmux to keep it
+alive, NAT only, and nothing to stop or restart it. `pengyos-vm` (Server and Desktop)
+makes a VM from an installer ISO or a disk image (`.xz`/`.gz`, or a URL), runs it as the
+user under `pengyos-vm@NAME.service`, and gives it a serial console, VNC on 127.0.0.1, an
+SSH forward (`pengyos-vm ssh NAME`), port forwards, `autostart` and a clean ACPI `stop`.
+
+- **Bridge mode** (wired only): `sudo pengyos-vm bridge enable` puts the port on
+  `pengyos-br0` (networkd, same MAC). `qemu-bridge-helper` is now **setuid root**; it
+  allows only the bridges in `/etc/qemu/bridge.conf`, which exists only after `bridge
+  enable` (`allow pengyos-br0`). The firewall's forward chain accepts bridged frames
+  (br_netfilter is active on the Server, and its drop policy would see them).
+- **QEMU has VNC** (`BR2_PACKAGE_LIBVNCSERVER`): before, `-vnc` was "invalid option",
+  so an installer with no serial console could not be seen at all.
+- A user's VMs stop when they log out unless linger is on (`sudo loginctl
+  enable-linger USER`); `start` says so.
+
 ### Added — a freshly written Core can be reached over SSH and fills its disk (2026-10-31)
 
 Core has no installer, and SSH is key-only, so a written Core image was reachable only

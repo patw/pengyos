@@ -7,3 +7,9 @@
 # (the COSMIC lock screen could never unlock). Buildroot's linux-pam installs it
 # 0755.
 /usr/bin/unix_chkpwd	f	4755	0	0	-	-	-	-	-
+#
+# pengyos-vm --net bridge: QEMU's helper puts an unprivileged user's VM tap on
+# a bridge, which needs root. It refuses every bridge /etc/qemu/bridge.conf
+# does not `allow`, and that file exists only after `sudo pengyos-vm bridge
+# enable` (allow pengyos-br0), so until then the helper can do nothing.
+/usr/libexec/qemu-bridge-helper	f	4755	0	0	-	-	-	-	-

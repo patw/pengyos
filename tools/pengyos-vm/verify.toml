@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The suite drives the shipped script against a sandbox root with fake
+# systemctl, qemu-img, networkctl and ip, so it needs no root, no KVM and no
+# build. That VMs really boot and bridge is proven on a Server (spec.md).
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-vm"
+expect = "exit0"
+timeout = 600
