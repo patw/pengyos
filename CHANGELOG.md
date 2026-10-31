@@ -17,6 +17,48 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — found on a ThinkPad Server: installer restart, late sshd, pengy-web, Quadlet (2026-10-30)
+
+Found installing a Server on a ThinkPad from the stick.
+
+- **"Remove the USB stick, then press Enter to restart" crashed** with
+  `OSError: [Errno 5] Input/output error: 'systemctl'`: `systemctl` lived on
+  the stick that had just been pulled. Both installers (console and Desktop
+  GUI) now open `/proc/sysrq-trigger` while the stick is still in. On Enter
+  they sync, remount everything read-only and have the kernel restart the
+  machine, which needs nothing from the stick, whether it's pulled or not.
+  `systemctl reboot` is only the fallback when the trigger can't be opened.
+  The new disk was already unmounted and synced, so the crash never damaged an
+  install.
+- **sshd came up two minutes after boot on machines with an unplugged network
+  port.** `systemd-networkd-wait-online` waited for every link, including an
+  empty Ethernet port beside Wi-Fi, until its 2-minute timeout. sshd waits for
+  network-online, so it waited too. It now waits for any one link (`--any`).
+- **networkd no longer takes a hostname from DHCP.** The installer names the
+  machine, and a DHCP-offered name was refused with "Could not set hostname:
+  Access denied" on every boot.
+- **`pengyos-webui on` never started pengy-web.** The unit had
+  `WorkingDirectory=%h`, but in a system unit `%h` is the manager's home
+  (`/root`) regardless of `User=`, so every start failed at CHDIR (Permission
+  denied) and the service restart-looped. It is now `WorkingDirectory=~`, the
+  `User=`'s home.
+- **Quadlet is in the image.** Buildroot built only `cmd/podman`, so a
+  `.container` file did nothing, and US-SRV-9's "containers managed by systemd,
+  up after a reboot with nobody logged in" could not work. `quadlet` is now
+  built and linked as the system and user generator, with
+  `podman-user-wait-network-online.service`. Tested on the ThinkPad: MongoDB 8
+  as a rootless Quadlet service with linger came back after a reboot,
+  reachable from the LAN through `pengyos-firewall` with its data intact.
+- **tmux and mosh never started on Core or Server.** `/etc/locale.conf` says
+  `LANG=C.UTF-8`, but only the Desktop generated locales, so `locale -a` listed
+  just C and POSIX. tmux refused ("invalid LC_ALL, LC_CTYPE or LANG"), and so
+  did Python's `setlocale(LC_ALL, "")`. Core now generates `C.UTF-8` (468 KB),
+  and the Server's feature list checks for it.
+- **SSH sessions had no `LANG`.** A console login inherits it from systemd; an
+  SSH one got nothing, interactive or not. The Server's sshd PAM stack now
+  reads `/etc/locale.conf` through `pam_env`, the way Debian does. Core still
+  uses Buildroot's own sshd PAM file, which has no `pam_env`.
+
 ### Added — SMB: Files opens network shares, and Servers share folders (2026-10-30)
 
 PengyOS had no SMB story at all, and nothing said so. On the Desktop, `smb://` in Files

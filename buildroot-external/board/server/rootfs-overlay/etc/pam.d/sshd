@@ -9,6 +9,11 @@ account   required  pam_unix.so
 password  required  pam_unix.so sha512 shadow
 session   required  pam_limits.so
 session   required  pam_env.so
+# LANG for SSH sessions. A console login inherits it from systemd
+# (/etc/locale.conf); an SSH one had none, so tmux refused to start ("need
+# UTF-8 locale") and tools fell back to ASCII. Debian reads its locale file
+# the same way.
+session   required  pam_env.so envfile=/etc/locale.conf
 session   required  pam_unix.so
 session   optional  pam_systemd.so
 # The message of the day (/etc/motd) after an interactive login.

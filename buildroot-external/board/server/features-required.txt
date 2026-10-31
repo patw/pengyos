@@ -35,3 +35,11 @@ exec-any  ksmbd.control                            # reload/shutdown, ksmbd.serv
 exists    usr/lib/systemd/system/ksmbd.service     # pengyos-shares enables it — BR2_PACKAGE_KSMBD_TOOLS (systemd unit dir)
 exec      usr/bin/pengyos-shares                   # board/server overlay
 
+# --- Containers at boot (US-SRV-9) ---
+exec      usr/libexec/podman/quadlet                       # .container files -> services — external.mk PENGYOS_PODMAN_INSTALL_QUADLET
+exec      usr/lib/systemd/user-generators/podman-user-generator      # rootless (~/.config/containers/systemd) — same hook
+exec      usr/lib/systemd/system-generators/podman-system-generator  # rootful (/etc/containers/systemd) — same hook
+exec      usr/libexec/podman/rootlessport                  # -p on a user-defined network — external.mk PENGYOS_PODMAN_INSTALL_ROOTLESSPORT
+
+# --- Locale (tmux, mosh and Python need the UTF-8 one /etc/locale.conf names) ---
+exists    usr/lib/locale/locale-archive                    # BR2_GENERATE_LOCALE="C.UTF-8" (core.config)

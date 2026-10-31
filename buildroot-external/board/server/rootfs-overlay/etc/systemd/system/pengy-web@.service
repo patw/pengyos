@@ -29,7 +29,9 @@ ConditionPathExists=/usr/bin/pengy-web
 [Service]
 Type=simple
 User=%i
-WorkingDirectory=%h
+# ~ is User='s home. Not %h: in a system unit that is the manager's (/root),
+# whatever User= says, and the start failed at CHDIR (Permission denied).
+WorkingDirectory=~
 # Overridden per user by the drop-in pengyos-webui writes; these are the
 # documented defaults, so a unit enabled by hand binds the same loopback port.
 Environment=WEBUI_PORT=5000

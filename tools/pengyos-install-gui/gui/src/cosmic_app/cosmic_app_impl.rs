@@ -27,6 +27,7 @@ use cosmic::widget::{self, button, column, container, nav_bar, radio, row, text}
 
 use pengyos_install_model::{Layout, Model, Step};
 
+use crate::restart::Restart;
 use crate::router::{Message as WizardMessage, MessageRouter};
 
 /// The unique COSMIC application id.
@@ -145,6 +146,8 @@ pub struct AppModel {
     progress: f32,
     status: String,
     run: Run,
+    /// Set up at start, while the stick (and so `systemctl`) is still there.
+    restart: Restart,
 }
 
 fn valid_hostname(h: &str) -> bool {
@@ -378,6 +381,7 @@ impl cosmic::Application for AppModel {
             progress: 0.0,
             status: String::new(),
             run: Run::NotStarted,
+            restart: Restart::live(),
         };
         let task = match app.core.main_window_id() {
             Some(id) => app.set_window_title("Install PengyOS".to_string(), id),
@@ -435,9 +439,7 @@ impl cosmic::Application for AppModel {
                 self.progress = 1.0;
             }
             Message::Finished(Err(e)) => self.run = Run::Failed(e),
-            Message::Reboot => {
-                let _ = Command::new("systemctl").arg("reboot").spawn();
-            }
+            Message::Reboot => self.restart.now(),
             // The live desktop stays; the dock / App Library reopen the installer.
             Message::TryLive => std::process::exit(0),
             Message::StartInstall => {

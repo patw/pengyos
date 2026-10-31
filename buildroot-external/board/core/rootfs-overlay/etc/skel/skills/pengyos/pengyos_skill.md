@@ -132,6 +132,12 @@ propose `apt install`, `pip install` into system paths, or editing files under
    rootless, `distrobox`, `pengyos-guest`. **Compilers and build toolchains live
    in the `dev` guest** (`pengyos-guest enter dev`), which shares `$HOME` and
    feels native — the base image has no compiler by design.
+   A service that should run at boot (a database, Jellyfin) is a Quadlet file,
+   `~/.config/containers/systemd/NAME.container` with `[Install]
+   WantedBy=default.target`, then `systemctl --user daemon-reload` and `start
+   NAME`. With `sudo loginctl enable-linger USER` it starts at boot with nobody
+   logged in. A published port is still closed to the LAN until
+   `sudo pengyos-firewall allow PORT --from CIDR`.
 
 For a user's own tools, `pip install --user`, `venv`, and `uv` work against
 Core's Python. Installing a binary that runs with system access is a Tier-2 act

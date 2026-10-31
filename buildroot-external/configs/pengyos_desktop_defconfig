@@ -36,6 +36,12 @@ BR2_x86_64=y
 # with any dynamic glibc toolchain.)
 BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
 BR2_TOOLCHAIN_HAS_THREADS=y
+# The locale /etc/locale.conf names (LANG=C.UTF-8). Without it Core and Server
+# had no locale at all (`locale -a`: C, POSIX): tmux refused to start ("invalid
+# LC_ALL, LC_CTYPE or LANG"), mosh-server likewise, and Python's
+# setlocale(LC_ALL, "") failed. Found trying tmux on a ThinkPad Server,
+# 2026-10-30. A few hundred KB; the Desktop layer replaces it with ~50 locales.
+# BR2_GENERATE_LOCALE: set by the desktop layer
 
 # --- Reproducible builds -----------------------------------------------------
 # UTC + C locale, fixed kernel build user/host/timestamp, SOURCE_DATE_EPOCH
