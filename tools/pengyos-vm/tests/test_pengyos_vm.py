@@ -136,6 +136,30 @@ def test_an_image_is_never_shrunk(box: Box, tmp_path: Path):
     assert "resize" not in [c[0] for c in box.calls("qemu-img")]
 
 
+def test_an_image_grows_to_the_default_disk_without_disk(box: Box, tmp_path: Path):
+    """A 1 GB Core image left 362 MB free (ThinkPad, 2026-10-31)."""
+    img = tmp_path / "core.img"
+    img.write_text(json.dumps({"virtual-size": 1 << 30}))
+    out = box.run("create", "core", "--image", str(img)).stdout
+    assert json.loads((box.home / "vms" / "core" / "disk.qcow2").read_text())["virtual-size"] == 20 << 30
+    assert "20G disk" in out
+    big = tmp_path / "big.img"
+    big.write_text(json.dumps({"virtual-size": 40 << 30}))
+    box.run("create", "big", "--image", str(big))
+    assert json.loads((box.home / "vms" / "big" / "disk.qcow2").read_text())["virtual-size"] == 40 << 30
+
+
+def test_a_forward_says_to_open_the_port_in_the_guest(box: Box):
+    """A forward to a default-deny PengyOS guest answered nothing (ThinkPad, 2026-10-31)."""
+    out = box.run("create", "web", "--iso", str(box.iso), "--forward", "8080:80",
+                  "--forward", "5353:53/udp").stdout
+    assert "pengyos-firewall allow 53/udp" in out or "pengyos-firewall allow 80" in out
+    assert "80" in out and "53/udp" in out
+    assert "open them inside" not in box.run("create", "plain", "--iso", str(box.iso)).stdout
+    out = box.run("set", "web", "--forward", "9090:9000").stdout
+    assert "pengyos-firewall allow 9000" in out
+
+
 def test_xz_images_are_unpacked(box: Box, tmp_path: Path):
     import lzma
     img = tmp_path / "core.img.xz"

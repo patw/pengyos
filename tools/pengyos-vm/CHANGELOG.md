@@ -16,6 +16,9 @@ and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
 ### Changed
 - `pengyos-vm ssh` uses a VM's own key when it has one (a kept `run`).
+- `create --image` grows the disk to 20G when `--disk` is not given (a 1 GB
+  Core image left 362 MB free), and `create`/`set --forward` say to open the
+  port inside a guest with a firewall (a PengyOS guest is default-deny).
 - When the user manager is going down (shutdown, reboot, last logout without
   linger) a VM gets 30 s to shut down, not 100 s, and `qemu.log` says it was
   asked to. `pengyos-vm-shutdown-notice.service` says on the console which VMs a

@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — found testing containers and VMs on the ThinkPad Server (2026-10-31)
+
+- **Rootless podman has its API socket.** Buildroot installed only the system
+  `podman.service`/`.socket`, so `systemctl --user enable --now podman.socket` (what
+  Docker-compatible tools need) failed with "Unit podman.socket does not exist". The image
+  now has podman's user units (`podman.socket`, `podman.service`, `podman-restart.service`,
+  `podman-auto-update.service`/`.timer`) and the system `podman-restart` and auto-update
+  ones. Before, nothing started `--restart=always` containers after a reboot. All ship
+  disabled, as upstream does.
+- **`pengyos-vm create --image` grows the disk to 20G by default** (sparse). A Core VM
+  kept the image's 1 GB root, with 362 MB free.
+- **`pengyos-vm` says to open a forwarded port inside the guest.** A PengyOS guest is
+  default-deny, so `--forward 8080:80` answered nothing until `pengyos-firewall allow 80`
+  was run in it.
+- Checked on the ThinkPad: the units install with `/usr/bin/podman` substituted, and a
+  Core VM got a 20 GB root (19 GB free) and the hint for port 80.
+
 ### Fixed — boot-menu fixes reached installed machines one update late (2026-10-31)
 
 26.10.52 put the screen last on the kernel line on real hardware, but an installed machine
