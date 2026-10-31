@@ -17,6 +17,27 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — a shutdown waiting on a VM looked hung, and boot was a black screen (2026-10-31)
+
+Found rebooting the ThinkPad Server into 26.10.51: it sat at a blinking cursor for over
+three minutes. Nothing had hung. A test VM running an older Core, which ignores the ACPI
+power button, held the shutdown for pengyos-vm's full 100 s stop timeout, and the screen
+said nothing about it.
+
+- **The screen shows systemd's boot and shutdown status on real hardware.** Where GRUB
+  finds a serial port, `console=ttyS0` came last on the kernel line, which makes the
+  serial port `/dev/console`, so `[  OK  ] Started …` and `A stop job is running for …`
+  went only there and the screen stayed black. GRUB now names `console=tty0` again after
+  the serial port on real hardware (the Core, Server and Desktop sticks, and installed
+  systems, whose grub.cfg `pengyos-update` rewrites at the next update). The kernel log
+  still goes to both; under QEMU the serial port stays `/dev/console` for the boot checks.
+- **A VM gets 30 s to shut down when everything is going down** (a shutdown, a reboot, or
+  the last logout without linger), not 100 s; `pengyos-vm stop` still waits the full 100 s.
+- **The console says what it is waiting for**: `Waiting for virtual machine to shut down:
+  core1 (beholder). A guest that ignores the power button is switched off after 30 s.`
+  (`pengyos-vm-shutdown-notice.service`, Server and Desktop). A VM's own `qemu.log` says
+  when it was asked to shut down and when it was switched off.
+
 ### Fixed — release.sh publishes only with notes (2026-10-31)
 
 26.10.51 went out by hand with no `--notes`, so the update page, the feed and the Updates

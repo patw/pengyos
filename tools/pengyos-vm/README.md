@@ -90,8 +90,10 @@ wireless port and says to use NAT.
   `ssh.authorized_keys.root`, and every VM gets `system.hostname=NAME`.
   systemd guests (PengyOS Core, recent Fedora/Debian/Arch) use them; others
   ignore them.
-- `stop` presses the ACPI power button and waits up to 100 s. A guest with
-  nothing listening for it (PengyOS Core: no logind) is then switched off.
+- `stop` presses the ACPI power button and waits up to 100 s; a guest with
+  nothing listening for it (PengyOS Core before 26.10.51: no logind) is then
+  switched off. When the machine shuts down or reboots, each VM gets 30 s, and
+  the console says which VMs it is waiting for.
 - Without access to `/dev/kvm` a VM still runs, in QEMU's emulator (slow).
 - Images: qcow2 or raw, `.xz`/`.gz` unpacked (sparsely), http(s) downloaded.
   The disk is grown to `--disk`, never shrunk.

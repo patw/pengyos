@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Say on the console which VMs a shutdown is waiting for.
+
+ExecStop of pengyos-vm-shutdown-notice.service, which stops as the shutdown
+begins. VMs run under their users' systemd managers, whose stop jobs the
+console shows only as "User Manager for UID 1000"; a guest that ignores the
+power button holds the shutdown for pengyos-vm's SHUTDOWN_WAIT, and before this
+the screen said nothing about it. A VM is a QEMU process started by pengyos-vm
+(`-name NAME,process=pengyos-vm-NAME`).
+
+    pengyos-vm-shutdown-notice [--proc DIR]    (DIR: a stand-in /proc, for tests)
+"""
+import os
+import pwd
+import sys
+
+WAIT = 30  # pengyos-vm's SHUTDOWN_WAIT
+
+
+def running_vms(proc: str) -> list[tuple[str, str]]:
+    vms = []
+    for pid in sorted((p for p in os.listdir(proc) if p.isdigit()), key=int):
+        try:
+            with open(os.path.join(proc, pid, "cmdline"), "rb") as f:
+                argv = f.read().decode(errors="replace").split("\0")
+            uid = os.stat(os.path.join(proc, pid)).st_uid
+        except OSError:
+            continue
+        if "-name" not in argv[:-1]:
+            continue
+        name, _, opts = argv[argv.index("-name") + 1].partition(",")
+        if f"process=pengyos-vm-{name}" not in opts.split(","):
+            continue
+        try:
+            user = pwd.getpwuid(uid).pw_name
+        except KeyError:
+            user = str(uid)
+        vms.append((name, user))
+    return vms
+
+
+def main(argv: list[str]) -> int:
+    proc = argv[argv.index("--proc") + 1] if "--proc" in argv else "/proc"
+    vms = running_vms(proc)
+    if not vms:
+        return 0
+    names = ", ".join(f"{name} ({user})" for name, user in vms)
+    what = "virtual machine" if len(vms) == 1 else f"{len(vms)} virtual machines"
+    print(f"Waiting for {what} to shut down: {names}. "
+          f"A guest that ignores the power button is switched off after {WAIT} s.", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
