@@ -107,6 +107,32 @@ define PENGYOS_PODMAN_INSTALL_QUADLET
 		$(TARGET_DIR)/usr/lib/systemd/user/podman-user-wait-network-online.service
 endef
 PODMAN_POST_INSTALL_TARGET_HOOKS += PENGYOS_PODMAN_INSTALL_QUADLET
+
+# The rest of podman's systemd units, the way its `make install` puts them
+# (@@PODMAN@@ -> /usr/bin/podman). Buildroot installs only the system
+# podman.service/.socket, so rootless podman had no API socket (`systemctl
+# --user enable --now podman.socket`: "Unit podman.socket does not exist", which
+# Docker-compatible tools need), and nothing started `--restart=always`
+# containers after a reboot, rootless or not (podman-restart.service). Found on
+# the ThinkPad Server, 2026-10-31. All ship disabled, as upstream and Fedora do:
+# a user turns on what they use.
+PENGYOS_PODMAN_USER_UNITS = podman.socket podman.service podman-restart.service \
+	podman-auto-update.service podman-auto-update.timer
+PENGYOS_PODMAN_SYSTEM_UNITS = podman-restart.service podman-auto-update.service \
+	podman-auto-update.timer
+define PENGYOS_PODMAN_INSTALL_UNITS
+	for kind in user system; do \
+		if [ $$kind = user ]; then units="$(PENGYOS_PODMAN_USER_UNITS)"; \
+		else units="$(PENGYOS_PODMAN_SYSTEM_UNITS)"; fi; \
+		for u in $$units; do \
+			f=$(@D)/contrib/systemd/$$kind/$$u; [ -f $$f ] || f=$$f.in; \
+			sed 's|@@PODMAN@@|/usr/bin/podman|g' $$f > $(@D)/pengyos-$$kind-$$u || exit 1; \
+			$(INSTALL) -D -m 0644 $(@D)/pengyos-$$kind-$$u \
+				$(TARGET_DIR)/usr/lib/systemd/$$kind/$$u || exit 1; \
+		done; \
+	done
+endef
+PODMAN_POST_INSTALL_TARGET_HOOKS += PENGYOS_PODMAN_INSTALL_UNITS
 endif
 
 # ca-certificates: the bundle (/etc/ssl/certs/ca-certificates.crt) is built at
