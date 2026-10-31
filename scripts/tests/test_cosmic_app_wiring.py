@@ -248,6 +248,22 @@ def test_file_sharing_is_wired_with_its_polkit_rule():
     )
 
 
+def test_remote_desktop_is_wired():
+    """The Remote Desktop window drives pengyos-remote, which runs the RDP server
+    (a host-built binary in /usr/libexec) through a user unit in the session."""
+    assert "pengyos-remote-desktop" in _app_list()
+    assert "pengyos-remote-desktop" in _installed_bins()
+    assert _launchers().get("io.catbee.pengyos.RemoteDesktop.desktop") == "pengyos-remote-desktop"
+    assert "pengyos-remote" in _overlay_bins()
+    lib = (ROOT / "tools/pengyos-remote-desktop/src/lib.rs").read_text()
+    assert 'pub const REMOTE: &str = "/usr/bin/pengyos-remote";' in lib
+    post = POST_BUILD.read_text(encoding="utf-8")
+    assert '"${TARGET_DIR}/usr/libexec/pengyos-rdp-server"' in post
+    assert "wanted pengyos-rdp-server" in BUILD_COSMIC.read_text(encoding="utf-8")
+    unit = ROOT / "buildroot-external/board/desktop/rootfs-overlay/usr/lib/systemd/user/pengyos-rdp-server.service"
+    assert "ExecStart=/usr/libexec/pengyos-rdp-server" in unit.read_text()
+
+
 def test_the_games_are_one_binary_and_eight_symlinks():
     """tools/pengy-games carries every game: it alone is built and installed,
     and each game's launcher runs a /usr/bin/pengy-<game> symlink to it."""

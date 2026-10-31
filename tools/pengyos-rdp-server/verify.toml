@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# Rust: the pure parts (key mapping, the password file's checks). It links
+# libpipewire, so the build host needs its -dev package (provision-build-host.sh
+# --desktop). That clients connect is proven against a Desktop (spec.md).
+[[check]]
+name = "unit tests"
+run = ["cargo", "test", "-q", "--locked"]
+cwd = "tools/pengyos-rdp-server"
+expect = "exit0"
+timeout = 1200

@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — remote desktop over RDP (2026-10-31)
+
+The Desktop can be used from another computer with an ordinary RDP client (Windows' Remote
+Desktop Connection, Windows App on a Mac, Remmina, FreeRDP). It shares the session that is
+logged in, as it is on the screen.
+
+- `pengyos-remote password|on|off|status|forget` sets it up as the user: an RDP password
+  (separate from the login password, 0600), a TLS certificate for the machine, and the user
+  unit `pengyos-rdp-server.service`, which runs in the desktop session (the first session
+  asks on screen). `on --local` listens on 127.0.0.1 only, for SSH tunnels.
+- The **Remote Desktop** app is a window over those commands.
+- `pengyos-rdp-server` is the 2026-10 prototype made a product: the portal's RemoteDesktop
+  + ScreenCast, PipeWire, and ironrdp-server **vendored with our patches** (ledgered as a
+  fork, 8 of 10; pengyos-nightly now watches crates.io for ironrdp releases). The patches
+  are what made FreeRDP 3.14 (Remmina's snap) and Remmina's resizing work.
+- Verified on behoweather: FreeRDP 3.32 through an SSH tunnel saw the live screen; a wrong
+  password was refused at NLA.
 ### Added — pengy-vmm: your VMs in a browser (2026-10-31)
 
 `systemctl --user enable --now pengy-vmm`, then open `pengy-vmm url`: the VM list, start /

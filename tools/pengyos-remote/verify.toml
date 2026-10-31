@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The suite drives the shipped script with HOME in a temp dir and fake
+# systemctl, openssl and ip, so it needs no desktop session and no build. That
+# a client really connects is proven on a Desktop (spec.md, "Verification").
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-remote"
+expect = "exit0"
+timeout = 600

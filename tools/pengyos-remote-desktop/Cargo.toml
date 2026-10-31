@@ -1,0 +1,38 @@
+# Remote Desktop (pengyos-remote-desktop): let other computers see and use this
+# desktop over RDP, from the COSMIC desktop. A window over `pengyos-remote`,
+# which does the work (the password, the certificate, the user unit that runs
+# pengyos-rdp-server in the session). Every button is a pengyos-remote command.
+#
+# The decision logic (lib.rs) is std + serde_json and `cargo test`-able without
+# a display. The window is behind `cosmic` (libcosmic), off by default, as in
+# pengyos-sharing.
+[package]
+name = "pengyos-remote-desktop"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+description = "Remote Desktop: share this COSMIC desktop over RDP."
+
+[features]
+default = []
+cosmic = ["dep:libcosmic"]
+
+[lib]
+name = "pengyos_remote_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-remote-desktop"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+# Same pinned libcosmic and feature set as the other tools/ apps, so all of them
+# build from one cache (CARGO_TARGET_DIR=~/cosmic-build/install-gui).
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
+features = ["about", "single-instance", "markdown", "qr_code", "wgpu", "xdg-portal"]

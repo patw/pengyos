@@ -206,3 +206,34 @@ def test_uutils_findutils_patch_release_is_routine():
 
 def test_uutils_findutils_ignores_latest_commit_and_prereleases():
     assert sources.uutils_findutils_findings(["latest-commit", "0.11.0-rc1"], "0.10.0") == []
+
+
+# --- ironrdp (vendored with patches into tools/pengyos-rdp-server) -------------
+
+def test_ironrdp_silent_at_the_newest_release():
+    versions = sources.crates_io_versions((FIX / "crates-io-ironrdp-server.json").read_text())
+    assert "0.13.0" in versions and "0.12.0" in versions
+    assert sources.ironrdp_vendor_findings("ironrdp-server", versions, "0.13.0") == []
+
+
+def test_ironrdp_new_minor_is_major_and_says_reapply():
+    versions = sources.crates_io_versions((FIX / "crates-io-ironrdp-server.json").read_text())
+    (f,) = sources.ironrdp_vendor_findings("ironrdp-server", versions, "0.12.0")
+    assert f["lane"] == "major" and f["available"] == "0.13.0"
+    assert "pengyos.diff" in f["note"]
+
+
+def test_crates_io_skips_yanked_and_prereleases():
+    text = '{"versions": [{"num": "0.14.0", "yanked": true}, {"num": "0.14.0-rc.1", "yanked": false},' \
+           ' {"num": "0.13.1", "yanked": false}]}'
+    assert sources.crates_io_versions(text) == ["0.13.1"]
+    (f,) = sources.ironrdp_vendor_findings("ironrdp-acceptor", sources.crates_io_versions(text), "0.13.0")
+    assert f["lane"] == "routine" and f["available"] == "0.13.1"
+
+
+def test_the_vendored_versions_the_cli_reads_exist():
+    import re
+    repo = Path(__file__).resolve().parents[3]
+    for crate, want in (("ironrdp-server", "0.13.0"), ("ironrdp-acceptor", "0.10.0")):
+        text = (repo / "tools/pengyos-rdp-server/vendor" / crate / "Cargo.toml").read_text()
+        assert re.search(r'^version = "([^"]+)"', text, re.M).group(1) == want

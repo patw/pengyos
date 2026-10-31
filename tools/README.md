@@ -75,7 +75,14 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-firmware`](pengyos-firmware/) | *Firmware*: the devices fwupd can update, what is on offer, and Update all / just this one, with update notifications (Rust, libcosmic, over fwupd). |
 | [`pengyos-firewall`](pengyos-firewall/) | Open and close this machine's own ports on top of the default-deny nftables ruleset: one rule file per port in `/etc/pengyos/nftables.d/`, checked with `nft -c` before reload. Every edition. |
 | [`pengyos-shares`](pengyos-shares/) | Share folders over SMB with the kernel's ksmbd server: shares in `/etc/ksmbd/ksmbd.conf`, share passwords in `ksmbdpwd.db`, port 445 opened to LAN ranges only while a share exists. Server and Desktop. |
+<<<<<<< HEAD
 | [`pengyos-vm`](pengyos-vm/) | Run QEMU/KVM VMs as the user: `create` from an ISO or image, `start`/`stop`/`console`/`ssh`/`vnc`, `autostart`; NAT with forwards, or `bridge enable` for a LAN bridge (wired only; setuid `qemu-bridge-helper` limited to `pengyos-br0`). `pengy-vmm` is the same in a browser (127.0.0.1:5100, token). Server and Desktop. |
+=======
+| [`pengyos-vm`](pengyos-vm/) | Run QEMU/KVM VMs as the user: `create` from an ISO or image, `start`/`stop`/`console`/`ssh`/`vnc`, `autostart`; NAT with forwards, or `bridge enable` for a LAN bridge (wired only; setuid `qemu-bridge-helper` limited to `pengyos-br0`). Server and Desktop. |
+| [`pengyos-remote`](pengyos-remote/) | Remote desktop from the shell (Desktop): `password`, `on [--local]`, `off`, `status`, `forget`. Runs `pengyos-rdp-server` as a user unit in the desktop session; password and certificate in `~/.config/pengyos-remote`. |
+| [`pengyos-rdp-server`](pengyos-rdp-server/) | The RDP server (Rust, host-built): the logged-in COSMIC session through the desktop portal and PipeWire, served by a vendored, patched ironrdp-server (ledgered fork). |
+| [`pengyos-remote-desktop`](pengyos-remote-desktop/) | "Remote Desktop" (Desktop): a COSMIC window over `pengyos-remote`: on/off, where to connect, the RDP password, ask again. |
+>>>>>>> f0944b81 (Remote desktop over RDP: pengyos-remote, the server, and an app)
 | [`pengyos-sharing`](pengyos-sharing/) | "File Sharing" (Desktop): a COSMIC window over `pengyos-shares` — what is shared and the `\\host\name` / `smb://host/name` addresses, share a folder, change or stop one, set your share password. Changes run `pkexec /usr/bin/pengyos-shares`; wheel needs no password (`60-pengyos-shares.rules`). |
 | [`pengyos-gamepads`](pengyos-gamepads/) | *Gamepads*: list the attached game controllers and joysticks and test their buttons, sticks, triggers and D-pad live (Rust, libcosmic, over evdev + sysfs). |
 | [`pengyos-printers`](pengyos-printers/) | *Printers*: add and remove printers, manage the print queue and print a test page (Rust, libcosmic, IPP to CUPS' local socket). |
