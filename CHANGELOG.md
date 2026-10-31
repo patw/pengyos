@@ -17,6 +17,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — Core is no longer offered as a download (2026-10-31)
+
+Core is the base every other edition is built on, and release.sh still builds and
+smoke-tests it with every release. As a download it was a dead end: no installer, no
+SSH key or user (SSH is key-only, so the only way in was the console's root
+autologin), no updater, and a 1 GB root filesystem on any disk. `download-publish`
+now refuses it and the download page no longer lists it; older releases' Core files
+stay on the site, unlisted. A Core that is worth downloading (first-boot provisioning,
+grown disk, updates) is the next step, as the VM manager's template.
+
 ### Added — File Sharing, an app for sharing folders on the Desktop (2026-10-30)
 
 - **File Sharing** (`pengyos-sharing`, in the Applications list): see what is shared and

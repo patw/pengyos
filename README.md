@@ -39,14 +39,15 @@ version:
 
 - Secure Boot off in the firmware settings. The images aren't signed for it yet.
 - Desktop boots into a live session you can try before installing. Server shows its
-  installer on screen. Core has no installer: it runs from the stick, and you write
-  it to an internal disk the same way.
+  installer on screen. Core isn't offered as a download: it's the base the other
+  editions are built on, and it has no installer or updater yet. Build it yourself
+  (below) to tinker with it.
 - Installing erases the whole target disk. 20 GB or more.
 - Desktop is a 1.4 GB download that writes 4.8 GB to the stick.
 
 After installing, the machine checks for updates daily. An update is written to a
 second root slot and booted once on trial; if it doesn't reach multi-user, the next
-boot returns to the old slot by itself. Core can't update in place yet.
+boot returns to the old slot by itself.
 
 ## What's different
 

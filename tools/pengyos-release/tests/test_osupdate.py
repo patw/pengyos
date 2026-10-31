@@ -143,14 +143,16 @@ def test_download_publish(tmp_path, key):
     (desk / "images/pengyos-desktop-x86_64.img").write_bytes(b"live only")
     core = build("c", "pengyos-core", "pengyos-core-x86_64.img", "Core")
     site = tmp_path / "site"
-    dest = publish_downloads([core, desk], site, key[0])
+    with pytest.raises(UpdatePublishError, match="unknown image 'pengyos-core'"):
+        publish_downloads([core, desk], site, key[0])   # Core is not a download any more
+    dest = publish_downloads([desk], site, key[0])
     listing = json.loads((dest / "downloads.json").read_text())
-    assert [e["image"] for e in listing["images"]] == ["pengyos-desktop", "pengyos-core"]
-    assert listing["images"][0]["kind"] == "installer" and listing["images"][1]["kind"] == "disk"
+    assert [e["image"] for e in listing["images"]] == ["pengyos-desktop"]
+    assert listing["images"][0]["kind"] == "installer"
     import lzma
     assert lzma.decompress((dest / "pengyos-desktop-26.09.1-x86_64.img.xz").read_bytes()) == b"disk image " * 100
     sums = (dest / "SHA256SUMS").read_text()
-    assert "pengyos-core-26.09.1-x86_64.img.xz" in sums
+    assert "pengyos-core" not in sums
     sig = (dest / "SHA256SUMS.sig").read_bytes().partition(b"\n")[2]
     Ed25519PublicKey.from_public_bytes(key[1]).verify(sig, hashlib.sha256(sums.encode()).digest())
     page = (site / "download/index.html").read_text()
@@ -162,7 +164,7 @@ def test_download_publish(tmp_path, key):
     refresh_index(site)
     page = (site / "download/index.html").read_text()
     assert "26.09.1/pengyos-desktop-26.09.1-x86_64.img.xz" in page
-    assert "26.09.1/pengyos-core-26.09.1-x86_64.img.xz" in page  # Core rides with its version
+    assert "pengyos-core" not in page
     assert list((site / "download").glob("pengyos-release-*.pub"))
     assert _stick(6 * 10**9) == 8 and _stick(1_400_000_000) == 4
     # a mixed-version set is refused
@@ -203,3 +205,29 @@ def test_download_page_lists_newest_stable_per_edition(tmp_path, key):
     # both cards lead with the release line; the build is small print
     assert page.count('<span class="v">26.09</span>') == 2
     assert "build 26.09.2" in page and "build 26.09.1" in page
+
+
+def test_core_published_earlier_is_no_longer_listed(tmp_path, key):
+    """Releases before 2026-10-31 carried Core; its files stay on the site but the
+    page no longer offers it, and republishing that version drops it from the sums."""
+    from pengyos_release.downloads import listed, publish_downloads
+    site = tmp_path / "site"
+    old = site / "download" / "26.09.1"
+    old.mkdir(parents=True)
+    (old / "downloads.json").write_text(json.dumps({"version": "26.09.1", "published": "x", "images": [
+        {"image": "pengyos-desktop", "name": "Desktop", "file": "pengyos-desktop-26.09.1-x86_64.img.xz",
+         "size": 1, "raw_size": 1, "sha256": "a", "kind": "installer", "build": "x"},
+        {"image": "pengyos-core", "name": "Core", "file": "pengyos-core-26.09.1-x86_64.img.xz",
+         "size": 1, "raw_size": 1, "sha256": "b", "kind": "disk", "build": "x"}]}))
+    rel = site / "update" / "pengyos-desktop" / "26.09.1"
+    rel.mkdir(parents=True)
+    (rel / "release.json").write_text(json.dumps(
+        {"image": "pengyos-desktop", "version": "26.09.1", "channels": ["stable"]}))
+    current, older = listed(site)
+    assert [e["image"] for e in current] == ["pengyos-desktop"] and older == []
+    b = make_build(tmp_path / "d", image="pengyos-desktop")
+    (b / "target/usr/lib/os-release").write_text(
+        'IMAGE_ID=pengyos-desktop\nIMAGE_VERSION="26.09.1"\nBUILD_ID="x"\n')
+    (b / "images/pengyos-desktop-x86_64-installer.img").write_bytes(b"x" * 10)
+    dest = publish_downloads([b], site, key[0], force=True)
+    assert "pengyos-core" not in (dest / "SHA256SUMS").read_text()

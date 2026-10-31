@@ -6,7 +6,7 @@
 #   --publish        sign and publish into the local site dir: update-publish for
 #                    the A/B editions (Desktop, Desktop NVIDIA, Server, Server
 #                    NVIDIA) and one
-#                    download-publish for every target built (staged: the
+#                    download-publish for every target built but Core (staged: the
 #                    download page lists only releases promoted to stable).
 #                    Needs $PENGYOS_RELEASE_KEY.
 #   --push           rsync the site dir to $PENGYOS_SITE_REMOTE (host:path/),
@@ -138,8 +138,10 @@ if [ "${PUBLISH}" = 1 ]; then
     notes=(); [ -n "${NOTES}" ] && notes=(--notes "@${NOTES}")
     dl=()
     for t in "${TARGETS[@]}"; do
+        # Core is built and smoke-tested (it is the base) but not offered for
+        # download or update: no installer, no SSH key, no updater yet.
+        [ "${t}" = pengyos-core ] && continue
         dl+=(--build "$(out "${t}")")
-        [ "${t}" = pengyos-core ] && continue        # Core has no A/B layout yet
         say "${t}: update-publish (${CHANNEL})"
         rel update-publish --build "$(out "${t}")" --site "${SITE}" \
             --key "${PENGYOS_RELEASE_KEY}" --channel "${CHANNEL}" "${notes[@]}"
