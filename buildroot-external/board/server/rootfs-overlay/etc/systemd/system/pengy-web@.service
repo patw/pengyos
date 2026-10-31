@@ -20,6 +20,14 @@
 # the bind address runs tools as %i. The default bind is loopback, this
 # machine only. A non-loopback bind is a deliberate, documented decision,
 # taken with `pengyos-webui on --host`, never a default and never implied.
+#
+# Root goes through sudo, as for %i at a terminal: Pengy's run_bash with
+# elevated=true runs the command's `sudo` with SUDO_ASKPASS fed the password
+# typed into the UI. So no NoNewPrivileges (it made sudo and every setuid
+# program unusable, whatever password was given) and no ProtectSystem (it
+# kept /usr, /etc and /boot read-only even for sudo, so Pengy could not make
+# the Tier-1 changes US-AGT-2 is about). Found 2026-10-31: on behoweather
+# Pengy could not write the USB sticks it had been asked to flash.
 [Unit]
 Description=Pengy web UI for %i
 Documentation=https://pengyos.catbee.ca
@@ -39,9 +47,7 @@ Environment=WEBUI_HOST=127.0.0.1
 ExecStart=/usr/bin/pengy-web --port ${WEBUI_PORT} --host ${WEBUI_HOST}
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=yes
 PrivateTmp=yes
-ProtectSystem=strict
 
 [Install]
 WantedBy=multi-user.target

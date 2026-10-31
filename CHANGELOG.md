@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — Pengy in the web UI could not use sudo (2026-10-31)
+
+Asked on behoweather to flash two USB sticks, Pengy (in `pengy-web`) downloaded and checked
+the images and then could not write them: `pengy-web@.service` set `NoNewPrivileges=yes`, so
+the sudo its elevated `run_bash` uses (with the password typed into the UI) could never gain
+root, and `ProtectSystem=strict` would have kept `/usr`, `/etc` and `/boot` read-only even
+as root, which ruled out the Tier-1 changes US-AGT-2 is built on. Both are gone from the
+unit. Root still takes the user's own sudo password, as at a terminal. `pengyos-webui`'s
+tests had also been failing since the unit's `WorkingDirectory` fix the day before; they
+pass again.
+
 ### Fixed — an installer stick left plugged in opened the installer on an installed Desktop (2026-10-31)
 
 behopc, an installed Desktop NVIDIA, rebooted into 26.10.52 with an installer stick in a USB

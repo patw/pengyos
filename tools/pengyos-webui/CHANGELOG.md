@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.1.2] - 2026-10-31
+
+### Fixed
+- Pengy in the web UI can use sudo again. `pengy-web@.service` had
+  `NoNewPrivileges=yes` and `ProtectSystem=strict`, so Pengy's elevated
+  `run_bash` (sudo with the password typed into the UI) could never gain root,
+  and even as root `/usr`, `/etc` and `/boot` were read-only. Both are gone; root
+  still needs the user's sudo password. Found on behoweather, where Pengy could
+  not write the USB sticks it had been asked to flash.
+- The tests expected `WorkingDirectory=%h` and failed since the unit changed to
+  `~` (2026-10-30); they assert `~` now.
+
 ## [0.1.1] - 2026-10-27
 
 ### Changed
