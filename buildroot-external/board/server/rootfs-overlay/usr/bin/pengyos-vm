@@ -16,6 +16,9 @@
                         [--iso FILE | --eject] [--ssh-key [FILE]]
     pengyos-vm autostart NAME on|off
     pengyos-vm delete NAME [--yes]
+    pengyos-vm run [--image FILE|URL] [--copy PATH]... [--fetch PATH]... [--timeout 10m]
+                   [--memory 1G] [--cpus 2] [--disk 8G] [--forward ...] [--keep]
+                   [-- COMMAND...]
     pengyos-vm bridge status
     sudo pengyos-vm bridge enable [IFACE]
     sudo pengyos-vm bridge disable
@@ -26,8 +29,17 @@ console), qemu.log, and while it runs the serial console and QMP sockets. It run
 (pengyos-vm@NAME.service), so `stop`, a reboot of the host and `autostart` all
 go through systemd, and nothing needs root.
 
+`run` is a throwaway VM: a fresh one on a copy-on-write overlay of the image
+(converted once, cached in ~/.cache/pengyos-vm/images), the --copy files put
+in /root/run over SSH with a key made for this run, COMMAND run there (no
+COMMAND: a shell), --fetch copied back into the current folder, and then the
+VM is switched off and deleted. Its exit status is COMMAND's (124: --timeout).
+The image must be a systemd guest that takes root's SSH key as a credential,
+such as PengyOS Core; --image defaults to $PENGYOS_VM_IMAGE. A run that was
+killed outright leaves its VM behind; the next `run` deletes it.
+
 Networking:
-  nat     (default) the VM shares this machine's connection, Wi-Fi included.
+  nat    (default) the VM shares this machine's connection, Wi-Fi included.
           Nothing on the LAN can reach it except the ports you forward, and
           each forward listens on 127.0.0.1 unless you give an address
           (0.0.0.0:8080:80, then `sudo pengyos-firewall allow 8080`). Every VM
@@ -38,7 +50,7 @@ Networking:
           second machine's frames are dropped by the access point.
 
 --root DIR (anywhere on the line) is the test hook: /etc, /sys and /dev are
-read under DIR, DIR/usr/bin/{systemctl,qemu-img,networkctl,ip,ssh} are run
+read under DIR, DIR/usr/bin/{systemctl,qemu-img,networkctl,ip,ssh,ssh-keygen} are run
 instead of the real ones, `_run` prints the QEMU command instead of running
 it, and the root guard is lifted because nothing outside DIR is touched.
 """
@@ -48,6 +60,7 @@ from __future__ import annotations
 import argparse
 import base64
 import gzip
+import hashlib
 import json
 import lzma
 import os
@@ -56,9 +69,11 @@ import re
 import secrets
 import select
 import shutil
+import signal
 import socket
 import subprocess
 import sys
+import tarfile
 import time
 import urllib.request
 from pathlib import Path
@@ -82,6 +97,9 @@ SIZE_RE = re.compile(r"^(\d+)([KMGT]?)i?B?$", re.I)
 SSH_PORT_BASE = 2201
 ESCAPE = b"\x1d"  # Ctrl-]
 DEFAULTS = {"memory": "2G", "cpus": 2, "disk": "20G"}
+RUN_DEFAULTS = {"memory": "1G", "disk": "8G", "boot_timeout": 180}
+RUN_DIR = "/root/run"
+DURATION_RE = re.compile(r"^(\d+)([smhd]?)$")
 
 ROOT: Path | None = None
 
@@ -396,6 +414,32 @@ def virtual_size(path: Path) -> int:
 
 
 # --------------------------------------------------------------------- create
+def check_resources(memory_text: str, cpus: int) -> int:
+    memory = parse_size(memory_text, "--memory")
+    if memory < 128 * 1024 ** 2:
+        raise Misuse("--memory: give it at least 128M")
+    if not 1 <= cpus <= (os.cpu_count() or 1):
+        raise Misuse(f"--cpus: 1 to {os.cpu_count()} on this machine")
+    return memory
+
+
+def new_conf(name: str, memory: int, cpus: int, net: str = "nat", firmware: str = "uefi",
+             iso: str | None = None, ssh_keys: str | None = None) -> dict:
+    return {
+        "name": name,
+        "memory": memory,
+        "cpus": cpus,
+        "firmware": firmware,
+        "net": net,
+        "mac": "52:54:00:%02x:%02x:%02x" % tuple(secrets.token_bytes(3)),
+        "ssh_port": pick_ssh_port(),
+        "vnc": pick_vnc(),
+        "forwards": [],
+        "iso": iso,
+        "ssh_keys": ssh_keys,
+    }
+
+
 def cmd_create(a) -> int:
     vm = VM(a.name)
     if vm.exists() or vm.dir.exists():
@@ -403,12 +447,8 @@ def cmd_create(a) -> int:
     if bool(a.iso) == bool(a.image):
         raise Misuse("give the VM something to boot: --iso FILE (an installer) or "
                      "--image FILE|URL (a disk image: qcow2, raw, .img, .xz, .gz)")
-    memory = parse_size(a.memory or DEFAULTS["memory"], "--memory")
-    if memory < 128 * 1024 ** 2:
-        raise Misuse("--memory: give it at least 128M")
     cpus = a.cpus or DEFAULTS["cpus"]
-    if not 1 <= cpus <= (os.cpu_count() or 1):
-        raise Misuse(f"--cpus: 1 to {os.cpu_count()} on this machine")
+    memory = check_resources(a.memory or DEFAULTS["memory"], cpus)
     disk = parse_size(a.disk, "--disk") if a.disk else None
     if a.net == "bridge":
         require_bridge()
@@ -417,19 +457,10 @@ def cmd_create(a) -> int:
         iso = Path(a.iso).expanduser().resolve()
         if not iso.is_file():
             raise Misuse(f"--iso: {a.iso} does not exist")
-    conf = {
-        "name": a.name,
-        "memory": memory,
-        "cpus": cpus,
-        "firmware": "bios" if a.bios else "uefi",
-        "net": a.net,
-        "mac": "52:54:00:%02x:%02x:%02x" % tuple(secrets.token_bytes(3)),
-        "ssh_port": pick_ssh_port(),
-        "vnc": pick_vnc(),
-        "forwards": [],
-        "iso": str(iso) if iso else None,
-        "ssh_keys": read_key(a.ssh_key) if a.ssh_key is not None else None,
-    }
+    conf = new_conf(a.name, memory, cpus, net=a.net,
+                    firmware="bios" if a.bios else "uefi",
+                    iso=str(iso) if iso else None,
+                    ssh_keys=read_key(a.ssh_key) if a.ssh_key is not None else None)
     add_forwards(conf, a.forward or [], a.name)
 
     vm.dir.mkdir(parents=True)
@@ -671,9 +702,7 @@ def cmd_stop(a) -> int:
         print(f"{vm.name} is not running")
         return 0
     if a.force:
-        user_systemctl("kill", "--signal=SIGKILL", vm.unit)
-        user_systemctl("stop", vm.unit, check=False)
-        user_systemctl("reset-failed", vm.unit, check=False)
+        force_off(vm)
         print(f"{vm.name} is off (forced: like pulling the plug)")
     else:
         print(f"asking {vm.name} to shut down (ACPI power button)... a guest that ignores it "
@@ -737,7 +766,9 @@ def cmd_ssh(a) -> int:
                       f"look it up on the console (`ip addr`) or in your router")
     if not user:
         user = "root" if vm.conf.get("ssh_keys") else pwd.getpwuid(os.getuid()).pw_name
-    argv = [tool("ssh"), "-p", str(ep[1]),
+    # A VM kept from a `run` (--keep) takes only the key made for that run.
+    key = ["-i", str(vm.path("id_ed25519"))] if vm.path("id_ed25519").is_file() else []
+    argv = [tool("ssh"), "-p", str(ep[1]), *key,
             "-o", f"UserKnownHostsFile={vm.path('known_hosts')}",
             "-o", "StrictHostKeyChecking=accept-new",
             f"{user}@{ep[0]}"] + a.command
@@ -856,6 +887,238 @@ def cmd_delete(a) -> int:
     shutil.rmtree(vm.dir)
     print(f"deleted {vm.name}")
     return 0
+
+
+# ------------------------------------------------------------ throwaway runs
+def parse_duration(text: str, what: str) -> float:
+    """Seconds in '90', '90s', '10m', '2h', '1d'."""
+    m = DURATION_RE.match(text.strip())
+    if not m or int(m.group(1)) == 0:
+        raise Misuse(f"{what} must look like 90s, 10m or 2h, not {text!r}")
+    return int(m.group(1)) * {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}[m.group(2)]
+
+
+def cached_image(source: str) -> Path:
+    """The image as qcow2 in the cache, converted the first time it is used.
+
+    A local file is keyed by its path, size and modification time (so a
+    rebuilt image is converted again), a URL by the URL."""
+    cache = Path.home() / ".cache" / PROG / "images"
+    if re.match(r"^https?://", source):
+        key = source
+    else:
+        path = Path(source).expanduser()
+        if not path.is_file():
+            raise Misuse(f"--image: {source} does not exist")
+        st = path.stat()
+        key = f"{path.resolve()}:{st.st_size}:{st.st_mtime_ns}"
+    base = cache / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".qcow2")
+    if base.is_file():
+        return base
+    cache.mkdir(parents=True, exist_ok=True)
+    work = cache / (base.stem + ".work")
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir()
+    try:
+        src = decompress(fetch(source, work / "image"), work)
+        print(f"caching {Path(source).name} as qcow2 (once)", file=sys.stderr)
+        tmp = work / base.name
+        run(["qemu-img", "convert", "-O", "qcow2", str(src), str(tmp)])
+        tmp.replace(base)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return base
+
+
+def force_off(vm: VM) -> None:
+    user_systemctl("kill", "--signal=SIGKILL", vm.unit, check=False)
+    user_systemctl("stop", vm.unit, check=False)
+    user_systemctl("reset-failed", vm.unit, check=False)
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def sweep_orphans() -> None:
+    """Delete the VMs of runs that were killed before they could clean up."""
+    for vm in all_vms():
+        owner = vm.conf.get("run_owner")
+        if owner and not pid_alive(owner):
+            force_off(vm)
+            shutil.rmtree(vm.dir, ignore_errors=True)
+            print(f"deleted {vm.name}, left behind by a run that was killed", file=sys.stderr)
+
+
+def run_ssh(vm: VM, *opts: str) -> list[str]:
+    return [tool("ssh"), "-p", str(vm.conf["ssh_port"]), "-i", str(vm.path("id_ed25519")),
+            "-o", "IdentitiesOnly=yes", "-o", f"UserKnownHostsFile={vm.path('known_hosts')}",
+            "-o", "StrictHostKeyChecking=accept-new", "-o", "LogLevel=ERROR", *opts,
+            "root@127.0.0.1"]
+
+
+def wait_for_ssh(vm: VM, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    probe = run_ssh(vm, "-o", "BatchMode=yes", "-o", "ConnectTimeout=5") + ["true"]
+    while True:
+        if subprocess.run(probe, capture_output=True, stdin=subprocess.DEVNULL).returncode == 0:
+            return
+        if vm.state() != "running":
+            log = vm.path("qemu.log")
+            tail = log.read_text(errors="replace").splitlines()[-15:] if log.is_file() else []
+            raise Failure(f"{vm.name} stopped while booting" + (":\n" + "\n".join(tail) if tail else ""))
+        if time.monotonic() > deadline:
+            tail = ""
+            if vm.path("console.log").is_file():
+                tail = "\n".join(vm.path("console.log").read_text(errors="replace").splitlines()[-15:])
+            raise Failure(f"{vm.name} did not answer SSH within {timeout:.0f}s (is the image a "
+                          f"systemd guest with sshd, such as PengyOS Core?)" +
+                          (f"; its console ended with:\n{tail}" if tail else ""))
+        time.sleep(1)
+
+
+def push(vm: VM, paths: list[Path]) -> None:
+    """Copy files and folders into RUN_DIR as a tar stream over SSH."""
+    p = subprocess.Popen(run_ssh(vm, "-o", "BatchMode=yes") +
+                         [f"mkdir -p {RUN_DIR} && tar -xf - -C {RUN_DIR}"],
+                         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    try:
+        with tarfile.open(fileobj=p.stdin, mode="w|") as tar:
+            for path in paths:
+                tar.add(str(path), arcname=path.name)
+        p.stdin.close()
+    except BrokenPipeError:
+        pass
+    err = p.stderr.read().decode(errors="replace").strip()
+    if p.wait() != 0:
+        raise Failure(f"copying into {vm.name} failed" + (f": {err}" if err else ""))
+
+
+def pull(vm: VM, names: list[str], into: Path) -> list[str]:
+    """Copy RUN_DIR/NAME back into `into`; the problems, worded for a person."""
+    problems = []
+    for name in names:
+        p = subprocess.Popen(run_ssh(vm, "-o", "BatchMode=yes") +
+                             [f"cd {RUN_DIR} && tar -cf - -- {shell_quote(name)}"],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            with tarfile.open(fileobj=p.stdout, mode="r|") as tar:
+                # "data" refuses absolute paths, .. and device files.
+                tar.extractall(into, filter="data")
+        except (tarfile.TarError, OSError) as e:
+            problems.append(f"--fetch {name}: {e}")
+        err = p.stderr.read().decode(errors="replace").strip()
+        if p.wait() != 0:
+            problems.append(f"--fetch {name}: " + (err or "not found in the VM"))
+    return problems
+
+
+def shell_quote(text: str) -> str:
+    return "'" + text.replace("'", "'\\''") + "'"
+
+
+class Stopped(Exception):
+    def __init__(self, signum: int):
+        self.signum = signum
+
+
+def cmd_run_once(a) -> int:
+    command = a.command[1:] if a.command[:1] == ["--"] else a.command
+    image = a.image or os.environ.get("PENGYOS_VM_IMAGE")
+    if not image:
+        raise Misuse("which image? --image FILE|URL (e.g. pengyos-core-x86_64.img), "
+                     "or set PENGYOS_VM_IMAGE")
+    cpus = a.cpus or DEFAULTS["cpus"]
+    memory = check_resources(a.memory or RUN_DEFAULTS["memory"], cpus)
+    disk = parse_size(a.disk or RUN_DEFAULTS["disk"], "--disk")
+    timeout = parse_duration(a.timeout, "--timeout") if a.timeout else None
+    boot_timeout = parse_duration(a.boot_timeout, "--boot-timeout") if a.boot_timeout else \
+        RUN_DEFAULTS["boot_timeout"] * (1 if kvm_ok() else 3)
+    copies = []
+    for text in a.copy or []:
+        path = Path(text).expanduser()
+        if not path.exists():
+            raise Misuse(f"--copy: {text} does not exist")
+        copies.append(path.resolve())
+    for name in a.fetch or []:
+        if name.startswith("/") or ".." in Path(name).parts:
+            raise Misuse(f"--fetch takes a path inside {RUN_DIR}, not {name!r}")
+    name = check_name(a.name) if a.name else "run-" + secrets.token_hex(3)
+    vm = VM(name)
+    if vm.dir.exists():
+        raise Misuse(f"{vm.dir} already exists: pick another --name")
+
+    sweep_orphans()
+    base = cached_image(image)
+    conf = new_conf(name, memory, cpus)
+    add_forwards(conf, a.forward or [], name)
+    conf["run_owner"] = os.getpid()
+
+    # SIGTERM and SIGHUP (a closed terminal, a killed agent) clean up as Ctrl-C does.
+    def stop_here(signum, frame):
+        raise Stopped(signum)
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, stop_here)
+
+    status = 1
+    vm.dir.mkdir(parents=True)
+    try:
+        run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", f"{PROG} run {name}",
+             "-f", str(vm.path("id_ed25519"))])
+        conf["ssh_keys"] = vm.path("id_ed25519.pub").read_text()
+        run(["qemu-img", "create", "-q", "-f", "qcow2", "-b", str(base), "-F", "qcow2",
+             str(vm.path("disk.qcow2")), str(max(disk, virtual_size(base)))])
+        shutil.copyfile(under_root(VARS_TEMPLATE), vm.path("vars.fd"))
+        vm.conf = conf
+        vm.save()
+        print(f"{name}: booting {Path(image).name} ({cpus} CPUs, {human(memory)})", file=sys.stderr)
+        user_systemctl("start", vm.unit)
+        wait_for_ssh(vm, boot_timeout)
+        if copies:
+            push(vm, copies)
+        tty = sys.stdin.isatty() and sys.stdout.isatty()
+        remote = f"mkdir -p {RUN_DIR} && cd {RUN_DIR} && " + (" ".join(command) or "exec ${SHELL:-sh} -l")
+        argv = run_ssh(vm, "-t" if tty else "-T") + [remote]
+        if not command:
+            print(f"{name}: a shell in a throwaway VM; it is deleted when you leave", file=sys.stderr)
+        p = subprocess.Popen(argv)
+        try:
+            status = p.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
+            print(f"{name}: --timeout {a.timeout} reached; stopped", file=sys.stderr)
+            status = 124
+        if a.fetch:
+            problems = pull(vm, a.fetch, Path.cwd())
+            for problem in problems:
+                print(f"{PROG}: {problem}", file=sys.stderr)
+            if problems and status == 0:
+                status = 1
+    except KeyboardInterrupt:
+        status = 128 + signal.SIGINT
+    except Stopped as e:
+        status = 128 + e.signum
+    finally:
+        for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            signal.signal(sig, signal.SIG_IGN)
+        if a.keep and vm.path("vm.json").is_file():
+            vm.conf.pop("run_owner", None)
+            vm.save()
+            print(f"{name}: kept (--keep). pengyos-vm ssh {name}; "
+                  f"pengyos-vm stop {name} --force && pengyos-vm delete {name} --yes",
+                  file=sys.stderr)
+        else:
+            force_off(vm)
+            shutil.rmtree(vm.dir, ignore_errors=True)
+            print(f"{name}: deleted", file=sys.stderr)
+    return status
 
 
 # --------------------------------------------------------------------- bridge
@@ -1070,6 +1333,26 @@ def parser() -> argparse.ArgumentParser:
     sp = add("delete", cmd_delete, "delete a VM and its disk")
     sp.add_argument("name")
     sp.add_argument("--yes", action="store_true")
+    sp = add("run", cmd_run_once, "run a command in a throwaway VM, then delete it")
+    sp.add_argument("--image", metavar="FILE|URL",
+                    help="the disk image (default $PENGYOS_VM_IMAGE), e.g. pengyos-core-x86_64.img")
+    sp.add_argument("--copy", action="append", metavar="PATH",
+                    help=f"copy a file or folder into {RUN_DIR} first (repeatable)")
+    sp.add_argument("--fetch", action="append", metavar="PATH",
+                    help=f"copy {RUN_DIR}/PATH back into this folder afterwards (repeatable)")
+    sp.add_argument("--timeout", metavar="DURATION", help="stop the command after e.g. 90s, 10m, 2h")
+    sp.add_argument("--boot-timeout", metavar="DURATION",
+                    help=f"how long to wait for SSH (default {RUN_DEFAULTS['boot_timeout']}s, "
+                         f"three times that without KVM)")
+    sp.add_argument("--memory", help=f"default {RUN_DEFAULTS['memory']}")
+    sp.add_argument("--cpus", type=int, help=f"default {DEFAULTS['cpus']}")
+    sp.add_argument("--disk", help=f"disk size (default {RUN_DEFAULTS['disk']}; a sparse overlay)")
+    sp.add_argument("--forward", action="append", metavar="[ADDR:]HOST:GUEST[/udp]",
+                    help="NAT port forward while it runs, e.g. 8080:80")
+    sp.add_argument("--name", help="the VM's name (default run-XXXXXX)")
+    sp.add_argument("--keep", action="store_true", help="keep the VM afterwards instead of deleting it")
+    sp.add_argument("command", nargs=argparse.REMAINDER,
+                    help="what to run in the VM, as ssh runs it (default: a shell)")
     br = add("bridge", None, "the LAN bridge for --net bridge (wired only)")
     bsub = br.add_subparsers(dest="bcmd", required=True, metavar="status|enable|disable")
     sp = bsub.add_parser("status", help="is the bridge on")

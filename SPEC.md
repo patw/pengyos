@@ -180,7 +180,9 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 - **Provenance:** `/etc/os-release` carries `IMAGE_ID`, `IMAGE_VERSION` and
   `BUILD_ID` (the git commit); the SBOM is embedded.
 - **Image:** a disk image (`pengyos-core-x86_64.img`) written straight to the target.
-  Core has no installer and no A/B layout yet, so it cannot update in place.
+  Core is a disposable VM image (decided 2026-10-31): it has no installer and
+  no A/B layout and is not updated in place; a new VM is made from the newer
+  image instead, which `pengyos-vm run` (Server) does for one job at a time.
 
 **Not in Core:** editors, containers, monitoring, any GUI or desktop library.
 
@@ -341,8 +343,10 @@ contract, not loved** — "replace interiors, not interfaces".
    the UKI/systemd-boot design. 🟡
 3. **COSMIC from source:** Buildroot recipes for COSMIC, so the Desktop no longer
    depends on the build host's userspace (§7). Flatpak is done. 🔵
-4. **Core updates:** give Core the A/B layout and an installer, or keep it a
-   write-once image. 🟡
+4. **Core updates:** decided 2026-10-31, Core stays a write-once image. Its use
+   is a throwaway VM (`pengyos-vm run`: boot, run one job, delete), so it is
+   replaced, not updated; bare-metal Core is not a goal. Still open: what Core
+   is called and whether its image is published, so a Server can fetch it. 🟢
 5. **A self-hosted Flatpak remote** (mirror + our own apps). 🟡
 6. **Firmware policy** where no free firmware exists — today: ship it, list it. 🟡
 7. **ARM** (alongside x86_64). ⚪

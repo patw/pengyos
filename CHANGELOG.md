@@ -17,6 +17,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — throwaway VMs: `pengyos-vm run` (2026-10-31)
+
+Core is decided: it is a **disposable VM image**, not a machine to keep and update
+(SPEC §2.1 and open question 4, USE-CASES US-CORE-8; US-CORE-4 is retired for Core). It
+gets no A/B layout and no installer; a newer Core is a newer image for the next VM.
+
+- `pengyos-vm run [--copy PATH] [--fetch PATH] [--timeout 10m] -- COMMAND` on the Server
+  boots a fresh VM on a copy-on-write overlay of a cached image (`--image`, or
+  `$PENGYOS_VM_IMAGE`), with an SSH key made for the run, puts the files in `/root/run`,
+  runs the command, copies results back and deletes the VM. No command: a shell, deleted
+  when you leave. The exit status is the command's. Ctrl-C, SIGTERM and a closed
+  terminal clean up; a run killed outright is swept by the next one.
+- On the ThinkPad (KVM) with the 26.10.51 Core image: 15 s for the first run (unpacking
+  and converting the image once), 9 s for a run with `--copy` and `--fetch` after that.
+
 ### Added — remote desktop over RDP (2026-10-31)
 
 The Desktop can be used from another computer with an ordinary RDP client (Windows' Remote

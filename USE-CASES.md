@@ -63,6 +63,11 @@ This is a real design requirement, not an afterthought.
 **The story of this edition:** a tiny, headless, unattended machine that must run for
 years on cheap hardware and be fixable from a distance.
 
+> **2026-10-31:** Core's own use is now a **throwaway VM** (US-CORE-8): spun up for a
+> job, given a static binary or Python, run isolated, then deleted. It is not updated
+> in place (US-CORE-4 is retired for Core) and bare-metal Core is not a goal; the node
+> stories below hold for the editions stacked on Core, the Server first.
+
 ### Personas
 
 - **The node builder** — deploys small boxes (N100-class, ~8 GB): a sensor gateway, a
@@ -104,7 +109,8 @@ How: one `systemd` unit; no desktop; no surprises.
 **Acceptance:** the unit starts on boot; survives reboot and hard power loss; consumes
 only the expected resources; logging is local and bounded.
 
-**US-CORE-4 — Update safely and roll back.**
+**US-CORE-4 — Update safely and roll back.** *(Retired for Core 2026-10-31: a Core VM is
+replaced, not updated (US-CORE-8). The Server meets it with the A/B slots.)*
 > *As the far-end admin, I want to apply an update and be able to undo it, so a bad
 > update never means a truck roll.*
 
@@ -141,6 +147,18 @@ jobs run with nobody logged in.
 **Acceptance:** from another machine, a pushed binary runs on the node; a job scheduled
 by the remote agent fires on time, survives reboot and an image update, and its output
 is in the journal; removing it is deleting the unit and the file.
+
+**US-CORE-8 — A throwaway machine for one job.**
+> *As an agent (Pengy, or Claude Code), I want a clean, isolated machine for one job that
+> is gone afterwards, so whatever I run cannot touch the host or the next job.*
+
+How: `pengyos-vm run --image pengyos-core-x86_64.img --copy ./tool -- ./tool/run`
+on a Server boots a copy-on-write overlay of the cached Core image, with a key made for
+this run, puts the files in `/root/run`, runs the command, copies `--fetch` paths back
+and deletes the VM.
+**Acceptance:** the command's output and exit status come back; afterwards no VM
+folder, unit or disk is left (also after Ctrl-C); a second run starts from the same
+clean image.
 
 ---
 

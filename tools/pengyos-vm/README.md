@@ -22,6 +22,31 @@ pengyos-vm autostart web on         # start at boot (turns on linger, see below)
 pengyos-vm delete web --yes
 ```
 
+## Throwaway runs: pengyos-vm run
+
+```sh
+export PENGYOS_VM_IMAGE=~/pengyos-core-x86_64.img            # or --image FILE|URL
+pengyos-vm run -- uname -a                                    # boot, run, delete
+pengyos-vm run --copy ./mytool --fetch out --timeout 30m -- ./mytool/run.sh
+pengyos-vm run                                                # a shell; deleted on exit
+```
+
+A fresh VM for one job, then gone. The image is converted to qcow2 once and
+cached (`~/.cache/pengyos-vm/images`); each run boots a copy-on-write overlay
+of it, so it starts in seconds and the cached image is never written. The run
+makes an SSH key for itself and gives it to the guest as root's (a systemd
+credential, so the image must be a systemd guest with sshd: PengyOS Core).
+`--copy` puts files and folders in `/root/run`, where COMMAND runs (as ssh
+runs it: the words are joined and the guest's shell reads them); `--fetch`
+copies `/root/run/PATH` back into the current folder, even when COMMAND
+failed. The exit status is COMMAND's, 124 when `--timeout` stopped it.
+
+Afterwards the VM is switched off and its folder deleted: Ctrl-C, SIGTERM and
+a closed terminal clean up too. A run killed outright (SIGKILL) leaves its
+`run-XXXXXX` VM behind; the next `run` deletes it. `--keep` keeps the VM
+instead (`pengyos-vm ssh NAME` uses the run's key). Defaults: 2 CPUs, 1G
+memory, an 8G sparse disk, NAT (`--forward` works), 180 s to answer SSH.
+
 ## In a browser: pengy-vmm
 
 ```sh
@@ -75,6 +100,7 @@ wireless port and says to use NAT.
 
 `~/vms/NAME/`: `vm.json` (settings), `disk.qcow2`, `vars.fd` (UEFI),
 `console.log`, `qemu.log`, `known_hosts`, and while it runs `serial.sock` and
-`qmp.sock`. The unit is `/usr/lib/systemd/user/pengyos-vm@.service`.
+`qmp.sock`; a `run` VM also has its key, `id_ed25519`. Cached images:
+`~/.cache/pengyos-vm/images/`. The unit is `/usr/lib/systemd/user/pengyos-vm@.service`.
 
 See [spec.md](spec.md) for the contract and how it was verified.

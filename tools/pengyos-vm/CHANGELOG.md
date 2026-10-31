@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.3.0] - 2026-10-31
+
+### Added
+- `pengyos-vm run`: a throwaway VM for one command. A copy-on-write overlay of
+  a cached image (`--image`, default `$PENGYOS_VM_IMAGE`), a per-run SSH key,
+  `--copy` in and `--fetch` out of `/root/run`, `--timeout`, then the VM is
+  deleted (Ctrl-C and SIGTERM too; the next run sweeps one that was killed).
+  `--keep` keeps it. The exit status is the command's.
+
+### Changed
+- `pengyos-vm ssh` uses a VM's own key when it has one (a kept `run`).
+
 ## [0.2.0] - 2026-10-31
 
 ### Added

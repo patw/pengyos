@@ -26,10 +26,25 @@
   with VNC (`BR2_PACKAGE_LIBVNCSERVER`). The firewall's forward chain accepts
   `pengyos-br0 → pengyos-br0` (br_netfilter is active on the Server).
 
+- `run`: a VM named `run-XXXXXX` (or `--name`) in `~/vms` like any other, with
+  `run_owner` (the run's PID) in `vm.json`. Its disk is a qcow2 overlay
+  (`qemu-img create -b`) of the image converted once into
+  `~/.cache/pengyos-vm/images/<sha256(path:size:mtime | URL)[:16]>.qcow2`, at
+  least `--disk` (8G). `ssh-keygen` makes an ed25519 key for the run, offered
+  as `ssh.authorized_keys.root`. It waits for `ssh true` (180 s, ×3 without
+  KVM; fails early if the unit stops), sends `--copy` as a tar stream into
+  `/root/run`, runs COMMAND there (`-t` only when stdin and stdout are
+  terminals; none: a login shell), pulls `--fetch` paths back with the "data"
+  tar filter (relative paths only), then force-stops and deletes the VM, also
+  on SIGINT, SIGTERM and SIGHUP. Exit status: COMMAND's, 124 on `--timeout`,
+  128 + the signal when interrupted (Ctrl-C 130, SIGTERM 143), 1 when a fetch failed after COMMAND succeeded. Each
+  `run` first deletes `run_owner` VMs whose process is gone. `--keep` drops
+  `run_owner`, so the VM stays an ordinary one.
+
 ## Verification
 
-- `tools/pengyos-vm/tests` (43 tests): the script against a sandbox root with
-  fake systemctl / qemu-img / networkctl / ip / ssh.
+- `tools/pengyos-vm/tests`: the script against a sandbox root with
+  fake systemctl / qemu-img / networkctl / ip / ssh / ssh-keygen.
 - 2026-10-31, ThinkPad Server (Wi-Fi, real KVM): a PengyOS Core VM from
   `core.img.xz` with `--ssh-key` and a forward: `pengyos-vm ssh core1` logged
   in as root, hostname `core1` from the credential, the disk grown to 4G;

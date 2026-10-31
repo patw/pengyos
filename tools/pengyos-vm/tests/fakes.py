@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The sandbox's stand-ins for systemctl, qemu-img, networkctl, ip, ssh,
-journalctl and loginctl, picked by the name they are installed as.
+ssh-keygen, journalctl and loginctl, picked by the name they are installed as.
 
 State lives under the sandbox root (the directory two levels up from this
 copy, DIR/usr/bin/NAME): units/<unit> holds active|inactive, units/<unit>.enabled
@@ -78,7 +78,30 @@ if NAME == "ip" and ARGS[:3] == ["-j", "-4", "neigh"]:
     sys.exit(0)
 
 if NAME == "ssh":
+    remote = ARGS[-1]
+    if "tar -xf -" in remote:  # run --copy: keep what was sent
+        (ROOT / "pushed.tar").write_bytes(sys.stdin.buffer.read())
+        sys.exit(0)
+    if "tar -cf -" in remote:  # run --fetch: hand back ROOT/guest/<name>
+        import tarfile
+        name = remote.rsplit(" ", 1)[-1].strip("'")
+        src = ROOT / "guest" / name
+        if not src.exists():
+            print(f"tar: {name}: No such file or directory", file=sys.stderr)
+            sys.exit(2)
+        with tarfile.open(fileobj=sys.stdout.buffer, mode="w|") as tar:
+            tar.add(str(src), arcname=name)
+        sys.exit(0)
+    if ARGS[-1] == "true":  # run's boot probe
+        sys.exit(255 if (ROOT / "ssh-down").exists() else 0)
     print(json.dumps(ARGS))
+    code = ROOT / "ssh-exit"
+    sys.exit(int(code.read_text()) if code.exists() else 0)
+
+if NAME == "ssh-keygen":
+    key = Path(ARGS[ARGS.index("-f") + 1])
+    key.write_text("PRIVATE\n")
+    Path(str(key) + ".pub").write_text("ssh-ed25519 AAAArun pengyos-vm run\n")
     sys.exit(0)
 
 if NAME == "loginctl":
