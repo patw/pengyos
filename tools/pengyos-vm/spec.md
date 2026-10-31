@@ -41,7 +41,23 @@
   and `pengyos-vm ssh lan1` (address from the neighbour table); VNC listened
   on 127.0.0.1:5901; `bridge disable` gave the address back to `ens3` and left
   no files.
-- Found on the way: a VM stops when its user logs out without linger (now
-  said by `start`); PengyOS Core ignores the ACPI power button (no logind), so
-  `stop` waits out its 100 s; the image's QEMU had no VNC until libvncserver
-  was selected.
+- Found on the way, and fixed: a VM stopped when its user logged out without
+  linger, and only root could turn linger on (polkit is now on the Server,
+  with `60-pengyos-linger.rules`); PengyOS Core ignored the ACPI power button
+  (logind is now in Core); the image's QEMU had no VNC until libvncserver was
+  selected.
+- 2026-10-31, the next Server image: an unprivileged `loginctl enable-linger`
+  succeeds (another user's is still refused); a Core VM's `pengyos-vm stop`
+  took 0.7 s (it was 100 s). pengy-vmm as a user unit: 403 without the token,
+  the page lists and details the VM with its serial console, a line typed into
+  the page ran in the guest, and a POST with only the cookie got 403.
+
+## pengy-vmm
+
+- `/usr/bin/pengy-vmm` (stdlib), user unit `pengy-vmm.service`, off by default.
+- 127.0.0.1:5100 by default. Token: `~/.config/pengy-vmm/token`, 0600, made on
+  first run. GET needs it as `?token=` or the SameSite=Strict HttpOnly cookie;
+  POST needs it in `X-Token`. CSP and `X-Frame-Options: DENY` on every page.
+- Every action is a `pengyos-vm` command line run as the user (create runs in
+  the background and is polled as a job); VM names are checked against the
+  same pattern before they reach a command line or a path.

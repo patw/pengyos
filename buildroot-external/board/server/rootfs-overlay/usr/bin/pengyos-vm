@@ -654,7 +654,7 @@ def cmd_start(a) -> int:
         if not lingering():
             user = pwd.getpwuid(os.getuid()).pw_name
             print(f"  note: it stops when you log out (your systemd user manager ends with your "
-                  f"last session). To keep VMs running: sudo loginctl enable-linger {user}")
+                  f"last session). To keep VMs running: loginctl enable-linger {user}")
         if not kvm_ok():
             print("  (no access to /dev/kvm: without hardware virtualisation it is slow)")
     if a.console:
@@ -834,7 +834,8 @@ def cmd_autostart(a) -> int:
     if not lingering():
         cp = run(["loginctl", "enable-linger", user], check=False)
         if cp.returncode != 0:
-            print(f"  to start it at boot without a login, run: sudo loginctl enable-linger {user}")
+            print(f"  linger could not be turned on, so it starts only when you log in "
+                  f"(sudo loginctl enable-linger {user})")
             return 0
     print("  and that runs at boot, logged in or not (linger is on)")
     return 0

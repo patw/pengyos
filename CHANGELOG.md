@@ -17,6 +17,25 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — pengy-vmm: your VMs in a browser (2026-10-31)
+
+`systemctl --user enable --now pengy-vmm`, then open `pengy-vmm url`: the VM list, start /
+shut down / force off / start at boot / delete, the serial console, and a New VM form.
+Every button runs `pengyos-vm` as you. It listens on 127.0.0.1 with a per-user token
+(other accounts can reach the port), and changes need the token in a header too.
+
+### Changed — users set their own linger; Core honours the power button (2026-10-31)
+
+- **polkit is on the Server now** (it was Desktop only), with
+  `60-pengyos-linger.rules`: any user may `loginctl enable-linger` for their own
+  account, no sudo. Before, logind had nothing to ask and allowed only root, so a
+  user's VMs and rootless containers stopped at logout unless an admin stepped in.
+  Other daemons can authorize through polkit the same way later. It brings setuid
+  `pkexec` and `polkit-agent-helper-1` to the Server, as on the Desktop.
+- **systemd-logind is in Core** (it was Server and up). Core ignored the power
+  button: a Core box kept running, and `pengyos-vm stop` of a Core VM waited out its
+  100 s and then cut the power.
+
 ### Added — `pengyos-vm`: virtual machines without QEMU command lines (2026-10-31)
 
 Running a VM on a Server meant a long `qemu-system-x86_64` line, a tmux to keep it
@@ -32,8 +51,8 @@ SSH forward (`pengyos-vm ssh NAME`), port forwards, `autostart` and a clean ACPI
   (br_netfilter is active on the Server, and its drop policy would see them).
 - **QEMU has VNC** (`BR2_PACKAGE_LIBVNCSERVER`): before, `-vnc` was "invalid option",
   so an installer with no serial console could not be seen at all.
-- A user's VMs stop when they log out unless linger is on (`sudo loginctl
-  enable-linger USER`); `start` says so.
+- A user's VMs stop when they log out unless linger is on (`loginctl enable-linger`;
+  `start` says so, `autostart on` turns it on).
 
 ### Added — a freshly written Core can be reached over SSH and fills its disk (2026-10-31)
 

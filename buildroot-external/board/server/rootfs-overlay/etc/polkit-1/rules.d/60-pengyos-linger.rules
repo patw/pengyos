@@ -1,0 +1,11 @@
+// PengyOS Server (and Desktop): any user may turn linger on or off for
+// themselves (`loginctl enable-linger`), so their systemd user manager, and
+// what runs in it (pengyos-vm VMs, rootless podman Quadlets), keeps running
+// after they log out and starts at boot. It only ever concerns the caller's
+// own account; another user's linger still needs an administrator.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.login1.set-self-linger") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

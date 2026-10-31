@@ -34,8 +34,14 @@ exec-any  ksmbd.mountd                             # the SMB3 server's user/shar
 exec-any  ksmbd.control                            # reload/shutdown, ksmbd.service's ExecReload — BR2_PACKAGE_KSMBD_TOOLS
 exists    usr/lib/systemd/system/ksmbd.service     # pengyos-shares enables it — BR2_PACKAGE_KSMBD_TOOLS (systemd unit dir)
 exec      usr/bin/pengyos-shares                   # board/server overlay
+exec      usr/lib/systemd/systemd-logind           # power button; sessions — BR2_PACKAGE_SYSTEMD_LOGIND (core layer)
+exec      usr/lib/polkit-1/polkitd                 # logind asks it for non-root callers — BR2_PACKAGE_POLKIT (server layer)
+contains  usr/share/polkit-1/actions/org.freedesktop.login1.policy  set-self-linger   # systemd built -Dpolkit=enabled (external.mk)
+exists    etc/polkit-1/rules.d/60-pengyos-linger.rules   # users set their own linger — server overlay
 exec      usr/bin/pengyos-vm                       # board/server overlay
 exists    usr/lib/systemd/user/pengyos-vm@.service   # board/server overlay
+exec      usr/bin/pengy-vmm                        # board/server overlay
+exists    usr/lib/systemd/user/pengy-vmm.service   # board/server overlay
 exec      usr/bin/qemu-system-x86_64               # pengyos-vm runs it — BR2_PACKAGE_QEMU_SYSTEM
 contains  usr/bin/qemu-system-x86_64  vnc-listen   # -vnc (pengyos-vm vnc) — BR2_PACKAGE_LIBVNCSERVER turns on QEMU's VNC
 exec      usr/bin/qemu-img                         # pengyos-vm create — BR2_PACKAGE_QEMU_TOOLS

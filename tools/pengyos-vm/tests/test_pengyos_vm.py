@@ -253,7 +253,7 @@ def test_start_stop_go_through_the_user_manager(box: Box):
     box.run("create", "deb", "--iso", str(box.iso))
     out = box.run("start", "deb").stdout
     assert "deb is running" in out and "pengyos-vm ssh deb" in out
-    assert "stops when you log out" in out and "sudo loginctl enable-linger" in out
+    assert "stops when you log out" in out and "loginctl enable-linger" in out
     import pwd
     linger = box.root / "var" / "lib" / "systemd" / "linger"
     linger.mkdir(parents=True)
@@ -288,7 +288,7 @@ def test_autostart_enables_the_unit_and_explains_linger(box: Box):
     box.run("create", "deb", "--iso", str(box.iso))
     out = box.run("autostart", "deb", "on").stdout
     assert ["--user", "enable", "pengyos-vm@deb.service"] in box.calls("systemctl")
-    assert "sudo loginctl enable-linger" in out
+    assert "linger could not be turned on" in out  # the fake loginctl refuses
     assert json.loads(box.run("list", "--json").stdout)[0]["autostart"] is True
     box.run("autostart", "deb", "off")
     assert json.loads(box.run("list", "--json").stdout)[0]["autostart"] is False
