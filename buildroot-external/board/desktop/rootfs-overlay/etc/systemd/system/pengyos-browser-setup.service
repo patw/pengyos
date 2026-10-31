@@ -8,7 +8,11 @@ Description=PengyOS: install the web browser (Firefox Flatpak)
 After=network-online.target pengyos-flatpak-setup.service
 Wants=network-online.target
 ConditionPathExists=!/var/lib/flatpak/.pengyos-browser
-ConditionPathExists=!/dev/disk/by-label/PENGYOS-PAYLOAD
+# Installed systems only (pengyos.data= on the kernel line). This used to test
+# for the installer stick's PENGYOS-PAYLOAD partition, which skipped Firefox on
+# an installed machine booted with a stick plugged in, and still ran on the
+# plain live image, whose /var is thrown away too.
+ConditionKernelCommandLine=pengyos.data
 StartLimitIntervalSec=0
 
 [Service]
