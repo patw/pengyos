@@ -320,6 +320,20 @@ as that account; a wrong password and an anonymous connection are refused; a fre
 and a machine whose last share was removed have nothing listening on 445. Not covered:
 network discovery (Windows' Network view, mDNS), guest shares, SMB1.
 
+**US-SRV-15 — Run a VM without learning QEMU.**
+> *As the self-hoster, I want to boot an installer ISO or a cloud image as a VM, reach it over
+> SSH, keep it running across reboots, and put it on my LAN when the box is wired, without
+> writing a QEMU command line.*
+
+How: `pengyos-vm` (`create`, `start`, `console`, `ssh`, `vnc`, `stop`, `autostart`). VMs are
+`~/vms/NAME`, run as the user under `pengyos-vm@NAME.service`. NAT with forwards works
+everywhere, Wi-Fi included; `sudo pengyos-vm bridge enable` puts a wired port on
+`pengyos-br0`, and the setuid `qemu-bridge-helper` (allowed only that bridge) attaches users'
+VMs to it. Wi-Fi cannot be bridged, and the tool says so.
+**Acceptance:** `pengyos-vm create x --image core.img.xz --ssh-key` then `start` and
+`pengyos-vm ssh x` logs in; `autostart on` with linger brings it back after a host reboot;
+a bridged VM gets its own address from the LAN's DHCP and the host reaches it.
+
 ---
 
 ## 3. PengyOS **Desktop** — “the daily driver”

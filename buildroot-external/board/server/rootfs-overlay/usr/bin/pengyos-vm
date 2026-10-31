@@ -1,0 +1,1117 @@
+#!/usr/bin/env python3
+"""pengyos-vm - run virtual machines without writing QEMU command lines.
+
+    pengyos-vm list [--json]
+    pengyos-vm create NAME (--iso FILE | --image FILE|URL) [--disk 20G] [--memory 2G]
+                      [--cpus 2] [--net nat|bridge] [--forward [ADDR:]HOST:GUEST[/udp]]...
+                      [--ssh-key [FILE]] [--bios]
+    pengyos-vm start NAME [--console]
+    pengyos-vm stop NAME [--force]
+    pengyos-vm console NAME              (Ctrl-] leaves)
+    pengyos-vm ssh [USER@]NAME [COMMAND...]
+    pengyos-vm vnc NAME
+    pengyos-vm log NAME [-n LINES]
+    pengyos-vm show NAME [--json | --qemu]
+    pengyos-vm set NAME [--memory] [--cpus] [--net] [--forward ...] [--unforward HOST]
+                        [--iso FILE | --eject] [--ssh-key [FILE]]
+    pengyos-vm autostart NAME on|off
+    pengyos-vm delete NAME [--yes]
+    pengyos-vm bridge status
+    sudo pengyos-vm bridge enable [IFACE]
+    sudo pengyos-vm bridge disable
+
+A VM is a folder, ~/vms/NAME: vm.json (its settings),
+disk.qcow2, the UEFI variables, console.log (everything it wrote to its serial
+console), qemu.log, and while it runs the serial console and QMP sockets. It runs as your user, under your systemd user manager
+(pengyos-vm@NAME.service), so `stop`, a reboot of the host and `autostart` all
+go through systemd, and nothing needs root.
+
+Networking:
+  nat     (default) the VM shares this machine's connection, Wi-Fi included.
+          Nothing on the LAN can reach it except the ports you forward, and
+          each forward listens on 127.0.0.1 unless you give an address
+          (0.0.0.0:8080:80, then `sudo pengyos-firewall allow 8080`). Every VM
+          gets a forward to its port 22, so `pengyos-vm ssh NAME` works.
+  bridge  the VM is on the wired LAN with its own address from your router.
+          Needs `sudo pengyos-vm bridge enable` once. Wi-Fi cannot be bridged:
+          an 802.11 client may only send from its own MAC address, so a
+          second machine's frames are dropped by the access point.
+
+--root DIR (anywhere on the line) is the test hook: /etc, /sys and /dev are
+read under DIR, DIR/usr/bin/{systemctl,qemu-img,networkctl,ip,ssh} are run
+instead of the real ones, `_run` prints the QEMU command instead of running
+it, and the root guard is lifted because nothing outside DIR is touched.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import gzip
+import json
+import lzma
+import os
+import pwd
+import re
+import secrets
+import select
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import urllib.request
+from pathlib import Path
+
+PROG = "pengyos-vm"
+UNIT = "pengyos-vm@{}.service"
+QEMU = "/usr/bin/qemu-system-x86_64"
+FIRMWARE = "/usr/share/qemu/edk2-x86_64-code.fd"
+# QEMU's own firmware descriptors pair the x86_64 code with the i386 vars.
+VARS_TEMPLATE = "/usr/share/qemu/edk2-i386-vars.fd"
+BRIDGE = "pengyos-br0"
+NETWORK_DIR = "etc/systemd/network"
+NETDEV_FILE = f"05-{BRIDGE}.netdev"
+BRIDGE_NET_FILE = f"05-{BRIDGE}.network"
+PORT_NET_FILE = f"05-{BRIDGE}-port.network"
+BRIDGE_CONF = "etc/qemu/bridge.conf"
+HELPER = "/usr/libexec/qemu-bridge-helper"
+MARK = "# Managed by pengyos-vm (pengyos-vm bridge enable/disable)."
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
+SIZE_RE = re.compile(r"^(\d+)([KMGT]?)i?B?$", re.I)
+SSH_PORT_BASE = 2201
+ESCAPE = b"\x1d"  # Ctrl-]
+DEFAULTS = {"memory": "2G", "cpus": 2, "disk": "20G"}
+
+ROOT: Path | None = None
+
+
+class Misuse(Exception):
+    """Exit 2 with this message; nothing has been changed."""
+
+
+class Failure(Exception):
+    """Exit 1 with this message."""
+
+
+# ----------------------------------------------------------------- plumbing
+def under_root(path: str) -> Path:
+    return ROOT / path.lstrip("/") if ROOT else Path(path)
+
+
+def tool(name: str) -> str:
+    if ROOT:
+        return str(ROOT / "usr" / "bin" / name)
+    return name
+
+
+def run(argv: list[str], check: bool = True, capture: bool = True) -> subprocess.CompletedProcess:
+    argv = [tool(argv[0])] + argv[1:]
+    try:
+        cp = subprocess.run(argv, text=True, capture_output=capture)
+    except FileNotFoundError:
+        raise Failure(f"{argv[0]} is not installed")
+    if check and cp.returncode != 0:
+        msg = (cp.stderr or cp.stdout or "").strip() if capture else ""
+        raise Failure(f"{' '.join(argv)} failed{': ' + msg if msg else ''}")
+    return cp
+
+
+def user_systemctl(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+    return run(["systemctl", "--user", *args], check=check)
+
+
+def vm_home() -> Path:
+    return Path.home() / "vms"
+
+
+def parse_size(text: str, what: str) -> int:
+    """Bytes in '20G', '512M', '2048' (MiB when there is no unit)."""
+    m = SIZE_RE.match(text.strip())
+    if not m:
+        raise Misuse(f"{what} must look like 512M, 2G or 20G, not {text!r}")
+    n, unit = int(m.group(1)), m.group(2).upper() or "M"
+    value = n * 1024 ** "BKMGT".index(unit)
+    if value <= 0:
+        raise Misuse(f"{what} must be more than zero")
+    return value
+
+
+def human(nbytes: int) -> str:
+    for unit in "TGM":
+        size = 1024 ** "BKMGT".index(unit)
+        if nbytes >= size and nbytes % size == 0:
+            return f"{nbytes // size}{unit}"
+    return f"{nbytes // 1024 ** 2}M"
+
+
+def check_name(name: str) -> str:
+    if not NAME_RE.match(name):
+        raise Misuse(f"VM names are lowercase letters, digits and dashes (up to 32), "
+                     f"starting with a letter or digit: {name!r}")
+    return name
+
+
+# ----------------------------------------------------------------------- VMs
+class VM:
+    def __init__(self, name: str):
+        self.name = check_name(name)
+        self.dir = vm_home() / name
+        self.conf_path = self.dir / "vm.json"
+        self.conf: dict = {}
+
+    @property
+    def unit(self) -> str:
+        return UNIT.format(self.name)
+
+    def exists(self) -> bool:
+        return self.conf_path.is_file()
+
+    def load(self) -> "VM":
+        if not self.exists():
+            raise Misuse(f"there is no VM called {self.name} (pengyos-vm list)")
+        self.conf = json.loads(self.conf_path.read_text())
+        return self
+
+    def save(self) -> None:
+        tmp = self.conf_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.conf, indent=2) + "\n")
+        tmp.replace(self.conf_path)
+
+    def path(self, name: str) -> Path:
+        return self.dir / name
+
+    def state(self) -> str:
+        cp = user_systemctl("is-active", self.unit, check=False)
+        out = cp.stdout.strip() or "inactive"
+        return {"active": "running", "inactive": "stopped", "activating": "starting",
+                "deactivating": "stopping"}.get(out, out)
+
+    def autostart(self) -> bool:
+        cp = user_systemctl("is-enabled", self.unit, check=False)
+        return cp.stdout.strip() == "enabled"
+
+    def running(self) -> bool:
+        return self.state() in ("running", "starting", "stopping")
+
+    def ssh_endpoint(self) -> tuple[str, int] | None:
+        if self.conf["net"] == "nat":
+            return "127.0.0.1", self.conf["ssh_port"]
+        addr = lan_address(self.conf["mac"])
+        return (addr, 22) if addr else None
+
+    def summary(self) -> dict:
+        c = self.conf
+        ssh = self.ssh_endpoint()
+        return {
+            "name": self.name,
+            "state": self.state(),
+            "autostart": self.autostart(),
+            "cpus": c["cpus"],
+            "memory": human(c["memory"]),
+            "disk": str(self.path("disk.qcow2")),
+            "net": c["net"],
+            "mac": c["mac"],
+            "ssh": f"{ssh[0]}:{ssh[1]}" if ssh else None,
+            "forwards": [fmt_forward(f) for f in c["forwards"]],
+            "vnc": f"127.0.0.1:{5900 + c['vnc']}",
+            "iso": c.get("iso"),
+            "firmware": c["firmware"],
+            "ssh_key": bool(c.get("ssh_keys")),
+        }
+
+
+def all_vms() -> list[VM]:
+    home = vm_home()
+    if not home.is_dir():
+        return []
+    vms = []
+    for d in sorted(home.iterdir()):
+        if NAME_RE.match(d.name) and (d / "vm.json").is_file():
+            vms.append(VM(d.name).load())
+    return vms
+
+
+def lan_address(mac: str) -> str | None:
+    """The bridged VM's IPv4 address, if this machine has seen it (neighbour table)."""
+    cp = run(["ip", "-j", "-4", "neigh"], check=False)
+    try:
+        for n in json.loads(cp.stdout or "[]"):
+            if n.get("lladdr", "").lower() == mac.lower() and n.get("dst"):
+                return n["dst"]
+    except ValueError:
+        pass
+    return None
+
+
+# ------------------------------------------------------------------ forwards
+FWD_RE = re.compile(r"^(?:(?P<addr>[0-9.]+):)?(?P<host>\d+):(?P<guest>\d+)(?:/(?P<proto>tcp|udp))?$")
+
+
+def parse_forward(text: str) -> dict:
+    m = FWD_RE.match(text)
+    if not m:
+        raise Misuse(f"a forward is HOST:GUEST, ADDR:HOST:GUEST or HOST:GUEST/udp "
+                     f"(8080:80, 0.0.0.0:8080:80, 5353:53/udp), not {text!r}")
+    host, guest = int(m["host"]), int(m["guest"])
+    for port in (host, guest):
+        if not 1 <= port <= 65535:
+            raise Misuse(f"port {port} is out of range")
+    if host < 1024:
+        raise Misuse(f"host port {host} is below 1024, which only root may listen on; "
+                     f"pick one above 1024 (e.g. {host + 8000}:{guest})")
+    return {"proto": m["proto"] or "tcp", "addr": m["addr"] or "127.0.0.1",
+            "host": host, "guest": guest}
+
+
+def fmt_forward(f: dict) -> str:
+    text = f"{f['addr']}:{f['host']}->{f['guest']}"
+    return text + ("/udp" if f["proto"] == "udp" else "")
+
+
+def used_ports(skip: str | None = None) -> set[tuple[str, int]]:
+    used = set()
+    for vm in all_vms():
+        if vm.name == skip:
+            continue
+        used.add(("tcp", vm.conf["ssh_port"]))
+        for f in vm.conf["forwards"]:
+            used.add((f["proto"], f["host"]))
+    return used
+
+
+def port_free(port: int, proto: str = "tcp") -> bool:
+    kind = socket.SOCK_STREAM if proto == "tcp" else socket.SOCK_DGRAM
+    with socket.socket(socket.AF_INET, kind) as s:
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def pick_ssh_port(skip: str | None = None) -> int:
+    used = used_ports(skip)
+    port = SSH_PORT_BASE
+    while ("tcp", port) in used or not port_free(port):
+        port += 1
+    return port
+
+
+def pick_vnc() -> int:
+    used = {vm.conf["vnc"] for vm in all_vms()}
+    n = 1
+    while n in used:
+        n += 1
+    return n
+
+
+def add_forwards(conf: dict, texts: list[str], name: str) -> None:
+    used = used_ports(skip=name) | {("tcp", conf["ssh_port"])}
+    used |= {(f["proto"], f["host"]) for f in conf["forwards"]}
+    for text in texts:
+        f = parse_forward(text)
+        if f["guest"] == 22 and f["proto"] == "tcp":
+            raise Misuse(f"every VM already forwards 127.0.0.1:{conf['ssh_port']} to its "
+                         f"port 22 (pengyos-vm ssh {name})")
+        if (f["proto"], f["host"]) in used:
+            raise Misuse(f"host port {f['host']}/{f['proto']} is already forwarded by a VM")
+        used.add((f["proto"], f["host"]))
+        conf["forwards"].append(f)
+
+
+# ------------------------------------------------------------------- SSH key
+def default_key() -> Path | None:
+    for name in ("id_ed25519.pub", "id_ecdsa.pub", "id_rsa.pub"):
+        p = Path.home() / ".ssh" / name
+        if p.is_file():
+            return p
+    return None
+
+
+def read_key(value: str) -> str:
+    path = default_key() if value == "" else Path(value).expanduser()
+    if path is None:
+        raise Misuse("--ssh-key: no ~/.ssh/id_ed25519.pub (or id_ecdsa, id_rsa) to use; "
+                     "make one with ssh-keygen or give the .pub file")
+    if not path.is_file():
+        raise Misuse(f"--ssh-key: {path} does not exist")
+    text = path.read_text()
+    keys = [l for l in text.splitlines() if l.strip() and not l.startswith("#")]
+    if not keys or not all(re.match(r"^(ssh-|ecdsa-|sk-)", k) for k in keys):
+        raise Misuse(f"--ssh-key: {path} is not a public key (the .pub file)")
+    if "PRIVATE KEY" in text:
+        raise Misuse(f"--ssh-key: {path} is a private key; give the .pub file")
+    return "\n".join(keys) + "\n"
+
+
+# --------------------------------------------------------------------- images
+def fetch(source: str, dest: Path) -> Path:
+    """A local path, or download a URL into dest's folder. Returns the file."""
+    if re.match(r"^https?://", source):
+        name = source.rstrip("/").rsplit("/", 1)[-1] or "download"
+        out = dest.parent / name
+        print(f"downloading {source}", file=sys.stderr)
+        with urllib.request.urlopen(source) as r, open(out, "wb") as w:
+            total = int(r.headers.get("Content-Length") or 0)
+            done, last = 0, 0.0
+            while chunk := r.read(1 << 20):
+                w.write(chunk)
+                done += len(chunk)
+                if sys.stderr.isatty() and time.monotonic() - last > 0.5:
+                    last = time.monotonic()
+                    pct = f" {100 * done // total}%" if total else ""
+                    print(f"\r  {done >> 20} MiB{pct}  ", end="", file=sys.stderr)
+        if sys.stderr.isatty():
+            print(file=sys.stderr)
+        return out
+    path = Path(source).expanduser()
+    if not path.is_file():
+        raise Misuse(f"{source} does not exist")
+    return path.resolve()
+
+
+def decompress(path: Path, workdir: Path) -> Path:
+    """xz and gz images (how many are published) unpacked next to the VM."""
+    opener = {".xz": lzma.open, ".gz": gzip.open}.get(path.suffix)
+    if not opener:
+        return path
+    out = workdir / (path.stem + ".unpacked")
+    print(f"unpacking {path.name}", file=sys.stderr)
+    # Sparse: a disk image is mostly zeros, and qemu-img reads holes as zeros.
+    zero = bytes(1 << 20)
+    with opener(path, "rb") as r, open(out, "wb") as w:
+        while chunk := r.read(1 << 20):
+            if chunk == zero[:len(chunk)]:
+                w.seek(len(chunk), os.SEEK_CUR)
+            else:
+                w.write(chunk)
+        w.truncate()
+    return out
+
+
+def virtual_size(path: Path) -> int:
+    cp = run(["qemu-img", "info", "--output=json", str(path)])
+    return int(json.loads(cp.stdout)["virtual-size"])
+
+
+# --------------------------------------------------------------------- create
+def cmd_create(a) -> int:
+    vm = VM(a.name)
+    if vm.exists() or vm.dir.exists():
+        raise Misuse(f"{vm.dir} already exists: pick another name, or `pengyos-vm delete {a.name}`")
+    if bool(a.iso) == bool(a.image):
+        raise Misuse("give the VM something to boot: --iso FILE (an installer) or "
+                     "--image FILE|URL (a disk image: qcow2, raw, .img, .xz, .gz)")
+    memory = parse_size(a.memory or DEFAULTS["memory"], "--memory")
+    if memory < 128 * 1024 ** 2:
+        raise Misuse("--memory: give it at least 128M")
+    cpus = a.cpus or DEFAULTS["cpus"]
+    if not 1 <= cpus <= (os.cpu_count() or 1):
+        raise Misuse(f"--cpus: 1 to {os.cpu_count()} on this machine")
+    disk = parse_size(a.disk, "--disk") if a.disk else None
+    if a.net == "bridge":
+        require_bridge()
+    iso = None
+    if a.iso:
+        iso = Path(a.iso).expanduser().resolve()
+        if not iso.is_file():
+            raise Misuse(f"--iso: {a.iso} does not exist")
+    conf = {
+        "name": a.name,
+        "memory": memory,
+        "cpus": cpus,
+        "firmware": "bios" if a.bios else "uefi",
+        "net": a.net,
+        "mac": "52:54:00:%02x:%02x:%02x" % tuple(secrets.token_bytes(3)),
+        "ssh_port": pick_ssh_port(),
+        "vnc": pick_vnc(),
+        "forwards": [],
+        "iso": str(iso) if iso else None,
+        "ssh_keys": read_key(a.ssh_key) if a.ssh_key is not None else None,
+    }
+    add_forwards(conf, a.forward or [], a.name)
+
+    vm.dir.mkdir(parents=True)
+    try:
+        target = vm.path("disk.qcow2")
+        if a.image:
+            src = decompress(fetch(a.image, target), vm.dir)
+            print("writing disk.qcow2", file=sys.stderr)
+            run(["qemu-img", "convert", "-O", "qcow2", str(src), str(target)])
+            for leftover in vm.dir.iterdir():
+                if leftover != target:
+                    leftover.unlink()
+            if disk and disk > virtual_size(target):
+                run(["qemu-img", "resize", "-q", str(target), str(disk)])
+        else:
+            run(["qemu-img", "create", "-q", "-f", "qcow2", str(target),
+                 str(disk or parse_size(DEFAULTS["disk"], "--disk"))])
+        if conf["firmware"] == "uefi":
+            shutil.copyfile(under_root(VARS_TEMPLATE), vm.path("vars.fd"))
+        vm.conf = conf
+        vm.save()
+    except BaseException:
+        shutil.rmtree(vm.dir, ignore_errors=True)
+        raise
+    print(f"created {a.name}: {cpus} CPUs, {human(memory)} memory, "
+          f"{human(virtual_size(vm.path('disk.qcow2')))} disk, {a.net}")
+    print(f"start it with: pengyos-vm start {a.name}" + (" --console" if iso else ""))
+    if iso:
+        print(f"when the install is done: pengyos-vm set {a.name} --eject")
+    return 0
+
+
+# ------------------------------------------------------------- QEMU command
+def kvm_ok() -> bool:
+    return os.access(under_root("/dev/kvm"), os.R_OK | os.W_OK)
+
+
+def qemu_argv(vm: VM) -> list[str]:
+    c, d = vm.conf, vm.dir
+    kvm = kvm_ok()
+    argv = [QEMU, "-name", f"{vm.name},process=pengyos-vm-{vm.name}",
+            "-machine", "q35,accel=" + ("kvm" if kvm else "tcg"),
+            "-cpu", "host" if kvm else "max",
+            "-smp", str(c["cpus"]), "-m", f"{c['memory'] // 1024 ** 2}M",
+            "-nodefaults", "-no-user-config"]
+    if c["firmware"] == "uefi":
+        argv += ["-drive", f"if=pflash,format=raw,readonly=on,file={FIRMWARE}",
+                 "-drive", f"if=pflash,format=raw,file={d / 'vars.fd'}"]
+    # The disk boots first: until something is installed on it, the firmware
+    # falls through to the installer ISO, and after the install the ISO can
+    # stay attached without booting again.
+    argv += ["-drive", f"if=none,id=disk0,format=qcow2,discard=unmap,file={d / 'disk.qcow2'}",
+             "-device", "virtio-blk-pci,drive=disk0,bootindex=0"]
+    if c.get("iso"):
+        argv += ["-drive", f"if=none,id=cd0,media=cdrom,readonly=on,file={c['iso']}",
+                 "-device", "ide-cd,drive=cd0,bootindex=1"]
+    if c["net"] == "nat":
+        fwd = [f"hostfwd=tcp:127.0.0.1:{c['ssh_port']}-:22"]
+        fwd += [f"hostfwd={f['proto']}:{f['addr']}:{f['host']}-:{f['guest']}" for f in c["forwards"]]
+        argv += ["-nic", ",".join(["user", "model=virtio-net-pci", f"mac={c['mac']}"] + fwd)]
+    else:
+        argv += ["-nic", f"bridge,br={BRIDGE},helper={HELPER},model=virtio-net-pci,mac={c['mac']}"]
+    serial = d / "serial.sock"
+    argv += ["-chardev", f"socket,id=ser0,path={serial},server=on,wait=off,"
+                         f"logfile={d / 'console.log'},logappend=on",
+             "-serial", "chardev:ser0",
+             "-qmp", f"unix:{d / 'qmp.sock'},server=on,wait=off",
+             "-device", "VGA", "-vnc", f"127.0.0.1:{c['vnc']}",
+             "-device", "qemu-xhci", "-device", "usb-tablet",
+             "-device", "virtio-rng-pci"]
+    # systemd guests read these (systemd.system-credentials(7)): the hostname,
+    # and root's SSH keys. Other guests ignore them.
+    creds = {"system.hostname": vm.name}
+    if c.get("ssh_keys"):
+        creds["ssh.authorized_keys.root"] = c["ssh_keys"]
+    for key, value in creds.items():
+        b64 = base64.b64encode(value.encode()).decode()
+        argv += ["-smbios", f"type=11,value=io.systemd.credential.binary:{key}={b64}"]
+    return argv
+
+
+def preflight(vm: VM) -> list[str]:
+    """Problems that would stop QEMU, worded for a person. Empty: good to go."""
+    c, problems = vm.conf, []
+    if not vm.path("disk.qcow2").is_file():
+        problems.append(f"its disk {vm.path('disk.qcow2')} is missing")
+    if c.get("iso") and not Path(c["iso"]).is_file():
+        problems.append(f"the ISO {c['iso']} is gone: `pengyos-vm set {vm.name} --eject` "
+                        f"or `--iso NEWFILE`")
+    if c["firmware"] == "uefi" and not vm.path("vars.fd").is_file():
+        problems.append(f"its UEFI variables {vm.path('vars.fd')} are missing")
+    if c["net"] == "bridge":
+        try:
+            require_bridge()
+        except Misuse as e:
+            problems.append(str(e))
+    return problems
+
+
+def cmd_run(a) -> int:
+    """ExecStart of pengyos-vm@.service: become QEMU."""
+    vm = VM(a.name).load()
+    problems = preflight(vm)
+    if problems:
+        raise Failure("; ".join(problems))
+    for stale in ("serial.sock", "qmp.sock"):
+        vm.path(stale).unlink(missing_ok=True)
+    argv = qemu_argv(vm)
+    if ROOT:
+        print(json.dumps(argv))
+        return 0
+    if not kvm_ok():
+        print("no access to /dev/kvm: running without hardware virtualisation (slow)",
+              file=sys.stderr)
+    os.execv(QEMU, argv)
+    return 1
+
+
+# ------------------------------------------------------------------------ QMP
+def qmp(vm: VM, command: str) -> socket.socket | None:
+    """Send one QMP command; the open socket (it closes when QEMU exits)."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(str(vm.path("qmp.sock")))
+        f = s.makefile("rwb", buffering=0)
+        f.readline()  # greeting
+        for cmd in ("qmp_capabilities", command):
+            f.write(json.dumps({"execute": cmd}).encode() + b"\n")
+            while True:
+                reply = json.loads(f.readline() or b"{}")
+                if "return" in reply or "error" in reply or not reply:
+                    break
+        return s
+    except OSError:
+        s.close()
+        return None
+
+
+def cmd_powerdown(a) -> int:
+    """ExecStop: press the power button, wait for the guest to shut down."""
+    vm = VM(a.name).load()
+    s = qmp(vm, "system_powerdown")
+    if not s:
+        return 0
+    s.settimeout(a.timeout)
+    try:
+        while s.recv(4096):
+            pass
+    except OSError:
+        print(f"{vm.name} did not shut down within {a.timeout:.0f}s; stopping it",
+              file=sys.stderr)
+    finally:
+        s.close()
+    return 0
+
+
+# --------------------------------------------------------------- user verbs
+def cmd_list(a) -> int:
+    rows = [vm.summary() for vm in all_vms()]
+    if a.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        print("no VMs yet: pengyos-vm create NAME --iso FILE (or --image FILE|URL)")
+        return 0
+    head = ("NAME", "STATE", "CPUS", "MEMORY", "NET", "SSH", "AUTOSTART")
+    table = [head] + [(r["name"], r["state"], str(r["cpus"]), r["memory"], r["net"],
+                       r["ssh"] or "-", "yes" if r["autostart"] else "no") for r in rows]
+    widths = [max(len(row[i]) for row in table) for i in range(len(head))]
+    for row in table:
+        print("  ".join(cell.ljust(w) for cell, w in zip(row, widths)).rstrip())
+    return 0
+
+
+def cmd_show(a) -> int:
+    vm = VM(a.name).load()
+    if a.qemu:
+        print(" ".join(qemu_argv(vm)))
+        return 0
+    s = vm.summary()
+    if a.json:
+        print(json.dumps(s, indent=2))
+        return 0
+    print(f"{s['name']}: {s['state']}" + (", starts at boot" if s["autostart"] else ""))
+    print(f"  {s['cpus']} CPUs, {s['memory']} memory, {s['firmware'].upper()} firmware")
+    print(f"  disk     {s['disk']}")
+    if s["iso"]:
+        print(f"  ISO      {s['iso']}")
+    print(f"  network  {s['net']}, MAC {s['mac']}")
+    if s["ssh"]:
+        print(f"  ssh      {s['ssh']} (pengyos-vm ssh {vm.name})")
+    elif s["net"] == "bridge":
+        print("  ssh      its LAN address is not known yet (see your router, or the console)")
+    for f in s["forwards"]:
+        print(f"  forward  {f}")
+    print(f"  screen   VNC on {s['vnc']} (pengyos-vm vnc {vm.name})")
+    print(f"  console  pengyos-vm console {vm.name}")
+    if s["ssh_key"]:
+        print("  key      root's SSH key is offered to the guest (systemd credential)")
+    if not kvm_ok():
+        print("  warning  no access to /dev/kvm: it runs without hardware virtualisation")
+    return 0
+
+
+def cmd_start(a) -> int:
+    vm = VM(a.name).load()
+    if vm.running():
+        print(f"{vm.name} is already running")
+    else:
+        problems = preflight(vm)
+        if problems:
+            raise Misuse(f"{vm.name} cannot start: " + "; ".join(problems))
+        user_systemctl("reset-failed", vm.unit, check=False)
+        user_systemctl("start", vm.unit)
+        time.sleep(0 if ROOT else 1)
+        if vm.state() != "running":
+            log = vm.path("qemu.log")
+            tail = log.read_text(errors="replace").splitlines()[-15:] if log.is_file() else []
+            raise Failure(f"{vm.name} did not stay up" +
+                          (":\n" + "\n".join(tail) if tail else f" (journalctl --user -u {vm.unit})"))
+        print(f"{vm.name} is running")
+        if not lingering():
+            user = pwd.getpwuid(os.getuid()).pw_name
+            print(f"  note: it stops when you log out (your systemd user manager ends with your "
+                  f"last session). To keep VMs running: sudo loginctl enable-linger {user}")
+        if not kvm_ok():
+            print("  (no access to /dev/kvm: without hardware virtualisation it is slow)")
+    if a.console:
+        return cmd_console(a)
+    print(f"  console: pengyos-vm console {vm.name}    screen: pengyos-vm vnc {vm.name}")
+    if vm.conf["net"] == "nat":
+        print(f"  ssh:     pengyos-vm ssh {vm.name}  (once the guest runs sshd)")
+    return 0
+
+
+def cmd_stop(a) -> int:
+    vm = VM(a.name).load()
+    if not vm.running():
+        print(f"{vm.name} is not running")
+        return 0
+    if a.force:
+        user_systemctl("kill", "--signal=SIGKILL", vm.unit)
+        user_systemctl("stop", vm.unit, check=False)
+        user_systemctl("reset-failed", vm.unit, check=False)
+        print(f"{vm.name} is off (forced: like pulling the plug)")
+    else:
+        print(f"asking {vm.name} to shut down (ACPI power button)... a guest that ignores it "
+              f"is switched off after 100s; `--force` does that now")
+        user_systemctl("stop", vm.unit)
+        user_systemctl("reset-failed", vm.unit, check=False)
+        print(f"{vm.name} is off")
+    return 0
+
+
+def cmd_console(a) -> int:
+    vm = VM(a.name).load()
+    if not vm.running():
+        raise Misuse(f"{vm.name} is not running (pengyos-vm start {vm.name} --console)")
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    for _ in range(20):
+        try:
+            s.connect(str(vm.path("serial.sock")))
+            break
+        except OSError:
+            time.sleep(0.25)
+    else:
+        raise Failure(f"cannot reach {vm.name}'s serial console (is another console open?)")
+    tty = sys.stdin.isatty()
+    print(f"connected to {vm.name}'s serial console; Ctrl-] leaves. Press Enter for a prompt.",
+          file=sys.stderr)
+    if tty:
+        import termios
+        import tty as ttymod
+        saved = termios.tcgetattr(0)
+        ttymod.setraw(0)
+    try:
+        while True:
+            ready, _, _ = select.select([0, s], [], [])
+            if s in ready:
+                data = s.recv(4096)
+                if not data:
+                    break
+                os.write(1, data)
+            if 0 in ready:
+                data = os.read(0, 1024)
+                if not data or (tty and ESCAPE in data):
+                    break
+                s.sendall(data)
+    finally:
+        if tty:
+            termios.tcsetattr(0, termios.TCSADRAIN, saved)
+        s.close()
+    print(f"\r\nleft {vm.name}'s console (it is still running)", file=sys.stderr)
+    return 0
+
+
+def cmd_ssh(a) -> int:
+    user, _, name = a.target.rpartition("@")
+    vm = VM(name).load()
+    if not vm.running():
+        raise Misuse(f"{vm.name} is not running (pengyos-vm start {vm.name})")
+    ep = vm.ssh_endpoint()
+    if not ep:
+        raise Failure(f"{vm.name} is bridged and its LAN address is not known here yet; "
+                      f"look it up on the console (`ip addr`) or in your router")
+    if not user:
+        user = "root" if vm.conf.get("ssh_keys") else pwd.getpwuid(os.getuid()).pw_name
+    argv = [tool("ssh"), "-p", str(ep[1]),
+            "-o", f"UserKnownHostsFile={vm.path('known_hosts')}",
+            "-o", "StrictHostKeyChecking=accept-new",
+            f"{user}@{ep[0]}"] + a.command
+    if ROOT:
+        return subprocess.call(argv)
+    os.execv(shutil.which("ssh") or "/usr/bin/ssh", argv)
+    return 1
+
+
+def cmd_vnc(a) -> int:
+    vm = VM(a.name).load()
+    port = 5900 + vm.conf["vnc"]
+    host = socket.gethostname()
+    print(f"{vm.name}'s screen is VNC on 127.0.0.1:{port} (this machine only).")
+    print("From another machine, tunnel it over SSH and point a VNC viewer at localhost:")
+    print(f"  ssh -L {port}:127.0.0.1:{port} {pwd.getpwuid(os.getuid()).pw_name}@{host}")
+    print(f"  then open  vnc://localhost:{port}")
+    if not vm.running():
+        print(f"({vm.name} is not running yet: pengyos-vm start {vm.name})")
+    return 0
+
+
+def cmd_log(a) -> int:
+    vm = VM(a.name).load()
+    log = vm.path("console.log")
+    if not log.is_file():
+        print(f"{vm.name} has written nothing to its serial console yet")
+        return 0
+    lines = log.read_text(errors="replace").splitlines()
+    print("\n".join(lines[-a.lines:]))
+    return 0
+
+
+def cmd_set(a) -> int:
+    vm = VM(a.name).load()
+    c = vm.conf
+    changed = []
+    if a.memory:
+        c["memory"] = parse_size(a.memory, "--memory")
+        changed.append(f"memory {human(c['memory'])}")
+    if a.cpus:
+        if not 1 <= a.cpus <= (os.cpu_count() or 1):
+            raise Misuse(f"--cpus: 1 to {os.cpu_count()} on this machine")
+        c["cpus"] = a.cpus
+        changed.append(f"{a.cpus} CPUs")
+    if a.net:
+        if a.net == "bridge":
+            require_bridge()
+        c["net"] = a.net
+        changed.append(f"network {a.net}")
+    for host in a.unforward or []:
+        before = len(c["forwards"])
+        c["forwards"] = [f for f in c["forwards"] if str(f["host"]) != host.split("/")[0]]
+        if len(c["forwards"]) == before:
+            raise Misuse(f"{vm.name} has no forward from host port {host}")
+        changed.append(f"no forward from {host}")
+    if a.forward:
+        add_forwards(c, a.forward, vm.name)
+        changed += [f"forward {fmt_forward(f)}" for f in c["forwards"][-len(a.forward):]]
+    if a.eject:
+        c["iso"] = None
+        changed.append("ISO ejected")
+    if a.iso:
+        iso = Path(a.iso).expanduser().resolve()
+        if not iso.is_file():
+            raise Misuse(f"--iso: {a.iso} does not exist")
+        c["iso"] = str(iso)
+        changed.append(f"ISO {iso.name}")
+    if a.ssh_key is not None:
+        c["ssh_keys"] = read_key(a.ssh_key)
+        changed.append("SSH key")
+    if not changed:
+        raise Misuse("nothing to change (pengyos-vm set --help)")
+    vm.save()
+    note = " (takes effect the next time it starts)" if vm.running() else ""
+    print(f"{vm.name}: " + ", ".join(changed) + note)
+    return 0
+
+
+def lingering() -> bool:
+    """Does this user's systemd manager run without a login (and so at boot)?"""
+    return under_root(f"/var/lib/systemd/linger/{pwd.getpwuid(os.getuid()).pw_name}").exists()
+
+
+def cmd_autostart(a) -> int:
+    vm = VM(a.name).load()
+    if a.mode == "off":
+        user_systemctl("disable", vm.unit)
+        print(f"{vm.name} no longer starts at boot")
+        return 0
+    user_systemctl("enable", vm.unit)
+    print(f"{vm.name} starts with your user manager")
+    user = pwd.getpwuid(os.getuid()).pw_name
+    if not lingering():
+        cp = run(["loginctl", "enable-linger", user], check=False)
+        if cp.returncode != 0:
+            print(f"  to start it at boot without a login, run: sudo loginctl enable-linger {user}")
+            return 0
+    print("  and that runs at boot, logged in or not (linger is on)")
+    return 0
+
+
+def cmd_delete(a) -> int:
+    vm = VM(a.name).load()
+    if vm.running():
+        raise Misuse(f"{vm.name} is running: pengyos-vm stop {vm.name} first")
+    if not a.yes:
+        if not sys.stdin.isatty():
+            raise Misuse(f"this deletes {vm.dir} and its disk: add --yes")
+        answer = input(f"delete {vm.name} and its disk ({vm.dir})? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            print("kept")
+            return 1
+    user_systemctl("disable", vm.unit, check=False)
+    shutil.rmtree(vm.dir)
+    print(f"deleted {vm.name}")
+    return 0
+
+
+# --------------------------------------------------------------------- bridge
+def sys_net(iface: str = "") -> Path:
+    return under_root("/sys/class/net") / iface
+
+
+def is_wireless(iface: str) -> bool:
+    return (sys_net(iface) / "wireless").exists() or (sys_net(iface) / "phy80211").exists()
+
+
+def wired_nics() -> list[str]:
+    nics = []
+    base = sys_net()
+    if not base.is_dir():
+        return nics
+    for d in sorted(base.iterdir()):
+        try:
+            if (d / "type").read_text().strip() != "1":  # ARPHRD_ETHER
+                continue
+        except OSError:
+            continue
+        if (d / "device").exists() and not is_wireless(d.name):
+            nics.append(d.name)
+    return nics
+
+
+def bridge_port() -> str | None:
+    path = under_root("/" + NETWORK_DIR) / PORT_NET_FILE
+    if not path.is_file():
+        return None
+    m = re.search(r"^Name=(\S+)", path.read_text(), re.M)
+    return m.group(1) if m else None
+
+
+def require_bridge() -> None:
+    if not bridge_port():
+        raise Misuse(f"bridge mode needs the LAN bridge: `sudo {PROG} bridge enable` (wired "
+                     f"network only), or use --net nat")
+    if not sys_net(BRIDGE).exists():
+        raise Misuse(f"{BRIDGE} is configured but not up: `networkctl status {BRIDGE}`")
+
+
+def require_root() -> None:
+    if os.geteuid() != 0 and not ROOT:
+        raise Misuse(f"this changes the machine's network: sudo {PROG} {' '.join(sys.argv[1:])}")
+
+
+def cmd_bridge_status(a) -> int:
+    port = bridge_port()
+    helper = under_root(HELPER)
+    setuid = helper.exists() and bool(helper.stat().st_mode & 0o4000)
+    info = {"enabled": bool(port), "port": port, "up": sys_net(BRIDGE).exists(),
+            "helper_setuid": setuid,
+            "vms": [vm.name for vm in all_vms() if vm.conf["net"] == "bridge"]}
+    if a.json:
+        print(json.dumps(info, indent=2))
+        return 0
+    if not port:
+        print(f"bridge: off. VMs use NAT. Turn it on with: sudo {PROG} bridge enable "
+              f"[{'|'.join(wired_nics()) or 'IFACE'}]")
+    else:
+        print(f"bridge: {BRIDGE} on {port}, {'up' if info['up'] else 'NOT up'}")
+        if info["vms"]:
+            print("  bridged VMs: " + ", ".join(info["vms"]))
+    if not setuid:
+        print(f"  warning: {HELPER} is not setuid root, so bridged VMs cannot start")
+    return 0
+
+
+def write_managed(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(MARK + "\n" + body)
+
+
+def cmd_bridge_enable(a) -> int:
+    require_root()
+    current = bridge_port()
+    nics = wired_nics()
+    iface = a.iface
+    if iface is None:
+        if current:
+            iface = current
+        elif len(nics) == 1:
+            iface = nics[0]
+        elif not nics:
+            raise Misuse("no wired network port here. Wi-Fi cannot be bridged (an access point "
+                         "only takes frames from the client's own MAC address): use --net nat, "
+                         "which works on Wi-Fi, with --forward for the ports you need")
+        else:
+            raise Misuse("which port? sudo pengyos-vm bridge enable " + "|".join(nics))
+    if not sys_net(iface).exists():
+        raise Misuse(f"there is no network interface {iface} (have: {', '.join(nics) or 'none'})")
+    if is_wireless(iface):
+        raise Misuse(f"{iface} is Wi-Fi, which cannot be bridged: an access point only takes "
+                     f"frames from the client's own MAC address, so the VM's would be dropped. "
+                     f"Use --net nat on Wi-Fi (with --forward), or a wired port: "
+                     f"{', '.join(nics) or 'none here'}")
+    if iface not in nics:
+        raise Misuse(f"{iface} is not a physical wired port ({', '.join(nics) or 'none here'})")
+    if current and current != iface:
+        raise Misuse(f"the bridge is already on {current}: `sudo {PROG} bridge disable` first")
+    mac = (sys_net(iface) / "address").read_text().strip()
+    net = under_root("/" + NETWORK_DIR)
+    # The bridge takes the port's MAC address, so the router sees the same
+    # machine. 05- sorts before the image's 10-pengyos-ethernet.network, which
+    # would otherwise claim the port (networkd uses the first match).
+    write_managed(net / NETDEV_FILE, f"[NetDev]\nName={BRIDGE}\nKind=bridge\nMACAddress={mac}\n")
+    write_managed(net / PORT_NET_FILE, f"[Match]\nName={iface}\n\n[Network]\nBridge={BRIDGE}\n")
+    write_managed(net / BRIDGE_NET_FILE,
+                  f"[Match]\nName={BRIDGE}\n\n[Network]\nDHCP=yes\n\n"
+                  f"[DHCPv4]\n# As the image's 10-pengyos-ethernet.network: the installer named this machine.\n"
+                  f"UseHostname=no\n")
+    write_managed(under_root("/" + BRIDGE_CONF), f"allow {BRIDGE}\n")
+    print(f"moving this machine's wired address from {iface} to {BRIDGE}...")
+    print("  (over SSH the session may pause; the address can change if your router "
+          "hands out leases by client ID)")
+    run(["networkctl", "reload"])
+    run(["networkctl", "reconfigure", iface], check=False)
+    print(f"bridge on: {BRIDGE} on {iface}. Bridged VMs: pengyos-vm create NAME ... --net bridge")
+    return 0
+
+
+def cmd_bridge_disable(a) -> int:
+    require_root()
+    port = bridge_port()
+    bridged = [vm.name for vm in all_vms() if vm.conf["net"] == "bridge"]
+    net = under_root("/" + NETWORK_DIR)
+    removed = False
+    for path in (net / NETDEV_FILE, net / PORT_NET_FILE, net / BRIDGE_NET_FILE,
+                 under_root("/" + BRIDGE_CONF)):
+        if path.is_file() and path.read_text().startswith(MARK):
+            path.unlink()
+            removed = True
+    if not removed:
+        print("the bridge is already off")
+        return 0
+    run(["networkctl", "reload"])
+    run(["ip", "link", "delete", BRIDGE], check=False)
+    if port:
+        run(["networkctl", "reconfigure", port], check=False)
+    print(f"bridge off: {port or 'the port'} has its own address again")
+    if bridged:
+        print("  these VMs are set to bridge and will not start until you `pengyos-vm set "
+              "NAME --net nat`: " + ", ".join(bridged))
+    return 0
+
+
+# ----------------------------------------------------------------------- main
+def parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog=PROG, description="Run virtual machines.",
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                epilog="Every VM lives in ~/vms/NAME. See `pengyos-vm COMMAND --help`.")
+    sub = p.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
+
+    def add(name, fn, help_):
+        sp = sub.add_parser(name, help=help_, description=help_)
+        if fn:
+            sp.set_defaults(fn=fn)
+        return sp
+
+    def vm_options(sp, creating):
+        sp.add_argument("--memory", help=f"e.g. 1G, 4G (default {DEFAULTS['memory']})" if creating else "e.g. 4G")
+        sp.add_argument("--cpus", type=int, help=f"default {DEFAULTS['cpus']}" if creating else None)
+        sp.add_argument("--net", choices=("nat", "bridge"), default="nat" if creating else None,
+                        help="nat (default; works on Wi-Fi) or bridge (own LAN address; wired only)")
+        sp.add_argument("--forward", action="append", metavar="[ADDR:]HOST:GUEST[/udp]",
+                        help="NAT port forward, e.g. 8080:80 (listens on 127.0.0.1 unless ADDR)")
+        sp.add_argument("--iso", metavar="FILE", help="installer ISO (boots while the disk is empty)")
+        sp.add_argument("--ssh-key", nargs="?", const="", metavar="FILE",
+                        help="offer this public key (default ~/.ssh/id_ed25519.pub) as root's to "
+                             "systemd guests")
+
+    sp = add("list", cmd_list, "list your VMs")
+    sp.add_argument("--json", action="store_true")
+    sp = add("create", cmd_create, "make a VM from an installer ISO or a disk image")
+    sp.add_argument("name")
+    vm_options(sp, True)
+    sp.add_argument("--image", metavar="FILE|URL",
+                    help="a disk image to boot (qcow2, raw .img; .xz/.gz unpacked; http(s) downloaded)")
+    sp.add_argument("--disk", help=f"disk size (default {DEFAULTS['disk']}; images grow to it)")
+    sp.add_argument("--bios", action="store_true", help="legacy BIOS instead of UEFI")
+    sp = add("start", cmd_start, "start a VM")
+    sp.add_argument("name")
+    sp.add_argument("--console", action="store_true", help="and attach to its serial console")
+    sp = add("stop", cmd_stop, "shut a VM down (ACPI power button)")
+    sp.add_argument("name")
+    sp.add_argument("--force", action="store_true", help="pull the plug instead")
+    sp = add("console", cmd_console, "attach to a VM's serial console (Ctrl-] leaves)")
+    sp.add_argument("name")
+    sp = add("ssh", cmd_ssh, "ssh into a VM")
+    sp.add_argument("target", metavar="[USER@]NAME")
+    sp.add_argument("command", nargs=argparse.REMAINDER)
+    sp = add("vnc", cmd_vnc, "how to see a VM's screen")
+    sp.add_argument("name")
+    sp = add("log", cmd_log, "what a VM wrote to its serial console")
+    sp.add_argument("name")
+    sp.add_argument("-n", "--lines", type=int, default=50)
+    sp = add("show", cmd_show, "a VM's settings and how to reach it")
+    sp.add_argument("name")
+    g = sp.add_mutually_exclusive_group()
+    g.add_argument("--json", action="store_true")
+    g.add_argument("--qemu", action="store_true", help="print the QEMU command it runs")
+    sp = add("set", cmd_set, "change a VM's settings")
+    sp.add_argument("name")
+    vm_options(sp, False)
+    sp.add_argument("--unforward", action="append", metavar="HOST", help="drop the forward from HOST port")
+    sp.add_argument("--eject", action="store_true", help="detach the ISO")
+    sp = add("autostart", cmd_autostart, "start a VM when the machine boots")
+    sp.add_argument("name")
+    sp.add_argument("mode", choices=("on", "off"))
+    sp = add("delete", cmd_delete, "delete a VM and its disk")
+    sp.add_argument("name")
+    sp.add_argument("--yes", action="store_true")
+    br = add("bridge", None, "the LAN bridge for --net bridge (wired only)")
+    bsub = br.add_subparsers(dest="bcmd", required=True, metavar="status|enable|disable")
+    sp = bsub.add_parser("status", help="is the bridge on")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(fn=cmd_bridge_status)
+    sp = bsub.add_parser("enable", help="put a wired port on a bridge (root)")
+    sp.add_argument("iface", nargs="?")
+    sp.set_defaults(fn=cmd_bridge_enable)
+    sp = bsub.add_parser("disable", help="take the bridge away again (root)")
+    sp.set_defaults(fn=cmd_bridge_disable)
+    # Internal: pengyos-vm@.service's ExecStart and ExecStop.
+    sp = sub.add_parser("_run")
+    sp.add_argument("name")
+    sp.set_defaults(fn=cmd_run)
+    sp = sub.add_parser("_powerdown")
+    sp.add_argument("name")
+    sp.add_argument("--timeout", type=float, default=100)
+    sp.set_defaults(fn=cmd_powerdown)
+    return p
+
+
+def main(argv: list[str]) -> int:
+    global ROOT
+    if "--root" in argv:
+        i = argv.index("--root")
+        ROOT = Path(argv[i + 1]).resolve()
+        argv = argv[:i] + argv[i + 2:]
+    a = parser().parse_args(argv)
+    if a.cmd != "bridge" and os.geteuid() == 0 and not ROOT and not a.cmd.startswith("_"):
+        print(f"{PROG}: run VMs as your own user, not root (they live in ~/vms and run "
+              f"under your systemd user manager)", file=sys.stderr)
+        return 2
+    try:
+        return a.fn(a)
+    except Misuse as e:
+        print(f"{PROG}: {e}", file=sys.stderr)
+        return 2
+    except Failure as e:
+        print(f"{PROG}: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

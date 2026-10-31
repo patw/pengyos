@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pengyos-vm"
+version = "0.1.0"
+description = "PengyOS tool (shipped in the Server overlay) that runs QEMU/KVM virtual machines as the user, with NAT or a LAN bridge."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Pat Wendorf", email = "dungeons@gmail.com" }]
+# The tool is one stdlib-only Python script in the image; this is its test harness.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

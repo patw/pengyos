@@ -1,0 +1,21 @@
+# A pengyos-vm virtual machine (~/vms/%i), run as the user who made it.
+# Started, stopped and enabled by `pengyos-vm start|stop|autostart %i`.
+# Stop presses the ACPI power button and waits for the guest to shut down;
+# after TimeoutStopSec systemd ends QEMU (like pulling the plug).
+[Unit]
+Description=pengyos-vm %i
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pengyos-vm _run %i
+# In the VM's folder, not only the journal: a user cannot read their own
+# journal when journald keeps it in memory (no per-user files), and `start`
+# shows this file when QEMU refuses to run.
+StandardOutput=append:%h/vms/%i/qemu.log
+StandardError=inherit
+ExecStop=/usr/bin/pengyos-vm _powerdown %i --timeout 100
+TimeoutStopSec=120
+KillMode=mixed
+
+[Install]
+WantedBy=default.target
