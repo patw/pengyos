@@ -17,6 +17,13 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — release.sh publishes only with notes (2026-10-31)
+
+26.10.51 went out by hand with no `--notes`, so the update page, the feed and the Updates
+app had no description for it (added afterwards; notes are not part of the signed
+manifest). `--publish`/`--push` now refuse to start without a non-empty notes file. The
+nightly always passes one.
+
 ### Added — throwaway VMs: `pengyos-vm run` (2026-10-31)
 
 Core is decided: it is a **disposable VM image**, not a machine to keep and update

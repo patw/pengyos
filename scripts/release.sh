@@ -13,7 +13,8 @@
 #                    retrying while the host is away (scripts/push-site.sh).
 #                    Implies --publish.
 #   --channel C      update channel for --publish (default: testing)
-#   --notes FILE     release notes for update-publish
+#   --notes FILE     release notes for update-publish (required with --publish:
+#                    the update page, the feed and the Updates app show them)
 #   --skip-cosmic    don't rebuild COSMIC before a Desktop target
 #   --no-boot-check  skip the QEMU checks (automatic, with a warning, on a host
 #                    without KVM: software emulation is too slow for them)
@@ -55,7 +56,7 @@ while [ $# -gt 0 ]; do
         --skip-cosmic) SKIP_COSMIC=1 ;;
         --no-boot-check) BOOT_CHECK=0 ;;
         --allow-dirty) ALLOW_DIRTY=1 ;;
-        -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
         -*) echo "release: unknown option $1" >&2; exit 2 ;;
         *) TARGETS+=("$1") ;;
     esac
@@ -79,6 +80,9 @@ fi
 if [ "${PUBLISH}" = 1 ]; then
     [ -r "${PENGYOS_RELEASE_KEY:-}" ] || die "--publish needs PENGYOS_RELEASE_KEY (the pengyos-sign private key)"
     [ -z "${PENGYOS_AUTHORIZED_KEYS_FILE:-}" ] || die "PENGYOS_AUTHORIZED_KEYS_FILE is set: published images must not carry a test key"
+    # The notes are the release's description on the update page, in the feed and in
+    # the Updates app; without them a release says nothing about what changed.
+    [ -s "${NOTES}" ] || die "--publish needs --notes FILE (non-empty): the update page, the feed and the Updates app show it"
 fi
 [ "${PUSH}" = 0 ] || [ -n "${PENGYOS_SITE_REMOTE:-}" ] || die "--push needs PENGYOS_SITE_REMOTE (host:path/)"
 if [ "${BOOT_CHECK}" = 1 ] && [ ! -w /dev/kvm ]; then
