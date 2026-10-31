@@ -281,3 +281,56 @@ def test_hook_selection(tmp_path, monkeypatch):
     with pytest.raises(UpdateError, match="30-fails"):
         cli.run_hooks("/dev/null", {"PENGYOS_TO": "26.10.0"})
     assert log.read_text().splitlines() == ["10-first 26.10.0", "20-second 26.10.0", "30-fails 26.10.0"]
+
+
+# --- the boot menu is the running system's (POS-044) --------------------------
+
+OLD_UPDATER_CFG = """set pengyos_serial=""
+if serial --unit=0 --speed=115200; then
+    set pengyos_serial="console=ttyS0,115200"
+    smbios --type 1 --get-string 4 --set pengyos_vendor
+    if [ "${pengyos_vendor}" != "QEMU" ]; then
+        set pengyos_serial="loglevel=4 console=ttyS0,115200"
+    fi
+fi
+menuentry "PengyOS (slot a)" --id pengyos-a {
+    linux /slot-a/bzImage root=PARTUUID=aaa ro rootwait pengyos.data=4 nvidia-drm.modeset=1 console=tty0 ${pengyos_serial}
+}
+"""
+
+
+def _boot_dir(tmp_path, text):
+    d = tmp_path / "EFI" / "BOOT"
+    d.mkdir(parents=True)
+    (d / "grub.cfg").write_text(text)
+    return d
+
+
+def test_an_old_updaters_boot_menu_is_rewritten_by_the_running_system(tmp_path):
+    """26.10.51's updater wrote 26.10.52's menu with the old serial line; the
+    running 26.10.52 rewrites it with its own render_grub_cfg (ThinkPad, 2026-10-31)."""
+    from pengyos_update.cli import write_boot_menu
+    d = _boot_dir(tmp_path, OLD_UPDATER_CFG)
+    assert write_boot_menu(d, {"a": "aaa", "b": "bbb"}, keep_unparsed=True)
+    cfg = (d / "grub.cfg").read_text()
+    assert 'set pengyos_serial="loglevel=4 console=ttyS0,115200 console=tty0"' in cfg
+    assert "nvidia-drm.modeset=1" in cfg, "the machine's own kernel arguments are kept"
+    assert 'menuentry "PengyOS (slot b)"' in cfg
+    assert not (d / "grub.cfg.new").exists()
+
+
+def test_a_current_boot_menu_is_left_untouched(tmp_path):
+    from pengyos_install.image import render_grub_cfg
+    from pengyos_update.cli import write_boot_menu
+    cfg = render_grub_cfg({"a": "aaa", "b": "bbb"}, "ro rootwait pengyos.data=4")
+    d = _boot_dir(tmp_path, cfg)
+    before = (d / "grub.cfg").stat().st_mtime_ns
+    assert not write_boot_menu(d, {"a": "aaa", "b": "bbb"}, keep_unparsed=True)
+    assert (d / "grub.cfg").stat().st_mtime_ns == before
+
+
+def test_confirm_leaves_a_hand_edited_boot_menu_alone(tmp_path):
+    from pengyos_update.cli import write_boot_menu
+    d = _boot_dir(tmp_path, "menuentry \"mine\" {\n    chainloader /EFI/other.efi\n}\n")
+    assert not write_boot_menu(d, {"a": "aaa", "b": "bbb"}, keep_unparsed=True)
+    assert "chainloader" in (d / "grub.cfg").read_text()

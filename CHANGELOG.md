@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — boot-menu fixes reached installed machines one update late (2026-10-31)
+
+26.10.52 put the screen last on the kernel line on real hardware, but an installed machine
+updated to 26.10.52 still booted with the old order. `pengyos-update apply` runs on the
+system being updated *from*, so it rendered the new slot's `grub.cfg` with the old version's
+template. `pengyos-update confirm`, which runs at every boot once the system has started
+cleanly, now also renders the boot menu with the running system's own code. It keeps the
+machine's kernel arguments, writes only when something changed, and leaves a hand-edited
+`grub.cfg` it cannot read alone. So a boot-menu change takes effect on the update that ships
+it. Checked on the ThinkPad on 26.10.52: the new `confirm`, run by hand, rewrote the menu .51
+had written, and the next boot had `console=tty0` last and showed its status on the screen.
+
 ### Fixed — an installer stick left plugged in opened the installer on an installed Desktop (2026-10-31)
 
 behopc, an installed Desktop NVIDIA, rebooted into 26.10.52 with an installer stick in a USB

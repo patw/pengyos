@@ -1,5 +1,14 @@
 # Changelog — pengyos-update
 
+
+## [Unreleased]
+
+### Changed
+- `confirm` renders grub.cfg with the running system's `render_grub_cfg`
+  (`write_boot_menu`, shared with `apply`), at every boot, writing only when it
+  differs and leaving a grub.cfg whose kernel line it cannot read alone. A
+  boot-menu change used to reach machines one update late, because `apply` runs
+  the old version's template.
 ## [0.1.1] — 2026-09-30
 
 ### Fixed

@@ -363,12 +363,7 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
                         "PENGYOS_IMAGE": image})
 
         progress.update("finish", 0.8, "Setting up the boot menu")
-        cfg_path = esp.boot_dir / "grub.cfg"
-        kargs = kernel_args_from_grub_cfg(cfg_path.read_text(encoding="utf-8"))
-        from pengyos_install.image import KERNEL_ARGS, render_grub_cfg
-        new_cfg = render_grub_cfg(layout.partuuids, kargs or KERNEL_ARGS)
-        (esp.boot_dir / "grub.cfg.new").write_text(new_cfg, encoding="utf-8")
-        os.replace(esp.boot_dir / "grub.cfg.new", cfg_path)
+        write_boot_menu(esp.boot_dir, layout.partuuids, keep_unparsed=False)
         esp.set_env(pengyos_slot=layout.booted, pengyos_try=target)
 
     shutil.rmtree(work, ignore_errors=True)
@@ -387,16 +382,45 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
     return 0
 
 
+def write_boot_menu(boot_dir: Path, partuuids: dict[str, str], keep_unparsed: bool) -> bool:
+    """grub.cfg as THIS system's render_grub_cfg writes it, keeping the kernel
+    arguments the current one has. Written (atomically) only if it differs.
+
+    `apply` calls it on the old system, so a new slot first boots the old
+    updater's template; `confirm` calls it on the new one, after it has
+    started cleanly, so a boot-menu change lands on the update that ships it
+    instead of the one after (the 26.10.52 console order reached nobody with
+    26.10.52, 2026-10-31). With keep_unparsed, a grub.cfg whose kernel line
+    cannot be read (edited by hand) is left alone instead of reset."""
+    from pengyos_install.image import KERNEL_ARGS, render_grub_cfg
+    cfg_path = boot_dir / "grub.cfg"
+    old = cfg_path.read_text(encoding="utf-8") if cfg_path.is_file() else ""
+    kargs = kernel_args_from_grub_cfg(old)
+    if kargs is None and keep_unparsed:
+        return False
+    new = render_grub_cfg(partuuids, kargs or KERNEL_ARGS)
+    if new == old:
+        return False
+    tmp = boot_dir / "grub.cfg.new"
+    tmp.write_text(new, encoding="utf-8")
+    os.replace(tmp, cfg_path)
+    return True
+
+
 def cmd_confirm(args: argparse.Namespace) -> int:
     require_root()
     _lock = lock()
     layout = detect_layout()
     env = read_env(layout.esp)
-    if env.get("pengyos_slot", "a") == layout.booted and not env.get("pengyos_try"):
+    already = env.get("pengyos_slot", "a") == layout.booted and not env.get("pengyos_try")
+    with Esp(layout.esp) as esp:
+        if not already:
+            esp.set_env(pengyos_slot=layout.booted, pengyos_try="")
+        if write_boot_menu(esp.boot_dir, layout.partuuids, keep_unparsed=True):
+            say("boot menu rewritten by this system's updater")
+    if already:
         say(f"slot {layout.booted} is already the default")
         return 0
-    with Esp(layout.esp) as esp:
-        esp.set_env(pengyos_slot=layout.booted, pengyos_try="")
     _, version, _ = identity()
     state = load_state()
     if state:
