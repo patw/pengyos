@@ -11,6 +11,13 @@ waits for the compositor (cosmic-session exports WAYLAND_DISPLAY to the systemd
 user manager once cosmic-comp is up), then launches each entry with that
 display and our session bus.
 
+It also waits, up to XWAYLAND_WAIT, for Xwayland's DISPLAY to reach the user
+manager. session-target imports WAYLAND_DISPLAY the moment the Wayland socket
+exists; cosmic-session exports DISPLAY about a second later, once Xwayland is
+up. Started in between, the Steam flatpak refused to run ("requires ... the
+DISPLAY environment variable [in] the D-Bus session bus activation
+environment", behotv, 2026-10-31), and any X11 app would have had no display.
+
 Spec rules kept: ~/.config/autostart overrides /etc/xdg/autostart by file name;
 Hidden=true and X-GNOME-Autostart-enabled=false disable; OnlyShowIn/NotShowIn
 against COSMIC; TryExec must exist. GNOME's AutostartCondition is not supported
@@ -25,6 +32,7 @@ import time
 
 DESKTOP = "COSMIC"
 WAIT = 60
+XWAYLAND_WAIT = 15
 
 
 def log(msg):
@@ -40,20 +48,32 @@ def user_env():
     return dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
 
 
+def wayland_ready(env, runtime, started):
+    display = env.get("WAYLAND_DISPLAY")
+    if not display:
+        return False
+    sock = display if display.startswith("/") else os.path.join(runtime, display)
+    try:
+        return os.stat(sock).st_mtime >= started - 1
+    except OSError:
+        return False
+
+
 def wait_for_compositor(started):
-    """WAYLAND_DISPLAY from the user manager, once its socket is newer than us."""
+    """WAYLAND_DISPLAY from the user manager, once its socket is newer than us,
+    and DISPLAY once Xwayland is up (or after XWAYLAND_WAIT without it)."""
     runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
     deadline = time.monotonic() + WAIT
+    x_deadline = None
     while time.monotonic() < deadline:
         env = user_env()
-        display = env.get("WAYLAND_DISPLAY")
-        if display:
-            sock = display if display.startswith("/") else os.path.join(runtime, display)
-            try:
-                if os.stat(sock).st_mtime >= started - 1:
-                    return {k: env[k] for k in ("WAYLAND_DISPLAY", "DISPLAY") if k in env}
-            except OSError:
-                pass
+        if wayland_ready(env, runtime, started):
+            if x_deadline is None:
+                x_deadline = time.monotonic() + XWAYLAND_WAIT
+            if "DISPLAY" in env or time.monotonic() >= x_deadline:
+                if "DISPLAY" not in env:
+                    log(f"no Xwayland DISPLAY after {XWAYLAND_WAIT}s; starting entries without it")
+                return {k: env[k] for k in ("WAYLAND_DISPLAY", "DISPLAY") if k in env}
         time.sleep(0.5)
     return None
 
