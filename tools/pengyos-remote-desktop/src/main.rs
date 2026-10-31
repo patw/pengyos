@@ -30,7 +30,7 @@ fn main() -> ExitCode {
 
     #[cfg(feature = "cosmic")]
     {
-        let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(620.0, 680.0));
+        let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(680.0, 720.0));
         match cosmic::app::run::<pengyos_remote_desktop::app::App>(settings, ()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {

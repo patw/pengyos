@@ -74,3 +74,17 @@ fn run_reports_the_tools_own_words() {
     assert_eq!(run(&sh("cat"), Some("hi")).unwrap(), "hi");
     assert_eq!(run(&sh("echo 'pengyos-remote: nope' >&2; exit 2"), None).unwrap_err(), "Nope");
 }
+
+
+#[test]
+fn the_fingerprint_is_two_lines_of_16_bytes() {
+    let fp = (0..32).map(|i| format!("{i:02X}")).collect::<Vec<_>>().join(":");
+    let s = Status::parse(&format!(r#"{{"enabled": true, "fingerprint": "{fp}"}}"#)).unwrap();
+    let lines = s.fingerprint_lines().unwrap();
+    let lines: Vec<&str> = lines.lines().collect();
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0], "00:01:02:03:04:05:06:07:08:09:0A:0B:0C:0D:0E:0F");
+    assert_eq!(lines[1].len(), 47);
+    assert_eq!(lines.join(":"), fp, "nothing lost or reordered");
+    assert_eq!(Status::parse(r#"{"enabled": false}"#).unwrap().fingerprint_lines(), None);
+}
