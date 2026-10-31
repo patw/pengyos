@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — App Library: a Games folder, no empty Office folder (2026-10-31)
+
+COSMIC's built-in App Library folders are Office, System and Utilities. PengyOS ships
+no office software, so Office was always empty, and the eight pengy-* games had no
+folder of their own. The Desktop now ships its own default folder list: Games (by the
+`Game` category), then System and Utilities unchanged. Someone who has already edited
+their folders keeps their own list.
+
 ### Changed — Core is no longer offered as a download (2026-10-31)
 
 Core is the base every other edition is built on, and release.sh still builds and
