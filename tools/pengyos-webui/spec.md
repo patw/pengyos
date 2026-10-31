@@ -61,8 +61,10 @@ Runtime state, all under `/etc` (the Tier-1 overlay, untouched by updates):
 
 - the script is `#!/bin/sh`, executable in git, and passes `sh -n` and `dash -n`;
 - the unit is asserted **byte for byte**, and structurally: `User=%i`,
-  `WorkingDirectory=%h`, `Restart=on-failure`, `WantedBy=multi-user.target`,
-  no `DynamicUser`, no `ProtectHome`, no `User=root`, loopback default;
+  `WorkingDirectory=~`, `Restart=on-failure`, `WantedBy=multi-user.target`,
+  no `DynamicUser`, no `ProtectHome`, no `User=root`, loopback default, and
+  nothing that stops sudo (no `NoNewPrivileges`, `ProtectSystem`, capability
+  or SUID restrictions): Pengy's elevated `run_bash` is a sudo call;
 - `on` / `off` / `status` run against `--root DIR` with `tests/fake-systemctl`;
 - state file, drop-in text, enable symlink, and the exact `systemctl` call
   sequence are asserted;

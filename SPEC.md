@@ -132,7 +132,12 @@ record what it did — so it keeps both, in layers:
 |---|---|---|---|
 | **0 — Base** | Kernel, libraries, the image itself | Nobody at runtime | A signed image written to the other A/B slot; boots once on trial, kept only if it reaches `multi-user.target` 🟢 |
 | **1 — Machine** | `/etc`, services, driver config, users' data | The admin or Pengy | Lives on `data` (`/etc` is an overlay over the image's); never touched by updates 🟢. Snapshots and a change journal: 🔵 |
-| **2 — Critical** | Signing keys, the update trust root, privilege changes | **A human signs** | Small, enumerated list 🟢 |
+| **2 — Critical** | Signing keys, the update trust root, privilege changes | **A human decides** | Small, enumerated list 🟢 |
+
+The tiers say **who decides**, not what is enforced. On a machine, Pengy has root through
+its user's sudo and nothing in the image sandboxes it (principle 11 in
+`docs/principles.md`). For a Tier-2 change it asks the human first. That is how it
+behaves, not a lock.
 
 **Live fixes converge back into the definition.** A fix applied on one machine is
 captured in the repo (a board fragment, an overlay file, a hardware profile), so the

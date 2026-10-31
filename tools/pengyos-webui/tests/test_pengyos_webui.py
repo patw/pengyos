@@ -170,6 +170,16 @@ EXPECTED_UNIT = """# PengyOS — the Pengy web UI for one user (%i = the user na
 # the bind address runs tools as %i. The default bind is loopback, this
 # machine only. A non-loopback bind is a deliberate, documented decision,
 # taken with `pengyos-webui on --host`, never a default and never implied.
+#
+# Root goes through sudo, as for %i at a terminal: Pengy's run_bash with
+# elevated=true runs the command's `sudo` with SUDO_ASKPASS fed the password
+# typed into the UI. Pengy is never sandboxed (principle 11 in
+# docs/principles.md), so this unit carries no hardening at all: no
+# NoNewPrivileges (it made sudo and every setuid program unusable, whatever
+# password was given), no ProtectSystem (/usr, /etc and /boot read-only even
+# for sudo), no PrivateTmp (a /tmp the user and other services could not see).
+# Found 2026-10-31: on behoweather Pengy could not write the USB sticks it had
+# been asked to flash.
 [Unit]
 Description=Pengy web UI for %i
 Documentation=https://pengyos.catbee.ca
@@ -179,7 +189,9 @@ ConditionPathExists=/usr/bin/pengy-web
 [Service]
 Type=simple
 User=%i
-WorkingDirectory=%h
+# ~ is User='s home. Not %h: in a system unit that is the manager's (/root),
+# whatever User= says, and the start failed at CHDIR (Permission denied).
+WorkingDirectory=~
 # Overridden per user by the drop-in pengyos-webui writes; these are the
 # documented defaults, so a unit enabled by hand binds the same loopback port.
 Environment=WEBUI_PORT=5000
@@ -187,9 +199,6 @@ Environment=WEBUI_HOST=127.0.0.1
 ExecStart=/usr/bin/pengy-web --port ${WEBUI_PORT} --host ${WEBUI_HOST}
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=yes
-PrivateTmp=yes
-ProtectSystem=strict
 
 [Install]
 WantedBy=multi-user.target
@@ -220,7 +229,9 @@ def _unit_options() -> dict[str, list[tuple[str, str]]]:
 def test_unit_runs_as_the_invoking_user_in_their_home():
     svc = dict(_unit_options().get("Service", []))
     assert svc.get("User") == "%i", "the UI is the agent as the human, so User=%i"
-    assert svc.get("WorkingDirectory") == "%h"
+    # ~ is User='s home; %h in a system unit is the manager's (/root), and the
+    # start failed at CHDIR (found on a ThinkPad Server, 2026-10-30).
+    assert svc.get("WorkingDirectory") == "~"
 
 
 def test_unit_keeps_the_users_home_visible():
@@ -229,6 +240,23 @@ def test_unit_keeps_the_users_home_visible():
     assert "DynamicUser" not in svc, "no ephemeral user: %i is the subject"
     assert svc.get("ProtectHome") in (None, "no"), "ProtectHome hides ~/.config/pengy, ~/skills, ~/.secrets"
     assert svc.get("User") != "root"
+
+
+def test_unit_lets_pengy_use_sudo():
+    """Pengy's elevated run_bash is a sudo call with the password typed into the UI,
+    and Pengy is never sandboxed (docs/principles.md, principle 11).
+
+    NoNewPrivileges made sudo (and every setuid program) unusable from the UI,
+    and ProtectSystem kept /usr, /etc and /boot read-only even as root: Pengy
+    could not write the USB sticks it was asked to flash (behoweather, 2026-10-31)."""
+    svc = dict(_unit_options().get("Service", []))
+    # Pengy is never sandboxed (principle 11): no hardening option of any kind.
+    blockers = [k for k in svc if k.startswith(("Protect", "Private", "Restrict"))
+                or k in ("NoNewPrivileges", "CapabilityBoundingSet", "AmbientCapabilities",
+                         "SystemCallFilter", "SystemCallArchitectures", "ReadOnlyPaths",
+                         "InaccessiblePaths", "DynamicUser", "LockPersonality",
+                         "MemoryDenyWriteExecute", "DevicePolicy", "DeviceAllow")]
+    assert not blockers, f"{blockers}: Pengy is never sandboxed (docs/principles.md, principle 11)"
 
 
 def test_unit_is_a_system_unit_that_boots():
