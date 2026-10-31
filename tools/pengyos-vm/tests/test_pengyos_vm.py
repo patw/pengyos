@@ -29,7 +29,7 @@ BOARD = REPO_ROOT / "buildroot-external" / "board"
 SCRIPT = BOARD / "server" / "rootfs-overlay" / "usr" / "bin" / "pengyos-vm"
 UNIT = BOARD / "server" / "rootfs-overlay" / "usr" / "lib" / "systemd" / "user" / "pengyos-vm@.service"
 HERE = Path(__file__).resolve().parent
-FAKES = ("systemctl", "qemu-img", "networkctl", "ip", "ssh", "journalctl", "loginctl")
+FAKES = ("systemctl", "qemu-img", "networkctl", "ip", "ssh", "ssh-keygen", "journalctl", "loginctl")
 NIC_MAC = "54:e1:ad:5a:60:8a"
 
 
@@ -341,6 +341,149 @@ def test_set_changes_and_unforwards(box: Box):
 
 def test_unknown_vm(box: Box):
     assert "no VM called" in box.run("start", "ghost", ok=2).stderr
+
+
+# -------------------------------------------------------------- throwaway run
+def core_image(box: Box) -> Path:
+    img = box.root.parent / "pengyos-core-x86_64.img"
+    img.write_text(json.dumps({"virtual-size": 1 << 30}))
+    return img
+
+
+def ssh_runs(box: Box) -> list[list[str]]:
+    """The ssh calls that ran something other than the boot probe or tar."""
+    return [c for c in box.calls("ssh") if c[-1] != "true" and "tar -" not in c[-1]]
+
+
+def test_run_boots_an_overlay_runs_and_deletes_everything(box: Box):
+    img = core_image(box)
+    cp = box.run("run", "--image", str(img), "--name", "job", "--", "uname", "-a")
+    argv = json.loads(cp.stdout)
+    assert argv[-2] == "root@127.0.0.1"
+    assert argv[-1] == "mkdir -p /root/run && cd /root/run && uname -a"
+    assert "-T" in argv, "no tty in a pipe"
+    assert "-i" in argv and argv[argv.index("-i") + 1].endswith("/vms/job/id_ed25519")
+    assert "job: deleted" in cp.stderr
+    assert not (box.home / "vms" / "job").exists()
+    calls = box.calls("systemctl")
+    assert ["--user", "start", "pengyos-vm@job.service"] in calls
+    assert ["--user", "kill", "--signal=SIGKILL", "pengyos-vm@job.service"] in calls
+    assert not any(c[1] == "enable" for c in calls), "a throwaway VM never autostarts"
+    create = [c for c in box.calls("qemu-img") if c[0] == "create"][0]
+    base = create[create.index("-b") + 1]
+    assert base.startswith(str(box.home / ".cache" / "pengyos-vm" / "images"))
+    assert create[-1] == str(8 << 30), "the 8G default, sparse"
+    assert Path(base).is_file(), "the converted image stays cached"
+
+
+def test_run_converts_the_image_once(box: Box):
+    img = core_image(box)
+    box.run("run", "--image", str(img), "true")
+    box.run("run", "--image", str(img), "true")
+    assert len([c for c in box.calls("qemu-img") if c[0] == "convert"]) == 1
+    img.write_text(json.dumps({"virtual-size": 2 << 30}))  # a rebuilt image
+    os.utime(img, (1, 1))
+    box.run("run", "--image", str(img), "true")
+    assert len([c for c in box.calls("qemu-img") if c[0] == "convert"]) == 2
+
+
+def test_run_gives_the_guest_its_own_key_as_roots(box: Box):
+    img = core_image(box)
+    box.run("run", "--image", str(img), "--name", "job", "--keep", "true")
+    argv = box.argv("job")
+    b64 = [s for s in opt(argv, "-smbios") if "ssh.authorized_keys.root" in s][0].split("root=", 1)[1]
+    import base64
+    assert base64.b64decode(b64).decode() == "ssh-ed25519 AAAArun pengyos-vm run\n"
+    assert "run_owner" not in box.vm("job"), "a kept VM is not swept"
+
+
+def test_run_passes_the_exit_status_through(box: Box):
+    (box.root / "ssh-exit").write_text("3")
+    cp = box.run("run", "--image", str(core_image(box)), "--name", "job", "false", ok=3)
+    assert not (box.home / "vms" / "job").exists()
+
+
+def test_run_copies_in_and_fetches_back(box: Box, tmp_path: Path):
+    payload = tmp_path / "tool"
+    payload.mkdir()
+    (payload / "main.py").write_text("print('hi')\n")
+    (box.root / "guest" / "out").mkdir(parents=True)
+    (box.root / "guest" / "out" / "result.txt").write_text("42\n")
+    work = tmp_path / "work"
+    work.mkdir()
+    env = dict(os.environ, HOME=str(box.home))
+    cp = subprocess.run(["python3", str(SCRIPT), "--root", str(box.root), "run",
+                         "--image", str(core_image(box)), "--copy", str(payload),
+                         "--fetch", "out", "--", "python3", "tool/main.py"],
+                        capture_output=True, text=True, env=env, cwd=work)
+    assert cp.returncode == 0, cp.stderr
+    import tarfile
+    with tarfile.open(box.root / "pushed.tar") as tar:
+        assert sorted(tar.getnames()) == ["tool", "tool/main.py"]
+    assert (work / "out" / "result.txt").read_text() == "42\n"
+    assert ssh_runs(box)[0][-1].endswith("python3 tool/main.py")
+
+
+def test_run_fetch_of_a_missing_path_fails_the_run(box: Box, tmp_path: Path):
+    cp = box.run("run", "--image", str(core_image(box)), "--fetch", "nope", "true", ok=1)
+    assert "--fetch nope" in cp.stderr and "No such file" in cp.stderr
+
+
+def test_run_without_a_command_is_a_shell(box: Box):
+    argv = json.loads(box.run("run", "--image", str(core_image(box))).stdout)
+    assert argv[-1].endswith("exec ${SHELL:-sh} -l")
+
+
+def test_run_image_comes_from_the_environment(box: Box):
+    assert "PENGYOS_VM_IMAGE" in box.run("run", "true", ok=2).stderr
+    env = dict(os.environ, HOME=str(box.home), PENGYOS_VM_IMAGE=str(core_image(box)))
+    cp = subprocess.run(["python3", str(SCRIPT), "--root", str(box.root), "run", "true"],
+                        capture_output=True, text=True, env=env)
+    assert cp.returncode == 0, cp.stderr
+
+
+@pytest.mark.parametrize("args,says", [
+    (["--timeout", "soon"], "--timeout must look like"),
+    (["--fetch", "/etc/shadow"], "--fetch takes a path inside /root/run"),
+    (["--fetch", "../x"], "--fetch takes a path inside /root/run"),
+    (["--copy", "/nonexistent/x"], "--copy: /nonexistent/x does not exist"),
+    (["--name", "Bad_Name"], "VM names are"),
+    (["--memory", "64M"], "at least 128M"),
+])
+def test_run_misuse_writes_nothing(box: Box, args, says):
+    cp = box.run("run", "--image", str(core_image(box)), *args, "true", ok=2)
+    assert says in cp.stderr
+    assert not (box.home / "vms").exists() or not any((box.home / "vms").iterdir())
+    assert not box.calls("systemctl")
+
+
+def test_run_that_never_answers_ssh_says_so_and_cleans_up(box: Box):
+    (box.root / "ssh-down").touch()
+    cp = box.run("run", "--image", str(core_image(box)), "--name", "job",
+                 "--boot-timeout", "2s", "true", ok=1)
+    assert "did not answer SSH within 2s" in cp.stderr
+    assert not (box.home / "vms" / "job").exists()
+
+
+def test_run_sweeps_the_vms_of_killed_runs(box: Box):
+    img = core_image(box)
+    box.run("run", "--image", str(img), "--name", "dead", "--keep", "true")
+    conf = box.vm("dead")
+    conf["run_owner"] = 2 ** 22 + 12345  # above pid_max's default: no such process
+    (box.home / "vms" / "dead" / "vm.json").write_text(json.dumps(conf))
+    box.run("create", "pet", "--iso", str(box.iso))
+    cp = box.run("run", "--image", str(img), "true")
+    assert "deleted dead, left behind by a run that was killed" in cp.stderr
+    assert not (box.home / "vms" / "dead").exists()
+    assert (box.home / "vms" / "pet").exists(), "only run VMs are swept"
+
+
+def test_ssh_into_a_kept_run_uses_its_key(box: Box):
+    box.run("run", "--image", str(core_image(box)), "--name", "job", "--keep", "true")
+    box.run("start", "job")
+    argv = json.loads(box.run("ssh", "job").stdout)
+    assert argv[2:4] == ["-i", str(box.home / "vms" / "job" / "id_ed25519")]
+    assert argv[-1] == "root@127.0.0.1"
 
 
 # ------------------------------------------------------------------ bridge
