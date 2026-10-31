@@ -26,7 +26,8 @@ environment variable" at every login, and started fine from the launcher later.
 `WAYLAND_DISPLAY`; cosmic-session exports Xwayland's `DISPLAY` about a second after that
 (on behotv, Steam started 0.27 s too early). It now waits for `DISPLAY` too, up to 15 s,
 and starts the entries without it after that, so a session without Xwayland still gets
-its startup apps.
+its startup apps. Checked on behotv (fix bind-mounted over 26.10.51): after a reboot Steam
+started 0.46 s after `DISPLAY` was exported, with no dialog.
 
 ### Fixed — a shutdown waiting on a VM looked hung, and boot was a black screen (2026-10-31)
 
