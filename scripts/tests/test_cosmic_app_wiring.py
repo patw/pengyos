@@ -126,7 +126,7 @@ def test_the_desktop_apps_have_launchers():
     """The apps that are meant to be opened from the Applications list."""
     programs = set(_launchers().values())
     for app in ("pengyos-disks", "pengyos-firmware", "pengyos-gamepads", "pengyos-printers",
-                "pengyos-updates"):
+                "pengyos-sharing", "pengyos-updates"):
         assert app in programs, f"{app} is installed but no .desktop launcher runs it"
 
 
@@ -227,6 +227,25 @@ def test_the_firmware_app_is_wired_end_to_end():
     rules = (overlay / "etc/polkit-1/rules.d/60-pengyos-firmware.rules").read_text()
     assert '"pengyos-firmware-check.service"' in rules
     assert '"pengyos-firmware-update@"' in rules
+
+
+def test_file_sharing_is_wired_with_its_polkit_rule():
+    """pengyos-sharing is a window over pengyos-shares, run through pkexec: the
+    app, its launcher, the CLI it drives and the rule that lets wheel run that
+    one program must all be there, or the buttons fail at click time."""
+    assert "pengyos-sharing" in _app_list()
+    assert "pengyos-sharing" in _installed_bins()
+    assert _launchers().get("io.catbee.pengyos.Sharing.desktop") == "pengyos-sharing"
+    assert "pengyos-shares" in _overlay_bins()
+    overlay = ROOT / "buildroot-external" / "board" / "desktop" / "rootfs-overlay"
+    rules = (overlay / "etc/polkit-1/rules.d/60-pengyos-shares.rules").read_text()
+    assert '"org.freedesktop.policykit.exec"' in rules
+    assert '"/usr/bin/pengyos-shares"' in rules
+    assert 'isInGroup("wheel")' in rules and "subject.local" in rules and "subject.active" in rules
+    lib = (ROOT / "tools/pengyos-sharing/src/lib.rs").read_text()
+    assert 'pub const SHARES: &str = "/usr/bin/pengyos-shares";' in lib, (
+        "pkexec matches the rule on the absolute program path"
+    )
 
 
 def test_the_games_are_one_binary_and_eight_symlinks():

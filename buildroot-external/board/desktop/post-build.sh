@@ -157,6 +157,18 @@ else
     echo "post-build: ${PRINTERS_GUI} not built — no Printers app (adding a printer needs a terminal)"
 fi
 
+# --- File Sharing (share folders on the network over SMB) --------------------
+# tools/pengyos-sharing, host-built the same way. A window over pengyos-shares
+# (board/server overlay), which it runs through pkexec; wheel needs no password
+# (60-pengyos-shares.rules). The .desktop file is in the overlay.
+SHARING_GUI="${GUI_BUILD}/install-gui/release/pengyos-sharing"
+if [ -x "${SHARING_GUI}" ]; then
+    install -Dm0755 "${SHARING_GUI}" "${TARGET_DIR}/usr/bin/pengyos-sharing"
+    echo "post-build: installed pengyos-sharing"
+else
+    echo "post-build: ${SHARING_GUI} not built — no File Sharing app (sharing needs a terminal)"
+fi
+
 # --- Firmware (fwupd: device firmware updates) -------------------------------
 # tools/pengyos-firmware, host-built the same way. The app and its session
 # notifier are unprivileged; root's side is pengyos-firmware-check.service and

@@ -69,7 +69,7 @@ def root(tmp_path: Path) -> Path:
 
 def sh(root: Path, *args: str, stdin: str | None = None,
        env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    e = {k: v for k, v in os.environ.items() if k != "SUDO_USER"}
+    e = {k: v for k, v in os.environ.items() if k not in ("SUDO_USER", "PKEXEC_UID")}
     e.update(env or {})
     return subprocess.run([str(SCRIPT), *args, "--root", str(root)], input=stdin,
                           capture_output=True, text=True, timeout=60, env=e)
@@ -200,6 +200,13 @@ def test_sudo_user_is_the_default_user(root):
     assert "\tvalid users = sam\n" in conf(root)
 
 
+def test_pkexec_caller_is_the_default_user(root):
+    """The File Sharing app runs us through pkexec, which sets PKEXEC_UID."""
+    r = sh(root, "add", "media", "/data/media", env={"PKEXEC_UID": "1001"})
+    assert r.returncode == 0, r.stderr
+    assert "\tvalid users = sam\n" in conf(root)
+
+
 # --- share passwords -----------------------------------------------------------
 
 
@@ -302,3 +309,21 @@ def test_status_json_and_text(root):
     assert "sam has no share password: sudo pengyos-shares passwd sam" in text
     sh(root, "remove", "media")
     assert "No shares." in sh(root, "status").stdout
+
+
+def test_status_without_root_leaves_the_password_list_out(root):
+    """The password database is root's (0600); status must still answer."""
+    sh(root, "add", "media", "/data/media", "--user", "pat")
+    sh(root, "passwd", "pat", "--stdin", stdin="secret123\n")
+    db = root / "etc" / "ksmbd" / "ksmbdpwd.db"
+    db.chmod(0)
+    try:
+        if os.access(db, os.R_OK):
+            pytest.skip("running as root: every file is readable")
+        r = sh(root, "status", "--json")
+        assert r.returncode == 0, r.stderr
+        state = json.loads(r.stdout)
+        assert state["users"] is None and state["shares"][0]["name"] == "media"
+        assert "sudo pengyos-shares status" in sh(root, "status").stdout
+    finally:
+        db.chmod(0o600)

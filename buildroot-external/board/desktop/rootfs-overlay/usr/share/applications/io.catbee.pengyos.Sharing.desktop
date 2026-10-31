@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=File Sharing
+GenericName=Share Folders
+Comment=Share folders with the other computers on your network
+Exec=pengyos-sharing
+Icon=folder-remote
+Terminal=false
+Categories=COSMIC;Settings;System;Network;
+Keywords=share;sharing;smb;samba;cifs;network;folder;windows;nas;ksmbd;
+StartupNotify=true

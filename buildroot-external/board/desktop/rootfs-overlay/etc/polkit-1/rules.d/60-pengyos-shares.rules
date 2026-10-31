@@ -1,0 +1,15 @@
+// PengyOS: administrators (wheel) at the computer may share folders from the
+// "File Sharing" app without a password, the way they manage printers and
+// updates. The app runs `pkexec /usr/bin/pengyos-shares …`; only that program
+// is allowed, and pengyos-shares itself keeps a share LAN-only (port 445 opens
+// to the private address ranges through pengyos-firewall) and off until a
+// share exists. Everyone else is asked for an administrator's password
+// (pkexec's default).
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/pengyos-shares" &&
+        subject.local && subject.active && subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
