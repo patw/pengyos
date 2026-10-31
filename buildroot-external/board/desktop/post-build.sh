@@ -169,6 +169,26 @@ else
     echo "post-build: ${SHARING_GUI} not built — no File Sharing app (sharing needs a terminal)"
 fi
 
+# --- Remote desktop (RDP) ------------------------------------------------------
+# tools/pengyos-rdp-server, host-built the same way: shares the logged-in
+# session over RDP (portal + PipeWire + ironrdp). Run by the user unit
+# pengyos-rdp-server.service, which pengyos-remote (overlay) turns on and off.
+RDP_SERVER="${GUI_BUILD}/install-gui/release/pengyos-rdp-server"
+if [ -x "${RDP_SERVER}" ]; then
+    install -Dm0755 "${RDP_SERVER}" "${TARGET_DIR}/usr/libexec/pengyos-rdp-server"
+    echo "post-build: installed pengyos-rdp-server"
+else
+    echo "post-build: ${RDP_SERVER} not built — no remote desktop"
+fi
+# The Remote Desktop window: buttons over pengyos-remote (overlay), as the user.
+REMOTE_GUI="${GUI_BUILD}/install-gui/release/pengyos-remote-desktop"
+if [ -x "${REMOTE_GUI}" ]; then
+    install -Dm0755 "${REMOTE_GUI}" "${TARGET_DIR}/usr/bin/pengyos-remote-desktop"
+    echo "post-build: installed pengyos-remote-desktop"
+else
+    echo "post-build: ${REMOTE_GUI} not built — no Remote Desktop app (remote desktop needs pengyos-remote)"
+fi
+
 # --- Firmware (fwupd: device firmware updates) -------------------------------
 # tools/pengyos-firmware, host-built the same way. The app and its session
 # notifier are unprivileged; root's side is pengyos-firmware-check.service and

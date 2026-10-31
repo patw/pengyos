@@ -137,13 +137,22 @@ fi
 
 # Our libcosmic apps share one target dir so they share the libcosmic build.
 if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ]; then
-    for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-usage pengyos-gamepads pengyos-printers pengyos-firmware pengyos-sharing pengy-games; do
+    for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-usage pengyos-gamepads pengyos-printers pengyos-firmware pengyos-sharing pengyos-remote-desktop pengy-games; do
         wanted "${app}" || continue
         echo "[cosmic] cargo build --release -p ${app} --features cosmic --locked"
         (cd "${REPO}/tools/${app}" && \
             CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p "${app}" --features cosmic --locked)
         built=$((built + 1))
     done
+fi
+
+# Not a libcosmic app, but host-built the same way (it links the host's
+# libpipewire, as cosmic-settings does) and into the same target dir.
+if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted pengyos-rdp-server; then
+    echo "[cosmic] cargo build --release -p pengyos-rdp-server --locked"
+    (cd "${REPO}/tools/pengyos-rdp-server" && \
+        CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p pengyos-rdp-server --locked)
+    built=$((built + 1))
 fi
 
 echo "[cosmic] done: ${built} cargo builds into ${BUILD}"

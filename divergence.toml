@@ -52,9 +52,9 @@ schema = 1
 fork_budget = 10
 
 # Budget: at most 10 maintained forks (kind = "fork") at any time.
-# Current fork count: 7 (ffmpeg-pengyos, hplip-pengyos 2026-10-19; upower-pengyos
+# Current fork count: 8 (ffmpeg-pengyos, hplip-pengyos 2026-10-19; upower-pengyos
 # 2026-10-20; libdisplay-info-pengyos 2026-10-23; uutils-findutils, distrobox,
-# xdg-utils 2026-10-27). openssh-pengyos (2026-10-19) expired with Buildroot
+# xdg-utils 2026-10-27; ironrdp-server 2026-10-31). openssh-pengyos (2026-10-19) expired with Buildroot
 # 2026.08.1 on 2026-10-28. build-fix entries are not counted. The gate's count is
 # authoritative; this line is the human copy.
 # Enforced by the gate from 2026-10-19: scripts/pengyos_gate.py:check_fork_budget counts
@@ -682,4 +682,34 @@ cost = "one xdg-mime.in hunk"
 expiry = "an xdg-utils release whose generic xdg-mime finds a type without mimetype or file (or that detects COSMIC): delete 0001"
 observe_source = "pkg-stats"
 release_monitoring_id = 5176
+upstream_status = "not-offered"
+
+[[divergence]]
+id        = "ironrdp-server-0.13.0-fork"
+kind      = "fork"
+component = "ironrdp-server"
+pinned_version = "0.13.0"
+editions  = ["pengyos-desktop", "pengyos-desktop-nvidia"]
+carried_since = "2026-10-31"
+recipe        = "tools/pengyos-rdp-server/vendor"
+
+# The Desktop's RDP server (tools/pengyos-rdp-server) vendors ironrdp-server 0.13.0
+# and ironrdp-acceptor 0.10.0 from crates.io with our changes ([patch.crates-io] in
+# its Cargo.toml; the whole change is vendor/pengyos.diff). Behaviour changes, so a
+# fork. Found against real clients on behoweather, 2026-10-23:
+#   - RemoteFX surface commands always anchored at (0,0) with a full-desktop region
+#     and global tile indices, image-mode headers on every message: FreeRDP < 3.2x
+#     clips any other origin to nothing and drops the connection (Remmina's snap
+#     bundles 3.14.1).
+#   - honour the client's size, then reactivate once at the real size: Remmina
+#     resizes its surface only on a DesktopResize.
+#   - the acceptor skips non-Confirm-Active PDUs during that reactivation.
+#   - a new connection takes over: the old client gets Set Error Info
+#     DisconnectedByOtherconnection inside Share Data headers (sent bare upstream,
+#     so clients could not parse it and Remmina reconnected forever).
+#   - undecodable fast-path input is logged and dropped, not fatal.
+upstream_fixes = []
+cost = "two vendored crates (588 KB) and a 305-line diff to re-apply on every bump; 0.x, so each minor is breaking"
+expiry = "an ironrdp-server release that anchors RemoteFX at the surface origin FreeRDP 3.14 accepts, resizes FreeRDP clients, and wraps Set Error Info in Share Data headers: drop vendor/ and [patch.crates-io]"
+observe_source = "pengyos-nightly observe, source ids ironrdp-server-vendor and ironrdp-acceptor-vendor: crates.io /api/v1/crates/NAME compared to the version in vendor/NAME/Cargo.toml (sources.ironrdp_vendor_findings, added 2026-10-31 with the fixture tests/fixtures/crates-io-ironrdp-server.json). No Buildroot recipe and no CPE, so pkg-stats and NVD cannot see it; these crates parse what a client sends before it logs in."
 upstream_status = "not-offered"

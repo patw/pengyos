@@ -109,6 +109,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-shares status\|add\|remove\|passwd` | Server/Desktop: share folders over SMB (the kernel's ksmbd; no Samba server) — see Gotchas |
 | `pengyos-vm list\|create\|start\|ssh\|console\|stop` | Server/Desktop: VMs in `~/vms`, NAT or `sudo pengyos-vm bridge enable` (wired only); `loginctl enable-linger` (no sudo) or they stop at logout |
 | `pengy-vmm url` / `systemctl --user enable --now pengy-vmm` | the VMs in a browser on 127.0.0.1:5100 (token in the URL) |
+| `pengyos-remote status\|password\|on [--local]\|off` | Desktop: remote desktop (RDP) of the logged-in session; run as the user; the Remote Desktop app does the same |
 | `pengyos-sharing` | Desktop: the File Sharing window over pengyos-shares (`--list` prints the same as text) |
 | `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers |
 | `distrobox create\|enter` | a full distro userspace sharing `$HOME` |

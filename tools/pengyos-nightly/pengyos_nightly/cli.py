@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import sys
 import time
 import subprocess
@@ -158,6 +159,15 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
             sources.parse_ls_remote(run_cmd(["git", "ls-remote", "--tags",
                                              "https://github.com/uutils/findutils"])),
             ufver))
+
+    # ironrdp: vendored with our patches into the Desktop's RDP server; no recipe, no
+    # CPE, so nothing else sees it. divergence.toml -> ironrdp-server-0.13.0-fork.
+    for crate in ("ironrdp-server", "ironrdp-acceptor"):
+        vendored = repo / "tools/pengyos-rdp-server/vendor" / crate / "Cargo.toml"
+        m = re.search(r'^version = "([^"]+)"', vendored.read_text(), re.M) if vendored.exists() else None
+        if m:
+            findings += guard(f"{crate}-vendor", lambda crate=crate, cur=m.group(1): sources.ironrdp_vendor_findings(
+                crate, sources.crates_io_versions(sources.http_get(f"https://crates.io/api/v1/crates/{crate}")), cur))
 
     def cosmic():
         comps = sources.read_cosmic_components((repo / "scripts/cosmic-components.tsv").read_text())

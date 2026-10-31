@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Remote Desktop
+GenericName=Share This Desktop
+Comment=Let another computer see and use this desktop over RDP
+Exec=pengyos-remote-desktop
+Icon=video-display
+Terminal=false
+Categories=COSMIC;Settings;System;Network;
+Keywords=rdp;remote;desktop;vnc;share;screen;remmina;windows;mstsc;
+StartupNotify=true

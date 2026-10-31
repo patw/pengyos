@@ -284,6 +284,34 @@ def libdisplay_info_fork_findings(tags: Iterable[str], current: str) -> list[dic
                            "cosmic-comp's libdisplay-info-sys must accept it first")}]
 
 
+def crates_io_versions(text: str) -> list[str]:
+    """Released, unyanked versions from crates.io's /api/v1/crates/NAME JSON."""
+    data = json.loads(text)
+    return [v["num"] for v in data.get("versions", [])
+            if not v.get("yanked") and not is_prerelease(v["num"])]
+
+
+def ironrdp_vendor_findings(crate: str, versions: Iterable[str], current: str) -> list[dict]:
+    """ironrdp-server / ironrdp-acceptor, vendored with our patches into
+    tools/pengyos-rdp-server/vendor (the Desktop's RDP server).
+
+    A vendored crate is invisible to pkg-stats: no Buildroot recipe, no CPE.
+    divergence.toml -> ironrdp-server-0.13.0-fork names this as its observe_source.
+    These crates parse what an RDP client sends before it has logged in, so a
+    release is worth knowing about even when the patches still apply. 0.x: a new
+    minor is breaking (bump_kind says major), and the vendored patches
+    (vendor/pengyos.diff) must be re-applied to it by hand.
+    """
+    newer = [v for v in versions if vkey(v) > vkey(current)]
+    if not newer:
+        return []
+    best = max(newer, key=vkey)
+    kind = bump_kind(current, best)
+    return [{"lane": kind, "component": crate, "current": current, "available": best,
+             "note": f"{crate} {best} on crates.io (vendored {current} with patches: "
+                     f"re-apply tools/pengyos-rdp-server/vendor/pengyos.diff)"}]
+
+
 def uutils_findutils_findings(tags: Iterable[str], current: str) -> list[dict]:
     """uutils/findutils, the authored recipe that ships find and xargs
     (`package/uutils-findutils`, Core).

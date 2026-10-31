@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+"""pengyos-remote - let other computers see and use this desktop over RDP.
+
+    pengyos-remote status [--json]
+    pengyos-remote password [--stdin]     set the RDP password (not your login password)
+    pengyos-remote on [--port 3389] [--local]
+                                          share this desktop while you are logged in
+                                          (--local: this machine only, for an SSH tunnel)
+    pengyos-remote off
+    pengyos-remote forget                 ask again before the next session is shared
+
+It shares the session you are logged into (what is on the screen, your mouse
+and keyboard), not a separate one. The RDP server, pengyos-rdp-server, runs as
+you in your desktop session (the user unit pengyos-rdp-server.service), so it
+is only there while you are logged in to the desktop, and `on` makes it start
+every time you are.
+
+Connect from Windows (Remote Desktop Connection), macOS (Windows App) or Linux
+(Remmina, xfreerdp) to this machine's address, with your user name and the
+RDP password. The first time, the desktop asks you on screen whether to allow
+it; that answer is kept until `forget`.
+
+Port 3389 is open to the network: the Desktop's firewall allows ports above
+1024. Every connection needs the password (NLA), and the traffic is TLS with a
+certificate made for this machine (clients ask you to trust it once: compare
+the fingerprint `status` prints).
+
+Files (yours, in ~/.config/pengyos-remote, 0700): password (0600), cert.pem and
+key.pem (0600), env (the port). The log is ~/.local/state/pengyos-remote/server.log.
+
+--root DIR (anywhere on the line) is the test hook: DIR/usr/bin/{systemctl,
+openssl,ip} are run instead of the real ones.
+"""
+
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import os
+import pwd
+import re
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+PROG = "pengyos-remote"
+UNIT = "pengyos-rdp-server.service"
+PORT = 3389
+MIN_PASSWORD = 8
+MAX_PASSWORD = 128
+
+ROOT: Path | None = None
+
+
+class Misuse(Exception):
+    """Exit 2 with this message; nothing has been changed."""
+
+
+class Failure(Exception):
+    """Exit 1 with this message."""
+
+
+def tool(name: str) -> str:
+    return str(ROOT / "usr" / "bin" / name) if ROOT else name
+
+
+def run(argv: list[str], check: bool = True, stdin: str | None = None) -> subprocess.CompletedProcess:
+    argv = [tool(argv[0])] + argv[1:]
+    try:
+        cp = subprocess.run(argv, text=True, capture_output=True, input=stdin)
+    except FileNotFoundError:
+        raise Failure(f"{argv[0]} is not installed")
+    if check and cp.returncode != 0:
+        raise Failure(f"{' '.join(argv)} failed: {(cp.stderr or cp.stdout).strip()}")
+    return cp
+
+
+def systemctl(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+    return run(["systemctl", "--user", *args], check=check)
+
+
+def conf_dir() -> Path:
+    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(base) / PROG
+
+
+def state_dir() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(base) / PROG
+
+
+def user() -> str:
+    return pwd.getpwuid(os.getuid()).pw_name
+
+
+def private_dir(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    path.chmod(0o700)
+    return path
+
+
+def write_private(path: Path, text: str) -> None:
+    """Write a 0600 file atomically (never a moment when it is readable by others)."""
+    tmp = path.with_suffix(".tmp")
+    tmp.unlink(missing_ok=True)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    tmp.replace(path)
+
+
+# ------------------------------------------------------------------ state
+def listen() -> tuple[str, int]:
+    env = conf_dir() / "env"
+    if env.is_file():
+        m = re.search(r"^RDP_ADDR=(.*):(\d+)\s*$", env.read_text(), re.M)
+        if m:
+            return m.group(1), int(m.group(2))
+    return "0.0.0.0", PORT
+
+
+def port() -> int:
+    return listen()[1]
+
+
+def fingerprint() -> str | None:
+    cert = conf_dir() / "cert.pem"
+    if not cert.is_file():
+        return None
+    cp = run(["openssl", "x509", "-in", str(cert), "-noout", "-fingerprint", "-sha256"], check=False)
+    m = re.search(r"=([0-9A-F:]+)", cp.stdout)
+    return m.group(1) if m else None
+
+
+def addresses() -> list[str]:
+    """This machine's LAN addresses (IPv4, then global IPv6), for `connect to`."""
+    cp = run(["ip", "-j", "addr", "show", "scope", "global"], check=False)
+    out: list[str] = []
+    try:
+        for link in json.loads(cp.stdout or "[]"):
+            if link.get("ifname", "").startswith(("podman", "pengyos-br", "virbr", "docker", "veth")):
+                continue
+            for a in link.get("addr_info", []):
+                if a.get("family") == "inet":
+                    out.insert(len([x for x in out if ":" not in x]), a["local"])
+                elif a.get("family") == "inet6" and not a.get("temporary"):
+                    out.append(a["local"])
+    except ValueError:
+        pass
+    return out
+
+
+def log_tail(n: int = 8) -> list[str]:
+    log = state_dir() / "server.log"
+    if not log.is_file():
+        return []
+    return log.read_text(errors="replace").splitlines()[-n:]
+
+
+def status() -> dict:
+    active = systemctl("is-active", UNIT, check=False).stdout.strip() or "inactive"
+    enabled = systemctl("is-enabled", UNIT, check=False).stdout.strip() == "enabled"
+    addr, p = listen()
+    host = socket.gethostname()
+    return {
+        "local_only": addr == "127.0.0.1",
+        "enabled": enabled,
+        "state": {"active": "running", "inactive": "stopped", "activating": "starting"}.get(active, active),
+        "user": user(),
+        "port": p,
+        "host": host,
+        "addresses": addresses(),
+        "password_set": (conf_dir() / "password").is_file(),
+        "fingerprint": fingerprint(),
+        "consent_saved": (state_dir() / "restore-token").is_file(),
+        "log": log_tail(),
+    }
+
+
+# ----------------------------------------------------------------- verbs
+def cmd_status(a) -> int:
+    s = status()
+    if a.json:
+        print(json.dumps(s, indent=2))
+        return 0
+    if not s["enabled"]:
+        print("remote desktop: off")
+    else:
+        print(f"remote desktop: on, {s['state']}" +
+              ("" if s["state"] == "running" else " (it runs while you are logged in to the desktop)"))
+    if s["local_only"]:
+        print(f"  connect to  localhost:{s['port']} through an SSH tunnel "
+              f"(ssh -L {s['port']}:127.0.0.1:{s['port']} {s['user']}@{s['host']})")
+    else:
+        where = [f"{s['host']}:{s['port']}"] + [f"{x}:{s['port']}" if ":" not in x else f"[{x}]:{s['port']}"
+                                                 for x in s["addresses"]]
+        print(f"  connect to  {', '.join(where)}")
+    print(f"  user        {s['user']}")
+    print(f"  password    {'set' if s['password_set'] else 'NOT SET: pengyos-remote password'}")
+    if s["fingerprint"]:
+        print(f"  certificate SHA-256 {s['fingerprint']}")
+    if s["enabled"] and not s["consent_saved"]:
+        print("  the first connection asks on this screen whether to allow it")
+    if s["log"] and s["state"] != "running":
+        print("  last log lines:")
+        for line in s["log"][-4:]:
+            print("    " + line)
+    return 0
+
+
+def read_new_password(from_stdin: bool) -> str:
+    if from_stdin:
+        pw = sys.stdin.readline().rstrip("\n")
+    else:
+        if not sys.stdin.isatty():
+            raise Misuse("no terminal to ask on: use --stdin")
+        pw = getpass.getpass("new RDP password: ")
+        if getpass.getpass("again: ") != pw:
+            raise Misuse("the two passwords differ; nothing changed")
+    if not MIN_PASSWORD <= len(pw) <= MAX_PASSWORD:
+        raise Misuse(f"the password needs {MIN_PASSWORD} to {MAX_PASSWORD} characters")
+    if "\n" in pw or "\r" in pw:
+        raise Misuse("the password cannot contain a line break")
+    return pw
+
+
+def cmd_password(a) -> int:
+    pw = read_new_password(a.stdin)
+    write_private(private_dir(conf_dir()) / "password", pw + "\n")
+    print("RDP password set" + (" (it is not your login password)" if not a.stdin else ""))
+    if systemctl("is-active", UNIT, check=False).stdout.strip() == "active":
+        systemctl("restart", UNIT)
+        print("  the server restarted with it; connected clients must reconnect")
+    return 0
+
+
+def make_cert() -> None:
+    d = private_dir(conf_dir())
+    key, cert = d / "key.pem", d / "cert.pem"
+    if key.is_file() and cert.is_file():
+        return
+    host = socket.gethostname()
+    run(["openssl", "req", "-x509", "-newkey", "rsa:3072", "-nodes", "-sha256", "-days", "3650",
+         "-subj", f"/CN={host}", "-addext", f"subjectAltName=DNS:{host},DNS:{host}.local",
+         "-keyout", str(key), "-out", str(cert)])
+    key.chmod(0o600)
+    print(f"made a certificate for {host} (SHA-256 {fingerprint()})")
+
+
+def cmd_on(a) -> int:
+    if not 1025 <= a.port <= 65535:
+        raise Misuse("pick a port from 1025 to 65535 (the Desktop's firewall opens those; "
+                     "lower ones need root)")
+    if not (conf_dir() / "password").is_file():
+        raise Misuse("set an RDP password first: pengyos-remote password")
+    make_cert()
+    private_dir(state_dir())
+    write_private(conf_dir() / "env", f"RDP_ADDR={'127.0.0.1' if a.local else '0.0.0.0'}:{a.port}\n")
+    systemctl("enable", UNIT)
+    # Requisite=graphical-session.target: starting fails outside a desktop
+    # session, which is fine; enable makes it start at the next login.
+    started = systemctl("restart", UNIT, check=False).returncode == 0
+    time.sleep(0 if ROOT else 1.5)
+    s = status()
+    if started and s["state"] == "running":
+        where = f"localhost:{s['port']} through an SSH tunnel" if a.local else f"{s['host']}:{s['port']}"
+        print(f"remote desktop on: connect to {where} as {s['user']}")
+        if not s["consent_saved"]:
+            print("  the desktop asks you on screen to allow it: say yes once, and it remembers")
+    else:
+        print("remote desktop on: it starts when you log in to the desktop "
+              "(it shares that session, and you are not in one now)")
+    return 0
+
+
+def cmd_off(a) -> int:
+    systemctl("disable", "--now", UNIT)
+    print("remote desktop off")
+    return 0
+
+
+def cmd_forget(a) -> int:
+    token = state_dir() / "restore-token"
+    if token.is_file():
+        token.unlink()
+        print("forgot the permission: the desktop asks again before the next session is shared")
+        if systemctl("is-active", UNIT, check=False).stdout.strip() == "active":
+            systemctl("restart", UNIT)
+    else:
+        print("nothing to forget: no permission is saved")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    global ROOT
+    if "--root" in argv:
+        i = argv.index("--root")
+        ROOT = Path(argv[i + 1]).resolve()
+        argv = argv[:i] + argv[i + 2:]
+    p = argparse.ArgumentParser(prog=PROG, description="Share this desktop over RDP.",
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
+    sp = sub.add_parser("status", help="is it on, and how to connect")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(fn=cmd_status)
+    sp = sub.add_parser("password", help="set the RDP password")
+    sp.add_argument("--stdin", action="store_true", help="read it from standard input")
+    sp.set_defaults(fn=cmd_password)
+    sp = sub.add_parser("on", help="share this desktop while you are logged in")
+    sp.add_argument("--port", type=int, default=PORT)
+    sp.add_argument("--local", action="store_true",
+                    help="listen on 127.0.0.1 only: reach it through an SSH tunnel")
+    sp.set_defaults(fn=cmd_on)
+    sp = sub.add_parser("off", help="stop sharing it")
+    sp.set_defaults(fn=cmd_off)
+    sp = sub.add_parser("forget", help="ask again before sharing")
+    sp.set_defaults(fn=cmd_forget)
+    a = p.parse_args(argv)
+    if os.geteuid() == 0 and not ROOT:
+        print(f"{PROG}: run it as the user whose desktop it shares, not root", file=sys.stderr)
+        return 2
+    try:
+        return a.fn(a)
+    except Misuse as e:
+        print(f"{PROG}: {e}", file=sys.stderr)
+        return 2
+    except Failure as e:
+        print(f"{PROG}: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

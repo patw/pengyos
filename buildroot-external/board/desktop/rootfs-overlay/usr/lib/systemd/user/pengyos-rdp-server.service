@@ -1,0 +1,21 @@
+# Remote desktop: share this desktop session over RDP (pengyos-remote on|off).
+# It needs the session (the portal shares the screen you are logged into), so
+# it starts with graphical-session.target and cannot start outside one.
+[Unit]
+Description=Remote desktop (RDP) for this session
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+ExecStart=/usr/libexec/pengyos-rdp-server
+EnvironmentFile=-%h/.config/pengyos-remote/env
+# A file, not only the journal: a user cannot read their own journal when
+# journald keeps it in memory, and `pengyos-remote status` shows its tail.
+StandardOutput=append:%h/.local/state/pengyos-remote/server.log
+StandardError=inherit
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

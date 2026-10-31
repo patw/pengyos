@@ -1,0 +1,19 @@
+[package]
+name = "pengyos-rdp-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+ashpd = { version = "0.13", features = ["tokio", "remote_desktop", "screencast"] }
+async-trait = "0.1.92"
+bytes = "1.12.1"
+ironrdp-server = { version = "0.13", features = ["helper"] }
+pipewire = "0.10"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[patch.crates-io]
+ironrdp-server = { path = "vendor/ironrdp-server" }
+ironrdp-acceptor = { path = "vendor/ironrdp-acceptor" }

@@ -1,0 +1,305 @@
+diff --git a/vendor/ironrdp-acceptor/src/connection.rs b/vendor/ironrdp-acceptor/src/connection.rs
+index 5c8d7db..6f2342e 100644
+--- a/vendor/ironrdp-acceptor/src/connection.rs
++++ b/vendor/ironrdp-acceptor/src/connection.rs
+@@ -843,9 +843,16 @@ impl Sequence for Acceptor {
+ 
+                         debug!(message = ?capabilities_confirm, "Received");
+ 
+-                        let ShareControlPdu::ClientConfirmActive(confirm) = capabilities_confirm.share_control_pdu
+-                        else {
+-                            return Err(ConnectorError::general("expected client confirm active"));
++                        let confirm = match capabilities_confirm.share_control_pdu {
++                            ShareControlPdu::ClientConfirmActive(confirm) => confirm,
++                            // pengyos-remote-proto: a client can still have finalization or input
++                            // PDUs in flight when the server starts a reactivation; skip them.
++                            other if self.reactivation => {
++                                debug!(pdu = other.as_short_name(), "Dropping PDU while waiting for Confirm Active");
++                                self.state = prev_state;
++                                return Ok(Written::Nothing);
++                            }
++                            _ => return Err(ConnectorError::general("expected client confirm active")),
+                         };
+ 
+                         (
+diff --git a/vendor/ironrdp-server/src/encoder/mod.rs b/vendor/ironrdp-server/src/encoder/mod.rs
+index d3f83c9..c2f7e6a 100644
+--- a/vendor/ironrdp-server/src/encoder/mod.rs
++++ b/vendor/ironrdp-server/src/encoder/mod.rs
+@@ -290,6 +290,8 @@ impl UpdateEncoder {
+         let mut rects = Vec::new();
+ 
+         let max_height = (self.max_request_size / (rect.width * 4)).max(1);
++        // pengyos-remote-proto: RemoteFX places tiles on the global 64px grid.
++        let max_height = if max_height >= 64 { max_height / 64 * 64 } else { max_height };
+         let mut y = rect.y;
+         let y_end = rect.y + rect.height;
+         while y < y_end {
+@@ -569,7 +571,10 @@ impl BitmapUpdateHandler for RemoteFxHandler {
+         let len = loop {
+             match self
+                 .remotefx
+-                .encode(bitmap, buffer.as_mut_slice(), self.desktop_size.take())
++                // pengyos-remote-proto: the context advertises image mode, which needs the
++                // Sync/Context/Channels header on every message. Sending it only once (take())
++                // makes FreeRDP < 3.32 reject the second frame and drop the connection.
++                .encode(bitmap, buffer.as_mut_slice(), self.desktop_size)
+             {
+                 Err(e) => match e.kind() {
+                     ironrdp_core::EncodeErrorKind::NotEnoughBytes { .. } => {
+@@ -582,7 +587,18 @@ impl BitmapUpdateHandler for RemoteFxHandler {
+             }
+         };
+ 
+-        set_surface(bitmap, self.codec_id, &buffer[..len])
++        // Anchored at the origin; see RfxEncoder::encode.
++        let ds = self.desktop_size.expect("RemoteFxHandler always has a desktop size");
++        let full = BitmapUpdate {
++            x: 0,
++            y: 0,
++            width: NonZeroU16::new(ds.width).context("zero desktop width")?,
++            height: NonZeroU16::new(ds.height).context("zero desktop height")?,
++            format: bitmap.format,
++            data: bytes::Bytes::new(),
++            stride: bitmap.stride,
++        };
++        set_surface(&full, self.codec_id, &buffer[..len])
+     }
+ }
+ 
+diff --git a/vendor/ironrdp-server/src/encoder/rfx.rs b/vendor/ironrdp-server/src/encoder/rfx.rs
+index 973c859..31db216 100644
+--- a/vendor/ironrdp-server/src/encoder/rfx.rs
++++ b/vendor/ironrdp-server/src/encoder/rfx.rs
+@@ -64,8 +64,15 @@ impl RfxEncoder {
+         };
+         Block::CodecChannel(CodecChannel::FrameBegin(frame_begin)).encode(&mut cursor)?;
+ 
+-        let width = bitmap.width.get();
+-        let height = bitmap.height.get();
++        // pengyos-remote-proto: FreeRDP < 3.2x computes the RFX clipping rect as
++        // [left + x, width) instead of [left + x, left + x + width), so any surface command
++        // not anchored at (0,0) clips to nothing and the client drops the connection.
++        // Anchor every message at the desktop origin, make the region the whole desktop,
++        // and place only the changed tiles at their global tile indices.
++        let (width, height) = match desktop_size {
++            Some(ds) => (ds.width, ds.height),
++            None => (bitmap.x + bitmap.width.get(), bitmap.y + bitmap.height.get()),
++        };
+         let rectangles = vec![rfx::RfxRectangle {
+             x: 0,
+             y: 0,
+@@ -166,8 +173,8 @@ impl<'a> UpdateEncoder<'a> {
+                     y_quant_index: 0,
+                     cb_quant_index: 0,
+                     cr_quant_index: 0,
+-                    x: cast_int!("tile_x", tile_x)?,
+-                    y: cast_int!("tile_y", tile_y)?,
++                    x: cast_int!("tile_x", tile_x + usize::from(self.bitmap.x) / 64)?,
++                    y: cast_int!("tile_y", tile_y + usize::from(self.bitmap.y) / 64)?,
+                     y_data,
+                     cb_data,
+                     cr_data,
+diff --git a/vendor/ironrdp-server/src/server.rs b/vendor/ironrdp-server/src/server.rs
+index 612a629..ef2bd3c 100644
+--- a/vendor/ironrdp-server/src/server.rs
++++ b/vendor/ironrdp-server/src/server.rs
+@@ -32,7 +32,7 @@ use tokio::net::TcpSocket;
+ use tokio::sync::{Mutex, mpsc, oneshot};
+ use tokio::task;
+ use tokio_rustls::TlsAcceptor;
+-use tracing::{debug, error, trace, warn};
++use tracing::{debug, error, info, trace, warn};
+ 
+ use crate::autodetect::{AutoDetectManager, RttSnapshot};
+ use crate::clipboard::CliprdrServerFactory;
+@@ -716,6 +716,35 @@ impl RdpServer {
+     ///
+     /// Equivalent to [`run_connection_with`](Self::run_connection_with) with
+     /// [`TransportTls::Managed`].
++    /// Run one connection, but end it early if another client connects; that client is
++    /// handed back through `next` to be served instead.
++    async fn run_connection_or_takeover(
++        &mut self,
++        stream: tokio::net::TcpStream,
++        listener: &tokio::net::TcpListener,
++        next: &mut Option<(tokio::net::TcpStream, SocketAddr)>,
++    ) -> Result<()> {
++        let conn = self.run_connection(stream);
++        tokio::pin!(conn);
++        loop {
++            tokio::select! {
++                result = &mut conn => return result,
++                accepted = listener.accept() => match accepted {
++                    Ok((stream, peer)) => {
++                        info!(?peer, "New connection takes over the current session");
++                        *next = Some((stream, peer));
++                        TAKEOVER.notify_waiters();
++                        return match tokio::time::timeout(Duration::from_secs(2), &mut conn).await {
++                            Ok(result) => result,
++                            Err(_) => Ok(()),
++                        };
++                    }
++                    Err(error) => warn!(%error, "accept failed"),
++                },
++            }
++        }
++    }
++
+     pub async fn run_connection<S>(&mut self, stream: S) -> Result<()>
+     where
+         S: AsyncRead + AsyncWrite + Send + Sync + Unpin,
+@@ -933,10 +962,31 @@ impl RdpServer {
+         debug!("Listening for connections on {local_addr}");
+         self.local_addr = Some(local_addr);
+ 
++        // pengyos-remote-proto: a new connection takes over the session (as on Windows)
++        // instead of queueing behind the current one until it disconnects.
++        let mut taken_over: Option<(tokio::net::TcpStream, SocketAddr)> = None;
++
+         loop {
+             let ev_receiver = Arc::clone(&self.ev_receiver);
+             let mut ev_receiver = ev_receiver.lock().await;
+             tokio::select! {
++                biased;
++                Some((stream, peer)) = core::future::ready(taken_over.take()), if taken_over.is_some() => {
++                    drop(ev_receiver);
++                    debug!(?peer, "Taking over the session");
++                    let started = tokio::time::Instant::now();
++                    let result = self.run_connection_or_takeover(stream, &listener, &mut taken_over).await;
++                    if let Err(ref error) = result {
++                        error!(?error, "Connection error");
++                    }
++                    self.static_channels = StaticChannelSet::new();
++                    if let Some(ref mut handler) = self.connection_handler {
++                        let action = handler.on_disconnected(peer, started.elapsed(), result.as_ref().err());
++                        if action == PostConnectionAction::Stop {
++                            break;
++                        }
++                    }
++                }
+                 Some(event) = ev_receiver.recv() => {
+                     match event {
+                         ServerEvent::Quit(reason) => {
+@@ -967,7 +1017,7 @@ impl RdpServer {
+                         drop(stream);
+                     } else {
+                         let started = tokio::time::Instant::now();
+-                        let result = self.run_connection(stream).await;
++                        let result = self.run_connection_or_takeover(stream, &listener, &mut taken_over).await;
+                         let duration = started.elapsed();
+ 
+                         if let Err(ref error) = result {
+@@ -1016,10 +1066,11 @@ impl RdpServer {
+         message_channel_id: Option<u16>,
+     ) -> Result<RunState> {
+         match action {
+-            Action::FastPath => {
+-                let input = decode(&bytes)?;
+-                self.handle_fastpath(input).await;
+-            }
++            Action::FastPath => match decode(&bytes) {
++                Ok(input) => self.handle_fastpath(input).await,
++                // pengyos-remote-proto: an undecodable input PDU must not end the session.
++                Err(e) => warn!(error = %e, len = bytes.len(), hex = %hex_dump(&bytes), "fast-path input decode failed; dropped"),
++            },
+ 
+             Action::X224 => {
+                 if self
+@@ -1237,6 +1288,7 @@ impl RdpServer {
+         let mut writer = SharedWriter::new(writer);
+         let mut display_writer = writer.clone();
+         let mut event_writer = writer.clone();
++        let mut takeover_writer = writer.clone();
+         let ev_receiver = Arc::clone(&self.ev_receiver);
+         let s = Rc::new(Mutex::new(self));
+ 
+@@ -1322,9 +1374,16 @@ impl RdpServer {
+         };
+ 
+         let state = tokio::select!(
+-            state = dispatch_pdu => state,
+-            state = dispatch_display => state,
+-            state = dispatch_events => state,
++            state = dispatch_pdu => { let s: Result<RunState> = state; s.context("pdu branch") },
++            state = dispatch_display => { let s: Result<RunState> = state; s.context("display branch") },
++            state = dispatch_events => { let s: Result<RunState> = state; s.context("events branch") },
++            () = TAKEOVER.notified() => {
++                info!("Session taken over by a new connection");
++                if let Err(error) = send_disconnected_by_other(io_channel_id, user_channel_id, &mut takeover_writer).await {
++                    warn!(%error, "failed to send disconnect reason");
++                }
++                Ok(RunState::Disconnect)
++            },
+         );
+ 
+         debug!("End of client loop: {state:?}");
+@@ -1483,6 +1542,16 @@ impl RdpServer {
+         let encoder = UpdateEncoder::new(desktop_size, surface_flags, update_codecs, self.opts.max_request_size)
+             .context("failed to initialize update encoder")?;
+ 
++        // pengyos-remote-proto: clients such as Remmina size their local surface from the
++        // desktop size *they* requested and only adopt the server's size through a
++        // DesktopResize, which FreeRDP raises on Deactivation-Reactivation. Reactivate once
++        // per connection at the real desktop size so frames are not drawn into a smaller surface.
++        if !result.reactivation {
++            debug!(?desktop_size, "Initial reactivation at the server desktop size");
++            deactivate_all(result.io_channel_id, result.user_channel_id, writer).await?;
++            return Ok(RunState::DeactivationReactivation { desktop_size });
++        }
++
+         let state = self
+             .client_loop(
+                 reader,
+@@ -1768,6 +1837,43 @@ impl RdpServer {
+ /// The request is framed by a Basic Security Header (SEC_AUTODETECT_REQ) per
+ /// [MS-RDPBCGR] 2.2.14.3 and carried in an MCS Send Data Indication on the
+ /// negotiated message channel, not as a Share Data PDU on the I/O channel.
++/// pengyos-remote-proto: wakes the active session's client loop when a new connection
++/// takes over. `notify_waiters` stores no permit, so it is a no-op with no active session.
++static TAKEOVER: tokio::sync::Notify = tokio::sync::Notify::const_new();
++
++/// Tell the client it lost the session to another connection, so FreeRDP-based clients
++/// do not auto-reconnect and take it straight back.
++async fn send_disconnected_by_other(
++    io_channel_id: u16,
++    user_channel_id: u16,
++    writer: &mut impl FramedWrite,
++) -> Result<(), anyhow::Error> {
++    let info = ServerSetErrorInfoPdu(ErrorInfo::ProtocolIndependentCode(
++        ProtocolIndependentCode::DisconnectedByOtherconnection,
++    ));
++    // A Set Error Info PDU is a Share Data PDU: it needs the Share Control and Share Data
++    // headers, or the client cannot parse it (send_access_denied above omits them).
++    let pdu = rdp::headers::ShareControlHeader {
++        share_id: 0,
++        pdu_source: io_channel_id,
++        share_control_pdu: ShareControlPdu::Data(rdp::headers::ShareDataHeader {
++            share_data_pdu: rdp::headers::ShareDataPdu::ServerSetErrorInfo(info),
++            stream_priority: rdp::headers::StreamPriority::Undefined,
++            compression_flags: rdp::headers::CompressionFlags::empty(),
++            compression_type: rdp::client_info::CompressionType::K8,
++        }),
++    };
++    let user_data = encode_vec(&pdu)?.into();
++    let pdu = SendDataIndication {
++        initiator_id: user_channel_id,
++        channel_id: io_channel_id,
++        user_data,
++    };
++    let msg = encode_vec(&X224(pdu))?;
++    writer.write_all(&msg).await?;
++    Ok(())
++}
++
+ fn encode_autodetect_request(
+     request: rdp::autodetect::AutoDetectRequest,
+     message_channel_id: u16,
+@@ -1868,3 +1974,7 @@ impl<'a, W: FramedWrite> SharedWriter<'a, W> {
+         }
+     }
+ }
++
++fn hex_dump(b: &[u8]) -> String {
++    b.iter().take(64).map(|x| format!("{x:02x}")).collect::<Vec<_>>().join(" ")
++}

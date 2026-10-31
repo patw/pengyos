@@ -596,6 +596,21 @@ share, read and write; an unreachable host fails with a network error, never "Lo
 not mountable"; a remembered password survives a reboot; nothing on a Desktop listens on
 445 until a folder is shared.
 
+**US-DSK-19 — Use this desktop from another computer.**
+> *As the daily-driver user, I want to reach my PengyOS desktop from my Windows laptop or my
+> Mac with the Remote Desktop client they already have, and see and use the session I left
+> open, with a password and nothing to install on this side.*
+
+How: `pengyos-remote` (or the Remote Desktop app over it) runs `pengyos-rdp-server` in the
+session: the desktop portal's RemoteDesktop + ScreenCast, PipeWire frames, and a vendored,
+patched ironrdp-server (`divergence.toml`). NLA with an RDP password separate from the login
+password; TLS with a certificate made for the machine; the first session asks on screen.
+`--local` keeps it to SSH tunnels.
+**Acceptance:** after `pengyos-remote password` and `on`, FreeRDP / Remmina / Windows' client
+logs in with the user name and that password and shows and drives the live screen; a wrong
+password is refused before anything is shown; `off` closes the port. Not covered: a second,
+separate session, audio, clipboard, multiple monitors.
+
 **US-DSK-18 — Share a folder with the house, without a terminal.**
 > *As the daily-driver user, I want to share my Music folder with the TV and the other
 > laptops from a window, so I never type an SMB config.*
