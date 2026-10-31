@@ -98,6 +98,11 @@ BR2_TARGET_GENERIC_GETTY_PORT="tty1"
 # --- Userspace packages -----------------------------------------------------
 # D-Bus: the systemd userspace messaging bus.
 BR2_PACKAGE_DBUS=y
+# systemd-logind: acts on the power button (HandlePowerKey=poweroff), so a
+# Core box, or a Core VM sent the ACPI button by `pengyos-vm stop`, shuts down
+# cleanly instead of ignoring it. Core has no PAM, so it tracks no sessions;
+# the Server adds PAM and pam_systemd for those.
+BR2_PACKAGE_SYSTEMD_LOGIND=y
 # Core utilities: uutils/coreutils — the Rust coreutils (SPEC §2.1). Our own
 # recipe (package/uutils-coreutils; Buildroot 2026.08 ships no uutils recipe),
 # pinned to 0.11.0 and built with `--features unix`, which is the set GNU
@@ -573,7 +578,13 @@ BR2_PACKAGE_LINUX_PAM=y
 # File permissions (board/server/permissions.txt): unix_chkpwd
 # setuid so pam_unix can check an unprivileged user's password.
 # BR2_ROOTFS_DEVICE_TABLE: set by the desktop layer
-BR2_PACKAGE_SYSTEMD_LOGIND=y
+# (systemd-logind itself is in Core: the power button.)
+# polkit: logind (and later other daemons) authorize unprivileged callers
+# through it; without it only root may, so a user could not even turn on
+# their own linger (pengyos-vm VMs died at logout). Rules in
+# /etc/polkit-1/rules.d (Server overlay: 60-pengyos-linger.rules). It brings
+# setuid pkexec and polkit-agent-helper-1 (polkit.mk's permissions table).
+BR2_PACKAGE_POLKIT=y
 # GRUB: Core's modules + loadenv/test — the installed grub.cfg picks the root
 # slot from grubenv.
 BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux ext2 fat part_msdos part_gpt normal efi_gop gfxterm gfxmenu font all_video videoinfo loadenv test smbios serial"
@@ -629,9 +640,8 @@ BR2_PACKAGE_PENGY_WEB=y
 BR2_TARGET_GENERIC_HOSTNAME="pengyos-desktop"
 
 # --- Userspace additions to the base -------------------------------------------
-# polkit: authorizes the flatpak system helper so cosmic-store can INSTALL apps
-# (the helper routes privileged writes through org.freedesktop.PolicyKit1).
-BR2_PACKAGE_POLKIT=y
+# polkit (Server layer) also authorizes the flatpak system helper so
+# cosmic-store can INSTALL apps (privileged writes go through PolicyKit1).
 # --- Flatpak: the app lane (SPEC §2.5) ----------------------------------------
 # Built from source (package/flatpak, with package/appstream and
 # package/libfyaml) — it used to be copied from the build host by post-build.
@@ -873,7 +883,7 @@ BR2_PACKAGE_SEATD_DAEMON=y
 # (LIBSEAT_BACKEND=seatd in start-cosmic and cosmic-greeter-start); logind only serves the
 # login1 API. systemd is built with polkit support (-Dpolkit=enabled) so logind
 # authorizes callers through the polkit daemon already in the image (root is
-# allowed regardless). (logind itself: Server layer.)
+# allowed regardless). (logind itself: Core layer.)
 # NOT via BR2_PACKAGE_SYSTEMD_POLKIT: that makes systemd depend on polkit, while
 # polkit's logind session tracking (external.mk) needs libsystemd first -- a
 # dependency cycle that broke any build of systemd after polkit. external.mk

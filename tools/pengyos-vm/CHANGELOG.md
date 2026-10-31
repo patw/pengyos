@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.2.0] - 2026-10-31
+
+### Added
+- `pengy-vmm`: the VMs in a browser (127.0.0.1:5100, per-user token, user
+  unit `pengy-vmm.service`), every action a `pengyos-vm` command.
+
+### Changed
+- Linger needs no sudo now (polkit `60-pengyos-linger.rules`): `start` says
+  `loginctl enable-linger`, and `autostart on` turns it on.
+
 ## [0.1.0] - 2026-10-31
 
 ### Added

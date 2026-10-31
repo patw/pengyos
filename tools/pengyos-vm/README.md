@@ -18,9 +18,25 @@ pengyos-vm show web [--json|--qemu] # settings, how to reach it, the QEMU comman
 pengyos-vm vnc web                  # its screen: VNC on 127.0.0.1, and the ssh -L line
 pengyos-vm log web                  # what it wrote to its serial console
 pengyos-vm stop web [--force]       # ACPI power button (or pull the plug)
-pengyos-vm autostart web on         # start at boot (needs linger, see below)
+pengyos-vm autostart web on         # start at boot (turns on linger, see below)
 pengyos-vm delete web --yes
 ```
+
+## In a browser: pengy-vmm
+
+```sh
+systemctl --user enable --now pengy-vmm    # serves http://127.0.0.1:5100
+pengy-vmm url                              # the address to open, with your token
+```
+
+A page over the same commands: the VM list, start / shut down / force off /
+start at boot / eject / delete, the serial console (read it, type a line), and
+a form for a new VM (ISO, or an image file or URL, downloaded in the
+background). Every button runs `pengyos-vm` as you. It listens on 127.0.0.1
+and needs your token (`~/.config/pengy-vmm/token`, 0600), because other
+accounts on the machine can reach that port too; changes need it in a header
+as well, so another site cannot post a form at it. From another machine:
+`ssh -L 5100:127.0.0.1:5100 you@host`, then open the `pengy-vmm url` address.
 
 ## Networking
 
@@ -42,8 +58,9 @@ wireless port and says to use NAT.
 ## Things to know
 
 - **Logging out stops your VMs** unless linger is on: your systemd user
-  manager ends with your last session. `sudo loginctl enable-linger USER`
-  keeps it (and `autostart`) running without a login. `start` says so.
+  manager ends with your last session. `loginctl enable-linger` (no sudo:
+  `60-pengyos-linger.rules` lets anyone set their own) keeps it running
+  without a login; `autostart on` turns it on for you. `start` says so.
 - `--ssh-key` hands your public key to the guest as the systemd credential
   `ssh.authorized_keys.root`, and every VM gets `system.hostname=NAME`.
   systemd guests (PengyOS Core, recent Fedora/Debian/Arch) use them; others

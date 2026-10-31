@@ -107,7 +107,8 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-autologin on\|off` | Desktop: skip the login screen at boot and the lock screen on sleep/idle |
 | `pengyos-webui status\|on\|off` | Server/Desktop: serve the Pengy web UI as a user, on `http://127.0.0.1:5000` (no login — see Gotchas) |
 | `pengyos-shares status\|add\|remove\|passwd` | Server/Desktop: share folders over SMB (the kernel's ksmbd; no Samba server) — see Gotchas |
-| `pengyos-vm list\|create\|start\|ssh\|console\|stop` | Server/Desktop: VMs in `~/vms`, NAT or `sudo pengyos-vm bridge enable` (wired only); `sudo loginctl enable-linger USER` or they stop at logout |
+| `pengyos-vm list\|create\|start\|ssh\|console\|stop` | Server/Desktop: VMs in `~/vms`, NAT or `sudo pengyos-vm bridge enable` (wired only); `loginctl enable-linger` (no sudo) or they stop at logout |
+| `pengy-vmm url` / `systemctl --user enable --now pengy-vmm` | the VMs in a browser on 127.0.0.1:5100 (token in the URL) |
 | `pengyos-sharing` | Desktop: the File Sharing window over pengyos-shares (`--list` prints the same as text) |
 | `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers |
 | `distrobox create\|enter` | a full distro userspace sharing `$HOME` |
@@ -137,8 +138,8 @@ propose `apt install`, `pip install` into system paths, or editing files under
    A service that should run at boot (a database, Jellyfin) is a Quadlet file,
    `~/.config/containers/systemd/NAME.container` with `[Install]
    WantedBy=default.target`, then `systemctl --user daemon-reload` and `start
-   NAME`. With `sudo loginctl enable-linger USER` it starts at boot with nobody
-   logged in. A published port is still closed to the LAN until
+   NAME`. With `loginctl enable-linger` (no sudo needed) it starts at boot with
+   nobody logged in. A published port is still closed to the LAN until
    `sudo pengyos-firewall allow PORT --from CIDR`.
 
 For a user's own tools, `pip install --user`, `venv`, and `uv` work against

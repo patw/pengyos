@@ -1,0 +1,12 @@
+# pengy-vmm: your pengyos-vm VMs in a browser, on http://127.0.0.1:5100
+# (`pengy-vmm url` prints the address with your token). Off by default:
+#   systemctl --user enable --now pengy-vmm
+[Unit]
+Description=pengy-vmm (VMs in a browser)
+
+[Service]
+ExecStart=/usr/bin/pengy-vmm serve
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,379 @@
+#!/usr/bin/env python3
+"""pengy-vmm - your VMs in a browser: a web page over `pengyos-vm`.
+
+    pengy-vmm url                     the address to open (with your token)
+    pengy-vmm serve [--port 5100] [--host 127.0.0.1]
+    systemctl --user enable --now pengy-vmm   (serve it in the background)
+
+Everything it does, it does by running `pengyos-vm` as you: the page is a view
+of `pengyos-vm list --json` and `show --json`, and its buttons are the same
+commands you would type. There is nothing here the CLI cannot do.
+
+It listens on 127.0.0.1 only. Other people with an account on this machine
+can reach that port too, so every request needs your token
+(~/.config/pengy-vmm/token, 0600, made on first run): `pengy-vmm url` prints
+the address with it, the page keeps it in a SameSite=Strict cookie, and
+changes also need it in a header. From another machine, tunnel it:
+    ssh -L 5100:127.0.0.1:5100 you@this-machine   then open `pengy-vmm url`.
+
+--vm-cmd PATH (test hook) runs PATH instead of /usr/bin/pengyos-vm.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hmac
+import html
+import json
+import os
+import re
+import secrets
+import socket
+import subprocess
+import sys
+import threading
+import time
+from http.cookies import SimpleCookie
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+PROG = "pengy-vmm"
+PORT = 5100
+VM_CMD = ["/usr/bin/pengyos-vm"]
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
+JOBS: dict[str, dict] = {}
+JOBS_LOCK = threading.Lock()
+
+
+def token_path() -> Path:
+    return Path.home() / ".config" / PROG / "token"
+
+
+def token() -> str:
+    p = token_path()
+    if not p.is_file():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(secrets.token_urlsafe(24) + "\n")
+    return p.read_text().strip()
+
+
+def vm(*args: str, timeout: float = 60) -> tuple[int, str]:
+    """Run pengyos-vm; (exit code, stdout+stderr)."""
+    try:
+        cp = subprocess.run(VM_CMD + list(args), capture_output=True, text=True,
+                            stdin=subprocess.DEVNULL, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return 124, f"pengyos-vm {args[0]} took longer than {timeout:.0f}s"
+    return cp.returncode, (cp.stdout + cp.stderr).strip()
+
+
+def vm_json(*args: str):
+    code, out = vm(*args, "--json")
+    if code != 0:
+        raise RuntimeError(out)
+    return json.loads(out)
+
+
+def start_job(title: str, args: list[str]) -> str:
+    """A slow command (create downloads and converts) in the background."""
+    jid = secrets.token_hex(4)
+    with JOBS_LOCK:
+        JOBS[jid] = {"id": jid, "title": title, "done": False, "ok": None, "output": "",
+                     "started": time.time()}
+
+    def work():
+        code, out = vm(*args, timeout=3600)
+        with JOBS_LOCK:
+            JOBS[jid].update(done=True, ok=code == 0, output=out)
+
+    threading.Thread(target=work, daemon=True).start()
+    return jid
+
+
+def console_send(name: str, text: str) -> str:
+    """Type a line into a VM's serial console (as `pengyos-vm console` would)."""
+    sock = Path.home() / "vms" / name / "serial.sock"
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(str(sock))
+        s.sendall(text.encode() + b"\r")
+        time.sleep(0.3)
+    except OSError as e:
+        raise RuntimeError(f"cannot reach {name}'s console ({e.strerror}); "
+                           f"is it running, or is a `pengyos-vm console` open?")
+    finally:
+        s.close()
+    return "sent"
+
+
+def console_tail(name: str, lines: int = 200) -> str:
+    log = Path.home() / "vms" / name / "console.log"
+    if not log.is_file():
+        return ""
+    data = log.read_bytes()[-200_000:].decode(errors="replace")
+    # Terminal control sequences (colours, OSC 3008 shell marks) are noise in a page.
+    data = re.sub(r"\x1b[\]P][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-9;?!>=]*[A-Za-z]|\x1b[()][0-9A-Za-z]|\r", "", data)
+    data = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", data)
+    return "\n".join(data.splitlines()[-lines:])
+
+
+ACTIONS = {
+    "start": lambda n, b: vm("start", n, timeout=60),
+    "stop": lambda n, b: vm("stop", n, timeout=150),
+    "force-stop": lambda n, b: vm("stop", n, "--force"),
+    "autostart-on": lambda n, b: vm("autostart", n, "on"),
+    "autostart-off": lambda n, b: vm("autostart", n, "off"),
+    "eject": lambda n, b: vm("set", n, "--eject"),
+    "delete": lambda n, b: vm("delete", n, "--yes"),
+}
+
+
+def create_args(b: dict) -> list[str]:
+    name = str(b.get("name", "")).strip()
+    args = ["create", name]
+    src = str(b.get("source", "")).strip()
+    if not src:
+        raise ValueError("give an ISO file, or a disk image file or URL")
+    kind = "--iso" if b.get("kind") == "iso" else "--image"
+    args += [kind, src]
+    for key in ("disk", "memory", "cpus"):
+        v = str(b.get(key, "")).strip()
+        if v:
+            args += [f"--{key}", v]
+    if b.get("net") in ("nat", "bridge"):
+        args += ["--net", b["net"]]
+    for f in str(b.get("forwards", "")).replace(",", " ").split():
+        args += ["--forward", f]
+    if b.get("ssh_key"):
+        args += ["--ssh-key"]
+    if b.get("bios"):
+        args += ["--bios"]
+    return args
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = PROG
+    tok = ""
+
+    def log_message(self, fmt, *args):  # quiet; the journal gets errors only
+        pass
+
+    # ------------------------------------------------------------- plumbing
+    def authed(self, need_header: bool) -> bool:
+        q = parse_qs(urlparse(self.path).query)
+        cookie = SimpleCookie(self.headers.get("Cookie", ""))
+        given = [q.get("token", [""])[0], cookie["vmm"].value if "vmm" in cookie else ""]
+        if need_header:
+            given = [self.headers.get("X-Token", "")]
+        return any(g and hmac.compare_digest(g, self.tok) for g in given)
+
+    def send(self, code: int, body: bytes, ctype: str, extra: dict | None = None):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy",
+                         "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def json(self, code: int, obj):
+        self.send(code, json.dumps(obj).encode(), "application/json")
+
+    def body(self) -> dict:
+        n = int(self.headers.get("Content-Length") or 0)
+        if n > 64_000:
+            raise ValueError("request too large")
+        return json.loads(self.rfile.read(n) or b"{}")
+
+    # ---------------------------------------------------------------- verbs
+    def do_GET(self):
+        path = urlparse(self.path).path
+        if not self.authed(need_header=False):
+            return self.send(403, FORBIDDEN.encode(), "text/html; charset=utf-8")
+        if path == "/":
+            cookie = f"vmm={self.tok}; HttpOnly; SameSite=Strict; Path=/"
+            page = PAGE.replace("@TOKEN@", html.escape(self.tok)).encode()
+            return self.send(200, page, "text/html; charset=utf-8", {"Set-Cookie": cookie})
+        try:
+            if path == "/api/vms":
+                return self.json(200, {"vms": vm_json("list"), "bridge": vm_json("bridge", "status")})
+            m = re.match(r"^/api/vms/([a-z0-9-]+)(/console)?$", path)
+            if m and NAME_RE.match(m[1]):
+                if m[2]:
+                    return self.json(200, {"text": console_tail(m[1])})
+                return self.json(200, vm_json("show", m[1]))
+            if path == "/api/jobs":
+                with JOBS_LOCK:
+                    return self.json(200, sorted(JOBS.values(), key=lambda j: -j["started"])[:10])
+        except (RuntimeError, ValueError) as e:
+            return self.json(400, {"error": str(e)})
+        self.json(404, {"error": "no such page"})
+
+    def do_POST(self):
+        if not self.authed(need_header=True):
+            return self.json(403, {"error": "missing or wrong token"})
+        path = urlparse(self.path).path
+        try:
+            b = self.body()
+            if path == "/api/vms":
+                args = create_args(b)
+                if not NAME_RE.match(args[1]):
+                    raise ValueError("names are lowercase letters, digits and dashes")
+                return self.json(202, {"job": start_job(f"create {args[1]}", args)})
+            m = re.match(r"^/api/vms/([a-z0-9-]+)/([a-z-]+)$", path)
+            if m and NAME_RE.match(m[1]):
+                name, action = m[1], m[2]
+                if action == "console":
+                    return self.json(200, {"ok": True, "output": console_send(name, str(b.get("text", "")))})
+                if action in ACTIONS:
+                    code, out = ACTIONS[action](name, b)
+                    return self.json(200 if code == 0 else 400, {"ok": code == 0, "output": out})
+        except (RuntimeError, ValueError) as e:
+            return self.json(400, {"error": str(e)})
+        self.json(404, {"error": "no such action"})
+
+
+FORBIDDEN = """<!doctype html><meta charset=utf-8><title>pengy-vmm</title>
+<body style="font-family:sans-serif;max-width:40em;margin:3em auto">
+<h1>pengy-vmm needs your token</h1>
+<p>Run <code>pengy-vmm url</code> on the machine and open the address it prints.</p>"""
+
+PAGE = r"""<!doctype html>
+<html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>pengy-vmm</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2330;--mute:#667085;--line:#e3e6eb;--acc:#2f6fdf;--bad:#c4372f;--ok:#1f8f4e}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1c2027;--ink:#e7eaf0;--mute:#9aa3b2;--line:#2b313b;--acc:#6b9bff;--bad:#ff6b61;--ok:#4cc584}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:baseline}
+header h1{font-size:18px;margin:0}header span{color:var(--mute)}
+main{max-width:1100px;margin:0 auto;padding:18px 22px;display:grid;gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+h2{font-size:15px;margin:0 0 10px}table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--mute);font-weight:600;font-size:13px}tr.sel td{background:color-mix(in srgb,var(--acc) 10%,transparent)}
+tr{cursor:pointer}.st{font-weight:600}.running{color:var(--ok)}.stopped{color:var(--mute)}.failed{color:var(--bad)}
+button{font:inherit;padding:5px 11px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}button.d{color:var(--bad)}button:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label{display:grid;gap:3px;font-size:13px;color:var(--mute)}input,select{width:100%;min-width:0;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+pre{background:#0d1014;color:#d6dde8;padding:10px;border-radius:8px;height:300px;overflow:auto;margin:8px 0;font:12.5px/1.35 ui-monospace,monospace;white-space:pre-wrap}
+.msg{white-space:pre-wrap;font-size:13px;color:var(--mute)}.err{color:var(--bad)}dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:0}dt{color:var(--mute)}dd{margin:0}
+code{font:13px ui-monospace,monospace}input[type=checkbox]{width:auto}
+</style></head><body>
+<header><h1>pengy-vmm</h1><span id=bridge></span></header>
+<main>
+<section class=card><h2>Virtual machines</h2>
+<table><thead><tr><th>Name</th><th>State</th><th>CPUs</th><th>Memory</th><th>Network</th><th>SSH</th><th>At boot</th></tr></thead>
+<tbody id=list><tr><td colspan=7 class=msg>loading…</td></tr></tbody></table>
+<p id=out class=msg></p></section>
+
+<section class=card id=detail hidden><h2 id=dname></h2>
+<div class=row id=dbtns></div><p></p><dl id=dinfo></dl>
+<h2 style="margin-top:14px">Serial console</h2>
+<pre id=con></pre>
+<form class=row id=conf><input id=conin placeholder="type a command, Enter sends it" style="flex:1"><button>Send</button></form>
+</section>
+
+<section class=card><h2>New VM</h2>
+<form id=create class=grid>
+<label>Name<input name=name required pattern="[a-z0-9][a-z0-9-]{0,31}" placeholder="web"></label>
+<label>Boot from<select name=kind><option value=iso>installer ISO</option><option value=image>disk image (file or URL)</option></select></label>
+<label style="grid-column:span 2">File or URL<input name=source required placeholder="/home/you/debian.iso"></label>
+<label>CPUs<input name=cpus placeholder=2></label><label>Memory<input name=memory placeholder=2G></label>
+<label>Disk<input name=disk placeholder=20G></label>
+<label>Network<select name=net><option value=nat>NAT (works on Wi-Fi)</option><option value=bridge>bridge (own LAN address)</option></select></label>
+<label style="grid-column:span 2">Port forwards (NAT)<input name=forwards placeholder="8080:80 0.0.0.0:8443:443"></label>
+<label><span><input type=checkbox name=ssh_key> give it my SSH key</span></label>
+<label><span><input type=checkbox name=bios> legacy BIOS</span></label>
+<div class=row><button class=p>Create</button></div>
+</form><p id=jobs class=msg></p></section>
+</main>
+<script>
+const T="@TOKEN@";let sel=null,vms=[];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function api(p,o={}){o.headers={"X-Token":T,"Content-Type":"application/json"};const r=await fetch(p,o);const j=await r.json().catch(()=>({error:r.statusText}));if(!r.ok)throw new Error(j.error||j.output||r.statusText);return j}
+function say(t,bad){$("out").textContent=t||"";$("out").className="msg"+(bad?" err":"")}
+async function load(){
+  try{const d=await api("/api/vms");vms=d.vms;const b=d.bridge;if(!sel&&vms.length)sel=vms[0].name;
+    $("bridge").textContent=b.enabled?`bridge on ${b.port}${b.up?"":" (not up)"}`:"bridge off: VMs use NAT";
+    $("list").innerHTML=vms.length?vms.map(v=>`<tr data-n="${esc(v.name)}" class="${v.name==sel?"sel":""}"><td><b>${esc(v.name)}</b></td><td class="st ${esc(v.state)}">${esc(v.state)}</td><td>${v.cpus}</td><td>${esc(v.memory)}</td><td>${esc(v.net)}</td><td><code>${esc(v.ssh||"–")}</code></td><td>${v.autostart?"yes":"no"}</td></tr>`).join(""):`<tr><td colspan=7 class=msg>No VMs yet: make one below.</td></tr>`;
+    document.querySelectorAll("#list tr[data-n]").forEach(r=>r.onclick=()=>{sel=r.dataset.n;load()});
+    if(sel&&vms.find(v=>v.name==sel))detail(vms.find(v=>v.name==sel));else $("detail").hidden=true;
+  }catch(e){say(e.message,true)}
+}
+function btn(t,a,cls,confirmText){const b=document.createElement("button");b.textContent=t;if(cls)b.className=cls;b.onclick=async()=>{if(confirmText&&!confirm(confirmText))return;b.disabled=true;say(t+"…");try{const r=await api(`/api/vms/${sel}/${a}`,{method:"POST",body:"{}"});say(r.output);if(a=="delete")sel=null}catch(e){say(e.message,true)}b.disabled=false;load()};return b}
+async function detail(v){
+  $("detail").hidden=false;$("dname").textContent=v.name;const B=$("dbtns");B.innerHTML="";
+  const on=v.state=="running";
+  if(!on)B.append(btn("Start","start","p"));else{B.append(btn("Shut down","stop"));B.append(btn("Force off","force-stop","d","Pull the plug on "+v.name+"? Unsaved work in it is lost."))}
+  B.append(v.autostart?btn("Don't start at boot","autostart-off"):btn("Start at boot","autostart-on"));
+  if(v.iso)B.append(btn("Eject ISO","eject"));
+  if(!on)B.append(btn("Delete","delete","d","Delete "+v.name+" and its disk? This cannot be undone."));
+  const rows=[["Disk",v.disk],["ISO",v.iso],["Network",v.net+", MAC "+v.mac],["SSH",v.ssh?`${v.ssh}  (pengyos-vm ssh ${v.name})`:(v.net=="bridge"?"LAN address not known yet":"")],["Forwards",(v.forwards||[]).join(", ")],["Screen",`VNC on ${v.vnc}: ssh -L ${v.vnc.split(":")[1]}:${v.vnc} this-machine, then a VNC viewer on localhost`],["Firmware",v.firmware.toUpperCase()]];
+  $("dinfo").innerHTML=rows.filter(r=>r[1]).map(r=>`<dt>${r[0]}</dt><dd><code>${esc(r[1])}</code></dd>`).join("");
+  try{const c=await api(`/api/vms/${v.name}/console`);const p=$("con"),end=p.scrollTop+p.clientHeight>=p.scrollHeight-20;p.textContent=c.text||"(nothing on the serial console yet)";if(end)p.scrollTop=p.scrollHeight}catch(e){}
+}
+$("conf").onsubmit=async e=>{e.preventDefault();try{await api(`/api/vms/${sel}/console`,{method:"POST",body:JSON.stringify({text:$("conin").value})});$("conin").value="";setTimeout(load,600)}catch(x){say(x.message,true)}};
+$("create").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),b=Object.fromEntries(f);b.ssh_key=f.has("ssh_key");b.bios=f.has("bios");
+  try{await api("/api/vms",{method:"POST",body:JSON.stringify(b)});e.target.reset();jobs()}catch(x){$("jobs").textContent=x.message;$("jobs").className="msg err"}};
+async function jobs(){try{const j=await api("/api/jobs");$("jobs").className="msg";$("jobs").textContent=j.map(x=>`${x.title}: ${x.done?(x.ok?"done":"failed"):"working…"}${x.done&&x.output?"\n  "+x.output.replace(/\n/g,"\n  "):""}`).join("\n");if(j.some(x=>!x.done))setTimeout(jobs,1500);else load()}catch(e){}}
+load();jobs();setInterval(load,4000);
+</script></body></html>
+"""
+
+
+def cmd_url(a) -> int:
+    print(f"http://127.0.0.1:{a.port}/?token={token()}")
+    return 0
+
+
+def cmd_serve(a) -> int:
+    Handler.tok = token()
+    if a.host not in ("127.0.0.1", "::1", "localhost"):
+        print(f"{PROG}: serving on {a.host}, not just this machine: the token is the only "
+              f"protection and plain HTTP shows it to the network", file=sys.stderr)
+    try:
+        srv = ThreadingHTTPServer((a.host, a.port), Handler)
+    except OSError as e:
+        print(f"{PROG}: cannot listen on {a.host}:{a.port}: {e.strerror}", file=sys.stderr)
+        return 1
+    print(f"{PROG}: serving on http://{a.host}:{a.port}/ (open `pengy-vmm url`)", file=sys.stderr)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    global VM_CMD
+    p = argparse.ArgumentParser(prog=PROG, description="Your VMs in a browser (over pengyos-vm).")
+    p.add_argument("--vm-cmd", help=argparse.SUPPRESS)
+    sub = p.add_subparsers(dest="cmd", required=True)
+    for name, fn in (("url", cmd_url), ("serve", cmd_serve)):
+        sp = sub.add_parser(name)
+        sp.add_argument("--port", type=int, default=PORT)
+        sp.set_defaults(fn=fn)
+        if name == "serve":
+            sp.add_argument("--host", default="127.0.0.1")
+    a = p.parse_args(argv)
+    if a.vm_cmd:
+        VM_CMD = a.vm_cmd.split()
+    if os.geteuid() == 0:
+        print(f"{PROG}: run it as the user whose VMs it shows, not root", file=sys.stderr)
+        return 2
+    return a.fn(a)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
