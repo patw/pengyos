@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The screen is `/dev/console` on real hardware again.** `render_grub_cfg` names
+  `console=tty0` after the serial console where GRUB finds a UART off QEMU, so
+  systemd's boot and shutdown status shows on the screen instead of only on the
+  serial port. Under QEMU the serial port stays last.
+
 ### Added
 - **The Server's live-session Wi-Fi comes along**, like the Desktop's
   NetworkManager profiles: each `/etc/wpa_supplicant/wpa_supplicant-nl80211-<iface>.conf`
