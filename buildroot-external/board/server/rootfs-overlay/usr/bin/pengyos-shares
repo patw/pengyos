@@ -297,11 +297,22 @@ def check_path(box: Box, path: str) -> str:
     return norm
 
 
+def invoker(box: Box) -> str | None:
+    """Who ran us through sudo or pkexec (the File Sharing app uses pkexec)."""
+    if os.environ.get("SUDO_USER"):
+        return os.environ["SUDO_USER"]
+    uid = os.environ.get("PKEXEC_UID", "")
+    if uid.isdigit():
+        return next((n for n, (u, _) in box.accounts().items() if u == int(uid)), None)
+    return None
+
+
 def cmd_add(box: Box, a, say) -> int:
     name = check_name(a.name)
     path = check_path(box, a.path)
     accounts = box.accounts()
-    users = a.user or ([os.environ["SUDO_USER"]] if os.environ.get("SUDO_USER") else [])
+    me = invoker(box)
+    users = a.user or ([me] if me else [])
     if not users:
         raise Misuse("say who may use the share: --user NAME (repeatable)")
     for u in users:
@@ -385,7 +396,10 @@ def cmd_deluser(box: Box, a, say) -> int:
 
 def cmd_status(box: Box, a, say) -> int:
     shares = load_shares(box)
-    users = load_users(box)
+    try:
+        users = load_users(box)
+    except PermissionError:  # root's 0600 file: who has a password is root's to see
+        users = None
     host = box.hostname()
     state = {
         "service": UNIT,
@@ -397,7 +411,7 @@ def cmd_status(box: Box, a, say) -> int:
                     "read_only": k.get("read only", "no").lower() in ("yes", "true", "1"),
                     "users": k.get("valid users", "").split(),
                     "comment": k.get("comment", "")} for n, k in shares.items()],
-        "users": sorted(users),
+        "users": None if users is None else sorted(users),
     }
     if a.json:
         print(json.dumps(state, indent=2))
@@ -409,12 +423,15 @@ def cmd_status(box: Box, a, say) -> int:
         say(f"No shares. Add one: sudo {PROG} add NAME /path/to/folder")
     for s in state["shares"]:
         mode = "read-only" if s["read_only"] else "read-write"
-        missing = [u for u in s["users"] if u not in users]
+        missing = [u for u in s["users"] if users is not None and u not in users]
         say(f"  {s['name']:<16} {s['path']}  ({mode}; {', '.join(s['users']) or 'nobody'})")
         say(f"  {'':<16} \\\\{host}\\{s['name']}   smb://{host}/{s['name']}")
         for u in missing:
             say(f"  {'':<16} {u} has no share password: sudo {PROG} passwd {u}")
-    say(f"Share passwords set for: {', '.join(state['users']) or 'nobody'}")
+    if users is None:
+        say(f"Who has a share password: sudo {PROG} status")
+    else:
+        say(f"Share passwords set for: {', '.join(state['users']) or 'nobody'}")
     return 0
 
 

@@ -64,3 +64,5 @@ exists    usr/lib/libxcb-cursor.so.0               # Qt >= 6.5 xcb plugin dlopen
 exists    usr/lib/libxcb-icccm.so.4                # Qt 6 xcb plugin — BR2_PACKAGE_XCB_UTIL_WM
 exists    usr/lib/libxcb-keysyms.so.1              # Qt 6 xcb plugin — BR2_PACKAGE_XCB_UTIL_KEYSYMS
 exec      usr/bin/pengyos-appimage                 # inspect/integrate/check — board/desktop/post-build.sh
+exec      usr/bin/pengyos-sharing                  # the File Sharing window — scripts/build-cosmic.sh + desktop post-build.sh
+exists    etc/polkit-1/rules.d/60-pengyos-shares.rules   # lets wheel run pkexec /usr/bin/pengyos-shares from it — desktop overlay

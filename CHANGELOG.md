@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — File Sharing, an app for sharing folders on the Desktop (2026-10-30)
+
+- **File Sharing** (`pengyos-sharing`, in the Applications list): see what is shared and
+  the addresses other computers use (`\\computer\name`, `smb://computer/name`), share a
+  folder with a picker and a suggested name, make it read-only, change or stop sharing
+  one, and set your share password. It is a window over `pengyos-shares`, run through
+  `pkexec`; administrators (wheel) need no password, the same as for Printers and
+  Updates (`60-pengyos-shares.rules`, which allows that one program only).
+- `pengyos-shares status` works without root (it leaves out who has a share
+  password, which is root's to see), and `add` takes its default user from pkexec as
+  well as sudo.
+
 ### Fixed — found on a ThinkPad Server: installer restart, late sshd, pengy-web, Quadlet (2026-10-30)
 
 Found installing a Server on a ThinkPad from the stick.

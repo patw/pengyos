@@ -577,6 +577,17 @@ share, read and write; an unreachable host fails with a network error, never "Lo
 not mountable"; a remembered password survives a reboot; nothing on a Desktop listens on
 445 until a folder is shared.
 
+**US-DSK-18 — Share a folder with the house, without a terminal.**
+> *As the daily-driver user, I want to share my Music folder with the TV and the other
+> laptops from a window, so I never type an SMB config.*
+
+How: the File Sharing app (`pengyos-sharing`), a window over `pengyos-shares`: pick a folder,
+take the suggested name, set a share password once. It runs `pkexec /usr/bin/pengyos-shares`;
+administrators need no password (`60-pengyos-shares.rules`), like Printers and Updates.
+**Acceptance:** a folder shared from the app opens from another computer at the address the
+app shows, with the user name and share password; stopping it closes 445 when it was the
+last share and leaves the files alone; a non-administrator is told so before anything runs.
+
 ---
 
 ## Cross-cutting stories
