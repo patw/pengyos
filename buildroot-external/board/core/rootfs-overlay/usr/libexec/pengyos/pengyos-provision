@@ -1,0 +1,89 @@
+#!/bin/sh
+# PengyOS Core: make a freshly written image usable without a screen.
+#
+# Core is written straight to a disk (or booted as a VM disk) with no installer,
+# so whoever wrote it needs a way to say who may log in and what the machine is
+# called, and the 1 GB root it was built with should fill the disk. Every boot,
+# before sshd (each step does nothing once done):
+#
+#   SSH keys   systemd's own provision.conf already turns an
+#              ssh.authorized_keys.root credential (QEMU: -smbios type=11,
+#              value=io.systemd.credential.binary:ssh.authorized_keys.root=BASE64)
+#              into /root/.ssh/authorized_keys. Here: the same from a file on the
+#              EFI partition, which any OS can write after flashing the image:
+#              pengyos/authorized_keys. New lines are appended; none removed.
+#   Hostname   the system.hostname credential, else pengyos/hostname on the EFI
+#              partition, replaces the image's default name (pengyos-core) only;
+#              a name someone set is left alone. (systemd itself lets a static
+#              /etc/hostname win over the credential, which is why this is here.)
+#   Disk       once: the root partition grows into the free space after it and
+#              the ext4 filesystem with it (online). The GPT's backup header
+#              moves to the disk's end first; Linux reads the GPT, so the hybrid
+#              MBR's old root entry does not matter.
+set -u
+DEFAULT_HOST=pengyos-core
+STATE=/var/lib/pengyos
+say() { echo "pengyos-provision: $*"; }
+
+root_dev=$(findmnt -no SOURCE /)
+disk=/dev/$(lsblk -no PKNAME "$root_dev" | head -1)
+
+# --- the EFI partition's pengyos/ folder ------------------------------------
+esp=$(lsblk -nrpo NAME,PARTTYPE "$disk" | awk 'tolower($2) ~ /^(c12a7328-f81f-11d2-ba4b-00a0c93ec93b|0xef)$/ {print $1; exit}')
+espdir=/run/pengyos-provision/esp
+if [ -n "$esp" ]; then
+    mkdir -p "$espdir"
+    mount -o ro "$esp" "$espdir" 2>/dev/null || esp=""
+fi
+esp_file() { [ -n "$esp" ] && [ -f "$espdir/pengyos/$1" ] && echo "$espdir/pengyos/$1"; }
+
+# --- SSH keys from the EFI partition ------------------------------------------
+if keys=$(esp_file authorized_keys); then
+    install -d -m 0700 /root/.ssh
+    touch /root/.ssh/authorized_keys && chmod 0600 /root/.ssh/authorized_keys
+    before=$(wc -l < /root/.ssh/authorized_keys)
+    # CRLF-safe: a file saved on Windows still works.
+    tr -d '\r' < "$keys" | while IFS= read -r line; do
+        case "$line" in ''|'#'*) continue ;; esac
+        grep -qxF "$line" /root/.ssh/authorized_keys || echo "$line" >> /root/.ssh/authorized_keys
+    done
+    n=$(( $(wc -l < /root/.ssh/authorized_keys) - before ))
+    [ "$n" -gt 0 ] && say "added $n SSH key(s) for root from the EFI partition"
+fi
+
+# --- hostname --------------------------------------------------------------------
+want=""
+if [ -n "${CREDENTIALS_DIRECTORY:-}" ] && [ -s "$CREDENTIALS_DIRECTORY/system.hostname" ]; then
+    want=$(tr -d '\r\n' < "$CREDENTIALS_DIRECTORY/system.hostname")
+elif f=$(esp_file hostname); then
+    want=$(head -1 "$f" | tr -d '\r\n ')
+fi
+have=$(cat /etc/hostname 2>/dev/null)
+if [ -n "$want" ] && [ "$have" = "$DEFAULT_HOST" ] && [ "$want" != "$have" ]; then
+    case "$want" in
+        *[!A-Za-z0-9-]*|-*|*-) say "ignoring hostname '$want' (letters, digits and dashes only)" ;;
+        *) echo "$want" > /etc/hostname && hostname "$want" && say "hostname set to $want" ;;
+    esac
+fi
+
+[ -n "$esp" ] && umount "$espdir" 2>/dev/null
+
+# --- grow the root partition and filesystem, once ------------------------------
+if [ ! -e "$STATE/root-grown" ]; then
+    part=$(cat "/sys/class/block/${root_dev#/dev/}/partition" 2>/dev/null)
+    disk_size=$(blockdev --getsize64 "$disk")
+    end=$(( ($(cat "/sys/class/block/${root_dev#/dev/}/start") + $(cat "/sys/class/block/${root_dev#/dev/}/size")) * 512 ))
+    # Leave alone when less than 64 MiB would be gained, or the root is not the last partition.
+    if [ -n "$part" ] && [ $((disk_size - end)) -gt $((64 * 1024 * 1024)) ] \
+       && [ "$(lsblk -nrpo NAME "$disk" | tail -1)" = "$root_dev" ]; then
+        sfdisk --relocate gpt-bak-std "$disk" >/dev/null 2>&1
+        if echo ", +" | sfdisk --no-reread --no-tell-kernel -N "$part" "$disk" >/dev/null 2>&1 \
+           && partx -u -n "$part" "$disk" && resize2fs "$root_dev" >/dev/null 2>&1; then
+            say "root filesystem grown to $(df -h / | awk 'NR==2 {print $2}')"
+        else
+            say "could not grow the root partition; it stays as it was"
+        fi
+    fi
+    mkdir -p "$STATE" && touch "$STATE/root-grown"
+fi
+exit 0

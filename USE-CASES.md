@@ -87,7 +87,12 @@ attached keyboard) with the network up via DHCP.
 > it from home.*
 
 How: minimal `sshd` over the network, or a serial/console fallback; host keys generated
-on first boot.
+on first boot. Core has no installer, so whoever writes the image says who may log in:
+`pengyos/authorized_keys` (and optionally `pengyos/hostname`) on its EFI partition, which
+any OS can write after flashing, or for a VM systemd's own credentials
+(`-smbios type=11,value=io.systemd.credential.binary:ssh.authorized_keys.root=BASE64`,
+`system.hostname`). `pengyos-provision.service` applies them before sshd and grows the
+root filesystem to the disk once.
 **Acceptance:** `ssh` login works after first boot; console access works with no network;
 the box is reachable again after a reboot with no human present.
 

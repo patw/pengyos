@@ -17,6 +17,24 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — a freshly written Core can be reached over SSH and fills its disk (2026-10-31)
+
+Core has no installer, and SSH is key-only, so a written Core image was reachable only
+from its console. `pengyos-provision.service` (Core only; Server and Desktop mask it)
+runs every boot before sshd:
+
+- **SSH keys**: `pengyos/authorized_keys` on the EFI partition (any OS can write that
+  FAT partition after flashing) is added to root's keys. A VM can skip the file:
+  systemd already turns an `ssh.authorized_keys.root` credential into root's keys
+  (QEMU `-smbios type=11,value=io.systemd.credential.binary:ssh.authorized_keys.root=…`).
+- **Hostname**: the `system.hostname` credential or `pengyos/hostname` replaces the
+  default `pengyos-core` (systemd alone lets the image's `/etc/hostname` win).
+- **Disk**: once, the root partition and its ext4 grow into the space after them;
+  the image's 1 GB root used to stay 1 GB on any disk.
+
+Core's SSH sessions get `LANG=C.UTF-8` too (`SetEnv` in its sshd_config: Core's
+sshd runs without PAM, so the Server's pam_env fix never reached it).
+
 ### Changed — App Library: a Games folder, no empty Office folder (2026-10-31)
 
 COSMIC's built-in App Library folders are Office, System and Utilities. PengyOS ships

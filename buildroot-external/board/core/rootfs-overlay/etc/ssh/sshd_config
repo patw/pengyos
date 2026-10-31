@@ -1,8 +1,8 @@
 # PengyOS Core — sshd configuration.
 #
-# Key-only root access: the image is reachable over SSH using the public key
-# injected at build time into /root/.ssh/authorized_keys
-# (see board/core/post-build.sh, PENGYOS_AUTHORIZED_KEYS_FILE).
+# Key-only root access: keys come from the build (board/core/post-build.sh,
+# PENGYOS_AUTHORIZED_KEYS_FILE), an ssh.authorized_keys.root credential, or
+# pengyos/authorized_keys on the EFI partition (pengyos-provision).
 # Console access is unaffected (the serial getty autologins).
 Port 22
 PermitRootLogin prohibit-password
@@ -13,4 +13,7 @@ AuthorizedKeysFile .ssh/authorized_keys
 UsePAM no
 # No PAM on Core: sshd prints /etc/motd itself.
 PrintMotd yes
+# Without PAM nothing reads /etc/locale.conf for an SSH session: give it the
+# image's locale so tmux and UTF-8 tools work.
+SetEnv LANG=C.UTF-8
 Subsystem sftp /usr/libexec/sftp-server

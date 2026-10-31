@@ -102,7 +102,10 @@ python3 -m pengyos_build build     pengyos-core --targets ../../targets.toml
 ```
 
 `tools/pengyos-qemu-verify` boots the result headless and asserts it reaches a
-login prompt. The full recipe, including the COSMIC host build the Desktop needs, is
+login prompt. To reach a written Core over SSH, put your public key in
+`pengyos/authorized_keys` on its EFI partition (and a name in `pengyos/hostname` if you
+like); a VM can pass it as a systemd credential instead. On first boot the root
+filesystem grows to fill the disk. The full recipe, including the COSMIC host build the Desktop needs, is
 in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Building an image is the easy half. **Running the repo** — the nightly loop, the
