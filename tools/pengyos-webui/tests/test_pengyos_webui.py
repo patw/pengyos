@@ -173,11 +173,13 @@ EXPECTED_UNIT = """# PengyOS — the Pengy web UI for one user (%i = the user na
 #
 # Root goes through sudo, as for %i at a terminal: Pengy's run_bash with
 # elevated=true runs the command's `sudo` with SUDO_ASKPASS fed the password
-# typed into the UI. So no NoNewPrivileges (it made sudo and every setuid
-# program unusable, whatever password was given) and no ProtectSystem (it
-# kept /usr, /etc and /boot read-only even for sudo, so Pengy could not make
-# the Tier-1 changes US-AGT-2 is about). Found 2026-10-31: on behoweather
-# Pengy could not write the USB sticks it had been asked to flash.
+# typed into the UI. Pengy is never sandboxed (principle 11 in
+# docs/principles.md), so this unit carries no hardening at all: no
+# NoNewPrivileges (it made sudo and every setuid program unusable, whatever
+# password was given), no ProtectSystem (/usr, /etc and /boot read-only even
+# for sudo), no PrivateTmp (a /tmp the user and other services could not see).
+# Found 2026-10-31: on behoweather Pengy could not write the USB sticks it had
+# been asked to flash.
 [Unit]
 Description=Pengy web UI for %i
 Documentation=https://pengyos.catbee.ca
@@ -197,7 +199,6 @@ Environment=WEBUI_HOST=127.0.0.1
 ExecStart=/usr/bin/pengy-web --port ${WEBUI_PORT} --host ${WEBUI_HOST}
 Restart=on-failure
 RestartSec=5
-PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -242,17 +243,20 @@ def test_unit_keeps_the_users_home_visible():
 
 
 def test_unit_lets_pengy_use_sudo():
-    """Pengy's elevated run_bash is a sudo call with the password typed into the UI.
+    """Pengy's elevated run_bash is a sudo call with the password typed into the UI,
+    and Pengy is never sandboxed (docs/principles.md, principle 11).
 
     NoNewPrivileges made sudo (and every setuid program) unusable from the UI,
     and ProtectSystem kept /usr, /etc and /boot read-only even as root: Pengy
     could not write the USB sticks it was asked to flash (behoweather, 2026-10-31)."""
     svc = dict(_unit_options().get("Service", []))
-    assert svc.get("NoNewPrivileges", "no") == "no"
-    assert svc.get("ProtectSystem", "no") == "no"
-    for blocker in ("CapabilityBoundingSet", "RestrictSUIDSGID", "SystemCallFilter",
-                    "PrivateDevices", "ReadOnlyPaths"):
-        assert blocker not in svc, f"{blocker} would stop sudo or what it is for"
+    # Pengy is never sandboxed (principle 11): no hardening option of any kind.
+    blockers = [k for k in svc if k.startswith(("Protect", "Private", "Restrict"))
+                or k in ("NoNewPrivileges", "CapabilityBoundingSet", "AmbientCapabilities",
+                         "SystemCallFilter", "SystemCallArchitectures", "ReadOnlyPaths",
+                         "InaccessiblePaths", "DynamicUser", "LockPersonality",
+                         "MemoryDenyWriteExecute", "DevicePolicy", "DeviceAllow")]
+    assert not blockers, f"{blockers}: Pengy is never sandboxed (docs/principles.md, principle 11)"
 
 
 def test_unit_is_a_system_unit_that_boots():

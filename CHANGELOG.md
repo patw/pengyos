@@ -24,7 +24,10 @@ the images and then could not write them: `pengy-web@.service` set `NoNewPrivile
 the sudo its elevated `run_bash` uses (with the password typed into the UI) could never gain
 root, and `ProtectSystem=strict` would have kept `/usr`, `/etc` and `/boot` read-only even
 as root, which ruled out the Tier-1 changes US-AGT-2 is built on. Both are gone from the
-unit. Root still takes the user's own sudo password, as at a terminal. `pengyos-webui`'s
+unit, and so is `PrivateTmp`. A new principle (11 in `docs/principles.md`) records the rule:
+Pengy is never sandboxed; it reaches root through the user's own sudo password, as at a
+terminal, and who can reach it is the user's call. SPEC §1.5's tiers now say who decides,
+not what is enforced. `pengyos-webui`'s
 tests had also been failing since the unit's `WorkingDirectory` fix the day before; they
 pass again.
 

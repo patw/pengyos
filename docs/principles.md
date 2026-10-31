@@ -95,6 +95,20 @@ When a decision is contested, these decide it.
     live in this repository, in plain text, under version control. The agent memory
     bus is for task recall. If it matters, it gets written down here.
 
+11. **Pengy is never sandboxed.** On a machine, Pengy (pengy-web, pengy-cli, the
+    desktop app) acts with its user's full authority, and with root through that
+    user's own sudo password, exactly as the user would at a terminal. It can do
+    anything on the machine, including destructive or unsafe things. Nothing in the
+    image may limit that: no `NoNewPrivileges`, `Protect*`, `Private*`, capability or
+    syscall filters on its processes, no profile or policy that denies it, no
+    lockdown that takes powers away from root. Sandboxing a web service is the right
+    default everywhere else; Pengy is the one exception, because doing whatever the
+    machine needs is its job. Who can *reach* Pengy (bind address, firewall) is the
+    user's decision and is where its exposure is controlled. Principle 9 governs the
+    OS's definition and trust root (this repo, releases, signing). It does not fence
+    Pengy on a machine. (2026-10-31: `NoNewPrivileges` and `ProtectSystem` on
+    `pengy-web@.service` stopped Pengy writing USB sticks it had been asked to flash.)
+
 ## The maintenance loop
 
 What's new here isn't the code, it's how the system gets curated and kept alive:

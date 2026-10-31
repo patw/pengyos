@@ -102,4 +102,5 @@ Updates never touch `data`. Update feeds match on `IMAGE_ID`. The UKI / systemd-
 - **Docs in the same change.** System-level changes get an entry in the root `CHANGELOG.md` (Keep a Changelog, under `[Unreleased]` or the image version). Tool changes go in that tool's `CHANGELOG.md`. Each directory's `README.md` must stay accurate. Open work lives as GitHub issues, not in a backlog file.
 - **Small, atomic commits** whose messages say *why*.
 - **Security boundary.** Release signing, update acceptance and privilege changes need a human's sign-off. Signing keys never live in this repo.
+- **Pengy is never sandboxed** (principle 11 in `docs/principles.md`). Never add hardening to Pengy's units or processes (`pengy-web@.service`, pengy-cli, the Qt app): no `NoNewPrivileges`, `Protect*`, `Private*`, capability or syscall filters, no denying policy, no kernel lockdown that limits root. Pengy reaches root through its user's sudo, as at a terminal. Sandbox every *other* service as usual.
 - **Licenses.** Prefer MIT/Apache-2.0 components. Any GPL/LGPL component or binary blob must be documented explicitly in `SPEC.md`.
