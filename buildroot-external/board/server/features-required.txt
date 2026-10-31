@@ -46,6 +46,10 @@ exists    usr/lib/systemd/user/pengy-vmm.service   # board/server overlay
 exec      usr/bin/qemu-system-x86_64               # pengyos-vm runs it — BR2_PACKAGE_QEMU_SYSTEM
 contains  usr/bin/qemu-system-x86_64  vnc-listen   # -vnc (pengyos-vm vnc) — BR2_PACKAGE_LIBVNCSERVER turns on QEMU's VNC
 exec      usr/bin/qemu-img                         # pengyos-vm create — BR2_PACKAGE_QEMU_TOOLS
+exists    usr/lib/systemd/user/podman.socket       # rootless API socket — external.mk PENGYOS_PODMAN_INSTALL_UNITS
+contains  usr/lib/systemd/user/podman.service  /usr/bin/podman   # @@PODMAN@@ substituted
+exists    usr/lib/systemd/user/podman-restart.service   # rootless --restart=always after a reboot
+contains  usr/lib/systemd/system/podman-restart.service  /usr/bin/podman   # the same for root containers
 exists    usr/share/qemu/edk2-x86_64-code.fd       # UEFI guests — BR2_PACKAGE_QEMU_BLOBS
 exists    usr/share/qemu/edk2-i386-vars.fd         # UEFI variables template — BR2_PACKAGE_QEMU_BLOBS
 exec      usr/libexec/qemu-bridge-helper           # --net bridge (setuid: board/server/permissions.txt)

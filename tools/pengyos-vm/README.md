@@ -96,7 +96,11 @@ wireless port and says to use NAT.
   the console says which VMs it is waiting for.
 - Without access to `/dev/kvm` a VM still runs, in QEMU's emulator (slow).
 - Images: qcow2 or raw, `.xz`/`.gz` unpacked (sparsely), http(s) downloaded.
-  The disk is grown to `--disk`, never shrunk.
+  The disk is grown to `--disk`, or to 20G without it, never shrunk (qcow2 is
+  sparse: unused space costs nothing).
+- A forward reaches the guest's port, and the guest's own firewall decides the
+  rest. A PengyOS guest is default-deny like every edition: open the port
+  inside it too (`pengyos-firewall allow 80`). `create` and `set` remind you.
 
 ## Files
 

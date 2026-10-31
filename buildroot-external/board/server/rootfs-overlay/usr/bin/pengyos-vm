@@ -475,8 +475,12 @@ def cmd_create(a) -> int:
             for leftover in vm.dir.iterdir():
                 if leftover != target:
                     leftover.unlink()
-            if disk and disk > virtual_size(target):
-                run(["qemu-img", "resize", "-q", str(target), str(disk)])
+            # An image is grown to --disk, or to the default when none is given:
+            # a 1 GB Core image left a VM with 362 MB free (ThinkPad, 2026-10-31).
+            # qcow2 is sparse, so the extra space costs nothing until it is used.
+            want = disk or parse_size(DEFAULTS["disk"], "--disk")
+            if want > virtual_size(target):
+                run(["qemu-img", "resize", "-q", str(target), str(want)])
         else:
             run(["qemu-img", "create", "-q", "-f", "qcow2", str(target),
                  str(disk or parse_size(DEFAULTS["disk"], "--disk"))])
@@ -492,7 +496,21 @@ def cmd_create(a) -> int:
     print(f"start it with: pengyos-vm start {a.name}" + (" --console" if iso else ""))
     if iso:
         print(f"when the install is done: pengyos-vm set {a.name} --eject")
+    forward_hint(conf["forwards"])
     return 0
+
+
+def forward_hint(forwards: list[dict]) -> None:
+    """A forward reaches the guest's port; the guest's own firewall decides the
+    rest. PengyOS guests are default-deny, so a forward to them answered
+    nothing until the port was opened inside (ThinkPad, 2026-10-31)."""
+    if not forwards:
+        return
+    ports = " ".join(sorted({f"{f['guest']}" + ("/udp" if f["proto"] == "udp" else "")
+                             for f in forwards}))
+    print(f"  forwards reach the guest's own ports: if its firewall is on (PengyOS is "
+          f"default-deny), open them inside it, e.g. `pengyos-firewall allow {ports.split()[0]}`"
+          + (f" (and {', '.join(ports.split()[1:])})" if len(ports.split()) > 1 else ""))
 
 
 # ------------------------------------------------------------- QEMU command
@@ -864,6 +882,8 @@ def cmd_set(a) -> int:
     vm.save()
     note = " (takes effect the next time it starts)" if vm.running() else ""
     print(f"{vm.name}: " + ", ".join(changed) + note)
+    if a.forward:
+        forward_hint(c["forwards"][-len(a.forward):])
     return 0
 
 
