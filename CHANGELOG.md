@@ -37,6 +37,9 @@ said nothing about it.
   core1 (beholder). A guest that ignores the power button is switched off after 30 s.`
   (`pengyos-vm-shutdown-notice.service`, Server and Desktop). A VM's own `qemu.log` says
   when it was asked to shut down and when it was switched off.
+- Checked on the ThinkPad (T470) with the changes applied by hand: boot and shutdown
+  status on the screen, and a `sudo reboot` with a VM that ignores the power button
+  waited 30 s, with the notice and the stop-job counter on screen.
 
 ### Fixed — release.sh publishes only with notes (2026-10-31)
 

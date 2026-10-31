@@ -71,6 +71,11 @@
   took 0.7 s (it was 100 s). pengy-vmm as a user unit: 403 without the token,
   the page lists and details the VM with its serial console, a line typed into
   the page ran in the guest, and a POST with only the cookie got 403.
+- 2026-10-31, ThinkPad T470 Server on 26.10.51 with these changes applied by hand: a
+  VM from the 26.10.49 Core (no logind, ignores the power button) took 100 s to an
+  explicit `stop`, 31 s when the user manager exited, and 30 s in a `sudo reboot`
+  (17:54:46 to 17:55:16). The notice naming it and the stop-job counter were on the
+  laptop's screen (photographed); boot and shutdown status show there too.
 
 ## pengy-vmm
 
