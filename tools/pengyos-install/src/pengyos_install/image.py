@@ -89,11 +89,15 @@ _WPA_CONF_RE = re.compile(r"^wpa_supplicant-nl80211-([A-Za-z0-9_-][A-Za-z0-9_.-]
 # gamemode: GameMode's polkit rule lets only this group change the CPU governor
 # and GPU clocks (its actions are allow_active=no otherwise), and its @gamemode
 # nice limit; without it GameMode did nothing.
+# systemd-journal: the system journal without sudo (the owner is in wheel, so it
+# grants nothing sudo does not), so `journalctl -b` shows the whole log, to the
+# owner and to Pengy debugging as them.
 # The image's /usr/lib/pengyos/owner-groups is the same list (merge-accounts adds
 # existing owners to groups appended later); tests/test_owner_groups.py keeps
 # the two equal.
 USER_GROUPS = (
     "wheel", "seat", "video", "audio", "input", "render", "pipewire", "gamemode",
+    "systemd-journal",
 )
 
 #: The data partition: btrfs, one subvolume per area (preinit mounts the same way).

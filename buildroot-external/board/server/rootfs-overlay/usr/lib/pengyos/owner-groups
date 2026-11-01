@@ -12,3 +12,6 @@ input
 render
 pipewire
 gamemode
+# The system journal (journalctl -b, -u UNIT) without sudo: the owner is in wheel,
+# so this grants no new power; Pengy debugs from the whole log.
+systemd-journal

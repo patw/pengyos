@@ -17,6 +17,36 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — LAN names resolve (2026-10-31)
+
+- **Bare LAN names work: `ssh miniserv`, `ping behopc`.** systemd-resolved sent a
+  single-label name only over LLMNR, which nothing on a home LAN answers, never to the
+  router's DNS that knows every DHCP client by name; `getent hosts miniserv` failed while
+  `nslookup miniserv 10.0.23.2` worked (behoserver). `ResolveUnicastSingleLabel=yes` in every
+  edition.
+- **`NAME.local` on the Server and Core**: mDNS was on in resolved but off on every link, so
+  `.local` names neither resolved nor answered. The wired and Wi-Fi networks now enable it
+  (the firewall already accepted 5353/udp). The Desktop keeps avahi as its mDNS stack.
+
+### Changed — the owner can read the system journal; `pengyos-update status` needs no sudo (2026-10-31)
+
+- **The machine's owner is in `systemd-journal`**, so `journalctl -b` and `journalctl -u UNIT`
+  show the system's logs without sudo (they are in `wheel`, so this grants nothing sudo
+  doesn't). New installs get it from the installer; existing owners from merge-accounts at
+  the first boot of this image. Pengy, debugging as the owner, saw only the user's journal.
+- **`pengyos-update status` shows both slots without sudo** (pengyos-update 0.2.0): the
+  commands that already run as root (`confirm` at every boot, `apply`, `rollback`) record the
+  slot table in the world-readable state file. Pengy had asked for a passwordless sudo rule
+  only to see the slots; no such rule ships.
+
+### Added — nvtop on Server and Desktop (2026-10-31)
+
+- **`nvtop`**, the htop-like GPU monitor (our recipe, `package/nvtop`, 3.3.2): utilization,
+  memory, clocks, power and the processes on each GPU over time. NVIDIA through NVML,
+  dlopened, so it shows the GPUs on the NVIDIA editions and runs quietly elsewhere; AMD
+  (libdrm_amdgpu, now on the Server) and Intel (i915/xe fdinfo) everywhere. In the
+  Server's feature list, so a layer edit can't drop it silently.
+
 ### Fixed — first Server NVIDIA install on real hardware (behoserver, 2026-10-31)
 
 - **nvidia-persistenced starts.** It dlopens `libnvidia-cfg.so.1`, which the

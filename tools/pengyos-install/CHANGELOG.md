@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The user the installer creates is also in `systemd-journal`, so `journalctl`
+  shows the system journal without sudo (the user is in `wheel` already).
+  Existing owners get it from merge-accounts at the first boot of the image.
+
 ### Fixed
 - **The screen is `/dev/console` on real hardware again.** `render_grub_cfg` names
   `console=tty0` after the serial console where GRUB finds a UART off QEMU, so

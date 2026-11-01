@@ -1,7 +1,14 @@
 # Changelog — pengyos-update
 
 
-## [Unreleased]
+## [0.2.0] — 2026-10-31
+
+### Added
+- `status` shows both slots without sudo. `confirm` (every boot), `apply`,
+  `rollback` and `status` as root record the slot table in the world-readable
+  state file (`slots`, `slots_at`); without root, `status` prints that record,
+  with the running slot and its system read live. Pengy asked for a
+  passwordless sudo rule just to see the slots.
 
 ### Changed
 - `confirm` renders grub.cfg with the running system's `render_grub_cfg`

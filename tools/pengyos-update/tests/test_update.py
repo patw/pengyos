@@ -334,3 +334,63 @@ def test_confirm_leaves_a_hand_edited_boot_menu_alone(tmp_path):
     d = _boot_dir(tmp_path, "menuentry \"mine\" {\n    chainloader /EFI/other.efi\n}\n")
     assert not write_boot_menu(d, {"a": "aaa", "b": "bbb"}, keep_unparsed=True)
     assert "chainloader" in (d / "grub.cfg").read_text()
+
+
+# --- status without sudo: the slot table root recorded --------------------------
+
+class _Layout:
+    def __init__(self, booted):
+        self.booted = booted
+        self.slots = {"a": "/dev/sda2", "b": "/dev/sda3"}
+        self.esp = "/dev/sda1"
+        self.partuuids = {"a": "aaa", "b": "bbb"}
+
+
+def _status(monkeypatch, tmp_path, capsys, state, booted="a", euid=1000):
+    from pengyos_update import cli
+    path = tmp_path / "state.json"
+    if state is not None:
+        path.write_text(json.dumps(state))
+    monkeypatch.setattr(cli, "identity", lambda: ("pengyos-server", "26.10.55", {"PRETTY_NAME": "PengyOS Server"}))
+    monkeypatch.setattr(cli, "read_config", lambda: {"feed": "https://x/feed.xml", "channel": "testing"})
+    monkeypatch.setattr(cli.os, "geteuid", lambda: euid)
+    monkeypatch.setattr(cli, "detect_layout", lambda: _Layout(booted))
+    args = build_parser().parse_args(["status", "--state", str(path)])
+    assert args.fn(args) == 0
+    return capsys.readouterr().out, path
+
+
+def test_status_without_sudo_and_no_record_says_how(monkeypatch, tmp_path, capsys):
+    out, _ = _status(monkeypatch, tmp_path, capsys, None)
+    assert "(run with sudo to see the slots)" in out
+
+
+def test_status_without_sudo_prints_the_recorded_slots(monkeypatch, tmp_path, capsys):
+    rows = [{"slot": "a", "device": "/dev/sda2", "system": "pengyos-server 26.10.55", "tags": ["running", "default"]},
+            {"slot": "b", "device": "/dev/sda3", "system": "pengyos-server 26.10.54", "tags": []}]
+    out, _ = _status(monkeypatch, tmp_path, capsys, {"slots": rows, "slots_at": "2026-11-01T02:00:00Z"})
+    assert "slot a:   /dev/sda2  pengyos-server 26.10.55  [running, default]" in out
+    assert "slot b:   /dev/sda3  pengyos-server 26.10.54" in out
+    assert "recorded 2026-11-01T02:00:00Z" in out
+    assert "run with sudo" not in out
+
+
+def test_status_without_sudo_reads_the_running_slot_live(monkeypatch, tmp_path, capsys):
+    # Recorded on slot a; this boot is slot b (a trial that never reached confirm).
+    rows = [{"slot": "a", "device": "/dev/sda2", "system": "pengyos-server 26.10.54", "tags": ["running", "default"]},
+            {"slot": "b", "device": "/dev/sda3", "system": "pengyos-server 26.10.55", "tags": ["tried once at next boot"]}]
+    out, _ = _status(monkeypatch, tmp_path, capsys, {"slots": rows, "slots_at": "t"}, booted="b")
+    assert "slot a:   /dev/sda2  pengyos-server 26.10.54  [default]" in out
+    assert "slot b:   /dev/sda3  pengyos-server 26.10.55  [running, tried once at next boot]" in out
+
+
+def test_status_as_root_records_the_slots(monkeypatch, tmp_path, capsys):
+    from pengyos_update import cli
+    monkeypatch.setattr(cli, "read_env", lambda esp: {"pengyos_slot": "a"})
+    monkeypatch.setattr(cli, "other_slot_version", lambda dev: "pengyos-server 26.10.54")
+    out, path = _status(monkeypatch, tmp_path, capsys, {"current": "26.10.55"}, euid=0)
+    assert "slot a:   /dev/sda2  pengyos-server 26.10.55  [running, default]" in out
+    saved = json.loads(path.read_text())
+    assert saved["current"] == "26.10.55"  # other fields kept
+    assert [r["slot"] for r in saved["slots"]] == ["a", "b"]
+    assert saved["slots"][1]["system"] == "pengyos-server 26.10.54"

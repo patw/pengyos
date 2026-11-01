@@ -10,6 +10,11 @@ Type=ether
 
 [Network]
 DHCP=yes
+# mDNS on this link: answer for <hostname>.local and resolve other .local names
+# (resolved's own stack; the firewall already accepts 5353/udp). Not on the
+# Desktop, where avahi is the mDNS stack and resolved's is off
+# (resolved.conf.d/50-pengyos-mdns-resolve-only.conf).
+MulticastDNS=yes
 
 # The installer gives the machine its name (/etc/hostname); a DHCP-offered
 # name would only be refused ("Could not set hostname: Access denied").
