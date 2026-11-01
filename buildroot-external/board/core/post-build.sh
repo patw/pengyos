@@ -279,6 +279,34 @@ fi
 # on the Desktop. The rule and its safety margin are in the script.
 python3 "$(dirname "$0")/../common/prune-iwlwifi.py" "${TARGET_DIR}"
 
+# --- /usr/local: the machine's own, on data -------------------------------------
+# /usr is the read-only image, swapped by every update. /usr/local is the one
+# place under it that belongs to the machine (a program, a library or firmware
+# put in as a stopgap until an image ships it), so it points into /var, which is
+# data on an installed system and survives updates (Fedora's image-based editions
+# do the same with /var/usrlocal). tmpfiles creates the tree; /usr/local/bin is
+# on PATH, /usr/local/lib in ld.so.conf, /usr/local/lib/firmware on the kernel's
+# firmware path (preinit). No package installs here: a real directory means one
+# does, and its files would be hidden.
+if [ -d "${TARGET_DIR}/usr/local" ] && [ ! -L "${TARGET_DIR}/usr/local" ]; then
+    if [ -n "$(ls -A "${TARGET_DIR}/usr/local")" ]; then
+        echo "post-build: a package installed into /usr/local, which is the machine's own:" >&2
+        find "${TARGET_DIR}/usr/local" -mindepth 1 | sed "s|${TARGET_DIR}||" >&2
+        exit 1
+    fi
+    rmdir "${TARGET_DIR}/usr/local"
+fi
+ln -sfn ../var/usrlocal "${TARGET_DIR}/usr/local"
+[ -x "${TARGET_DIR}/usr/bin/ldconfig" ] || {
+    echo "post-build: no /usr/bin/ldconfig; /usr/local/lib and /etc/ld.so.conf.d need it (external.mk glibc hook)" >&2; exit 1; }
+# /usr/local/bin first on the login PATH (sudo's secure_path and systemd's
+# default service PATH already list it). Set here, not with
+# BR2_SYSTEM_DEFAULT_PATH: the skeleton writes /etc/profile only when it is
+# (re)installed, so an incremental build would keep the old line.
+grep -q '^export PATH=' "${TARGET_DIR}/etc/profile" || {
+    echo "post-build: /etc/profile has no 'export PATH=' line to set" >&2; exit 1; }
+sed -i 's|^export PATH=.*|export PATH="/usr/local/bin:/usr/bin"|' "${TARGET_DIR}/etc/profile"
+
 # --- Last: every shared library the image needs is in it ------------------------
 # (the edition's later post-build runs this again over the finished tree)
 python3 "$(dirname "$0")/../common/check-needed-libs.py" "${TARGET_DIR}"

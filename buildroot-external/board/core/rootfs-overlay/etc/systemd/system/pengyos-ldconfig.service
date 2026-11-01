@@ -6,18 +6,19 @@
 #
 # The image needs no cache: without one the loader searches /usr/lib directly,
 # which is right for any slot. So the cache exists only while a directory is
-# listed in /etc/ld.so.conf.d/*.conf; with none, a leftover cache is removed.
+# listed in /etc/ld.so.conf.d/*.conf or a library is in /usr/local/lib; with
+# neither, a leftover cache is removed.
 # -X: never create soname links (/usr is read-only).
 [Unit]
-Description=Rebuild the dynamic loader cache for /etc/ld.so.conf.d
+Description=Rebuild the dynamic loader cache for /usr/local/lib and /etc/ld.so.conf.d
 DefaultDependencies=no
 Conflicts=shutdown.target
-After=local-fs.target
+After=local-fs.target systemd-tmpfiles-setup.service
 Before=sysinit.target shutdown.target systemd-update-done.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'for f in /etc/ld.so.conf.d/*.conf; do [ -e "$f" ] && exec /usr/bin/ldconfig -X; done; rm -f /etc/ld.so.cache'
+ExecStart=/bin/sh -c 'for f in /etc/ld.so.conf.d/*.conf /usr/local/lib/*.so*; do [ -e "$f" ] && exec /usr/bin/ldconfig -X; done; rm -f /etc/ld.so.cache'
 
 [Install]
 WantedBy=sysinit.target

@@ -16,6 +16,14 @@ export PATH
 mountpoint -q /proc || mount -t proc proc /proc
 mountpoint -q /sys || mount -t sysfs sysfs /sys
 
+# Firmware the image does not ship (yet) can be dropped into
+# /usr/local/lib/firmware (-> /var/usrlocal, on data), laid out like
+# /lib/firmware; the kernel tries this directory first. Set here, before any
+# module loads (udev starts after systemd). The kernel resolves the path at each
+# load, so it is fine that /var is bound below.
+[ -w /sys/module/firmware_class/parameters/path ] &&
+    printf %s /usr/local/lib/firmware > /sys/module/firmware_class/parameters/path
+
 data=
 for arg in $(cat /proc/cmdline); do
     case "$arg" in pengyos.data=*) data=${arg#pengyos.data=} ;; esac

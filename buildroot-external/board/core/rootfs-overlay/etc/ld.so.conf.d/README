@@ -1,2 +1,0 @@
-Only files named *.conf here are read (see /etc/ld.so.conf). One directory per
-line; run `sudo ldconfig -X` after adding or removing one.
