@@ -1,0 +1,23 @@
+# Keep /etc/ld.so.cache in step with the slot that booted. The cache lives in
+# /etc (the writable overlay on data) and records full paths, while each boot
+# may run a different read-only /usr (A/B update or rollback). systemd's own
+# ldconfig.service (off in Buildroot) runs only when /usr is newer than /etc,
+# which misses a rollback to an older slot, so this runs at every boot.
+#
+# The image needs no cache: without one the loader searches /usr/lib directly,
+# which is right for any slot. So the cache exists only while a directory is
+# listed in /etc/ld.so.conf.d/*.conf; with none, a leftover cache is removed.
+# -X: never create soname links (/usr is read-only).
+[Unit]
+Description=Rebuild the dynamic loader cache for /etc/ld.so.conf.d
+DefaultDependencies=no
+Conflicts=shutdown.target
+After=local-fs.target
+Before=sysinit.target shutdown.target systemd-update-done.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'for f in /etc/ld.so.conf.d/*.conf; do [ -e "$f" ] && exec /usr/bin/ldconfig -X; done; rm -f /etc/ld.so.cache'
+
+[Install]
+WantedBy=sysinit.target

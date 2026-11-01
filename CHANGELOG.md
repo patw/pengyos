@@ -31,6 +31,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   in the bundle but not installed, unless it is on a short optional list with a reason
   (CUDA debugger, PKCS#11, tile IR, the container sandbox helper, and CUDA's GL interop
   on the headless Server).
+### Added — stopgap library directories (2026-10-31)
+
+- **`/etc/ld.so.conf.d/` works.** A directory listed in `/etc/ld.so.conf.d/NAME.conf`
+  (then `sudo ldconfig -X`) is on the loader's path, for a vendor SDK under `/opt` or a
+  library copied in until the next image ships it (behoserver needed
+  `libnvidia-gpucomp` before 26.10.55). Before, there was no `/etc/ld.so.conf`, so the
+  only way was `LD_LIBRARY_PATH` in each program's environment.
+- **The cache can't go stale across slots.** `/etc/ld.so.cache` lives in the `/etc`
+  overlay on data while `/usr` changes with every update or rollback, and it records
+  full paths. `pengyos-ldconfig.service` rebuilds it early in every boot (systemd's own
+  `ldconfig.service` runs only when `/usr` is newer, which misses a rollback), and
+  removes it when no `.conf` is listed: the image itself needs no cache.
 
 ### Fixed — found testing containers and VMs on the ThinkPad Server (2026-10-31)
 
