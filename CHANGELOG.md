@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — LAN names resolve (2026-10-31)
+
+- **Bare LAN names work: `ssh miniserv`, `ping behopc`.** systemd-resolved sent a
+  single-label name only over LLMNR, which nothing on a home LAN answers, never to the
+  router's DNS that knows every DHCP client by name; `getent hosts miniserv` failed while
+  `nslookup miniserv 10.0.23.2` worked (behoserver). `ResolveUnicastSingleLabel=yes` in every
+  edition.
+- **`NAME.local` on the Server and Core**: mDNS was on in resolved but off on every link, so
+  `.local` names neither resolved nor answered. The wired and Wi-Fi networks now enable it
+  (the firewall already accepted 5353/udp). The Desktop keeps avahi as its mDNS stack.
+
 ### Changed — the owner can read the system journal; `pengyos-update status` needs no sudo (2026-10-31)
 
 - **The machine's owner is in `systemd-journal`**, so `journalctl -b` and `journalctl -u UNIT`
