@@ -17,6 +17,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — first Server NVIDIA install on real hardware (behoserver, 2026-10-31)
+
+- **nvidia-persistenced starts.** It dlopens `libnvidia-cfg.so.1`, which the
+  `nvidia-open` recipe never installed, so the unit failed at every boot on both
+  NVIDIA editions ("Failed to open libnvidia-cfg.so.1"). The GPUs worked, but were not
+  kept initialized between jobs. `libnvidia-gpucomp`, which `libcuda` dlopens, was
+  installed only with the graphics option; it is now in every NVIDIA image.
+- **A missing dlopened driver library fails the build.** dlopen()ed libraries are not
+  in `DT_NEEDED`, and the QEMU boot check has no NVIDIA GPU, so neither caught this.
+  `package/nvidia-open/check-dlopen-libs.sh` now scans every program and library the
+  recipe installs from the driver bundle for driver-library names, and fails if one is
+  in the bundle but not installed, unless it is on a short optional list with a reason
+  (CUDA debugger, PKCS#11, tile IR, the container sandbox helper, and CUDA's GL interop
+  on the headless Server).
+
 ### Fixed — found testing containers and VMs on the ThinkPad Server (2026-10-31)
 
 - **Rootless podman has its API socket.** Buildroot installed only the system
