@@ -159,6 +159,14 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
   `pengy-web` and no `pengyos-webui`.
 - **`/usr` is read-only.** A "fix" that edits `/usr` cannot work; the mutable
   surface is `/etc` (Tier 1) and the data partition.
+- **Stopgaps until an image ships the fix go in `/usr/local`** (it is
+  `/var/usrlocal`, on data, kept across updates): a program in
+  `/usr/local/bin` (first on `PATH`), a library in `/usr/local/lib` (then
+  `sudo ldconfig -X`), firmware in `/usr/local/lib/firmware` laid out like
+  `/lib/firmware` (the kernel looks there first; reload the module). Another
+  library directory goes in `/etc/ld.so.conf.d/NAME.conf`. These win over the
+  image's own files and never expire, so tell the human what you put there,
+  and remove it once an update ships the real fix.
 - **Scheduling is systemd timers; there is no cron or `at`.** A recurring job
   is a `.service` + `.timer` pair (`OnCalendar=`, `Persistent=true`) in
   `~/.config/systemd/user/` (as the user; `loginctl enable-linger` once so it

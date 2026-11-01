@@ -31,6 +31,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   in the bundle but not installed, unless it is on a short optional list with a reason
   (CUDA debugger, PKCS#11, tile IR, the container sandbox helper, and CUDA's GL interop
   on the headless Server).
+### Added — /usr/local for the machine's own programs, libraries and firmware (2026-10-31)
+
+- **`/usr/local` exists and survives updates.** It points to `/var/usrlocal`, on data
+  (Fedora's image-based editions do the same). `/usr/local/bin` is first on the default
+  `PATH` (sudo and systemd services already had it), `/usr/local/lib` is in
+  `ld.so.conf`, and preinit points the kernel's firmware search at
+  `/usr/local/lib/firmware` before any module loads. A program, library or firmware
+  blob the image does not ship yet can be dropped in without `LD_LIBRARY_PATH` or
+  waiting for an image. The build fails if a package ever installs into `/usr/local`.
+
 ### Added — stopgap library directories (2026-10-31)
 
 - **`/etc/ld.so.conf.d/` works.** A directory listed in `/etc/ld.so.conf.d/NAME.conf`
@@ -43,6 +53,9 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   full paths. `pengyos-ldconfig.service` rebuilds it early in every boot (systemd's own
   `ldconfig.service` runs only when `/usr` is newer, which misses a rollback), and
   removes it when no `.conf` is listed: the image itself needs no cache.
+  The config itself ships as `/usr/lib/pengyos/ld.so.conf` and is linked to
+  `/etc/ld.so.conf` at boot (tmpfiles): Buildroot's target-finalize refuses an
+  `/etc/ld.so.conf` in the image, and the link keeps it following the image.
 
 ### Fixed — found testing containers and VMs on the ThinkPad Server (2026-10-31)
 

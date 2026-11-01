@@ -54,15 +54,15 @@ define PENGYOS_GLIBC_INSTALL_LOCALE
 	$(INSTALL) -D -m 0755 $(@D)/build/locale/locale $(TARGET_DIR)/usr/bin/locale
 endef
 GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_LOCALE
-# ldconfig where the NVIDIA container toolkit is: the CDI spec's update-ldcache
-# hook runs the host's /sbin/ldconfig inside the container (so a container gets
-# the driver libraries in its ld cache), and fails without one.
-ifeq ($(BR2_PACKAGE_NVIDIA_CONTAINER_TOOLKIT),y)
-define PENGYOS_GLIBC_INSTALL_LDCONFIG
+# ldconfig in every edition. /usr/local/lib and /etc/ld.so.conf.d (the
+# machine's stopgap libraries, board/core) need it to build /etc/ld.so.cache,
+# and pengyos-ldconfig.service runs it at boot. The NVIDIA container toolkit's
+# CDI update-ldcache hook also runs the host's /sbin/ldconfig inside the
+# container. Buildroot installs it only for BR2_PACKAGE_GLIBC_UTILS.
+define PENGYOS_GLIBC_INSTALL_LDCONFIG_EVERYWHERE
 	$(INSTALL) -D -m 0755 $(@D)/build/elf/ldconfig $(TARGET_DIR)/usr/bin/ldconfig
 endef
-GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_LDCONFIG
-endif
+GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_LDCONFIG_EVERYWHERE
 
 # podman: Buildroot builds only cmd/podman. Rootless containers on a
 # user-defined network (podman network create, every podman-compose project)
