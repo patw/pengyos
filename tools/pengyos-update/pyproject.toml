@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-update"
-version = "0.1.1"
+version = "0.2.0"
 description = "On-device updater for PengyOS: read the update feed, verify the signed release, write it into the other root slot, boot it once, keep it if it comes up."
 readme = "README.md"
 requires-python = ">=3.10"

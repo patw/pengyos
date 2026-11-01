@@ -5,7 +5,7 @@ feed, verify the signed release, write it into the **other** root slot, boot it
 once, and keep it only if it comes up.
 
 ```console
-$ pengyos-update status              # version, channel, both slots (sudo for slots)
+$ pengyos-update status              # version, channel, both slots (as recorded at boot; sudo reads them live)
 $ pengyos-update check               # is there a newer release on my channel?
 $ sudo pengyos-update apply --reboot # install it and restart into it
 $ sudo pengyos-update rollback       # make the other slot the default again

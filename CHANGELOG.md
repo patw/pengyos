@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — the owner can read the system journal; `pengyos-update status` needs no sudo (2026-10-31)
+
+- **The machine's owner is in `systemd-journal`**, so `journalctl -b` and `journalctl -u UNIT`
+  show the system's logs without sudo (they are in `wheel`, so this grants nothing sudo
+  doesn't). New installs get it from the installer; existing owners from merge-accounts at
+  the first boot of this image. Pengy, debugging as the owner, saw only the user's journal.
+- **`pengyos-update status` shows both slots without sudo** (pengyos-update 0.2.0): the
+  commands that already run as root (`confirm` at every boot, `apply`, `rollback`) record the
+  slot table in the world-readable state file. Pengy had asked for a passwordless sudo rule
+  only to see the slots; no such rule ships.
+
 ### Added — nvtop on Server and Desktop (2026-10-31)
 
 - **`nvtop`**, the htop-like GPU monitor (our recipe, `package/nvtop`, 3.3.2): utilization,

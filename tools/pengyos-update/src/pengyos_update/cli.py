@@ -371,6 +371,7 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
     avail = state.get("available") or {}
     save_state(args.state, staged=man.version, other=man.version,
                available=avail if avail.get("version") not in (None, man.version) else None)
+    record_slots(layout, image, current, args.state)
     write_motd(f"PengyOS {man.version} is installed — restart to start it.", MOTD)
     progress.update("done", 1.0, f"PengyOS {man.version} is ready — restart to start it",
                     version=man.version)
@@ -418,10 +419,11 @@ def cmd_confirm(args: argparse.Namespace) -> int:
             esp.set_env(pengyos_slot=layout.booted, pengyos_try="")
         if write_boot_menu(esp.boot_dir, layout.partuuids, keep_unparsed=True):
             say("boot menu rewritten by this system's updater")
+    image, version, _ = identity()
+    record_slots(layout, image, version)
     if already:
         say(f"slot {layout.booted} is already the default")
         return 0
-    _, version, _ = identity()
     state = load_state()
     if state:
         avail = state.get("available") or {}
@@ -464,23 +466,18 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         esp.set_env(pengyos_slot=other, pengyos_try="")
     if load_state():
         save_state(staged=what.split()[1])
+    image, current, _ = identity()
+    record_slots(layout, image, current)
     say(f"slot {other} ({what}) is the default from the next restart.")
     if args.reboot:
         subprocess.run(["systemctl", "reboot"])
     return 0
 
 
-def cmd_status(args: argparse.Namespace) -> int:
-    image, current, osr = identity()
-    cfg = read_config()
-    say(f"system:   {osr.get('PRETTY_NAME', image)} ({image} {current}, build {osr.get('BUILD_ID', '?')})")
-    say(f"channel:  {cfg['channel']}   feed: {cfg['feed']}")
-    if os.geteuid() != 0:
-        say("(run with sudo to see the slots)")
-        return 0
-    layout = detect_layout()
-    env = read_env(layout.esp)
+def slot_rows(layout, env: dict, image: str, current: str) -> list[dict]:
+    """The A/B table: per slot its partition, system and tags (root: mounts the other slot)."""
     committed = env.get("pengyos_slot", "a")
+    rows = []
     for s in ("a", "b"):
         tags = []
         if s == layout.booted:
@@ -490,7 +487,60 @@ def cmd_status(args: argparse.Namespace) -> int:
         if env.get("pengyos_try") == s:
             tags.append("tried once at next boot")
         ver = f"{image} {current}" if s == layout.booted else other_slot_version(layout.slots[s])
-        say(f"slot {s}:   {layout.slots[s]}  {ver}  {'[' + ', '.join(tags) + ']' if tags else ''}")
+        rows.append({"slot": s, "device": layout.slots[s], "system": ver, "tags": tags})
+    return rows
+
+
+def print_slots(rows: list[dict]) -> None:
+    for r in rows:
+        tags = r.get("tags") or []
+        say(f"slot {r['slot']}:   {r['device']}  {r['system']}  {'[' + ', '.join(tags) + ']' if tags else ''}")
+
+
+def record_slots(layout, image: str, current: str, state_path: str = STATE) -> None:
+    """Keep the slot table in the world-readable state file, so `status` needs no sudo.
+
+    Called by the commands that already run as root and change or prove the table:
+    confirm (every boot), apply and rollback. Never fails the caller.
+    """
+    try:
+        rows = slot_rows(layout, read_env(layout.esp), image, current)
+        save_state(state_path, slots=rows, slots_at=now_iso())
+    except (UpdateError, OSError) as exc:
+        say(f"(could not record the slots for `pengyos-update status`: {exc})")
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    image, current, osr = identity()
+    cfg = read_config()
+    say(f"system:   {osr.get('PRETTY_NAME', image)} ({image} {current}, build {osr.get('BUILD_ID', '?')})")
+    say(f"channel:  {cfg['channel']}   feed: {cfg['feed']}")
+    if os.geteuid() == 0:
+        layout = detect_layout()
+        rows = slot_rows(layout, read_env(layout.esp), image, current)
+        print_slots(rows)
+        save_state(args.state, slots=rows, slots_at=now_iso())
+        return 0
+    # Without root: the table root last recorded (confirm writes it at every boot),
+    # with "running" and this slot's system read live, so a boot that never reached
+    # confirm is still shown as it is.
+    state = load_state(args.state)
+    rows = state.get("slots")
+    if not rows:
+        say("(run with sudo to see the slots)")
+        return 0
+    try:
+        booted = detect_layout().booted
+    except UpdateError:
+        booted = None
+    for r in rows:
+        tags = [t for t in r.get("tags") or [] if t != "running"]
+        if r.get("slot") == booted:
+            tags.insert(0, "running")
+            r["system"] = f"{image} {current}"
+        r["tags"] = tags
+    print_slots(rows)
+    say(f"(slots as recorded {state.get('slots_at', '?')}; sudo reads them live)")
     return 0
 
 
@@ -513,6 +563,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("status", help="this machine: version, channel, slots")
+    s.add_argument("--state", default=STATE, help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_status)
 
     s = sub.add_parser("check", help="is there a newer release?")
