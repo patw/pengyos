@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — nvtop on Server and Desktop (2026-10-31)
+
+- **`nvtop`**, the htop-like GPU monitor (our recipe, `package/nvtop`, 3.3.2): utilization,
+  memory, clocks, power and the processes on each GPU over time. NVIDIA through NVML,
+  dlopened, so it shows the GPUs on the NVIDIA editions and runs quietly elsewhere; AMD
+  (libdrm_amdgpu, now on the Server) and Intel (i915/xe fdinfo) everywhere. In the
+  Server's feature list, so a layer edit can't drop it silently.
+
 ### Fixed — first Server NVIDIA install on real hardware (behoserver, 2026-10-31)
 
 - **nvidia-persistenced starts.** It dlopens `libnvidia-cfg.so.1`, which the

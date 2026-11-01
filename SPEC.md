@@ -90,6 +90,7 @@ Chosen once, inherited everywhere.
 | **Swap** | zram (`zram-generator`) | MIT | swap partition | 🟢 |
 | **Time / trust** | chrony; ca-certificates; OpenSSL | GPL-2.0 / MPL-2.0 / Apache-2.0 | timesyncd | 🟢 |
 | **Remote** | OpenSSH, key-only; host keys generated on first boot | BSD | — | 🟢 |
+| **GPU monitor** | **nvtop** (Server and Desktop) — our recipe `package/nvtop`: NVIDIA through NVML (dlopened, so one build serves every edition), AMD through libdrm_amdgpu, Intel through DRM fdinfo | GPL-3.0 | `nvidia-smi` alone (NVIDIA only, a snapshot with no history); btop (a whole system monitor, for the GPU view alone) | 🟢 |
 | **LSM** | **Yama** (`ptrace_scope=1`) and **Landlock** since 26.10.23; no MAC policy yet (the kernel has no AppArmor or SELinux) | GPL-2.0 | SELinux | 🟡 |
 | **Signing** | **ed25519** detached signatures (`tools/pengyos-sign`) on update manifests | MIT | GPG | 🟢 |
 | **SBOM** | **SPDX + CycloneDX** per image, generated from Buildroot's `legal-info`/`show-info` (`pengyos-build sbom --embed`), signed, and embedded at `/etc/pengyos/` | CC0-1.0 | — | 🟢 |

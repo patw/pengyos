@@ -455,6 +455,9 @@ BR2_PACKAGE_PYTHON_SETUPTOOLS=y
 # the user it creates; root keeps bash.
 BR2_PACKAGE_ZSH=y
 BR2_PACKAGE_NCURSES_WCHAR=y
+# GPU monitor (our recipe): NVIDIA via NVML where the driver is, AMD and Intel
+# everywhere; nvidia-smi alone shows no processes over time and no other vendor.
+BR2_PACKAGE_NVTOP=y
 BR2_PACKAGE_GIT=y
 # The toolchain lane: Buildroot cannot put a compiler on the target (by design,
 # since 2012). gcc/clang/rustc/go/headers live in a distrobox container

@@ -1,0 +1,19 @@
+config BR2_PACKAGE_NVTOP
+	bool "nvtop"
+	depends on BR2_PACKAGE_SYSTEMD # libsystemd: device enumeration
+	depends on BR2_TOOLCHAIN_HAS_THREADS # libdrm
+	depends on BR2_USE_WCHAR # ncurses
+	depends on BR2_USE_MMU # libdrm amdgpu
+	depends on BR2_TOOLCHAIN_HAS_SYNC_4 # libdrm amdgpu atomics
+	select BR2_PACKAGE_NCURSES
+	select BR2_PACKAGE_NCURSES_WCHAR
+	select BR2_PACKAGE_LIBDRM
+	select BR2_PACKAGE_LIBDRM_AMDGPU
+	help
+	  An htop-like monitor for GPUs: utilization, memory, clocks,
+	  power, temperature and the processes using each GPU. NVIDIA
+	  through NVML (dlopened, so the same build runs everywhere and
+	  shows NVIDIA GPUs only where the driver is), AMD through
+	  libdrm_amdgpu, Intel (i915, xe) through DRM fdinfo.
+
+	  https://github.com/Syllo/nvtop

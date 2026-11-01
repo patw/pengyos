@@ -15,6 +15,7 @@ exec-any  smartctl                                 # SMART disk health — BR2_P
 exec-any  nvme                                     # NVMe health log — BR2_PACKAGE_NVME
 exec-any  wg                                       # WireGuard keys and status — BR2_PACKAGE_WIREGUARD_TOOLS
 exec-any  ethtool                                  # NIC link, offloads, Wake-on-LAN — BR2_PACKAGE_ETHTOOL
+exec-any  nvtop                                    # GPU monitor (NVIDIA, AMD, Intel) — BR2_PACKAGE_NVTOP
 
 # --- GPU firmware for xe (US-SRV-9 transcoding) ---------------------------------
 exists    usr/lib/firmware/xe/bmg_guc_70.bin       # Battlemage GuC — BR2_PACKAGE_LINUX_FIRMWARE_XE
