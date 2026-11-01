@@ -46,9 +46,13 @@ NVIDIA_OPEN_MODULE_MAKE_OPTS = \
 # --- Userspace -----------------------------------------------------------------
 # Compute and video, in every NVIDIA image: CUDA (inference), NVML (nvidia-smi,
 # monitoring), NVENC / NVDEC / optical flow (encoding; ffmpeg dlopens these by
-# SONAME). They need nothing but glibc.
+# SONAME). They need nothing but glibc. libnvidia-cfg is dlopened by
+# nvidia-persistenced (it exits at start without it) and libnvidia-gpucomp by
+# libcuda; NVIDIA's README lists both as internal driver libraries.
 NVIDIA_OPEN_LIBS = \
 	libcuda.so.$(NVIDIA_OPEN_VERSION) \
+	libnvidia-cfg.so.$(NVIDIA_OPEN_VERSION) \
+	libnvidia-gpucomp.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-ptxjitcompiler.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-nvvm.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-nvvm70.so.4 \
@@ -70,7 +74,6 @@ NVIDIA_OPEN_LIBS += \
 	libnvidia-glcore.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-glsi.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-tls.so.$(NVIDIA_OPEN_VERSION) \
-	libnvidia-gpucomp.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-glvkspirv.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-allocator.so.$(NVIDIA_OPEN_VERSION) \
 	libnvidia-egl-gbm.so.1.1.3 \
@@ -154,6 +157,9 @@ define NVIDIA_OPEN_INSTALL_TARGET_CMDS
 		$(TARGET_DIR)/usr/lib/modprobe.d/nvidia.conf
 	$(INSTALL) -D -m 0644 $(NVIDIA_OPEN_PKGDIR)/80-nvidia-pm.rules \
 		$(TARGET_DIR)/usr/lib/udev/rules.d/80-nvidia-pm.rules
+	# Every driver library an installed program dlopens must be installed:
+	# the QEMU boot check has no NVIDIA GPU, so it cannot catch a missing one.
+	sh $(NVIDIA_OPEN_PKGDIR)/check-dlopen-libs.sh $(@D) $(TARGET_DIR)
 endef
 
 # Suspend/resume: /proc/driver/nvidia/suspend hooks (needed for CUDA/UVM state
