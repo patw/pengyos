@@ -9,7 +9,8 @@
 //!   password   the RDP password (0600; not the login password)
 //!   cert.pem / key.pem   the TLS identity, made by `pengyos-remote on`
 //! The RDP user name is the login name. Env overrides (tests, debugging):
-//!   RDP_ADDR (default 0.0.0.0:3389), RDP_USER, RDP_PASS_FILE, RDP_CERT, RDP_KEY.
+//!   RDP_ADDR (default 0.0.0.0:3389), RDP_USER, RDP_PASS_FILE, RDP_CERT, RDP_KEY,
+//!   RDP_CURSOR=embedded (paint the cursor into frames; default: an RDP pointer).
 
 use std::num::{NonZeroU16, NonZeroUsize};
 use std::os::fd::OwnedFd;
@@ -360,9 +361,13 @@ fn run_pipewire(
         .add_local_listener_with_user_data(spa::param::video::VideoInfoRaw::default())
         .state_changed(move |_, _, old, new| {
             eprintln!("pipewire: {old:?} -> {new:?}");
-            if matches!(new, pw::stream::StreamState::Error(_)) {
-                let _ = wake.send(Wake::Stream);
-            }
+            use pw::stream::StreamState as S;
+            let _ = match (&old, &new) {
+                (_, S::Error(_)) => wake.send(Wake::Stream),
+                (S::Streaming, _) => wake.send(Wake::Paused),
+                (_, S::Streaming) => wake.send(Wake::Resumed),
+                _ => Ok(()),
+            };
         })
         .param_changed(move |stream, info, id, param| {
             let Some(param) = param else { return };
@@ -512,6 +517,9 @@ enum Wake {
     Stream,
     Input,
     Closed,
+    /// The stream left Streaming; a dead portal backend looks exactly like this.
+    Paused,
+    Resumed,
 }
 
 /// Output count plus a change counter, so a bounce (remove + add) is seen even
@@ -646,7 +654,7 @@ impl Portal {
             .select_sources(
                 session,
                 SelectSourcesOptions::default()
-                    .set_cursor_mode(CursorMode::Metadata)
+                    .set_cursor_mode(cursor_mode())
                     .set_sources(BitFlags::from(SourceType::Monitor))
                     .set_multiple(false),
             )
@@ -680,6 +688,19 @@ async fn stop(live: Live) {
 type Current = Arc<tokio::sync::RwLock<Option<Live>>>;
 
 const SETTLE: std::time::Duration = std::time::Duration::from_secs(2);
+const STALL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// How the cursor reaches the client: as RDP pointer metadata by default, so the
+/// client draws it locally. RDP_CURSOR=embedded paints it into the frames instead
+/// (clients then also show their own pointer). Embedded was tried as a fix for the
+/// portal's duplicate_frame panic and did not help: that race is in the frame
+/// handling shared by both paths (see supervise).
+fn cursor_mode() -> CursorMode {
+    match std::env::var("RDP_CURSOR").as_deref() {
+        Ok("embedded") => CursorMode::Embedded,
+        _ => CursorMode::Metadata,
+    }
+}
 
 /// Keep a working portal session in `current` for as long as the process runs.
 /// The first session's size goes to `first_size`.
@@ -717,18 +738,37 @@ async fn supervise(
         *current.write().await = Some(live);
         outputs.borrow_and_update();
 
-        let reason = tokio::select! {
-            _ = outputs.changed() => "the displays changed".to_string(),
-            w = wake.recv() => match w {
-                Some(Wake::Closed) => "the portal closed the session".to_string(),
-                w => format!("{w:?} failed"),
-            },
+        // Paused for longer than STALL with no way back: the backend is gone (it panicked
+        // on behobasement 2026-11-02 with the stream left Paused and no Closed signal).
+        let mut stalled: Option<tokio::time::Instant> = None;
+        let mut displays_changed = false;
+        let reason = loop {
+            let deadline = stalled.unwrap_or_else(|| tokio::time::Instant::now() + STALL);
+            tokio::select! {
+                _ = outputs.changed() => {
+                    displays_changed = true;
+                    break "the displays changed".to_string();
+                }
+                _ = tokio::time::sleep_until(deadline), if stalled.is_some() => {
+                    break format!("the stream stopped for {} s", STALL.as_secs());
+                }
+                w = wake.recv() => match w {
+                    Some(Wake::Paused) => stalled = Some(tokio::time::Instant::now() + STALL),
+                    Some(Wake::Resumed) => stalled = None,
+                    Some(Wake::Closed) => break "the portal closed the session".to_string(),
+                    w => break format!("{w:?} failed"),
+                },
+            }
         };
         eprintln!("portal: {reason}; replacing the session");
         if let Some(live) = current.write().await.take() {
             stop(live).await;
         }
-        tokio::time::sleep(SETTLE).await;
+        // Only a monitor coming and going needs time to settle; after a dead stream or
+        // backend, every second waited is a second of frozen screen for the client.
+        if displays_changed {
+            tokio::time::sleep(SETTLE).await;
+        }
         while wake.try_recv().is_ok() {}
     }
 }
