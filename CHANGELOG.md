@@ -17,6 +17,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — NVIDIA laptops can power the dGPU down on Linux 7.3 (2026-11-02)
+
+- **Runtime D3 (RTD3) keeps working on hybrid AMD/Intel + NVIDIA laptops under Linux
+  7.3.** 7.3 starts kernel threads in an empty root filesystem, and nvidia-open
+  615.78.08 opens the GPU's PCI config file from one, so the open failed, the driver
+  decided RTD3 was unsupported without logging an error, and the dGPU stayed powered
+  (battery drain and heat). NVIDIA/open-gpu-kernel-modules#1507, still open.
+  `package/nvidia-open/0001` does that one open with 7.3's `scoped_with_init_fs()`; on
+  older kernels it changes nothing. Ledgered as `nvidia-open-615.78.08-fork`.
+
 ### Fixed — LAN names resolve (2026-10-31)
 
 - **Bare LAN names work: `ssh miniserv`, `ping behopc`.** systemd-resolved sent a

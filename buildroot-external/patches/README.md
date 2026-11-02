@@ -75,6 +75,7 @@ Patches a recipe carries in its **own** directory are not listed here, because t
 are not delivered through `BR2_GLOBAL_PATCH_DIR`. `package/hplip-pengyos/` carries four
 (2 regenerated from Buildroot's, 2 authored here) and `package/ffmpeg-pengyos/` carries
 two upstream CVE fixes on 9.0.2 (declared in its own `.mk`; ledger entry
-`ffmpeg-9.0.2-fork`).
+`ffmpeg-9.0.2-fork`). `package/nvidia-open/` carries one authored fix
+(RTD3 under Linux 7.3's kthread nullfs root; ledger entry `nvidia-open-615.78.08-fork`).
 
 Each entry names its own expiry in the ledger.

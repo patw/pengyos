@@ -52,9 +52,9 @@ schema = 1
 fork_budget = 10
 
 # Budget: at most 10 maintained forks (kind = "fork") at any time.
-# Current fork count: 8 (ffmpeg-pengyos, hplip-pengyos 2026-10-19; upower-pengyos
+# Current fork count: 9 (ffmpeg-pengyos, hplip-pengyos 2026-10-19; upower-pengyos
 # 2026-10-20; libdisplay-info-pengyos 2026-10-23; uutils-findutils, distrobox,
-# xdg-utils 2026-10-27; ironrdp-server 2026-10-31). openssh-pengyos (2026-10-19) expired with Buildroot
+# xdg-utils 2026-10-27; ironrdp-server 2026-10-31; nvidia-open 2026-11-02). openssh-pengyos (2026-10-19) expired with Buildroot
 # 2026.08.1 on 2026-10-28. build-fix entries are not counted. The gate's count is
 # authoritative; this line is the human copy.
 # Enforced by the gate from 2026-10-19: scripts/pengyos_gate.py:check_fork_budget counts
@@ -712,4 +712,27 @@ upstream_fixes = []
 cost = "two vendored crates (588 KB) and a 305-line diff to re-apply on every bump; 0.x, so each minor is breaking"
 expiry = "an ironrdp-server release that anchors RemoteFX at the surface origin FreeRDP 3.14 accepts, resizes FreeRDP clients, and wraps Set Error Info in Share Data headers: drop vendor/ and [patch.crates-io]"
 observe_source = "pengyos-nightly observe, source ids ironrdp-server-vendor and ironrdp-acceptor-vendor: crates.io /api/v1/crates/NAME compared to the version in vendor/NAME/Cargo.toml (sources.ironrdp_vendor_findings, added 2026-10-31 with the fixture tests/fixtures/crates-io-ironrdp-server.json). No Buildroot recipe and no CPE, so pkg-stats and NVD cannot see it; these crates parse what a client sends before it logs in."
+upstream_status = "not-offered"
+
+[[divergence]]
+id        = "nvidia-open-615.78.08-fork"
+kind      = "fork"
+component = "nvidia-open"
+pinned_version = "615.78.08"
+editions  = ["pengyos-server-nvidia", "pengyos-desktop-nvidia"]
+carried_since = "2026-11-02"
+recipe        = "buildroot-external/package/nvidia-open"
+
+# Authored recipe. Linux 7.3 starts every kthread in an empty nullfs root, and the
+# driver opens /sys/bus/pci/devices/<bdf>/config from its nv-probe-<bdf> kthread, so
+# the open fails, the driver decides runtime D3 is unsupported and says nothing: the
+# NVIDIA dGPU of a hybrid laptop (the 6th-gen Ryzen AMD+NVIDIA test laptop) never
+# powers down. NVIDIA/open-gpu-kernel-modules#1507, open against 615.78.08,
+# 2026-10-31. 0001 wraps that one filp_open() in 7.3's scoped_with_init_fs(); on an
+# older kernel the macro is undefined and the code is unchanged. Restores behaviour,
+# so a fork. Needed from the Linux 7.3.1 bump on.
+upstream_fixes = []
+cost = "a 15-line patch to nv-pci.c; it stops applying (the build fails) if NVIDIA reworks nv_get_pci_sysfs_config(), which is the cue to check whether they fixed it"
+expiry = "an NVIDIA open-gpu-kernel-modules release whose nv_get_pci_sysfs_config() opens the config file in a way that works from a 7.3 kthread (#1507 closed as fixed): delete 0001 on that bump"
+observe_source = "pengyos-nightly observe, source id nvidia: git ls-remote --tags https://github.com/NVIDIA/open-gpu-kernel-modules compared to NVIDIA_OPEN_VERSION (sources.nvidia_findings). Every newer driver is reported in the major lane, and that bump is where 0001 is re-checked. pkg-stats cannot see the authored recipe."
 upstream_status = "not-offered"
