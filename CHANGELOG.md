@@ -17,6 +17,20 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — remote desktop no longer dies when the monitor sleeps, or the portal crashes (2026-11-02)
+
+- **RDP came back black or frozen, with dead input, after the monitor was switched off
+  or blanked.** The portal session shares one output object, and a monitor going away
+  (an LG UltraGear also drops off HDMI for a moment on every screen blank) makes
+  cosmic-comp replace it, which silently kills the session. `pengyos-rdp-server` now
+  replaces its portal session whenever the outputs change, the stream stalls for 2 s,
+  input keeps failing or the portal closes it, closes the session when stopped, and
+  waits for a display instead of crash-looping. A connected client sees frames resume.
+- **The COSMIC portal panicked after a few minutes of screencasting** (`duplicate_frame`),
+  taking every screencast and RDP session down. A race in cosmic-client-toolkit's frame
+  handling; `cosmic-patches/xdg-desktop-portal-cosmic/0001` hands a frame's result over
+  only after the frame is destroyed.
+
 ### Changed — Linux 7.3.1: the kernel moves off the retired 7.2 series (2026-11-02)
 
 The kernel moves from 7.2.13 to 7.3.1. kernel.org marked 7.2 end of life with 7.2.15

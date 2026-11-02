@@ -2,7 +2,7 @@
 # the libcosmic pin, scripts/cosmic-locks and board/desktop/cosmic-patches.
 # Do not edit: change those and rerun the script.
 
-COSMIC_VERSION = 900282e2ec36
+COSMIC_VERSION = ee5f9c568b92
 COSMIC_SITE = https://github.com/pop-os/cosmic-comp/archive/8cb1802caada438bb5cc7670dfabdaca5fad0502
 COSMIC_SOURCE = cosmic-comp-8cb1802caada438bb5cc7670dfabdaca5fad0502.tar.gz
 COSMIC_EXTRA_DOWNLOADS = \
