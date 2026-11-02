@@ -153,6 +153,13 @@ def dependency_changes(
     return tuple(stale)
 
 
+def packages_with_build_dirs(names: set[str], build: Path) -> tuple[Path, ...]:
+    """Build dirs of the named packages that have one (built packages only)."""
+    dirs = _build_dirs(build)
+    found = (_dir_for(_normalize(name), dirs) for name in sorted(names))
+    return tuple(sorted(p for p in found if p is not None))
+
+
 def remove_build_dirs(paths: tuple[Path, ...]) -> None:
     """``make <pkg>-dirclean`` for each: drop the build dir so it rebuilds."""
     for path in paths:

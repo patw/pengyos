@@ -63,6 +63,16 @@ package, so the `.config` diff cannot see it and the stamp stays green — the s
 of every `br2-external` override. `staleness <target>` reports the same finding
 without removing anything, for when you want to know before you launch a build.
 
+A **kernel version change** (`kernel.py`) gives the kernel a new build dir, but
+nothing that builds *against* it: an out-of-tree module package (nvidia-open,
+v4l2loopback) depends on `linux` by name, so neither check above marks it. When
+`BR2_LINUX_KERNEL_VERSION` moves, `configure` also removes the build dir of every
+built package whose `show-info` dependencies include `linux`, and deletes the old
+kernel's `target/usr/lib/modules/<old>`, which no kernel can load from any more and
+which otherwise ships in the image (82-175 MB per edition at 7.2.13, past both
+Server root filesystems' size). If `show-info` fails it says `CLEAN BUILD NEEDED`
+instead of guessing. Found on the 7.2.13 -> 7.3.1 bump, 2026-11-02.
+
 Rebuilding a package never deletes what it installed before, and turning a package
 off leaves all of its files in `target/`, so they go into the image
 (`leftovers.py`). On 2026-10-10 the Desktop image kept `systemd-timesyncd` enabled
