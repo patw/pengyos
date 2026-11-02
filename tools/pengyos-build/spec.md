@@ -144,6 +144,17 @@ already been configured:
   dependency check rejects (a trailing colon is the usual one), keeping real
   directories and unsetting the variable when none are left.
 
+- **Kernel version change.** When `BR2_LINUX_KERNEL_VERSION` differs between the
+  old and new `.config` (both with `BR2_LINUX_KERNEL=y`), configure also removes
+  the build dir of every built package whose new `show-info` dependencies include
+  `linux` (the out-of-tree module packages), and deletes `target/` module dirs
+  (`usr/lib/modules`, `lib/modules`, de-duplicated through the merged-usr symlink)
+  whose release is the old version, plain or with a `-`/`+` local suffix and not
+  also the new one's. Each is named in the configure output. If `show-info`
+  failed, no package is guessed at and the output says `CLEAN BUILD NEEDED: kernel
+  <old> -> <new>`; the old module tree is still removed. Turning the kernel off
+  removes nothing.
+
 - **Leftovers.** Buildroot never deletes from `target/`: a rebuilt package
   leaves what it no longer installs, and a package turned off leaves all of its
   files. After a successful build, a file that still exists in `target/` is a
@@ -258,6 +269,13 @@ touches the network, and writes only the manifest file itself.
   (`PIPEWIRE_PULSE_CONF_OPTS` is pipewire-pulse, not pipewire). A bare-number diff
   context line is never read as a commit epoch. The cost is asserted as a contract:
   three git invocations, all scoped to the external tree, and no scan of the tree.
+- kernel version change (`kernel.py`): the dependents of `linux` are the module
+  packages; the old release dir is found once through the `lib -> usr/lib`
+  symlink, with a local-version suffix too, and never a version that only shares a
+  prefix (7.3.1 -> 7.3.10 keeps 7.3.10). End to end with fake make: 7.2.13 -> 7.3.1
+  dircleans nvidia-open and v4l2loopback, keeps an unrelated package, and drops
+  `usr/lib/modules/7.2.13`; the same kernel touches nothing; a failed `show-info`
+  says `CLEAN BUILD NEEDED`; turning the kernel off removes nothing.
 - leftovers (`leftovers.py`): a file a rebuilt package stopped installing and a
   file of a package `.config` marks not set are reported; a file another enabled
   package still lists, an overlay file in neither list, and a file already gone

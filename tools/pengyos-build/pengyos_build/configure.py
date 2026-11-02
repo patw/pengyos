@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
-from . import hostshim, leftovers, recipe, stale
+from . import hostshim, kernel, leftovers, recipe, stale
 from .acquire import default_build_root, source_dir
 from .targets import Target
 
@@ -222,33 +222,59 @@ def configure_target(
 
     report = stale.StaleReport()
     rebuild: tuple[Path, ...] = ()
+    kernel_notes: tuple[str, ...] = ()
     if old_config is not None and config.is_file():
-        report = stale.stale_packages(
-            old_config, config.read_text(encoding="utf-8"), output / "build"
-        )
+        new_config = config.read_text(encoding="utf-8")
+        report = stale.stale_packages(old_config, new_config, output / "build")
         rebuild = report.rebuild
         new_info = info(source, output, env) if old_info is not None else None
+        new_deps: dict[str, set[str]] | None = None
         if old_info is not None and new_info is not None:
             try:
+                new_deps = stale.parse_show_info(new_info)
                 dep_stale = stale.dependency_changes(
-                    stale.parse_show_info(old_info),
-                    stale.parse_show_info(new_info),
-                    output / "build",
+                    stale.parse_show_info(old_info), new_deps, output / "build"
                 )
             except ValueError:
                 dep_stale = ()
             rebuild = tuple(sorted(set(rebuild) | set(dep_stale)))
+        # A kernel version change: rebuild what builds against it, and drop the
+        # old kernel's module tree from target/ (kernel.py).
+        old_k, new_k = kernel.kernel_version(old_config), kernel.kernel_version(new_config)
+        if old_k and new_k and old_k != new_k:
+            if new_deps is not None:
+                mods = stale.packages_with_build_dirs(
+                    kernel.module_packages(new_deps), output / "build"
+                )
+                rebuild = tuple(sorted(set(rebuild) | set(mods)))
+                built = " ".join(p.name for p in mods) or "none built"
+                kernel_notes += (
+                    f"kernel {old_k} -> {new_k}: rebuilding the packages built "
+                    f"against it ({built})",
+                )
+            else:
+                kernel_notes += (
+                    f"CLEAN BUILD NEEDED: kernel {old_k} -> {new_k}, and make "
+                    "show-info failed, so the module packages built against the old "
+                    "kernel cannot be named for a rebuild",
+                )
+            trees = kernel.old_module_trees(output / "target", old_k, new_k)
+            kernel.remove_trees(trees)
+            for tree in trees:
+                kernel_notes += (
+                    f"kernel {old_k} -> {new_k}: removed {tree.relative_to(output)}",
+                )
 
     # A recipe change (a .mk, a Config.in select, a patch) moves no symbol of its
     # own package, so the .config diff above cannot see it and Buildroot's stamps
     # stay green. Compare each built package's stamp against the newest commit
     # touching its recipe (recipe.py) — the 26.10.19 NVIDIA image shipped without
     # two such changes for exactly this reason.
-    notes: tuple[str, ...] = ()
+    notes: tuple[str, ...] = kernel_notes
     if config.is_file():
         recipes = recipe.recipe_staleness(external, output)
         rebuild = tuple(sorted(set(rebuild) | set(recipes.rebuild)))
-        notes = recipes.notes
+        notes = notes + recipes.notes
 
     # Rebuilding never deletes what a package installed before: keep the file
     # list as it stands so the next build can name what it left (leftovers.py).

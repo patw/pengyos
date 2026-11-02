@@ -6,6 +6,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — a kernel version change now rebuilds the modules built against it
+- **Out-of-tree module packages kept their old-kernel build.** nvidia-open and
+  v4l2loopback depend on `linux` by name, so moving the kernel version changed
+  neither their options nor their dependency list, and their stamps stayed green:
+  the next image would have shipped no NVIDIA driver and no v4l2loopback for the new
+  kernel. `configure` now dircleans every built package that depends on `linux` when
+  `BR2_LINUX_KERNEL_VERSION` changes (`kernel.py`).
+- **The old kernel's module tree shipped in the image.** `target/usr/lib/modules/<old>`
+  stayed beside the new one (82-175 MB per edition at 7.2.13), enough to push both
+  Server root filesystems past their fixed size. `configure` deletes it on the same
+  change. Found on the 7.2.13 -> 7.3.1 bump, 2026-11-02.
+
 ### Fixed — turning the compiler cache on no longer rebuilds the whole tree
 - `BR2_CCACHE` adds host-ccache to every package's dependency list, so the
   dependency check (`stale.dependency_changes`) marked every built package stale
