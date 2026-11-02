@@ -22,6 +22,7 @@ use ashpd::desktop::remote_desktop::{
     Axis, DeviceType, KeyState, RemoteDesktop, SelectDevicesOptions,
 };
 use ashpd::desktop::screencast::{CursorMode, Screencast, SelectSourcesOptions, SourceType};
+use ashpd::desktop::Session;
 use ironrdp_server::{
     BitmapUpdate, Credentials, DesktopSize, DisplayUpdate, KeyboardEvent, MouseEvent, PixelFormat,
     RGBAPointer, RdpServer, RdpServerDisplay, RdpServerDisplayUpdates, RdpServerInputHandler,
@@ -332,14 +333,18 @@ fn cursor_meta_param() -> Result<Vec<u8>> {
 fn run_pipewire(
     fd: OwnedFd,
     node: u32,
-    tx: watch::Sender<Option<Arc<Frame>>>,
-    cursor_tx: watch::Sender<Option<Arc<Cursor>>>,
+    tx: Arc<watch::Sender<Option<Arc<Frame>>>>,
+    cursor_tx: Arc<watch::Sender<Option<Arc<Cursor>>>>,
+    quit: pw::channel::Receiver<()>,
+    wake: mpsc::UnboundedSender<Wake>,
 ) -> Result<()> {
     let meta_param = cursor_meta_param()?;
-    pw::init();
     let mainloop = pw::main_loop::MainLoopRc::new(None)?;
     let context = pw::context::ContextRc::new(&mainloop, None)?;
     let core = context.connect_fd_rc(fd, None)?;
+    // The supervisor stops this loop when it replaces the portal session.
+    let ml = mainloop.clone();
+    let _quit = quit.attach(mainloop.loop_(), move |()| ml.quit());
 
     let stream = pw::stream::StreamBox::new(
         &core,
@@ -353,7 +358,12 @@ fn run_pipewire(
 
     let _listener = stream
         .add_local_listener_with_user_data(spa::param::video::VideoInfoRaw::default())
-        .state_changed(|_, _, old, new| eprintln!("pipewire: {old:?} -> {new:?}"))
+        .state_changed(move |_, _, old, new| {
+            eprintln!("pipewire: {old:?} -> {new:?}");
+            if matches!(new, pw::stream::StreamState::Error(_)) {
+                let _ = wake.send(Wake::Stream);
+            }
+        })
         .param_changed(move |stream, info, id, param| {
             let Some(param) = param else { return };
             if id != spa::param::ParamType::Format.as_raw() {
@@ -480,7 +490,247 @@ fn run_pipewire(
         &mut params,
     )?;
     mainloop.run();
+    eprintln!("pipewire: stream stopped");
     Ok(())
+}
+
+// ---------------------------------------------------------------- session recovery
+//
+// A portal session shares one output object. When the monitor is switched off, or
+// goes into standby and briefly drops off HDMI (the LG UltraGear on behobasement does
+// this on every screen blank, 2026-11-02), cosmic-comp replaces that output and the
+// session silently dies: its stream stays "running" with no buffers and its libei
+// input connection is closed, so RDP clients see a black or frozen screen and their
+// input goes nowhere. Nothing reports it, so the session is replaced from here
+// whenever the set of outputs changes, the stream fails, input keeps failing, or the
+// portal closes it. The RDP listener and the frame channels outlive sessions, so a
+// connected client just sees frames resume.
+
+/// Why the session should be replaced.
+#[derive(Debug)]
+enum Wake {
+    Stream,
+    Input,
+    Closed,
+}
+
+/// Output count plus a change counter, so a bounce (remove + add) is seen even
+/// though the count ends where it started.
+type Outputs = (u64, usize);
+
+/// Watch the compositor's wl_output globals and publish every change.
+fn watch_outputs(tx: watch::Sender<Outputs>) -> Result<()> {
+    use std::collections::HashSet;
+    use wayland_client::protocol::wl_registry;
+    use wayland_client::{Connection, Dispatch, QueueHandle};
+
+    struct St {
+        names: HashSet<u32>,
+        tx: watch::Sender<Outputs>,
+    }
+    impl St {
+        fn publish(&self) {
+            let count = self.names.len();
+            self.tx.send_modify(|(generation, n)| {
+                *generation += 1;
+                *n = count;
+            });
+        }
+    }
+    impl Dispatch<wl_registry::WlRegistry, ()> for St {
+        fn event(
+            st: &mut Self,
+            _: &wl_registry::WlRegistry,
+            event: wl_registry::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+            match event {
+                wl_registry::Event::Global { name, interface, .. } if interface == "wl_output" => {
+                    st.names.insert(name);
+                    st.publish();
+                }
+                wl_registry::Event::GlobalRemove { name } => {
+                    if st.names.remove(&name) {
+                        st.publish();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let conn = Connection::connect_to_env().context("wayland: no compositor to watch")?;
+    let mut queue = conn.new_event_queue();
+    let _registry = conn.display().get_registry(&queue.handle(), ());
+    let mut st = St { names: HashSet::new(), tx };
+    queue.roundtrip(&mut st)?;
+    st.publish();
+    loop {
+        queue.blocking_dispatch(&mut st)?;
+    }
+}
+
+/// One live portal session and the PipeWire thread reading its stream.
+struct Live {
+    session: Arc<Session<RemoteDesktop>>,
+    node: u32,
+    size: (i32, i32),
+    pw_quit: pw::channel::Sender<()>,
+    closed_watch: tokio::task::JoinHandle<()>,
+}
+
+struct Portal {
+    rd: RemoteDesktop,
+    sc: Screencast,
+    token_path: PathBuf,
+    frames: Arc<watch::Sender<Option<Arc<Frame>>>>,
+    cursor: Arc<watch::Sender<Option<Arc<Cursor>>>>,
+    wake: mpsc::UnboundedSender<Wake>,
+}
+
+impl Portal {
+    async fn start(&self) -> Result<Live> {
+        // A saved restore token skips the consent dialog after the first run.
+        let token = std::fs::read_to_string(&self.token_path).ok();
+        let session = self.rd.create_session(Default::default()).await?;
+        match self.start_on(&session, token.as_deref()).await {
+            Ok((node, size, fd)) => {
+                let (pw_quit, quit_rx) = pw::channel::channel();
+                let (frames, cursor, wake) =
+                    (self.frames.clone(), self.cursor.clone(), self.wake.clone());
+                std::thread::spawn(move || {
+                    if let Err(e) = run_pipewire(fd, node, frames, cursor, quit_rx, wake.clone()) {
+                        eprintln!("pipewire: {e:#}");
+                        let _ = wake.send(Wake::Stream);
+                    }
+                });
+                let session = Arc::new(session);
+                // The portal can end the session on its own (revoked, backend restart).
+                let closed_watch = {
+                    let (session, wake) = (session.clone(), self.wake.clone());
+                    tokio::spawn(async move {
+                        use futures_util::StreamExt;
+                        if let Ok(mut closed) = session.receive_closed().await {
+                            if closed.next().await.is_some() {
+                                let _ = wake.send(Wake::Closed);
+                            }
+                        }
+                    })
+                };
+                Ok(Live { session, node, size, pw_quit, closed_watch })
+            }
+            Err(e) => {
+                let _ = session.close().await;
+                Err(e)
+            }
+        }
+    }
+
+    async fn start_on(
+        &self,
+        session: &Session<RemoteDesktop>,
+        token: Option<&str>,
+    ) -> Result<(u32, (i32, i32), OwnedFd)> {
+        self.rd
+            .select_devices(
+                session,
+                SelectDevicesOptions::default()
+                    .set_devices(DeviceType::Keyboard | DeviceType::Pointer)
+                    .set_persist_mode(PersistMode::ExplicitlyRevoked)
+                    .set_restore_token(token),
+            )
+            .await?;
+        self.sc
+            .select_sources(
+                session,
+                SelectSourcesOptions::default()
+                    .set_cursor_mode(CursorMode::Metadata)
+                    .set_sources(BitFlags::from(SourceType::Monitor))
+                    .set_multiple(false),
+            )
+            .await?;
+        eprintln!("portal: starting (approve the dialog on the machine if it appears)");
+        let started = self.rd.start(session, None, Default::default()).await?.response()?;
+        if let Some(t) = started.restore_token() {
+            std::fs::write(&self.token_path, t)?;
+        }
+        eprintln!("portal: devices {:?}", started.devices());
+        let stream = started.streams().first().context("portal returned no stream")?.clone();
+        let node = stream.pipe_wire_node_id();
+        let size = stream.size().unwrap_or((1920, 1080));
+        eprintln!("portal: stream node {node} size {}x{}", size.0, size.1);
+        let fd = self.sc.open_pipe_wire_remote(session, Default::default()).await?;
+        Ok((node, size, fd))
+    }
+}
+
+/// Stop a session's PipeWire loop and close the portal session, so the portal does
+/// not keep a capture running for nobody (a killed server left one for two days).
+async fn stop(live: Live) {
+    // Our own Close must not read as the portal closing the next session.
+    live.closed_watch.abort();
+    let _ = live.pw_quit.send(());
+    if let Err(e) = live.session.close().await {
+        eprintln!("portal: closing the session: {e}");
+    }
+}
+
+type Current = Arc<tokio::sync::RwLock<Option<Live>>>;
+
+const SETTLE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Keep a working portal session in `current` for as long as the process runs.
+/// The first session's size goes to `first_size`.
+async fn supervise(
+    portal: Portal,
+    current: Current,
+    mut outputs: watch::Receiver<Outputs>,
+    mut wake: mpsc::UnboundedReceiver<Wake>,
+    first_size: tokio::sync::oneshot::Sender<(i32, i32)>,
+) {
+    let mut first_size = Some(first_size);
+    loop {
+        if outputs.borrow_and_update().1 == 0 {
+            eprintln!("portal: no display connected; waiting for one");
+            while outputs.borrow_and_update().1 == 0 {
+                if outputs.changed().await.is_err() {
+                    return;
+                }
+            }
+            // A monitor coming back can bounce more than once; let it settle.
+            tokio::time::sleep(SETTLE).await;
+            continue;
+        }
+        let live = match portal.start().await {
+            Ok(live) => live,
+            Err(e) => {
+                eprintln!("portal: {e:#}; retrying in 5 s");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+        if let Some(tx) = first_size.take() {
+            let _ = tx.send(live.size);
+        }
+        *current.write().await = Some(live);
+        outputs.borrow_and_update();
+
+        let reason = tokio::select! {
+            _ = outputs.changed() => "the displays changed".to_string(),
+            w = wake.recv() => match w {
+                Some(Wake::Closed) => "the portal closed the session".to_string(),
+                w => format!("{w:?} failed"),
+            },
+        };
+        eprintln!("portal: {reason}; replacing the session");
+        if let Some(live) = current.write().await.take() {
+            stop(live).await;
+        }
+        tokio::time::sleep(SETTLE).await;
+        while wake.try_recv().is_ok() {}
+    }
 }
 
 // ---------------------------------------------------------------- main
@@ -537,83 +787,106 @@ async fn main() -> Result<()> {
     let cert = path_env("RDP_CERT", "cert.pem");
     let key = path_env("RDP_KEY", "key.pem");
 
-    // Portal session. A saved restore token skips the consent dialog after the first run.
     let dir = state_dir();
     std::fs::create_dir_all(&dir)?;
-    let token_path = dir.join("restore-token");
-    let token = std::fs::read_to_string(&token_path).ok();
+    pw::init();
 
-    let rd = RemoteDesktop::new().await?;
-    let sc = Screencast::new().await?;
-    let session = rd.create_session(Default::default()).await?;
-    rd.select_devices(
-        &session,
-        SelectDevicesOptions::default()
-            .set_devices(DeviceType::Keyboard | DeviceType::Pointer)
-            .set_persist_mode(PersistMode::ExplicitlyRevoked)
-            .set_restore_token(token.as_deref()),
-    )
-    .await?;
-    sc.select_sources(
-        &session,
-        SelectSourcesOptions::default()
-            .set_cursor_mode(CursorMode::Metadata)
-            .set_sources(BitFlags::from(SourceType::Monitor))
-            .set_multiple(false),
-    )
-    .await?;
-    eprintln!("portal: starting (approve the dialog on the machine if it appears)");
-    let started = rd.start(&session, None, Default::default()).await?.response()?;
-    if let Some(t) = started.restore_token() {
-        std::fs::write(&token_path, t)?;
-    }
-    eprintln!("portal: devices {:?}", started.devices());
-    let stream = started.streams().first().context("portal returned no stream")?.clone();
-    let node = stream.pipe_wire_node_id();
-    let (sw, sh) = stream.size().unwrap_or((1920, 1080));
-    eprintln!("portal: stream node {node} size {sw}x{sh}");
-    let fd = sc.open_pipe_wire_remote(&session, Default::default()).await?;
+    // The displays, watched for the session supervisor.
+    let (outputs_tx, outputs_rx) = watch::channel::<Outputs>((0, 0));
+    std::thread::spawn(move || {
+        if let Err(e) = watch_outputs(outputs_tx) {
+            eprintln!("wayland: {e:#}");
+        }
+    });
 
+    // Frames and cursor outlive portal sessions: every session feeds the same channels.
     let (frame_tx, frame_rx) = watch::channel(None);
     let (cursor_tx, cursor_rx) = watch::channel(None);
-    std::thread::spawn(move || {
-        if let Err(e) = run_pipewire(fd, node, frame_tx, cursor_tx) {
-            eprintln!("pipewire: {e:#}");
-        }
-    });
+    let (wake_tx, wake_rx) = mpsc::unbounded_channel::<Wake>();
+    let current: Current = Arc::new(tokio::sync::RwLock::new(None));
+    let portal = Portal {
+        rd: RemoteDesktop::new().await?,
+        sc: Screencast::new().await?,
+        token_path: dir.join("restore-token"),
+        frames: Arc::new(frame_tx),
+        cursor: Arc::new(cursor_tx),
+        wake: wake_tx.clone(),
+    };
+    let (size_tx, size_rx) = tokio::sync::oneshot::channel();
+    tokio::spawn(supervise(portal, current.clone(), outputs_rx, wake_rx, size_tx));
 
-    // Input pump: RDP handler (sync) -> channel -> portal calls (async).
-    let (in_tx, mut in_rx) = mpsc::unbounded_channel::<Input>();
-    tokio::spawn(async move {
-        while let Some(ev) = in_rx.recv().await {
-            let state = |p| if p { KeyState::Pressed } else { KeyState::Released };
-            let r = match ev {
-                Input::Key { code, pressed } => {
-                    rd.notify_keyboard_keycode(&session, code, state(pressed), Default::default())
-                        .await
-                }
-                Input::Keysym { sym, pressed } => {
-                    rd.notify_keyboard_keysym(&session, sym, state(pressed), Default::default())
-                        .await
-                }
-                Input::Motion { x, y } => {
-                    rd.notify_pointer_motion_absolute(&session, node, x, y, Default::default())
-                        .await
-                }
-                Input::Button { button, pressed } => {
-                    rd.notify_pointer_button(&session, button, state(pressed), Default::default())
-                        .await
-                }
-                Input::Scroll { axis, steps } => {
-                    rd.notify_pointer_axis_discrete(&session, axis, steps, Default::default())
-                        .await
-                }
-            };
-            if let Err(e) = r {
-                eprintln!("input: {e}");
+    // Stopping the server closes its portal session; a killed one left the portal
+    // capturing for nobody, and the next session on that portal never streamed.
+    {
+        let current = current.clone();
+        tokio::spawn(async move {
+            use tokio::signal::unix::{SignalKind, signal};
+            let mut term = signal(SignalKind::terminate()).expect("SIGTERM handler");
+            tokio::select! {
+                _ = term.recv() => {}
+                _ = tokio::signal::ctrl_c() => {}
             }
-        }
-    });
+            if let Some(live) = current.write().await.take() {
+                stop(live).await;
+            }
+            std::process::exit(0);
+        });
+    }
+
+    // Input pump: RDP handler (sync) -> channel -> the current session's portal calls.
+    let input_rd = RemoteDesktop::new().await?;
+    let (in_tx, mut in_rx) = mpsc::unbounded_channel::<Input>();
+    {
+        let current = current.clone();
+        tokio::spawn(async move {
+            let mut failures = 0u32;
+            while let Some(ev) = in_rx.recv().await {
+                let guard = current.read().await;
+                // No session (no display, or one being replaced): the event has nowhere to go.
+                let Some(live) = guard.as_ref() else { continue };
+                let (rd, session, node) = (&input_rd, &live.session, live.node);
+                let state = |p| if p { KeyState::Pressed } else { KeyState::Released };
+                let r = match ev {
+                    Input::Key { code, pressed } => {
+                        rd.notify_keyboard_keycode(session, code, state(pressed), Default::default())
+                            .await
+                    }
+                    Input::Keysym { sym, pressed } => {
+                        rd.notify_keyboard_keysym(session, sym, state(pressed), Default::default())
+                            .await
+                    }
+                    Input::Motion { x, y } => {
+                        rd.notify_pointer_motion_absolute(session, node, x, y, Default::default())
+                            .await
+                    }
+                    Input::Button { button, pressed } => {
+                        rd.notify_pointer_button(session, button, state(pressed), Default::default())
+                            .await
+                    }
+                    Input::Scroll { axis, steps } => {
+                        rd.notify_pointer_axis_discrete(session, axis, steps, Default::default())
+                            .await
+                    }
+                };
+                drop(guard);
+                match r {
+                    Ok(_) => failures = 0,
+                    Err(e) => {
+                        eprintln!("input: {e}");
+                        // One bad event is not a dead session; a run of them is.
+                        failures += 1;
+                        if failures == 3 {
+                            let _ = wake_tx.send(Wake::Input);
+                            failures = 0;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // The RDP desktop size is the first session's; later sessions are on the same monitor.
+    let (sw, sh) = size_rx.await.context("the session supervisor stopped")?;
 
     let tls = TlsIdentityCtx::init_from_paths(&cert, &key)?;
     let mut server = RdpServer::builder()
