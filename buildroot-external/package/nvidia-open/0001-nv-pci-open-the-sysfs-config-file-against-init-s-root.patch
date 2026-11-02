@@ -1,0 +1,53 @@
+nv-pci: open the PCI sysfs config file against init's root (Linux 7.3)
+
+Since Linux 7.3 ("fs,kthread: start all kthreads in nullfs") a kernel
+thread resolves paths in an empty nullfs root instead of sharing init's.
+nv_get_pci_sysfs_config() runs in the nv-probe-<bdf> kthread, so its
+filp_open() of /sys/bus/pci/devices/<bdf>/config returns -ENOENT,
+sysfs_config_file stays NULL, nv_dynamic_power_available() is false and
+RTD3 is disabled without an error: the dGPU of a hybrid laptop never
+leaves D0. Reported upstream as NVIDIA/open-gpu-kernel-modules#1507
+against 615.78.08.
+
+Wrap the one lookup in scoped_with_init_fs(), the helper 7.3 added for
+kthreads that must open a real path (userspace_init_fs is exported GPL;
+the module is Dual MIT/GPL). The file is used through its handle after
+this, so nothing else looks up a path. On a kernel without the helper
+the macro is undefined and the code is unchanged.
+
+Upstream: not offered; carried
+Signed-off-by: Pat Wendorf <dungeons@gmail.com>
+---
+--- a/kernel-open/nvidia/nv-pci.c	2026-11-02 10:31:02.622839417 -0500
++++ b/kernel-open/nvidia/nv-pci.c	2026-11-02 10:31:11.041063031 -0500
+@@ -34,6 +34,7 @@
+ #include "nv-vgpu-vfio-interface.h"
+ #endif
+ #include <linux/completion.h>
++#include <linux/fs_struct.h>
+ #include <linux/iommu.h>
+ #include <linux/kthread.h>
+ 
+@@ -439,7 +440,21 @@
+                    NV_PCI_SLOT_NUMBER(pci_dev));
+     if (ret > 0 && ret < sizeof(filename))
+     {
+-        struct file *file = filp_open(filename, O_RDONLY, 0);
++        struct file *file;
++
++#if defined(scoped_with_init_fs)
++        /*
++         * Since Linux 7.3 a kthread (this runs in nv-probe-<bdf>) resolves
++         * paths in an empty nullfs root, so the sysfs path below is -ENOENT
++         * and RTD3 is silently disabled. Resolve it against init's root, as
++         * in-tree kthreads that open files do. The open file needs no path
++         * lookups after this.
++         */
++        scoped_with_init_fs()
++            file = filp_open(filename, O_RDONLY, 0);
++#else
++        file = filp_open(filename, O_RDONLY, 0);
++#endif
+         if (!IS_ERR(file))
+         {
+ #if defined(NV_SEQ_READ_ITER_PRESENT)

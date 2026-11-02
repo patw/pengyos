@@ -17,6 +17,27 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — Linux 7.3.1: the kernel moves off the retired 7.2 series (2026-11-02)
+
+The kernel moves from 7.2.13 to 7.3.1. kernel.org marked 7.2 end of life with 7.2.15
+(2026-11-01), so 7.2 gets no more fixes; 7.3.1 is the first point release of the
+current stable series, inside SPEC's "one or two releases of its `.0`". Its sha256 is
+pinned in `patches/linux/7.3.1/linux.hash`, from kernel.org's signed `sha256sums.asc`.
+Every edition's shipped config carries over under `olddefconfig` with no fragment
+symbol lost; the four symbols that drop out no longer exist in 7.3 (`PROC_SYSCTL` is now
+part of `SYSCTL`, which stays on). The NVIDIA editions need the nvidia-open RTD3 fix
+(next entry), which lands first.
+
+### Fixed — NVIDIA laptops can power the dGPU down on Linux 7.3 (2026-11-02)
+
+- **Runtime D3 (RTD3) keeps working on hybrid AMD/Intel + NVIDIA laptops under Linux
+  7.3.** 7.3 starts kernel threads in an empty root filesystem, and nvidia-open
+  615.78.08 opens the GPU's PCI config file from one, so the open failed, the driver
+  decided RTD3 was unsupported without logging an error, and the dGPU stayed powered
+  (battery drain and heat). NVIDIA/open-gpu-kernel-modules#1507, still open.
+  `package/nvidia-open/0001` does that one open with 7.3's `scoped_with_init_fs()`; on
+  older kernels it changes nothing. Ledgered as `nvidia-open-615.78.08-fork`.
+
 ### Fixed — LAN names resolve (2026-10-31)
 
 - **Bare LAN names work: `ssh miniserv`, `ping behopc`.** systemd-resolved sent a
