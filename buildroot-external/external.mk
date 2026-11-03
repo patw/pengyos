@@ -57,6 +57,33 @@ define PENGYOS_VIM_INSTALL_HELP
 endef
 VIM_POST_INSTALL_TARGET_HOOKS += PENGYOS_VIM_INSTALL_HELP
 endif
+# binutils on the target is for reading binaries (strings, ar, nm, objdump, readelf,
+# size, strip, objcopy), the commands BusyBox's strings/ar applets stood in for until
+# 26.11.0. The linker and assembler come with it and are taken out again: no
+# compiler or libc headers ship, so `ld`/`as` stay the no-toolchain stubs that
+# point at the dev guest (board/core/tool-stubs/pengyos-no-toolchain).
+ifeq ($(BR2_PACKAGE_BINUTILS_TARGET),y)
+define PENGYOS_BINUTILS_NO_LINKER
+	rm -f $(TARGET_DIR)/usr/bin/ld $(TARGET_DIR)/usr/bin/ld.bfd \
+		$(TARGET_DIR)/usr/bin/ld.gold $(TARGET_DIR)/usr/bin/as \
+		$(TARGET_DIR)/usr/bin/gprof $(TARGET_DIR)/usr/bin/gprofng* \
+		$(TARGET_DIR)/usr/bin/gp-*
+	rm -rf $(TARGET_DIR)/usr/$(GNU_TARGET_NAME) $(TARGET_DIR)/usr/lib/ldscripts \
+		$(TARGET_DIR)/usr/lib/gprofng $(TARGET_DIR)/usr/lib/bfd-plugins
+endef
+BINUTILS_POST_INSTALL_TARGET_HOOKS += PENGYOS_BINUTILS_NO_LINKER
+endif
+# debianutils is here for run-parts (what BusyBox's applet stood in for until
+# 26.11.0), with savelog and ischroot. Its `make install` also installs a shell-script
+# `which` over GNU which (install order decides), plus installkernel and
+# add-/remove-shell, so the install is written out: these three only.
+ifeq ($(BR2_PACKAGE_DEBIANUTILS),y)
+define DEBIANUTILS_INSTALL_TARGET_CMDS
+	$(INSTALL) -D -m 0755 $(@D)/run-parts $(TARGET_DIR)/usr/bin/run-parts
+	$(INSTALL) -D -m 0755 $(@D)/ischroot $(TARGET_DIR)/usr/bin/ischroot
+	$(INSTALL) -D -m 0755 $(@D)/savelog $(TARGET_DIR)/usr/bin/savelog
+endef
+endif
 # locale likewise. COSMIC Settings' Region & Language page lists the languages
 # `locale -a` prints and the launcher's calculator asks `locale` for the decimal
 # separator; with no binary the language list was empty (behoweather, 26.10.22).

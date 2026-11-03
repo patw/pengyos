@@ -141,27 +141,36 @@ fi
 rm -f "${TARGET_DIR}"/etc/ssh/ssh_host_*
 echo "post-build: no ssh host keys in the image (generated per machine on first boot)"
 
-# --- Applet links BusyBox no longer provides --------------------------------------
-# Compiling an applet out of busybox.fragment does not remove its symlink from an
-# incremental build's TARGET_DIR (Buildroot never deletes files), and the stub
-# loop below would take that dangling-in-spirit link for a real tool and skip the
-# stub (hit with crontab, 26.10.43). busybox.links lists what this build installs;
-# any other link to busybox is stale.
-BB_LINKS="$(ls "${BUILD_DIR}"/busybox-*/busybox.links 2>/dev/null | head -1)"
-if [ -n "${BB_LINKS}" ]; then
-    # Names, not paths: /bin, /sbin and /usr/sbin are merged into /usr/bin.
-    BB_NAMES="$(sed 's|.*/||' "${BB_LINKS}")"
-    for d in bin sbin usr/bin usr/sbin; do
-        [ -d "${TARGET_DIR}/$d" ] && [ ! -L "${TARGET_DIR}/$d" ] || continue
-        for p in "${TARGET_DIR}/$d"/*; do
-            [ -L "$p" ] && [ "$(basename "$(readlink "$p")")" = busybox ] || continue
-            name=$(basename "$p")
-            if ! printf '%s\n' "${BB_NAMES}" | grep -qxF -- "${name}"; then
-                rm -f "$p"
-                echo "post-build: removed stale BusyBox link /$d/${name}"
-            fi
-        done
+# --- No BusyBox: clear what an earlier build left ---------------------------------
+# BusyBox is not built since 26.11.0 (layers/core.config), but Buildroot never
+# deletes from TARGET_DIR: an incremental tree keeps /bin/busybox and every applet
+# link to it, and those would shadow the stubs below and answer as the cut-down
+# applets. A clean build has none of this; this makes an incremental one match.
+for d in bin sbin usr/bin usr/sbin; do
+    [ -d "${TARGET_DIR}/$d" ] && [ ! -L "${TARGET_DIR}/$d" ] || continue
+    for p in "${TARGET_DIR}/$d"/*; do
+        [ -L "$p" ] && [ "$(basename "$(readlink "$p")")" = busybox ] || continue
+        rm -f "$p"
+        echo "post-build: removed leftover BusyBox link /$d/$(basename "$p")"
     done
+done
+rm -f "${TARGET_DIR}/bin/busybox" "${TARGET_DIR}/usr/bin/busybox" \
+      "${TARGET_DIR}/etc/busybox.conf"
+
+# --- hostname: uutils', whatever order net-tools installed in ---------------
+# net-tools (Core since 26.11.0, Server before) installs its own `hostname` plus
+# dnsdomainname/domainname/nisdomainname/ypdomainname links to it, and uutils
+# installs `hostname` too: install order picked the winner. On Server 26.10.x
+# uutils won and the links then pointed at a multicall binary that knows none of
+# those names, so `dnsdomainname` printed "coreutils: missing argument". One owner:
+# uutils' hostname; dnsdomainname is its -d; the NIS domain names are dropped.
+if [ -e "${TARGET_DIR}/usr/bin/coreutils" ]; then
+    ln -sf coreutils "${TARGET_DIR}/usr/bin/hostname"
+    rm -f "${TARGET_DIR}/usr/bin/domainname" "${TARGET_DIR}/usr/bin/nisdomainname" \
+          "${TARGET_DIR}/usr/bin/ypdomainname" "${TARGET_DIR}/usr/bin/dnsdomainname"
+    printf '#!/bin/sh\n# PengyOS: the DNS domain of this host (net-tools name, uutils hostname).\nexec hostname -d "$@"\n' \
+        > "${TARGET_DIR}/usr/bin/dnsdomainname"
+    chmod 0755 "${TARGET_DIR}/usr/bin/dnsdomainname"
 fi
 
 # --- "Not installed" stubs for tools this image lacks --------------------------
@@ -169,12 +178,13 @@ fi
 # Only for tools the image really lacks: an edition that ships the real tool
 # (Desktop: sgdisk, wipefs, …) must not have it shadowed — which is why these
 # are not in the rootfs overlay (overlays land after the packages).
-# The no-toolchain stub is one script under many names (cc, make, cargo, ...: the
-# links in tool-stubs/); `install` follows each link, so every name gets a copy
-# and the script reads its own name. The script itself is not a command.
+# The pengyos-no-* stubs are each one script under many names (no-toolchain: cc,
+# make, cargo, ...; no-dnstools: dig, host, nslookup; the links in tool-stubs/);
+# `install` follows each link, so every name gets a copy and the script reads its
+# own name. The scripts themselves are not commands.
 for stub in "${BOARD_DIR}"/tool-stubs/*; do
     name=$(basename "$stub")
-    [ "$name" = pengyos-no-toolchain ] && continue
+    case "$name" in pengyos-no-*) continue ;; esac
     have=
     for d in bin sbin usr/bin usr/sbin; do
         p="${TARGET_DIR}/$d/$name"
@@ -209,7 +219,8 @@ fi
 # misbehaves on the rest, so the same script works in a shell session and fails
 # under `sh`. Debian puts dash here and Fedora puts bash; we put bash (it is
 # already the root shell, and the Server's comfort profile assumes bash syntax).
-# BusyBox keeps its ash applet as `ash` for anyone who wants the small one.
+# BusyBox (and its ash) is not in the image since 26.11.0; Buildroot points
+# /bin/sh at bash on its own then, and this keeps it so whatever the config says.
 if [ -e "${TARGET_DIR}/usr/bin/bash" ]; then
     ln -sf bash "${TARGET_DIR}/usr/bin/sh"
     echo "post-build: /bin/sh -> bash (so sh -c gets bash semantics)"

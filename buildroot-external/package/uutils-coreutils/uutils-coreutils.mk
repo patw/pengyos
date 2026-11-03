@@ -75,13 +75,16 @@ define UUTILS_COREUTILS_BUILD_CMDS
 endef
 
 # Install the multicall binary, then expose every utility as a symlink to it
-# (busybox-style multi-call dispatch on argv[0]).
+# (busybox-style multi-call dispatch on argv[0]). `[` is test under its other
+# name (the multicall binary dispatches it and wants the closing `]`); it is not in
+# upstream's feature list, and until 26.11.0 the image's /usr/bin/[ was BusyBox's.
 define UUTILS_COREUTILS_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0755 \
 		$(UUTILS_COREUTILS_SRCDIR)/target/$(RUSTC_TARGET_NAME)/release/coreutils \
 		$(TARGET_DIR)/usr/bin/coreutils
 	$(foreach util,$(UUTILS_COREUTILS_UTILITIES), \
 		ln -sf coreutils $(TARGET_DIR)/usr/bin/$(util);$(sep))
+	ln -sf coreutils '$(TARGET_DIR)/usr/bin/['
 endef
 
 $(eval $(cargo-package))
