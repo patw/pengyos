@@ -17,6 +17,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — the system Quadlet lane is there and explained (2026-11-03)
+
+Server (and Desktop) now ship `/etc/containers/systemd/` with a README: the system
+lane (rootful, up at boot with nobody logged in, no linger) against the user lane
+(`~/.config/containers/systemd`, needs linger), an example, and the two traps a Pengy
+field review hit: a key quadlet does not know leaves no unit at all (the generator's
+`--dryrun` names the key), and `is-enabled` answers `generated` for a unit that does
+start at boot. The directory did not exist before, so nothing pointed at the lane
+US-SRV-9 fits best.
+
 ### Added — the host says how to build: compiler stubs and `dx` (2026-11-03)
 
 `cc`, `c++`, `gcc`, `g++`, `ld`, `as`, `make`, `cmake`, `ninja`, `pkg-config`, `go`,

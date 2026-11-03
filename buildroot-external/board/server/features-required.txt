@@ -59,6 +59,7 @@ exec      usr/libexec/qemu-bridge-helper           # --net bridge (setuid: board
 exec      usr/libexec/podman/quadlet                       # .container files -> services — external.mk PENGYOS_PODMAN_INSTALL_QUADLET
 exec      usr/lib/systemd/user-generators/podman-user-generator      # rootless (~/.config/containers/systemd) — same hook
 exec      usr/lib/systemd/system-generators/podman-system-generator  # rootful (/etc/containers/systemd) — same hook
+exists    etc/containers/systemd/README                              # the system Quadlet lane, explained where it is used — board/server/rootfs-overlay
 exec      usr/libexec/podman/rootlessport                  # -p on a user-defined network — external.mk PENGYOS_PODMAN_INSTALL_ROOTLESSPORT
 
 # --- Locale (tmux, mosh and Python need the UTF-8 one /etc/locale.conf names) ---
