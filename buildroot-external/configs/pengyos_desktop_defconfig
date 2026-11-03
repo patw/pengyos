@@ -142,6 +142,18 @@ BR2_PACKAGE_STRACE=y
 BR2_PACKAGE_LESS=y
 BR2_PACKAGE_ATTR=y
 BR2_PACKAGE_PSMISC=y
+# Editor: Vim, in every edition (decided 2026-11-03, "developer comfort is critical").
+# Its recipe links vi -> vim, so `vi`, vipw/vigr, git and EDITOR=/bin/vi all get Vim,
+# and its tools bring the real `xxd`. BusyBox's vi and xxd applets are compiled out
+# (board/core/busybox.fragment); the runtime (syntax, filetypes) is on, and the help
+# files Buildroot deletes are put back in external.mk so `:help` works on the machine.
+BR2_PACKAGE_VIM=y
+BR2_PACKAGE_VIM_RUNTIME=y
+# kbd (chvt, openvt, deallocvt, loadkeys) and xz (xz, xzcat, unxz, lzma) were only in
+# the image as dependencies; BusyBox's copies of their commands are compiled out
+# above, so they are selected by name: a dependency change must not take a command away.
+BR2_PACKAGE_KBD=y
+BR2_PACKAGE_XZ=y
 # BusyBox applets are resolved in the config, not by install order: the
 # fragment compiles out every applet another package owns (and the early-boot /
 # embedded ones, since the image has no initramfs and no sysvinit).

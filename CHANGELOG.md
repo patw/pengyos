@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — Vim is the editor, and BusyBox loses what other packages already own (2026-11-03)
+
+First step of taking BusyBox out of the image. **Vim** joins Core (so every edition):
+`vi` is Vim, `:help` works (Buildroot's recipe deletes the help files; `external.mk`
+puts them back), and Vim's `xxd` replaces BusyBox's. BusyBox's `vi` and `xxd` are
+compiled out, along with 23 applets that a real tool already shadowed in every edition
+(`uname`/`whoami` from uutils, `init`/`halt`/`reboot` from systemd, `ip`, `xz`,
+`mke2fs`, `hexdump` and others). The applets BusyBox is still the only provider of
+(most of them on Core: `login`, `passwd`, `ping`, `wget`, `lspci`, ...) go in later
+steps, each with its replacement.
+
 ### Added — the gate refuses merge-conflict markers (2026-11-03)
 
 `check_conflict_markers` fails on any tracked file with a `<<<<<<<` or `>>>>>>>` line

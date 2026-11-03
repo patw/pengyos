@@ -47,6 +47,16 @@ define PENGYOS_GLIBC_INSTALL_LDD
 endef
 GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_LDD
 GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_GETENT
+# Vim's :help. Buildroot's vim.mk deletes usr/share/vim/vim*/doc after installing,
+# which leaves `:help` answering E149 for every topic. On a machine people develop on,
+# the editor's own manual is part of the editor (a few MB), so the runtime's install
+# target is run again after Buildroot's, which puts doc/ and its tags back.
+ifeq ($(BR2_PACKAGE_VIM_RUNTIME),y)
+define PENGYOS_VIM_INSTALL_HELP
+	$(TARGET_MAKE_ENV) $(MAKE) -C $(@D)/src DESTDIR=$(TARGET_DIR) installrtbase
+endef
+VIM_POST_INSTALL_TARGET_HOOKS += PENGYOS_VIM_INSTALL_HELP
+endif
 # locale likewise. COSMIC Settings' Region & Language page lists the languages
 # `locale -a` prints and the launcher's calculator asks `locale` for the decimal
 # separator; with no binary the language list was empty (behoweather, 26.10.22).

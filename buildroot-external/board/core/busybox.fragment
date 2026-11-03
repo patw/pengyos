@@ -255,6 +255,42 @@
 # CONFIG_CROND is not set
 # CONFIG_CRONTAB is not set
 
+# --- Vim owns vi and xxd (BR2_PACKAGE_VIM in layers/core.config) -----------
+# CONFIG_VI is not set
+# CONFIG_XXD is not set
+
+# --- Shadowed in every edition: a real tool already answers these names -------
+# Found 2026-11-03 by resolving each applet in all five targets: these were built
+# into BusyBox while the name already pointed at another package's program in every
+# edition, Core included. Dead weight, and an applet that wins the day its owner's
+# install order changes. uname/whoami: uutils-coreutils; halt/poweroff/reboot/init:
+# systemd; sulogin, chvt/openvt/deallocvt, w, linux32/64: util-linux, kbd, procps;
+# ip: iproute2; hexdump: util-linux; mke2fs: e2fsprogs; mkdosfs: dosfstools;
+# xz/lzma and their cat/un- forms: xz.
+# CONFIG_UNAME is not set
+# CONFIG_WHOAMI is not set
+# CONFIG_HALT is not set
+# CONFIG_POWEROFF is not set
+# CONFIG_REBOOT is not set
+# CONFIG_INIT is not set
+# CONFIG_SULOGIN is not set
+# CONFIG_CHVT is not set
+# CONFIG_OPENVT is not set
+# CONFIG_DEALLOCVT is not set
+# CONFIG_W is not set
+# CONFIG_LINUX32 is not set
+# CONFIG_LINUX64 is not set
+# CONFIG_IP is not set
+# CONFIG_HEXDUMP is not set
+# CONFIG_MKE2FS is not set
+# CONFIG_MKDOSFS is not set
+# CONFIG_XZ is not set
+# CONFIG_XZCAT is not set
+# CONFIG_UNXZ is not set
+# CONFIG_LZMA is not set
+# CONFIG_LZCAT is not set
+# CONFIG_UNLZMA is not set
+
 # --- BusyBox wget: make HTTPS real -------------------------------------------
 # The Core image has no curl (that is the Server's); busybox wget was the only
 # downloader and it could not verify a certificate, so every `wget https://...`
