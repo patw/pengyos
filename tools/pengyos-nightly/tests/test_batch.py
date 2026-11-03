@@ -1156,3 +1156,70 @@ def test_a_failed_batch_takes_the_ledger_entry_back(tmp_path):
     # the bail restores it from main. Same statement either way: no entry, no claim.
     assert not led.exists() or "[[divergence]]" not in led.read_text()
     assert _branch(repo) == "main" and _dirty(repo) == ""
+
+
+# --- what main took by hand since the last release ------------------------------
+
+def _git_in(repo, *args):
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+def _merge_by_hand(repo, branch, why, filename):
+    """A topic branch merged to main with --no-ff, the way hand work lands."""
+    _git_in(repo, "checkout", "-q", "-b", branch)
+    (repo / filename).write_text("x\n")
+    _git_in(repo, "add", filename)
+    _git_in(repo, "commit", "-q", "-m", f"{branch}: work")
+    _git_in(repo, "checkout", "-q", "main")
+    _git_in(repo, "merge", "-q", "--no-ff", branch, "-m", f"Merge branch '{branch}': {why}")
+
+
+def test_hand_merges_since_the_last_release_are_named_oldest_first(tmp_path):
+    repo = _repo(tmp_path)
+    _merge_by_hand(repo, "old/work", "shipped already", "old.txt")
+    (repo / "VERSION").write_text("26.10.55\n")
+    _git_in(repo, "commit", "-q", "-am", "release 26.10.55: set VERSION")
+    _merge_by_hand(repo, "kernel/7.3.1", "Linux 7.3.1 off the retired 7.2 series", "k.txt")
+    _merge_by_hand(repo, "fix/kernel-bump-rebuild", "", "r.txt")
+    (repo / "direct.txt").write_text("x\n")
+    _git_in(repo, "add", "direct.txt")
+    _git_in(repo, "commit", "-q", "-m", "docs: a commit straight on main")
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    assert A.merged_by_hand(subprocess.run, repo, head) == [
+        "Linux 7.3.1 off the retired 7.2 series (kernel/7.3.1)",
+        "fix/kernel-bump-rebuild",
+        "docs: a commit straight on main",
+    ]
+
+
+def test_a_merged_batch_is_the_boundary_not_a_hand_merge(tmp_path):
+    repo = _repo(tmp_path)
+    _git_in(repo, "checkout", "-q", "-b", "nightly/2026-11-03-batch")
+    (repo / "VERSION").write_text("26.10.56\n")
+    _git_in(repo, "commit", "-q", "-am", "nightly batch 26.10.56: set VERSION")
+    _git_in(repo, "checkout", "-q", "main")
+    _git_in(repo, "merge", "-q", "--no-ff", "nightly/2026-11-03-batch",
+            "-m", "Merge nightly/2026-11-03-batch: 4 change(s) as 26.10.56 on testing")
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    assert A.merged_by_hand(subprocess.run, repo, head) == []
+
+
+def test_the_batch_notes_name_what_main_took_by_hand(tmp_path):
+    repo = _repo(tmp_path)
+    _merge_by_hand(repo, "kernel/7.3.1", "Linux 7.3.1 off the retired 7.2 series", "k.txt")
+    key = _key(tmp_path)
+    site = _site(tmp_path)
+    state = tmp_path / "state"
+    A.run_batch([_bump_action()], _cfg(key_file=key), repo, tmp_path, site, state,
+                apply=True, run=Fake(repo=repo), today=TODAY)
+    notes = (state / "notes-batch-2026-10-06.md").read_text()
+    assert "merged to main by hand since the last release" in notes
+    assert "- Linux 7.3.1 off the retired 7.2 series (kernel/7.3.1)" in notes
+    assert "libmtp 1.1.22 -> 1.1.23" in notes
+
+
+def test_notes_without_hand_merges_have_no_empty_section():
+    notes = A.batch_notes([_bump_action()], "26.10.9")
+    assert "by hand" not in notes
