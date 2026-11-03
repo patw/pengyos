@@ -35,7 +35,7 @@
 # Observed by pengyos-nightly's `uutils-findutils` source (git tags): there is
 # no release-monitoring.org project for it, so pkg-stats cannot see it age.
 
-UUTILS_FINDUTILS_VERSION = 0.10.0
+UUTILS_FINDUTILS_VERSION = 0.11.0
 UUTILS_FINDUTILS_SITE = $(call github,uutils,findutils,$(UUTILS_FINDUTILS_VERSION))
 UUTILS_FINDUTILS_LICENSE = MIT
 UUTILS_FINDUTILS_LICENSE_FILES = LICENSE
