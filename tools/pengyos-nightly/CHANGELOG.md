@@ -6,6 +6,17 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — release notes name what main took by hand since the last release
+26.10.56 shipped Linux 7.3.1 under notes that named only its four routine bumps: a
+batch is cut from main's tip, so every branch merged by hand since the last release
+goes out with it, and the notes only knew the batch's own changes.
+- **`merged_by_hand`** lists main's first-parent commits since the last one that
+  changed `VERSION` (a release, or the merge of the previous batch), oldest first, a
+  merge by its `Merge branch 'x': why` summary.
+- **`batch_notes`** and **`notes_for`** put them in an "Also in this image, merged to
+  main by hand since the last release" section under the title; no section when there
+  are none.
+
 ### Removed — the openssh-fork observe source
 Buildroot 2026.08.1 ships OpenSSH 10.6p1, which ends the `openssh-pengyos` fork (its
 ledger expiry). Stock openssh is back, and pkg-stats sees a stock recipe, so the

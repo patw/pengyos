@@ -78,11 +78,48 @@ def next_version(repo: Path, site: Path) -> tuple[str, str]:
     return bumped, f"{current} is already published, so this release is {bumped}"
 
 
-def notes_for(action: dict, version: str, version_note: str = "") -> str:
+def merged_by_hand(run, repo: Path, base: str) -> list[str]:
+    """What main took outside the nightly since the last release, oldest first.
+
+    A batch is cut from main's tip, so every branch merged by hand since the last
+    published VERSION ships in this image too. The batch notes only knew their own
+    changes: 26.10.56 shipped Linux 7.3.1 under notes that named four routine bumps.
+    The boundary is the last first-parent commit that changed VERSION (a release, or
+    the merge of the previous batch); everything on main's first-parent line after it
+    is listed, a merge by its "Merge branch 'x': why" summary.
+    """
+    since = _git(run, repo, "log", "-1", "--first-parent", "--format=%H", base,
+                 "--", "VERSION", check=False)
+    rng = f"{since}..{base}" if since else base
+    out = _git(run, repo, "log", "--first-parent", "--reverse", "--format=%s", rng,
+               check=False)
+    items = []
+    for subject in out.splitlines():
+        subject = subject.strip()
+        if not subject:
+            continue
+        if subject.startswith("Merge branch '"):
+            name, _, why = subject[len("Merge branch '"):].partition("'")
+            why = why.lstrip(": ").strip()
+            subject = f"{why} ({name})" if why else name
+        items.append(subject)
+    return items
+
+
+def _by_hand_lines(by_hand) -> list[str]:
+    if not by_hand:
+        return []
+    return (["Also in this image, merged to main by hand since the last release:"]
+            + [f"- {s}" for s in by_hand] + [""])
+
+
+def notes_for(action: dict, version: str, version_note: str = "",
+              by_hand=()) -> str:
     lines = [f"PengyOS {version} - nightly {action['lane']} lane.", ""]
     if version_note:
         lines.append(f"({version_note})")
         lines.append("")
+    lines += _by_hand_lines(by_hand)
     cves = action.get("cves") or []
     closes = set(action.get("closes") or [])
     if closes:
@@ -233,7 +270,8 @@ def published_today(state_dir: Path, today: dt.date) -> int:
                and a.get("kind") != "batch")
 
 
-def batch_notes(actions: list[dict], version: str, version_note: str = "") -> str:
+def batch_notes(actions: list[dict], version: str, version_note: str = "",
+                by_hand=()) -> str:
     """One notes file for the whole release: every change, with its own evidence.
 
     The notes are what a machine on the testing channel (and the operator, the next
@@ -246,6 +284,7 @@ def batch_notes(actions: list[dict], version: str, version_note: str = "") -> st
     if version_note:
         lines.append(f"({version_note})")
         lines.append("")
+    lines += _by_hand_lines(by_hand)
     if cves:
         lines.append(f"Closes {len(cves)} security issue(s): {', '.join(cves)}.")
         lines.append("")
@@ -638,7 +677,8 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
     # --- build, boot-check, sign, publish -------------------------------------
     state_dir.mkdir(parents=True, exist_ok=True)
     notes = state_dir / f"notes-{action['id']}.md"
-    notes.write_text(notes_for(action, version))
+    notes.write_text(notes_for(action, version,
+                               by_hand=merged_by_hand(run, repo, base)))
     argv = ["scripts/release.sh", "--publish", "--channel", G.CHANNEL,
             "--notes", str(notes)]
     if cfg["skip_cosmic"]:
@@ -1059,7 +1099,8 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     editions = sorted({e for a in live for e in a["editions"]})
     state_dir.mkdir(parents=True, exist_ok=True)
     notes = state_dir / f"notes-batch-{today.isoformat()}.md"
-    notes.write_text(batch_notes(live, version))
+    notes.write_text(batch_notes(live, version,
+                                 by_hand=merged_by_hand(run, repo, base)))
     argv = ["scripts/release.sh", "--publish", "--channel", G.CHANNEL,
             "--notes", str(notes)]
     if cfg["skip_cosmic"]:
