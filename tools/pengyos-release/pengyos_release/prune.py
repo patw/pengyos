@@ -18,7 +18,8 @@ images would mean re-signing its ``SHA256SUMS``, and prune never needs the key.
 
 Dry run by default. ``apply`` deletes, then rewrites ``update/feed.xml``,
 ``update/index.html`` and ``download/index.html``. The site push must then
-mirror deletions (``rsync --delete``), or the server keeps its copies.
+mirror deletions (``scripts/push-site.sh --delete SITE REMOTE``), or the server
+keeps its copies.
 """
 
 from __future__ import annotations

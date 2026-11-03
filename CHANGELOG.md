@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — `push-site.sh --delete`: a prune reaches the live server (2026-11-03)
+
+`pengyos-release prune --apply` removes superseded releases from the local site, but
+`scripts/push-site.sh` copied with plain `rsync -a`, so the server kept every pruned
+release. `--delete` adds `rsync --delete-after` for `update/` and `download/`, with the
+same retries. It refuses unless SITE has `update/feed.xml` and `download/index.html`, so
+a wrong or empty SITE cannot empty the live site. `release.sh --push` does not pass it.
+
 ### Fixed — remote desktop no longer dies when the monitor sleeps, or the portal crashes (2026-11-02)
 
 - **RDP came back black or frozen, with dead input, after the monitor was switched off
