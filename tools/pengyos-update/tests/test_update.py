@@ -346,7 +346,7 @@ class _Layout:
         self.partuuids = {"a": "aaa", "b": "bbb"}
 
 
-def _status(monkeypatch, tmp_path, capsys, state, booted="a", euid=1000):
+def _status(monkeypatch, tmp_path, capsys, state, booted="a", euid=1000, extra=()):
     from pengyos_update import cli
     path = tmp_path / "state.json"
     if state is not None:
@@ -355,7 +355,7 @@ def _status(monkeypatch, tmp_path, capsys, state, booted="a", euid=1000):
     monkeypatch.setattr(cli, "read_config", lambda: {"feed": "https://x/feed.xml", "channel": "testing"})
     monkeypatch.setattr(cli.os, "geteuid", lambda: euid)
     monkeypatch.setattr(cli, "detect_layout", lambda: _Layout(booted))
-    args = build_parser().parse_args(["status", "--state", str(path)])
+    args = build_parser().parse_args(["status", "--state", str(path), *extra])
     assert args.fn(args) == 0
     return capsys.readouterr().out, path
 
@@ -394,3 +394,36 @@ def test_status_as_root_records_the_slots(monkeypatch, tmp_path, capsys):
     assert saved["current"] == "26.10.55"  # other fields kept
     assert [r["slot"] for r in saved["slots"]] == ["a", "b"]
     assert saved["slots"][1]["system"] == "pengyos-server 26.10.54"
+
+
+
+def test_status_says_how_old_the_recorded_slots_are(monkeypatch, tmp_path, capsys):
+    """A two-day-old slot map read as a parenthetical (field review F6): the age is
+    now spelled out, with what keeps the record current."""
+    import datetime as dt
+    at = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=2, hours=3)).replace(microsecond=0)
+    rows = [{"slot": "a", "device": "/dev/sda2", "system": "pengyos-server 26.10.55", "tags": ["default"]}]
+    out, _ = _status(monkeypatch, tmp_path, capsys,
+                     {"slots": rows, "slots_at": at.isoformat().replace("+00:00", "Z")})
+    assert "2 days ago" in out and "last boot, apply or rollback" in out
+
+
+def test_status_json_names_the_source_and_age_of_the_slots(monkeypatch, tmp_path, capsys):
+    rows = [{"slot": "a", "device": "/dev/sda2", "system": "pengyos-server 26.10.55", "tags": ["default"]},
+            {"slot": "b", "device": "/dev/sda3", "system": "pengyos-server 26.10.54", "tags": []}]
+    out, _ = _status(monkeypatch, tmp_path, capsys,
+                     {"slots": rows, "slots_at": "2026-11-01T02:00:00Z"}, extra=["--json"])
+    d = json.loads(out)
+    assert d["current"] == "26.10.55" and d["channel"] == "testing"
+    assert d["slots_source"] == "recorded" and d["slots_at"] == "2026-11-01T02:00:00Z"
+    assert isinstance(d["slots_age_s"], int) and d["slots_age_s"] > 0
+    assert d["slots"][0]["tags"] == ["running", "default"]
+
+
+def test_status_json_as_root_reads_live(monkeypatch, tmp_path, capsys):
+    from pengyos_update import cli
+    monkeypatch.setattr(cli, "read_env", lambda esp: {"pengyos_slot": "a"})
+    monkeypatch.setattr(cli, "other_slot_version", lambda dev: "pengyos-server 26.10.54")
+    out, _ = _status(monkeypatch, tmp_path, capsys, {}, euid=0, extra=["--json"])
+    d = json.loads(out)
+    assert d["slots_source"] == "live" and d["slots_age_s"] == 0
