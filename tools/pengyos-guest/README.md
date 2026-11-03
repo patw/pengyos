@@ -77,12 +77,34 @@ nvidia = false
   apk, nix) on every `apply`.
 - `setup` — shell commands run inside the guest as you, after the packages, on
   every `apply`; keep them idempotent.
+- `verify` — commands that must succeed after setup (`rustc --version`). `apply`
+  prints `ok  <command>: <first line>` for each and fails naming the first that
+  does not, so a tool setup left unusable is an error, not "ran 5 setup step(s)".
 - `mounts` — extra `host:guest[:mode]` bind mounts (your home is always shared).
 - `nvidia` — share the host's NVIDIA driver with the guest (CUDA).
 - `exports` — launcher name → guest-side executable path.
 - `description` — shown by `list`.
 
 `guests.toml` at the tool's root is a small example.
+
+### Using the dev box from the host
+
+The host has no compiler toolchain; `cc`, `make`, `cmake`, `cargo` and the rest
+are stubs that say how to reach the dev box (and exit 127). `dx` runs one command
+there, in the current directory, with the exit code passed back:
+
+```sh
+pengyos-guest apply dev            # once
+dx cmake -S . -B build && dx cmake --build build -j"$(nproc)"
+dx cargo build --release
+dx --shell
+```
+
+What the dev box's setup installs as you (rustup, uv) lands in your home, which
+the host shares: `~/.cargo/bin` and `~/.local/bin`. They are deliberately **not**
+put on the host's PATH. `uv` there works on the host against the host's Python;
+`cargo` and `rustc` start but cannot link (the host has no `cc`), so build with
+`dx cargo ...`.
 
 ## Design
 

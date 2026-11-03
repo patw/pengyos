@@ -37,6 +37,11 @@ class Guest:
     exports: dict[str, str] = field(default_factory=dict)
     mounts: list[str] = field(default_factory=list)
     setup: list[str] = field(default_factory=list)
+    # Commands that must succeed once setup has run (``rustc --version``): what a
+    # guest promises, checked. A setup step can succeed while leaving its tool
+    # unusable (rustup present, no default toolchain), so "ran N steps" proved
+    # nothing (Pengy field review, 2026-11-03).
+    verify: list[str] = field(default_factory=list)
     nvidia: bool = False
     description: str = ""
 
@@ -48,6 +53,7 @@ class Guest:
             "exports": dict(self.exports),
             "mounts": list(self.mounts),
             "setup": list(self.setup),
+            "verify": list(self.verify),
             "nvidia": self.nvidia,
             "description": self.description,
         }
@@ -100,6 +106,7 @@ def parse(text: str) -> Guestbook:
                 exports={str(k): str(v) for k, v in body.get("exports", {}).items()},
                 mounts=[str(m) for m in body.get("mounts", [])],
                 setup=[str(c) for c in body.get("setup", [])],
+                verify=[str(c) for c in body.get("verify", [])],
                 nvidia=bool(body.get("nvidia", False)),
                 description=str(body.get("description", "")),
             )

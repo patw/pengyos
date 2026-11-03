@@ -17,7 +17,7 @@ argv that would be executed is the contract tests assert on.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
@@ -64,6 +64,8 @@ class ApplyResult:
     provisioned: bool
     packages: list[str]
     setup: list[str]
+    # (command, first line of its output) for each ``verify`` command, in order.
+    verified: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -158,6 +160,16 @@ class GuestManager:
                         f"setup step failed in guest {guest.name!r}: {step}: "
                         f"{step_result.stderr.strip() or 'exit code ' + str(step_result.returncode)}"
                     )
+            verified = []
+            for check in guest.verify:
+                r = self.distrobox.enter(guest.name, command=["sh", "-lc", check])
+                first = ((r.stdout or "").strip() or (r.stderr or "").strip()).splitlines()
+                if not r.ok:
+                    raise GuestError(
+                        f"verify failed in guest {guest.name!r}: {check}: "
+                        f"{(r.stderr or r.stdout or '').strip() or 'exit code ' + str(r.returncode)}"
+                    )
+                verified.append((check, first[0] if first else ""))
         except SandboxError as exc:
             raise GuestError(str(exc)) from None
 
@@ -168,6 +180,7 @@ class GuestManager:
             provisioned=provisioned,
             packages=list(guest.packages),
             setup=list(guest.setup),
+            verified=verified,
         )
 
     # -- enter --------------------------------------------------------------

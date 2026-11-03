@@ -80,6 +80,7 @@ def test_guest_to_dict_roundtrip():
         "exports": {"x": "/x"},
         "mounts": ["h:g:rw"],
         "setup": [],
+        "verify": [],
         "nvidia": False,
         "description": "",
     }

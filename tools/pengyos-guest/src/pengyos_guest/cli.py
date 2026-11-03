@@ -67,6 +67,8 @@ def _report(result, out) -> None:
         print(f"provisioned {len(result.packages)} package(s) in {result.name}", file=out, flush=True)
     if result.setup:
         print(f"ran {len(result.setup)} setup step(s) in {result.name}", file=out, flush=True)
+    for check, line in result.verified:
+        print(f"ok  {check}: {line}", file=out, flush=True)
 
 
 def cmd_apply(config: str | None, names: Sequence[str] = (), *, out=None, manager=None) -> int:
