@@ -169,8 +169,12 @@ fi
 # Only for tools the image really lacks: an edition that ships the real tool
 # (Desktop: sgdisk, wipefs, …) must not have it shadowed — which is why these
 # are not in the rootfs overlay (overlays land after the packages).
+# The no-toolchain stub is one script under many names (cc, make, cargo, ...: the
+# links in tool-stubs/); `install` follows each link, so every name gets a copy
+# and the script reads its own name. The script itself is not a command.
 for stub in "${BOARD_DIR}"/tool-stubs/*; do
     name=$(basename "$stub")
+    [ "$name" = pengyos-no-toolchain ] && continue
     have=
     for d in bin sbin usr/bin usr/sbin; do
         p="${TARGET_DIR}/$d/$name"

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `verify`: a guest's promises are checked (2026-11-03)
+- **`verify`** in a guest definition lists commands that must succeed after setup.
+  `apply` prints the first line of each (`ok  rustc --version: rustc 1.91.0 ...`) and
+  fails naming the first that does not.
+- **`dev.toml`** verifies gcc, cmake, ninja, go, rustc, cargo and uv, and picks the
+  stable Rust toolchain when rustup has none. From a Pengy field review: on
+  26.10.55, rustup was present with no default, `rustc` errored, and `apply`
+  reported "ran 5 setup step(s)".
+- The README says how the host reaches the box (`dx`), and that `~/.cargo/bin` and
+  `~/.local/bin` are shared but not on the host PATH.
+
 ### Fixed
 - The shipped dev and CUDA boxes put `~/.cargo/bin` and `~/.local/bin` on the
   PATH only for bash login shells (`/etc/profile.d`); zsh, the shell `enter`

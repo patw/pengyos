@@ -1,0 +1,43 @@
+Quadlets: podman containers as systemd services
+===============================================
+
+A file here named NAME.container (or .pod, .volume, .network, .kube) becomes the
+system service NAME.service at the next `systemctl daemon-reload` or boot. There
+are two places to put one, and which you pick decides who runs it:
+
+  System lane: this directory, /etc/containers/systemd/   (as root)
+    Runs rootful, starts at boot with nobody logged in, needs no linger.
+    [Install]  WantedBy=multi-user.target
+    The cleanest fit for a server's services (US-SRV-9).
+
+  User lane: ~/.config/containers/systemd/                (as you)
+    Runs rootless, as your user. Starts at boot only with linger on:
+      loginctl enable-linger "$USER"        (once; PengyOS lets you do your own)
+    [Install]  WantedBy=default.target
+
+Example, /etc/containers/systemd/web.container:
+
+  [Unit]
+  Description=nginx
+  [Container]
+  Image=docker.io/library/nginx:stable
+  PublishPort=8080:80
+  Environment=TZ=America/Toronto      # Environment=, not Env= (an unknown key drops the unit)
+  Volume=/data/web:/usr/share/nginx/html:ro,Z
+  [Service]
+  Restart=always
+  [Install]
+  WantedBy=multi-user.target
+
+  systemctl daemon-reload && systemctl start web
+  pengyos-firewall allow 8080/tcp --from 10.0.23.0/24    # the firewall is default-deny
+
+Two traps:
+  * A file with a key quadlet does not know leaves NO unit: `systemctl start web`
+    says "Unit web.service not found". The reason is only in the generator's log:
+      sudo /usr/lib/systemd/system-generators/podman-system-generator --dryrun   (system)
+      /usr/lib/systemd/user-generators/podman-user-generator --user --dryrun (user)
+    or journalctl -b | grep quadlet
+  * `systemctl is-enabled web` answers "generated", never "enabled". That is how
+    systemd labels any generated unit. With an [Install] section the service
+    starts at boot (the generator wires it into the target itself).

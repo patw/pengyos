@@ -166,6 +166,25 @@ def check_group_overlays(repo: Path) -> list[Check]:
     return out
 
 
+def check_conflict_markers(repo: Path) -> list[Check]:
+    """No committed file may hold a merge-conflict marker.
+
+    539a4c63 (the RDP commit, 2026-10-31) landed tools/README.md with a live
+    `<<<<<<< HEAD` / `>>>>>>>` block, the pengyos-vm row on both sides, and nothing
+    noticed until a Pengy field review read the file on 2026-11-03. Only the two
+    unambiguous markers count: a bare `=======` is also a Markdown heading rule.
+    Patches are skipped (they may quote a conflict on purpose).
+    """
+    rc, out = _run(["git", "-C", str(repo), "grep", "-I", "-n", "-E",
+                    r"^(<<<<<<<|>>>>>>>)( |$)", "--", ".",
+                    ":(exclude)*.patch", ":(exclude)*.diff"], cwd=repo)
+    hits = [ln for ln in out.splitlines() if ln.strip()] if rc == 0 else []
+    if hits:
+        return [Check("conflict-markers", False,
+                      f"{len(hits)} marker line(s): " + "; ".join(hits[:5]))]
+    return [Check("conflict-markers", True, "no merge-conflict markers in tracked files")]
+
+
 def _image_size(path: Path) -> tuple[int, int] | None:
     """(width, height) read from a PNG or JPEG header, stdlib only."""
     import struct
@@ -764,6 +783,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rep.checks += check_wiring_lints(repo, changed)
     rep.checks += check_group_overlays(repo)
+    rep.checks += check_conflict_markers(repo)
     rep.checks += check_patch_declarations(repo)
     rep.checks += check_ledger_covers_patch_sets(repo)
     rep.checks += check_fork_budget(repo)

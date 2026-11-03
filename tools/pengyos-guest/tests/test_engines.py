@@ -330,3 +330,41 @@ def test_apply_raises_on_setup_failure():
     fake.respond(["distrobox", "enter", "x", "--", "sh", "-lc"], RunResult(argv=[], returncode=1))
     with pytest.raises(GuestError, match="setup step failed in guest 'x': false"):
         GuestManager(runner=fake).apply(Guest(name="x", image="alpine:3", setup=["false"]))
+
+
+
+# -- verify --------------------------------------------------------------------
+
+
+def test_apply_runs_verify_and_reports_what_it_found():
+    fake = FakeRunner()
+    _script_not_found(fake)
+    fake.respond(["distrobox", "enter", "dev", "--", "sh", "-lc", "rustc --version"],
+                 RunResult(argv=[], returncode=0, stdout="rustc 1.91.0 (f8297e351 2025-10-28)\n"))
+    g = Guest(name="dev", image="ubuntu:24.04", setup=["true"], verify=["rustc --version"])
+    result = GuestManager(runner=fake).apply(g)
+    assert result.verified == [("rustc --version", "rustc 1.91.0 (f8297e351 2025-10-28)")]
+
+
+def test_a_tool_setup_left_unusable_fails_apply_by_name():
+    """2026-11-03: rustup was present with no default toolchain; setup skipped it,
+    apply said "ran 5 setup step(s)", and rustc did not work."""
+    from pengyos_guest.engines import GuestError
+
+    fake = FakeRunner()
+    _script_not_found(fake)
+    fake.respond(["distrobox", "enter", "dev", "--", "sh", "-lc", "rustc --version"],
+                 RunResult(argv=[], returncode=1,
+                           stderr="error: rustup could not choose a version of rustc to run\n"))
+    g = Guest(name="dev", image="ubuntu:24.04", verify=["rustc --version"])
+    with pytest.raises(GuestError, match="verify failed in guest 'dev': rustc --version: error: rustup"):
+        GuestManager(runner=fake).apply(g)
+
+
+def test_the_shipped_dev_box_verifies_every_toolchain_it_names():
+    from pengyos_guest import config
+    dev = next(g for g in config.load(Path(__file__).parents[1] / "guests.d" / "dev.toml").guests
+               if g.name == "dev")
+    for tool in ("gcc", "cmake", "go", "rustc", "cargo", "uv"):
+        assert any(v.startswith(tool) for v in dev.verify), tool
+    assert any("rustup default" in s for s in dev.setup)

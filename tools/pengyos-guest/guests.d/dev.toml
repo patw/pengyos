@@ -30,5 +30,15 @@ setup = [
   "echo '. /etc/pengyos-dev-path.sh' | sudo tee /etc/profile.d/pengyos-dev.sh >/dev/null",
   "grep -q pengyos-dev-path /etc/zsh/zshenv 2>/dev/null || { sudo mkdir -p /etc/zsh && echo '. /etc/pengyos-dev-path.sh' | sudo tee -a /etc/zsh/zshenv >/dev/null; }",
   "command -v rustup >/dev/null || curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path",
+  # rustup can be there with no toolchain chosen (a ~/.cargo from an earlier or a
+  # host install: home is shared), and then every rustc/cargo errors "no default is
+  # configured". The step above skips in that case, so pick stable when none is set.
+  "rustup default >/dev/null 2>&1 || rustup default stable",
   "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh",
+]
+# What this box promises, checked after setup on every apply: each must succeed,
+# and apply prints the version it found (or fails, naming the command).
+verify = [
+  "gcc --version", "cmake --version", "ninja --version", "go version",
+  "rustc --version", "cargo --version", "uv --version",
 ]

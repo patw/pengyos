@@ -22,6 +22,7 @@ the image itself.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import fcntl
 import hashlib
 import json
@@ -510,39 +511,73 @@ def record_slots(layout, image: str, current: str, state_path: str = STATE) -> N
         say(f"(could not record the slots for `pengyos-update status`: {exc})")
 
 
+def _age_s(iso: str) -> int | None:
+    """Seconds since an ISO-8601 UTC stamp (now_iso's form), or None if unreadable."""
+    try:
+        t = dt.datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=dt.timezone.utc)
+    return max(0, int((dt.datetime.now(dt.timezone.utc) - t).total_seconds()))
+
+
+def _human(seconds: int) -> str:
+    for unit, n in (("day", 86400), ("hour", 3600), ("minute", 60)):
+        if seconds >= n:
+            k = seconds // n
+            return f"{k} {unit}{'s' if k != 1 else ''}"
+    return "less than a minute"
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     image, current, osr = identity()
     cfg = read_config()
-    say(f"system:   {osr.get('PRETTY_NAME', image)} ({image} {current}, build {osr.get('BUILD_ID', '?')})")
-    say(f"channel:  {cfg['channel']}   feed: {cfg['feed']}")
+    out = {"image": image, "current": current, "build": osr.get("BUILD_ID", ""),
+           "channel": cfg["channel"], "feed": cfg["feed"],
+           "slots": [], "slots_source": "none", "slots_at": None, "slots_age_s": None}
     if os.geteuid() == 0:
         layout = detect_layout()
         rows = slot_rows(layout, read_env(layout.esp), image, current)
-        print_slots(rows)
-        save_state(args.state, slots=rows, slots_at=now_iso())
+        at = now_iso()
+        save_state(args.state, slots=rows, slots_at=at)
+        out.update(slots=rows, slots_source="live", slots_at=at, slots_age_s=0)
+    else:
+        # Without root: the table root last recorded, with "running" and this slot's
+        # system read live, so a boot that never reached confirm is still shown as it
+        # is. The other slot's system is only readable as root (it is a block device),
+        # but nothing changes it without recording: confirm (every boot), apply and
+        # rollback all rewrite this table.
+        state = load_state(args.state)
+        rows = state.get("slots") or []
+        if rows:
+            try:
+                booted = detect_layout().booted
+            except UpdateError:
+                booted = None
+            for r in rows:
+                tags = [t for t in r.get("tags") or [] if t != "running"]
+                if r.get("slot") == booted:
+                    tags.insert(0, "running")
+                    r["system"] = f"{image} {current}"
+                r["tags"] = tags
+            at = state.get("slots_at")
+            out.update(slots=rows, slots_source="recorded", slots_at=at, slots_age_s=_age_s(at))
+    if getattr(args, "json", False):
+        print(json.dumps(out, indent=2))
         return 0
-    # Without root: the table root last recorded (confirm writes it at every boot),
-    # with "running" and this slot's system read live, so a boot that never reached
-    # confirm is still shown as it is.
-    state = load_state(args.state)
-    rows = state.get("slots")
-    if not rows:
+    say(f"system:   {osr.get('PRETTY_NAME', image)} ({image} {current}, build {out['build'] or '?'})")
+    say(f"channel:  {cfg['channel']}   feed: {cfg['feed']}")
+    if not out["slots"]:
         say("(run with sudo to see the slots)")
         return 0
-    try:
-        booted = detect_layout().booted
-    except UpdateError:
-        booted = None
-    for r in rows:
-        tags = [t for t in r.get("tags") or [] if t != "running"]
-        if r.get("slot") == booted:
-            tags.insert(0, "running")
-            r["system"] = f"{image} {current}"
-        r["tags"] = tags
-    print_slots(rows)
-    say(f"(slots as recorded {state.get('slots_at', '?')}; sudo reads them live)")
+    print_slots(out["slots"])
+    if out["slots_source"] == "recorded":
+        age = out["slots_age_s"]
+        when = f"{out['slots_at'] or '?'}" + (f", {_human(age)} ago" if age is not None else "")
+        say(f"(slots as recorded {when}, at the last boot, apply or rollback, which are what "
+            "change them; sudo reads them live)")
     return 0
-
 
 def cmd_channel(args: argparse.Namespace) -> int:
     cfg = read_config()
@@ -564,6 +599,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("status", help="this machine: version, channel, slots")
     s.add_argument("--state", default=STATE, help=argparse.SUPPRESS)
+    s.add_argument("--json", action="store_true",
+                   help="machine-readable, with where the slot table came from and its age")
     s.set_defaults(fn=cmd_status)
 
     s = sub.add_parser("check", help="is there a newer release?")

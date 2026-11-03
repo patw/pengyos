@@ -261,6 +261,11 @@ run as **podman containers managed by systemd (quadlets)** — started at boot, 
 failure, updated independently of the OS; podman's Docker-compatible socket covers
 compose files. Jellyfin gets `/dev/dri` for hardware transcoding. The external drive is a
 systemd mount unit (or `/etc/fstab` entry) under `/data` or `/srv`.
+Services go in the **system** Quadlet lane, `/etc/containers/systemd/` (rootful, up at
+boot with nobody logged in, no linger); `~/.config/containers/systemd/` is the user lane
+and needs `loginctl enable-linger`. The image's `/etc/containers/systemd/README` says
+which is which and names the two traps (an unknown key leaves no unit; `is-enabled`
+says `generated`).
 **Acceptance:** after a reboot with nobody logged in, all services are up and reachable
 on the LAN; transcoding uses the GPU; the media drive is mounted before the containers
 start; an image update leaves config, data and containers intact.
