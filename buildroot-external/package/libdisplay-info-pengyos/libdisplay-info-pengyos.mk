@@ -18,7 +18,7 @@
 #
 ################################################################################
 
-LIBDISPLAY_INFO_PENGYOS_VERSION = 0.4.0
+LIBDISPLAY_INFO_PENGYOS_VERSION = 0.3.0
 LIBDISPLAY_INFO_PENGYOS_SOURCE = libdisplay-info-$(LIBDISPLAY_INFO_PENGYOS_VERSION).tar.xz
 LIBDISPLAY_INFO_PENGYOS_SITE = https://gitlab.freedesktop.org/emersion/libdisplay-info/-/releases/$(LIBDISPLAY_INFO_PENGYOS_VERSION)/downloads
 LIBDISPLAY_INFO_PENGYOS_LICENSE = MIT
