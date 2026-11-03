@@ -17,6 +17,12 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — the gate refuses merge-conflict markers (2026-11-03)
+
+`check_conflict_markers` fails on any tracked file with a `<<<<<<<` or `>>>>>>>` line
+(patches excepted). 539a4c63 landed tools/README.md with a live conflict block, and
+nothing caught it until a Pengy field review read the file.
+
 ### Added — the system Quadlet lane is there and explained (2026-11-03)
 
 Server (and Desktop) now ship `/etc/containers/systemd/` with a README: the system
