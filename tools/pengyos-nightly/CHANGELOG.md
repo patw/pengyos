@@ -6,6 +6,13 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — a new month starts a new release line
+`next_version` only ever added 1 to N, so the first November release would have been
+26.10.58. It now dates the version by the day it is published: the first release of a
+month is `YY.MM.0` (CONTRIBUTING.md, "Versioning"), N counts up from what that month
+already published, and an unpublished VERSION is reused only if it belongs to the
+current month.
+
 ### Fixed — a fork's newer series can no longer be approved into a bump
 26.10.56 bumped `libdisplay-info-pengyos` to 0.4.0 after it was approved on the decision
 page. That fork exists only to stay on soversion 3 for cosmic-comp, and the compositor
