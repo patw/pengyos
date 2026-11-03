@@ -106,15 +106,6 @@ chmod 0440 "${TARGET_DIR}"/etc/sudoers.d/* 2>/dev/null || true
 # for fwupd's UEFI capsules; the root is read-only, so the mount point ships here.
 mkdir -p "${TARGET_DIR}/efi"
 
-# --- PAM: no lines for modules the image does not have ---------------------------
-# util-linux's /etc/pam.d/login names pam_selinux (no SELinux here) and
-# pam_console (Red Hat's, long gone). Both are optional/ignored, so console
-# logins worked, but PAM logged "unable to dlopen(pam_selinux.so)" at error
-# level on every one (26.10.23 QEMU probe).
-if [ -f "${TARGET_DIR}/etc/pam.d/login" ]; then
-    sed -i '/pam_selinux\.so/d; /pam_console\.so/d' "${TARGET_DIR}/etc/pam.d/login"
-fi
-
 # --- The comfort shell profile (US-SRV-1) --------------------------------------
 # tools/pengyos-server-toolset authors the curated bash/zsh profile (starship
 # prompt, fzf, zoxide, modern aliases, tmux defaults); the image installs it at

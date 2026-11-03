@@ -141,6 +141,16 @@ fi
 rm -f "${TARGET_DIR}"/etc/ssh/ssh_host_*
 echo "post-build: no ssh host keys in the image (generated per machine on first boot)"
 
+# --- PAM: no lines for modules the image does not have ---------------------------
+# (Core's since 26.11.0: shadow's login came with BusyBox's departure.)
+# util-linux's /etc/pam.d/login names pam_selinux (no SELinux here) and
+# pam_console (Red Hat's, long gone). Both are optional/ignored, so console
+# logins worked, but PAM logged "unable to dlopen(pam_selinux.so)" at error
+# level on every one (26.10.23 QEMU probe).
+if [ -f "${TARGET_DIR}/etc/pam.d/login" ]; then
+    sed -i '/pam_selinux\.so/d; /pam_console\.so/d' "${TARGET_DIR}/etc/pam.d/login"
+fi
+
 # --- No BusyBox: clear what an earlier build left ---------------------------------
 # BusyBox is not built since 26.11.0 (layers/core.config), but Buildroot never
 # deletes from TARGET_DIR: an incremental tree keeps /bin/busybox and every applet

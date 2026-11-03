@@ -81,6 +81,7 @@ Chosen once, inherited everywhere.
 | **find, xargs** | **uutils/findutils** (Rust) — our recipe `package/uutils-findutils` (the pin is the recipe's version): `find`, `xargs`, `locate`, `updatedb`, linking Buildroot's oniguruma | MIT | GNU findutils (GPL-3.0; what shipped up to 26.10.44). Diffutils stays GNU: uutils/diffutils 0.6.0 has no `diff -r`, `diff3` or `sdiff` | 🟢 |
 | **Privilege** | **sudo-rs** (Rust, Server and Desktop) — our recipe `package/sudo-rs` (the pin is the recipe's version): `sudo` (setuid), `sudoedit`, `visudo`; `/etc/sudoers` grants root and includes `/etc/sudoers.d`; the admins are `wheel` (the drop-in, and `pam_wheel` in PAM service `sudo`) | Apache-2.0 / MIT | C sudo (ISC; Buildroot's recipe — what shipped up to 26.10.44), doas | 🟢 |
 | **Shell** | **bash** (Core); **zsh** added on Server, wired to the comfort profile (`/etc/pengyos/shell/profile`: starship prompt, fzf, zoxide, aliases) + the zsh plugins (autosuggestions, syntax highlighting) | GPL-3.0 / MIT | nushell, fish, oh-my-zsh (a git-checkout framework with an update ping; the curated profile ships its feel instead) | 🟢 |
+| **No BusyBox** | Not built since 26.11.0: every command it answered comes from its own package in Core (shadow, iputils, net-tools, traceroute, curl + GNU wget, pciutils, usbutils, hdparm, binutils minus `ld`/`as`, GNU bc, cpio, dos2unix, lzop, ncurses, whois `mkpasswd`, debianutils `run-parts`); `dig`/`host`/`nslookup` are BIND's tools on Server and Desktop, a pointer to `resolvectl` on Core | per package | BusyBox with applets compiled out per package (26.10.x), toybox | 🟢 |
 | **Editor** | **Vim** in every edition (Buildroot's recipe, runtime and `:help` included); `vi` is Vim, and Vim's `xxd` replaces BusyBox's | Vim license (charityware, GPL-compatible) | BusyBox vi (what shipped up to 26.10.57), nvi, helix | 🟢 |
 | **IPC** | **D-Bus** reference daemon | AFL-2.1 / GPL-2.0 | dbus-broker (stock Buildroot recipe, not enabled) | 🟢 / 🔵 broker |
 | **Devices, logs** | systemd-udevd, systemd-journald | LGPL-2.1 | eudev, rsyslog | 🟢 |
@@ -174,9 +175,10 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 - **Userspace:** systemd (journald, udevd, logind, networkd, resolved), D-Bus, uutils
   coreutils and uutils findutils (Rust), util-linux, kmod, iproute2, procps-ng, bash, Python 3, nftables,
   chrony, OpenSSH (key-only). The text/search tools come from the projects that define
-  the behaviour, not from BusyBox: find/xargs (uutils findutils), grep, sed, gawk, GNU time, which,
-  diffutils, patch, gzip, Info-ZIP unzip, tar, tree, lsof, less, attr, psmisc — and the
-  BusyBox applets for all of them are compiled out (`board/core/busybox.fragment`).
+  the behaviour: find/xargs (uutils findutils), grep, sed, gawk, GNU time, which,
+  diffutils, patch, gzip, Info-ZIP unzip, tar, tree, lsof, less, attr, psmisc, Vim,
+  curl and GNU wget, shadow (login, passwd, useradd), iputils, net-tools, traceroute,
+  pciutils, usbutils, binutils (no linker). There is no BusyBox (since 26.11.0).
   `/bin/sh` is bash.
 - **Storage tools:** e2fsprogs, btrfs-progs, dosfstools, exfatprogs, parted, LVM2,
   cryptsetup, efibootmgr.
@@ -329,12 +331,12 @@ cut down. 144 applets were in the Server image, and the tools agents reach for w
 among them: `find` without `-printf`, `grep` without `-P`/`--include`, `sed` without
 `\b`, `awk` without `gensub`, `xargs` without `-d`, `diff` without `-r`, `time -v`,
 `unzip -l`, `killall -q`, `losetup -f`, `last -x`, `su -l`. They read like the real
-tools and behave like an initramfs — in an image with **no initramfs**. PengyOS now
-resolves the overlap in the BusyBox config instead of by luck: every applet another
-package owns is compiled out, the early-boot and embedded applets go with it, and
-`scripts/tests/test_core_userland.py` fails if a fragment names a symbol BusyBox does
-not declare (a typo is a silent no-op) or removes a command no selected package
-provides.
+tools and behave like an initramfs — in an image with **no initramfs**. Through
+26.10.x PengyOS resolved the overlap in the BusyBox config instead of by luck (every
+applet another package owned was compiled out); 26.11.0 finished the job and dropped
+BusyBox, giving each of its last 59 applets a real package or a recorded reason to go.
+`scripts/tests/test_core_userland.py` keeps that map and fails if a command loses its
+package.
 
 **Init → systemd.** Freedom 🟡 (LGPL-2.1, fine) · maintenance ✅ · security 🟡 (large
 but well audited) · dependencies 🔴 (it drags a lot, and forces glibc) · interface ✅

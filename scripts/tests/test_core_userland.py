@@ -444,3 +444,14 @@ def test_no_unit_is_left_calling_the_dropped_ifup():
     for cfg in DEFCONFIGS:
         text = (EXT / "configs" / cfg).read_text()
         assert "BR2_PACKAGE_IFUPDOWN_SCRIPTS=y" not in text, cfg
+
+
+def test_core_has_the_pam_stack_shadow_login_includes():
+    """shadow's /etc/pam.d/login includes system-auth; without it every console
+    login answered "Permission denied" (Server 26.10.3; Core in the first 26.11.0
+    build, once shadow's login replaced BusyBox's)."""
+    assert "BR2_PACKAGE_SHADOW=y" in LAYER_CORE.read_text()
+    pam = CORE_BOARD / "rootfs-overlay/etc/pam.d"
+    assert "pam_unix.so" in (pam / "system-auth").read_text()
+    assert "pam_unix.so" in (pam / "other").read_text()
+    assert "pam_selinux" in POST_BUILD_CORE.read_text()  # the login cleanup is Core's
