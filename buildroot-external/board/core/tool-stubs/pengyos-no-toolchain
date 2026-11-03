@@ -1,0 +1,45 @@
+#!/bin/sh
+# PengyOS stub: the host has no compiler toolchain, and that is deliberate.
+#
+# Installed by core/post-build.sh under every name in this directory that links
+# here (cc, gcc, make, cmake, cargo, ...), and only where the image has no real
+# tool of that name. The system slot is read-only and holds no toolchain; builds
+# happen in the dev guest, which has them. This turns "command not found" into
+# the next step, so nobody concludes the machine cannot build at all (a Pengy
+# field review on 2026-11-03 did exactly that before finding the dev box).
+#
+# Exit 127, as "not found" would: a configure probe still fails and a build stops
+# at once. The message goes to stderr, so it can never be mistaken for output.
+# A guest has its own /usr/bin, so these never shadow the compilers inside one.
+NAME=$(basename "$0")
+
+if ! command -v pengyos-guest >/dev/null 2>&1; then
+    cat >&2 <<MSG
+PengyOS: '$NAME' is not installed. This edition (Core) has no compiler toolchain
+and no build guest. Server and Desktop ship a dev box with gcc, cmake, go, rust
+and uv (pengyos-guest apply dev). Or build in a container (podman run ...).
+MSG
+    exit 127
+fi
+
+case "$NAME" in
+    cargo|rustc|rustup) hint="dx $NAME build --release" ;;
+    make)               hint="dx make -j\$(nproc)" ;;
+    cmake)              hint="dx cmake -S . -B build && dx cmake --build build -j\$(nproc)" ;;
+    go)                 hint="dx go build ./..." ;;
+    *)                  hint="dx $NAME ..." ;;
+esac
+cat >&2 <<MSG
+PengyOS: '$NAME' is not on the host. The system is read-only and has no compiler
+toolchain (no cc/gcc/ld/make/cmake/ninja/pkg-config/go/rust). Build in the dev
+guest, which has them. Your home directory is the same inside and out:
+
+  pengyos-guest apply dev     # once: gcc, cmake, ninja, go, rust, uv (a few minutes)
+  $hint
+                              # dx runs one command in the guest, in this directory
+  dx --shell                  # or work in a shell there
+
+What you build runs on the host (the guest's glibc is older than the host's).
+Or ship it as a container: ~/.config/containers/systemd/<name>.container
+MSG
+exit 127

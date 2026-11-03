@@ -17,6 +17,19 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — the host says how to build: compiler stubs and `dx` (2026-11-03)
+
+`cc`, `c++`, `gcc`, `g++`, `ld`, `as`, `make`, `cmake`, `ninja`, `pkg-config`, `go`,
+`gofmt`, `cargo`, `rustc` and `rustup` are now stubs on every edition (one script,
+`board/core/tool-stubs/pengyos-no-toolchain`, under each name; never where a real
+tool exists). Like the `crontab` stub, each says what to do instead and exits 127:
+on Server and Desktop, `pengyos-guest apply dev` and `dx <command>`; on Core, that
+this edition has no build guest. `dx` (Server, Desktop) runs one command in the
+dev guest from the host, in the current directory, with its exit code passed back.
+Both were Pengy's on behoserver (`~/.local/bin`). Its field review of Server
+showed what their absence cost: an agent concluded the machine could not compile
+at all before it found the dev box.
+
 ### Added — `push-site.sh --delete`: a prune reaches the live server (2026-11-03)
 
 `pengyos-release prune --apply` removes superseded releases from the local site, but

@@ -1,0 +1,68 @@
+#!/bin/bash
+# dx: run one command in a PengyOS guest (the dev box by default), from the host.
+#
+# The host has no compiler toolchain (board/core/tool-stubs/pengyos-no-toolchain
+# says so under each tool's name); the `dev` guest has gcc, cmake, ninja, go, rust
+# and uv. dx is the one-line way there: the current directory is kept, the
+# guest's login PATH is used (its toolchains live in ~/.cargo and ~/.local/bin),
+# and the command's exit code is passed straight back.
+#
+#   dx make -j8
+#   dx cmake -S . -B build && dx cmake --build build -j"$(nproc)"
+#   dx cargo build --release
+#   dx --shell                  # a shell in the guest
+#   dx --list                   # the guests that exist
+#   dx -g cuda nvcc --version   # another guest (or PENGYOS_DX_GUEST=cuda)
+#
+# Written by Pengy on behoserver (~/.local/bin/dx, 2026-11-02) and shipped in the
+# image on 2026-11-03 after its field review.
+set -uo pipefail
+
+GUEST="${PENGYOS_DX_GUEST:-dev}"
+
+card() {
+    cat <<CARD
+dx: run build commands in a guest, because the host image has no toolchain.
+
+  host (PengyOS, read-only)   no: cc gcc g++ ld as make cmake ninja pkg-config go rust
+  guest '$GUEST'              gcc g++ make cmake ninja pkg-config go cargo rustc uv
+
+  dx <command> [args...]      e.g. dx cmake --build build -j8
+  dx --shell                  interactive shell in '$GUEST'
+  dx --list                   guests
+  dx -g <name> <command>      another guest (PENGYOS_DX_GUEST sets the default)
+
+  First time:  pengyos-guest apply dev
+  The directory is kept and the exit code is the command's. What you build runs
+  on the host (the guest's glibc is older than the host's).
+CARD
+}
+
+case "${1-}" in
+    ""|-h|--help) card; exit 0 ;;
+    --list|-l)    exec pengyos-guest list ;;
+    --shell|-s)   shift; set -- bash -l ;;
+    -g|--guest)   GUEST="${2:?dx: -g needs a guest name}"; shift 2 ;;
+    --)           shift ;;
+esac
+[ "$#" -gt 0 ] || { card >&2; exit 2; }
+
+# A missing guest fails here, with the fix, rather than distrobox creating a
+# half-provisioned container.
+if ! distrobox list 2>/dev/null | awk -F'|' 'NR>1 {gsub(/ /,"",$2); print $2}' | grep -qx -- "$GUEST"; then
+    echo "dx: there is no guest '$GUEST' yet. Create it with:  pengyos-guest apply $GUEST" >&2
+    exit 2
+fi
+
+# A login shell, so the guest's own PATH setup runs (dev.toml writes it); the
+# system directories first, so a build system that caches a compiler path
+# caches the guest's /usr/bin/cc. distrobox translates the directory for paths
+# mounted elsewhere in the guest; cd only if it exists there.
+exec distrobox enter "$GUEST" -- bash -lc '
+    cd "$1" 2>/dev/null || true
+    shift
+    PATH="/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:$PATH"
+    export PATH
+    hash -r
+    exec "$@"
+' dx "$PWD" "$@"
