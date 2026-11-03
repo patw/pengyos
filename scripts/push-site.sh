@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Push the published site dir to the live host, retrying while the host is away.
 #
-#   scripts/push-site.sh SITE REMOTE         REMOTE is host:path/ ($PENGYOS_SITE_REMOTE)
+#   scripts/push-site.sh [--delete] SITE REMOTE   REMOTE is host:path/ ($PENGYOS_SITE_REMOTE)
+#
+#   --delete   also remove from REMOTE's update/ and download/ what SITE no longer
+#              has, after the transfer (rsync --delete-after). Use it after
+#              `pengyos-release prune --apply`: without it the server keeps every
+#              pruned release. It refuses unless SITE looks like a published site
+#              (update/feed.xml and download/index.html), so a wrong or empty SITE
+#              cannot empty the live one. release.sh does not pass it.
 #
 # release.sh --push calls this as its last step, after every image is signed and
 # published into SITE. The remote is another machine with its own life: on
@@ -15,12 +22,20 @@
 #   PENGYOS_PUSH_WAIT   seconds before the first retry, doubled each time
 #                       (default 30: 30+60+120+240s covers a reboot)
 set -euo pipefail
-[ $# -eq 2 ] || { echo "usage: push-site.sh SITE REMOTE" >&2; exit 2; }
+DELETE=()
+if [ "${1:-}" = "--delete" ]; then DELETE=(--delete-after); shift; fi
+[ $# -eq 2 ] || { echo "usage: push-site.sh [--delete] SITE REMOTE" >&2; exit 2; }
 SITE="$1" REMOTE="$2"
+if [ "${#DELETE[@]}" -gt 0 ]; then
+    for f in update/feed.xml download/index.html; do
+        [ -s "${SITE}/${f}" ] || { echo "push-site.sh: --delete refused: ${SITE}/${f} is" \
+            "missing, so ${SITE} is not a published site and would empty ${REMOTE}" >&2; exit 2; }
+    done
+fi
 TRIES="${PENGYOS_PUSH_TRIES:-5}" WAIT="${PENGYOS_PUSH_WAIT:-30}"
 
 n=1
-until rsync -a "${SITE}/update" "${SITE}/download" "${REMOTE}"; do
+until rsync -a "${DELETE[@]}" "${SITE}/update" "${SITE}/download" "${REMOTE}"; do
     if [ "${n}" -ge "${TRIES}" ]; then
         echo "[release] push failed after ${n} attempts: the release is signed and published" \
              "in ${SITE} but not on ${REMOTE}; rerun scripts/push-site.sh to finish it" >&2
