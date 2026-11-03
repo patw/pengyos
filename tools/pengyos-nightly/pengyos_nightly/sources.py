@@ -266,8 +266,11 @@ def libdisplay_info_fork_findings(tags: Iterable[str], current: str) -> list[dic
     Upstream tags releases `0.3.0`, with no `v`. A point release in the pinned series
     (0.3.1) is routine and wins over a newer series: it is the one the fork can take
     without moving cosmic-comp, and the likeliest carrier of a security fix. Without
-    one, the newest series is major - a newer series needs cosmic-comp's crate to move
-    first, so it is reported, never something the loop can bump on its own.
+    one, the newest series is reported and marked ``report_only``: a newer series is
+    the fork's *expiry* (move cosmic-comp's pin, then delete the fork), not an update
+    to the fork, so not even an approval can send it to the act lane. 2026-11-03: an
+    approved 0.4.0 was bumped by the nightly, and 26.10.56's compositor started only
+    off a stale .so.3 left in the target tree.
     """
     versions = [t for t in tags if re.fullmatch(r"\d+\.\d+\.\d+", t)]
     newer = [v for v in versions if vkey(v) > vkey(current)]
@@ -276,12 +279,18 @@ def libdisplay_info_fork_findings(tags: Iterable[str], current: str) -> list[dic
     series = [v for v in newer if bump_kind(current, v) == "routine"]
     best = max(series or newer, key=vkey)
     kind = bump_kind(current, best)
-    return [{"lane": kind, "component": "libdisplay-info-pengyos", "current": current,
-             "available": best,
+    finding = {"lane": kind, "component": "libdisplay-info-pengyos", "current": current,
+               "available": best,
              "note": (f"libdisplay-info point release (fork: {current} -> {best})"
                       if kind == "routine"
                       else f"new libdisplay-info series ({current} -> {best}); "
-                           "cosmic-comp's libdisplay-info-sys must accept it first")}]
+                           "cosmic-comp's libdisplay-info-sys must accept it first")}
+    if kind != "routine":
+        finding["report_only"] = (
+            f"libdisplay-info {best} is a new soversion; cosmic-comp links .so.3. Taking it "
+            "means moving cosmic-comp's pin and retiring the fork (divergence.toml -> "
+            "libdisplay-info-0.3.0-fork), done by hand, not a bump of the fork")
+    return [finding]
 
 
 def crates_io_versions(text: str) -> list[str]:

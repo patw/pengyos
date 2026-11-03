@@ -41,6 +41,20 @@ def test_the_newer_series_is_major_and_says_what_blocks_it():
     assert "libdisplay-info-sys" in f[0]["note"]
 
 
+def test_a_newer_series_is_report_only_so_no_approval_can_bump_the_fork():
+    """2026-11-03: 0.4.0 was approved on the decision page, the act lane bumped the
+    fork to it, and 26.10.56's compositor started only off a stale .so.3. A newer
+    series is the fork's expiry, not an update to it; 0.5.0 must not repeat that."""
+    for tags in (list(TAGS), list(TAGS) + ["0.5.0"]):
+        f = sources.libdisplay_info_fork_findings(tags, "0.3.0")
+        assert f[0]["lane"] == "major" and "cosmic-comp" in f[0]["report_only"], f
+
+
+def test_a_point_release_in_the_pinned_series_stays_actable():
+    f = sources.libdisplay_info_fork_findings(["0.3.0", "0.3.1", "0.4.0"], "0.3.0")
+    assert "report_only" not in f[0], f
+
+
 def test_a_point_release_in_the_pinned_series_wins_over_a_newer_series():
     """0.3.1 is what the fork can take without moving cosmic-comp, and the likeliest
     carrier of a CVE fix. Reporting only "0.4.1 available" would bury it."""

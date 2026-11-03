@@ -81,8 +81,11 @@ def _unreachable(plan: dict, component: str) -> str:
     return ""
 
 
-def _cannot_act(component: str, pkg: dict | None, plan: dict | None = None) -> str:
+def _cannot_act(component: str, pkg: dict | None, plan: dict | None = None,
+                finding: dict | None = None) -> str:
     """Why an approval could not be carried out, or "" when it could."""
+    if (finding or {}).get("report_only"):
+        return f"The nightly can't do this one: {finding['report_only']}."
     if component in G.DENIED:
         return f"The nightly can't do this one: {G.DENIED[component]}."
     if pkg and pkg.get("tree") == "BUILDROOT":
@@ -131,7 +134,7 @@ def view(paths: dict, repo: Path, run=subprocess.run, now: dt.datetime | None = 
                 "current": f.get("current") or (pkg or {}).get("current", ""),
                 "target": available, "note": f.get("note", ""),
                 "editions": (pkg or {}).get("editions", []),
-                "cannot_act": _cannot_act(name, pkg, plan),
+                "cannot_act": _cannot_act(name, pkg, plan, f),
                 "decision": entry if verdict else None}
         if verdict == D.APPROVED:
             item["status"] = _status(_plan_entry(plan, name, ("approved",)), plan_new, entry,
@@ -352,8 +355,12 @@ def create_app(paths: dict, repo: Path, run=subprocess.run):
         if kind == "security" and decision == D.APPROVED:
             abort(400)      # nothing to approve: the security lane runs on its own guards
         if decision == D.APPROVED:
-            pkg = _read(paths["obs"], {}).get("packages", {}).get(component)
-            if _cannot_act(component, pkg, _read(paths["plan"], {})):
+            obs = _read(paths["obs"], {})
+            pkg = obs.get("packages", {}).get(component)
+            finding = next((f for f in obs.get("findings", [])
+                            if f.get("component") == component
+                            and (f.get("available") or "") == target), None)
+            if _cannot_act(component, pkg, _read(paths["plan"], {}), finding):
                 abort(400)
         D.decide(paths["decisions"], kind, component, decision, target)
         return redirect(url_for("index"))
