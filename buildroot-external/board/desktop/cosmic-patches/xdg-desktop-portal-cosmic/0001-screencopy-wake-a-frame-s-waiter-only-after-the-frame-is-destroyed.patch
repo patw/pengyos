@@ -1,0 +1,91 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] screencopy: wake a frame's waiter only after the frame is destroyed
+
+cosmic-client-toolkit's frame dispatch calls ready()/failed() and only
+then destroy()s the ext_image_copy_capture_frame_v1. ready()/failed()
+sent the result straight to the capture thread waiting in
+capture_wl_buffer(), so that thread could send create_frame for the next
+capture before the dispatch thread had queued the old frame's destroy.
+The compositor then sees two live frames on one session, raises
+ext_image_copy_capture_session_v1 error 1 (duplicate_frame), and the
+wayland thread panics and takes the whole portal down: every screencast
+and remote-desktop session dies with it. It takes a frame that completes
+while PipeWire already has the next buffer queued, so it shows up after
+a few minutes of real use (RDP on behobasement, 2026-11-02, twice).
+
+Queue the results in AppData and send them after blocking_dispatch()
+returns. By then each finished frame's destroy is in the connection's
+outgoing buffer, so whatever the woken thread sends is ordered after it.
+
+Upstream: not offered; carried
+Signed-off-by: Pat Wendorf <dungeons@gmail.com>
+---
+--- a/src/wayland/mod.rs
++++ b/src/wayland/mod.rs
+@@ -123,6 +123,28 @@
+     toplevel_info_state: ToplevelInfoState,
+     workspace_state: WorkspaceState,
+     seat_state: SeatState,
++    // PengyOS: frame results to hand to their waiters once the dispatch that
++    // produced them has returned (see `send_finished_frames`).
++    #[allow(clippy::type_complexity)]
++    finished_frames: Vec<(
++        oneshot::Sender<Result<Frame, WEnum<FailureReason>>>,
++        Result<Frame, WEnum<FailureReason>>,
++    )>,
++}
++
++impl AppData {
++    /// cosmic-client-toolkit calls `ready`/`failed` *before* it destroys the frame
++    /// object. Waking the capture thread from there lets it send `create_frame` for
++    /// the next capture ahead of that `destroy`, and the compositor kills the
++    /// connection with ext_image_copy_capture_session_v1 error 1 (duplicate_frame).
++    /// After `blocking_dispatch` returns, every finished frame's `destroy` is already
++    /// in the connection's outgoing buffer, so any request a woken thread sends is
++    /// queued after it.
++    fn send_finished_frames(&mut self) {
++        for (sender, result) in self.finished_frames.drain(..) {
++            let _ = sender.send(result);
++        }
++    }
+ }
+ 
+ impl Drop for AppData {
+@@ -327,14 +349,18 @@
+             toplevel_info_state: ToplevelInfoState::new(&registry_state, &qh),
+             registry_state,
+             seat_state: SeatState::new(&globals, &qh),
++            finished_frames: Vec::new(),
+         };
+         event_queue.flush().unwrap();
+ 
+         event_queue.roundtrip(&mut data).unwrap();
++        data.send_finished_frames();
+ 
+         thread::spawn(move || {
+             loop {
+-                match event_queue.blocking_dispatch(&mut data) {
++                let result = event_queue.blocking_dispatch(&mut data);
++                data.send_finished_frames();
++                match result {
+                     Ok(_) => {}
+                     // The connection is still usable; skip the malformed message
+                     Err(err @ DispatchError::BadMessage { .. }) => {
+@@ -741,7 +767,7 @@
+             .data::<FrameData>()
+             .and_then(|data| data.sender.lock().unwrap().take())
+         {
+-            let _ = sender.send(Ok(frame));
++            self.finished_frames.push((sender, Ok(frame)));
+         }
+     }
+ 
+@@ -756,7 +782,7 @@
+             .data::<FrameData>()
+             .and_then(|data| data.sender.lock().unwrap().take())
+         {
+-            let _ = sender.send(Err(reason));
++            self.finished_frames.push((sender, Err(reason)));
+         }
+     }
+ 
