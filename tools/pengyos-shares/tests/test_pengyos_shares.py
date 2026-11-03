@@ -157,6 +157,17 @@ def test_add_writes_the_share_opens_lan_and_starts_ksmbd(root):
     assert "pat has no share password yet" in r.stdout
 
 
+def test_add_says_which_ranges_it_opened(root):
+    """It printed "LAN addresses only" while opening all private space, IPv6
+    unique-local and link-local; the output now names every range (field review F3)."""
+    r = sh(root, "add", "media", "/data/media", "--user", "pat")
+    assert r.returncode == 0, r.stderr
+    for c in LAN:
+        assert c in r.stdout, c
+    assert "LAN addresses only" not in r.stdout
+    assert "pengyos-firewall remove 445/tcp" in r.stdout
+
+
 def test_a_second_share_reloads_instead_of_restarting(root):
     sh(root, "add", "media", "/data/media", "--user", "pat")
     r = sh(root, "add", "music", "/home/pat/Music", "--read-only", "--user", "pat",

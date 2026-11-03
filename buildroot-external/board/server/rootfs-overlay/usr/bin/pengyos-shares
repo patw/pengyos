@@ -264,7 +264,10 @@ def apply(box: Box, shares: dict, say) -> None:
             box.systemctl("reload", UNIT)
         else:
             box.systemctl("enable", "--now", UNIT)
-            say(f"Started {UNIT}; port {PORT} is open to LAN addresses only.")
+            say(f"Started {UNIT}; port {PORT}/tcp is open to private addresses only: "
+                f"{', '.join(LAN)} (IPv4 private, IPv6 unique-local and link-local).")
+            say(f"  Narrower: pengyos-firewall remove {PORT}/tcp --from <range> for each, "
+                f"then pengyos-firewall allow {PORT}/tcp --from <your LAN>.")
     else:
         box.systemctl("disable", "--now", UNIT)
         for cidr in LAN:

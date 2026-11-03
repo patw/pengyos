@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed — `add` names the ranges it opens 445 to (2026-11-03)
+It printed "port 445 is open to LAN addresses only" while opening all of 10/8,
+172.16/12, 192.168/16, fd00::/8 and fe80::/10. It now lists them, and says how to
+narrow them with `pengyos-firewall` (Pengy field review, F3).
+
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
