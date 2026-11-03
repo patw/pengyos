@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-FFMPEGTHUMBNAILER_VERSION = 2.3.1
+FFMPEGTHUMBNAILER_VERSION = 2.4.1
 FFMPEGTHUMBNAILER_SITE = $(call github,dirkvdb,ffmpegthumbnailer,v$(FFMPEGTHUMBNAILER_VERSION))
 FFMPEGTHUMBNAILER_LICENSE = GPL-2.0+
 FFMPEGTHUMBNAILER_LICENSE_FILES = COPYING

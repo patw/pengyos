@@ -1,2 +1,4 @@
-sha256  0691647dc054179c358794c643a0968f796d23c015d02283e6ce2cf4173d2e0a  ffmpegthumbnailer-2.3.1.tar.gz
+# From https://github.com/dirkvdb/ffmpegthumbnailer/archive/v2.4.1/ffmpegthumbnailer-2.4.1.tar.gz
+sha256  779ff290a2b874fc889b28aa4c89fb5d1dbc9a15ee1d09524ed346bd83a4d920  ffmpegthumbnailer-2.4.1.tar.gz
 sha256  204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994  COPYING
+
