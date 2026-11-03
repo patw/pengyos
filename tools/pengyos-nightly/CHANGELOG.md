@@ -6,6 +6,17 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — a fork's newer series can no longer be approved into a bump
+26.10.56 bumped `libdisplay-info-pengyos` to 0.4.0 after it was approved on the decision
+page. That fork exists only to stay on soversion 3 for cosmic-comp, and the compositor
+started only off a stale .so.3 left in the target tree.
+- **Findings** can carry `report_only: <why>`. The planner records an approved one as
+  refused (`report_only_finding`) and never as an action; the web page disables Approve,
+  shows the reason, and the form refuses it.
+- **`libdisplay_info_fork_findings`** marks any newer series report-only (it is the
+  fork's expiry: move cosmic-comp's pin and retire the fork, by hand). Point releases in
+  the pinned series stay routine.
+
 ### Fixed — release notes name what main took by hand since the last release
 26.10.56 shipped Linux 7.3.1 under notes that named only its four routine bumps: a
 batch is cut from main's tip, so every branch merged by hand since the last release

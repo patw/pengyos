@@ -409,6 +409,18 @@ def _denied(kind: str, name: str, lane: str, current: str, target: str,
             "refused_by": ["operator_denied"], "refused_reason": [reason]}
 
 
+def _report_only(name: str, lane: str, current: str, target: str, pkg: dict | None,
+                 why: str) -> dict:
+    """An approved finding its source marked report-only: refused, with the reason."""
+    reason = f"report_only_finding: {why}"
+    return {"id": f"{lane}-{name}-{target}", "lane": lane, "component": name,
+            "current": current, "target": target, "allowed": False,
+            "editions": list((pkg or {}).get("editions") or []), "cves": [], "closes": [],
+            "edits": [], "hash": None, "risks": [],
+            "guards": [{"guard": "report_only_finding", "ok": False, "reason": reason}],
+            "refused_by": ["report_only_finding"], "refused_reason": [reason]}
+
+
 def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
                build_root: Path, nvd_of=lambda cve: {}, get=E.fetch_bytes,
                decisions: dict | None = None) -> dict:
@@ -458,6 +470,15 @@ def build_plan(obs: dict, st: dict, cfg: dict, today: dt.date, repo: Path,
                                   decided[D.key("update", name)]))
             continue
         if name in considered:
+            continue
+        if f.get("report_only"):
+            # The source says no act path exists for this finding (a fork's expiry, not
+            # an update to it). An approval does not create one; record why, so the
+            # plan still shows the candidate and what stopped it.
+            if verdict == D.APPROVED:
+                denied.append(_report_only(name, f.get("lane") or "major",
+                                           f.get("current") or "", available,
+                                           packages.get(name), f["report_only"]))
             continue
         if verdict == D.APPROVED:
             considered[name] = ("approved", available)

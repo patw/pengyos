@@ -971,6 +971,24 @@ def test_an_approval_does_not_lift_the_other_guards(tmp_path):
     assert not a["allowed"] and "denied_component" in a["refused_by"]
 
 
+def test_an_approval_does_not_act_on_a_finding_its_source_marked_report_only(tmp_path):
+    """The libdisplay-info fork's newer series: approved, it still has no act path."""
+    obs = _pengy_obs("1.12.2", lane="major")
+    obs["findings"][0]["report_only"] = "a new series retires the fork; done by hand"
+    plan = _pengy_plan(tmp_path, obs, _decided("update", "pengy", "approved", "1.12.2"))
+    assert plan["actions"] == []
+    a = _by_id(plan, "major-pengy-1.12.2")
+    assert a["refused_by"] == ["report_only_finding"]
+    assert "retires the fork" in a["refused_reason"][0]
+
+
+def test_an_unapproved_report_only_finding_is_not_even_a_candidate(tmp_path):
+    obs = _pengy_obs("1.12.2", lane="major")
+    obs["findings"][0]["report_only"] = "done by hand"
+    plan = _pengy_plan(tmp_path, obs)
+    assert plan["actions"] == [] and plan["refused"] == []
+
+
 def test_a_denied_routine_bump_is_not_acted_on_and_says_who_stopped_it(tmp_path):
     plan = _pengy_plan(tmp_path, _pengy_obs("1.11.6"),
                        _decided("update", "pengy", "denied", "1.11.6"))

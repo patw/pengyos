@@ -273,3 +273,17 @@ def test_approving_an_unfetchable_target_is_refused_at_the_form(tmp_path):
         "decision": "approved"})
     assert r.status_code == 400
     assert D.load(paths["decisions"]) == {}, "no decision is recorded for a phantom version"
+
+
+def test_a_report_only_finding_cannot_be_approved(tmp_path):
+    """The source says there is no act path: the button is off and the form refuses."""
+    paths = _state(tmp_path)
+    obs = json.loads(paths["obs"].read_text())
+    obs["findings"][0]["report_only"] = "a new series retires the fork; done by hand"
+    paths["obs"].write_text(json.dumps(obs))
+    v = web.view(paths, tmp_path, run=_clean)
+    item = next(i for i in v["waiting"] if i["component"] == "pengy")
+    assert "retires the fork" in item["cannot_act"]
+    r = _client(paths, tmp_path).post("/decide", data={
+        "kind": "update", "component": "pengy", "target": "1.12.2", "decision": "approved"})
+    assert r.status_code == 400 and D.load(paths["decisions"]) == {}
