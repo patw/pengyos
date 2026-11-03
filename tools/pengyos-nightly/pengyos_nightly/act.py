@@ -62,20 +62,30 @@ def published_versions(site: Path) -> set[str]:
     return out
 
 
-def next_version(repo: Path, site: Path) -> tuple[str, str]:
-    """The version this release should carry.
+def next_version(repo: Path, site: Path, today: dt.date | None = None) -> tuple[str, str]:
+    """The version this release should carry: ``YY.MM.N`` for the month it is published.
 
-    A VERSION that has never been published is not a used version: 26.10.8 was
-    built and gated but never published, so publishing it is not a new release
-    line — bumping past it would leave a phantom version in the history.
+    N counts the images published that month, from 0 (CONTRIBUTING.md, "Versioning"),
+    so the first release of a new month is ``YY.MM.0``, not the old month's N + 1.
+    Until 2026-11-03 this only ever added 1 to N, and the first November release would
+    have been 26.10.58.
+
+    A VERSION of this month that has never been published is not a used version:
+    26.10.8 was built and gated but never published, so publishing it is not a new
+    release, and bumping past it would leave a phantom version in the history.
     """
+    today = today or dt.date.today()
+    line = f"{today.year % 100:02d}.{today.month:02d}"
     current = (repo / "VERSION").read_text().strip()
-    if current not in published_versions(site):
+    published = published_versions(site)
+    if current.startswith(line + ".") and current not in published:
         return current, f"{current} has never been published, so it is reused"
-    parts = current.split(".")
-    parts[-1] = str(int(parts[-1]) + 1)
-    bumped = ".".join(parts)
-    return bumped, f"{current} is already published, so this release is {bumped}"
+    used = [int(v.rsplit(".", 1)[1]) for v in published
+            if v.startswith(line + ".") and v.rsplit(".", 1)[1].isdigit()]
+    nxt = f"{line}.{max(used) + 1 if used else 0}"
+    if not current.startswith(line + "."):
+        return nxt, f"{current} is from an earlier month, so this release starts {line} at {nxt}"
+    return nxt, f"{current} is already published, so this release is {nxt}"
 
 
 def merged_by_hand(run, repo: Path, base: str) -> list[str]:
@@ -621,7 +631,7 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
     try:
         base = _git(run, repo, "rev-parse", "HEAD")
         branch = f"nightly/{today.isoformat()}-{action['component']}"
-        version, why = next_version(repo, site)
+        version, why = next_version(repo, site, today)
         result["version"] = version
         result["branch"] = branch
         entered.append(branch)
@@ -936,7 +946,7 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     try:
         base = _git(run, repo, "rev-parse", "HEAD")
         branch = f"nightly/{today.isoformat()}-batch"
-        version, why = next_version(repo, site)
+        version, why = next_version(repo, site, today)
         result["version"] = version
         result["branch"] = branch
         entered.append(branch)

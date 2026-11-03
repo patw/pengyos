@@ -188,6 +188,50 @@ def test_a_published_version_is_bumped_past(tmp_path):
     assert result["version"] == "26.10.9", "26.10.8 is already in the feed"
 
 
+def _published(site, *versions):
+    for v in versions:
+        d = site / "update" / "pengyos-desktop" / v
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "manifest.json").write_text("{}")
+
+
+def _repo_at(tmp_path, version):
+    repo = tmp_path / "vrepo"
+    repo.mkdir()
+    (repo / "VERSION").write_text(version + "\n")
+    return repo
+
+
+def test_a_new_month_starts_at_zero(tmp_path):
+    """26.10.57 was the last October release; the first November one is 26.11.0, not
+    26.10.58 (YY.MM.N, N counts the month's images from 0)."""
+    site = tmp_path / "site"
+    _published(site, "26.10.56", "26.10.57")
+    v, why = A.next_version(_repo_at(tmp_path, "26.10.57"), site, dt.date(2026, 11, 3))
+    assert v == "26.11.0" and "earlier month" in why
+
+
+def test_an_unpublished_version_from_last_month_is_not_reused(tmp_path):
+    site = tmp_path / "site"
+    _published(site, "26.10.57")
+    v, _ = A.next_version(_repo_at(tmp_path, "26.10.58"), site, dt.date(2026, 11, 1))
+    assert v == "26.11.0"
+
+
+def test_within_a_month_n_counts_up_from_what_is_published(tmp_path):
+    site = tmp_path / "site"
+    _published(site, "26.10.57", "26.11.0", "26.11.1")
+    v, _ = A.next_version(_repo_at(tmp_path, "26.11.1"), site, dt.date(2026, 11, 20))
+    assert v == "26.11.2"
+
+
+def test_a_new_year_rolls_the_year_too(tmp_path):
+    site = tmp_path / "site"
+    _published(site, "26.12.4")
+    v, _ = A.next_version(_repo_at(tmp_path, "26.12.4"), site, dt.date(2027, 1, 2))
+    assert v == "27.01.0"
+
+
 # --- failure paths: nothing published, main unmoved --------------------------
 
 def test_a_failed_gate_publishes_nothing(tmp_path):
