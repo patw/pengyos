@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — `pengyos-services` (2026-11-03)
+
+`pengyos-services status` answers, in one command, what took eight in Pengy's Server
+review: for every systemd unit, Quadlet and VM, whether it runs, whether it starts at
+boot (a Quadlet's `generated`, a user service without linger), which ports it listens
+on, whether the firewall lets the LAN in, and its real memory use (peak and anon, not
+page cache). It names each problem (a Quadlet with no unit and the key that broke it,
+a VM forward on 127.0.0.1 behind an opened port, two services on one port, a firewall
+rule with nothing behind it) with the command that fixes it. `--json` and `--check`
+are for scripts and host moves. Read-only, in every edition.
+
 ### Removed — BusyBox (2026-11-03)
 
 BusyBox is no longer in the image. Every command it still answered now comes from its

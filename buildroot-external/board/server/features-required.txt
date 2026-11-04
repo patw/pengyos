@@ -64,3 +64,6 @@ exec      usr/libexec/podman/rootlessport                  # -p on a user-define
 
 # --- Locale (tmux, mosh and Python need the UTF-8 one /etc/locale.conf names) ---
 exists    usr/lib/locale/locale-archive                    # BR2_GENERATE_LOCALE="C.UTF-8" (core.config)
+
+# --- Observability (Pengy's Server review, R3) -----------------------------------
+exists    usr/bin/pengyos-services                 # board/core overlay; what runs, autostarts, listens, is reachable

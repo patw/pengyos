@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""One fake for every tool pengyos-services runs under --root DIR.
+
+Installed as DIR/usr/bin/{systemctl,ss,ip,pengyos-firewall,ssh} and as DIR's
+podman generators (symlinks to this file). It answers from DIR/fixture.json and
+appends its argv to DIR/calls.log, so a test can see how it was called.
+"""
+import json
+import os
+import sys
+
+me = os.path.abspath(sys.argv[0])
+name = os.path.basename(me)
+root = me
+while not os.path.exists(os.path.join(root, "fixture.json")):
+    root = os.path.dirname(root)
+fx = json.load(open(os.path.join(root, "fixture.json")))
+args = sys.argv[1:]
+with open(os.path.join(root, "calls.log"), "a") as f:
+    f.write(json.dumps([name] + args) + "\n")
+
+
+def scope_of(args):
+    if "--user" not in args:
+        return "system"
+    if "-M" in args:
+        return "user:" + args[args.index("-M") + 1].rstrip("@")
+    return "user:" + fx["self"]
+
+
+if name == "systemctl":
+    units = fx.get("systemctl", {}).get(scope_of(args), {})
+    words, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a in ("-M", "-p"):
+            skip = a == "-M"
+            words.append(a) if a == "-p" else None
+        elif not a.startswith("-"):
+            words.append(a)
+    words = [w for w in words if w != "-p"]
+    if words[:1] == ["list-units"]:
+        for u, p in units.items():
+            if p.get("LoadState", "loaded") == "loaded" and p.get("listed", True):
+                print(f"{u} loaded {p.get('ActiveState', 'inactive')} {p.get('SubState', 'dead')} x")
+    elif words[:1] == ["show"]:
+        props = args[args.index("-p") + 1].split(",")
+        blocks = []
+        for u in words[2:]:  # show PROPS UNIT...
+            p = {"Id": u, "LoadState": "not-found", "ActiveState": "inactive"}
+            if u in units:
+                p.update({"LoadState": "loaded"}, **{k: v for k, v in units[u].items()
+                                                     if k != "listed"})
+            blocks.append("\n".join(f"{k}={p.get(k, '')}" for k in props))
+        print("\n\n".join(blocks))
+    sys.exit(0)
+if name == "ss":
+    sys.stdout.write(fx.get("ss", ""))
+    sys.exit(fx.get("ss_rc", 0))
+if name == "ip":
+    print(json.dumps(fx.get("ip", [])))
+    sys.exit(0)
+if name == "pengyos-firewall":
+    if "firewall" not in fx:
+        sys.exit(1)
+    print(json.dumps(fx["firewall"]))
+    sys.exit(0)
+if name in ("podman-system-generator", "podman-user-generator"):
+    key = "system" if name.startswith("podman-system") else "user:" + os.environ.get(
+        "PENGYOS_FAKE_USER", fx.get("self", ""))
+    sys.stderr.write(fx.get("generator", {}).get(key, ""))
+    sys.exit(1 if fx.get("generator", {}).get(key) else 0)
+if name == "ssh":
+    script = sys.stdin.read()
+    for line in script.splitlines():
+        # ... /dev/tcp/ADDR/PORT ...
+        tail = line.split("/dev/tcp/", 1)[1].split('"', 1)[0]
+        a, p = tail.split("/")
+        print(f"{a} {p} {fx.get('ssh', {}).get(f'{a} {p}', 'no')}")
+    sys.exit(0)
+sys.exit(127)
