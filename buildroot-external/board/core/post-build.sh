@@ -332,6 +332,17 @@ grep -q '^export PATH=' "${TARGET_DIR}/etc/profile" || {
     echo "post-build: /etc/profile has no 'export PATH=' line to set" >&2; exit 1; }
 sed -i 's|^export PATH=.*|export PATH="/usr/local/bin:/usr/bin"|' "${TARGET_DIR}/etc/profile"
 
+# --- The unit files the image itself ships in /etc ----------------------------
+# pengyos-services lists what this machine's owner added. On an installed system
+# /etc is an overlay and its upper layer says that, but a booted disk image has a
+# plain /etc, where the image's own units (pengyos-banner, …) sit beside the
+# owner's. This list tells them apart. Written here, after every package and
+# overlay is in; no later edition's post-build adds a unit file to /etc.
+mkdir -p "${TARGET_DIR}/usr/lib/pengyos"
+( cd "${TARGET_DIR}" && find etc/systemd/system etc/systemd/user -maxdepth 1 \
+      \( -type f -o -type l \) -name '*.service' 2>/dev/null | LC_ALL=C sort ) \
+    > "${TARGET_DIR}/usr/lib/pengyos/image-units.txt"
+
 # --- Last: every shared library the image needs is in it ------------------------
 # (the edition's later post-build runs this again over the finished tree)
 python3 "$(dirname "$0")/../common/check-needed-libs.py" "${TARGET_DIR}"

@@ -41,13 +41,18 @@ pengyos-services --root DIR …     # test hook: read fixtures under DIR, run DI
 - Which services are listed by default: anything the machine's owner added
   (units under `/etc/systemd/system` or `~/.config/systemd/user`, every Quadlet,
   every VM), anything with a listening socket (so `sshd` and pengy-web appear), and
-  anything failed. Units that are part of the image and do not listen are left out;
+  anything failed. PengyOS mounts `/etc` as an overlay, and the image ships units of
+  its own in `/etc/systemd/system`. So when `/etc` is an overlay, a unit there counts
+  as the owner's only if it is in the upper layer (`upperdir=` in
+  `/proc/self/mountinfo`, `/data/etc/upper`). Alias links (`dbus-org.….service`) are
+  not units. Units that are part of the image and do not listen are left out;
   `--all` shows them too.
 - Without root it reports system services plus the calling user's. Run under `sudo`,
   it covers every user with a running manager or linger. Anything it could not see
   is marked as such ("owner unknown: run with sudo"), never omitted.
-- `--json` writes one document (schema below). `--check` exits 1 if any problem is
-  found (see Problems), so a fleet script or a migration step can gate on it.
+- `--json` writes one document (schema below). `--check` exits 1 if an error-level
+  problem is found (see Problems), so a fleet script or a migration step can gate on
+  it. Warnings do not fail it.
 - `--probe-from HOST` also tests reachability for real: over `ssh HOST`, it connects
   to each port that is served and meant to be reachable, at this machine's LAN
   address. Without it, reachability is worked out from the bind address and the
@@ -67,8 +72,8 @@ pengyos-services --root DIR …     # test hook: read fixtures under DIR, run DI
 | `autostart` | yes / no / `at-login-only` / `on-demand` / `via-timer`, plus `why` | see Autostart |
 | `memory` | cgroup `memory.peak`, and `anon` from `memory.stat` | never `MemoryCurrent`; page cache is shown apart as `file` |
 | `ports` | see Ports | each one with owner, bind, firewall, reachability |
-| `linger` | `loginctl show-user -p Linger` | user scope only |
-| `data` | Quadlet `Volume=` host paths, `podman inspect` mounts, the unit's `WorkingDirectory=`/`StateDirectory=`/`ReadWritePaths=`, a VM's `~/vms/NAME` | where state lives, for backups and host moves |
+| `linger` | `/var/lib/systemd/linger/NAME` (what `loginctl show-user -p Linger` reads) | user scope only |
+| `data` | Quadlet `Volume=` (a host path, or a named volume's `…/volumes/NAME/_data`), the unit's `WorkingDirectory=` (not a home directory)/`StateDirectory=`/`ReadWritePaths=`, a VM's `~/vms/NAME` | where state lives, for backups and host moves. Not `podman inspect`: it is slow per container, needs each user's podman, and a Quadlet's `Volume=` says the same |
 | `source` | the unit file, or `.container`, or `vm.json` | |
 
 ### Autostart
@@ -92,7 +97,11 @@ not from `is-enabled`:
 Listeners come from `ss -Htulpn` (TCP listen, UDP bound). Each socket's PID is mapped
 to its unit through `/proc/PID/cgroup`. That one mechanism covers a plain service, a
 rootless container (pasta/rootlessport run in the container's unit), and a VM's
-`hostfwd` (qemu runs in `pengyos-vm@NAME.service`). Declared ports are read as well:
+`hostfwd` (qemu runs in `pengyos-vm@NAME.service`). A container started with `podman
+run` from inside a unit runs in its own `libpod-ID.scope`; its conmon (`conmon … -c
+ID`) stays in the unit's cgroup, so the socket is traced to the unit through that. A
+socket no cgroup explains, but whose port exactly one service declares (pasta outside
+the unit, or a socket not ours when not root), goes to that service. Declared ports are read as well:
 Quadlet `PublishPort=` and `vm.json` forwards. So a stopped service still shows the
 ports it would take, and a collision can be found before it happens.
 
@@ -102,7 +111,14 @@ Each port gets:
   `opened <cidr>` (a `pengyos-firewall` rule; the CIDR actually in force), or `blocked`.
   Read from `pengyos-firewall status --json`.
 - `reachable` from the LAN: `yes`, `no — bound to loopback`, `no — blocked by the
-  firewall`, `no — not listening`, each with `by rules` or `tested`.
+  firewall`, `no — not listening`, `no — bound to ADDR, not a LAN address`, each with
+  `by rules` or `tested from HOST`.
+- A **rootful** Quadlet's `PublishPort=` is DNATed by netavark, and the ruleset's
+  forward chain accepts DNATed traffic (`ct status dnat accept`). The input rules,
+  and so `pengyos-firewall`, do not apply to it, and there is no socket for `ss` to
+  see. It is reported as `firewall: not filtered (rootful publish: DNAT …)` and as
+  listening whenever the unit is active. A rootless publish (pasta, rootlessport) is
+  a host socket, and the firewall applies as usual.
 
 Also reported, apart from any service:
 - Firewall rules with nothing listening behind them (`open-not-served`).
@@ -115,11 +131,11 @@ Also reported, apart from any service:
 | `quadlet-no-unit` | a `.container`/`.kube`/… file with no generated unit; the generator's error (`podman-system-generator --dryrun`, or the user generator) is quoted with the file and the key (F1) |
 | `user-no-linger` | a user service that should autostart, for a user without linger |
 | `port-collision` | two owners declare or bind the same port and protocol (container publish against VM forward, two VMs, unit against container) |
-| `served-not-reachable` | listening on all addresses, but the firewall blocks it. Shown as a warning, because it may be meant (a LAN-only service on a closed port is often a mistake, rarely a choice) |
+| `served-not-reachable` | an owner-added service listens on all addresses (or a LAN one), but the firewall blocks it. A **warning**, because it may be meant. Image services are left out: systemd-resolved's LLMNR on a closed 5355 is by design. With `--probe-from`, a port the rules call reachable that the probe could not reach is this code at error level |
 | `loopback-only-forward` | a VM forward or a container publish bound to 127.0.0.1 while a firewall rule opens the same port: someone meant the LAN to reach it (F4/F5) |
-| `open-not-served` | a `pengyos-firewall` rule, and nothing listens on that port |
+| `open-not-served` | a `pengyos-firewall` rule, and nothing listens on that port (a **warning**; the detail names a stopped service that declares it) |
 
-Each problem carries the command that fixes it: `loginctl enable-linger NAME`,
+Every other code is an error. Each problem carries the command that fixes it: `loginctl enable-linger NAME`,
 `pengyos-vm set NAME --unforward 8080 --forward 0.0.0.0:8080:80`, `sudo pengyos-firewall
 allow 8080 --from 10.0.23.0/24`, and so on.
 
@@ -139,6 +155,10 @@ allow 8080 --from 10.0.23.0/24`, and so on.
  "unowned_listeners": [], "open_not_served": [],
  "problems": [{"code": "user-no-linger", "service": "…", "detail": "…", "fix": "…"}]}
 ```
+Also present: each service's `unit`, `result` and `ports[].listening`; each
+problem's `severity` (`error` or `warning`) and, for `quadlet-no-unit`, `key`
+(`Container/Env`); and at the top `lan_addresses`, `firewall_active`, `not_seen`
+(users not inspected without root) and `notes` (sources that did not answer).
 `version` bumps on any breaking change. Sizes are bytes and times are ISO 8601 UTC.
 `lan` is the machine's own subnets (from its addresses); it is what `reachable`
 reasons against.

@@ -1,0 +1,1337 @@
+#!/usr/bin/env python3
+"""pengyos-services - what this machine serves, and whether it will after a reboot.
+
+    pengyos-services status [NAME] [--all] [--json] [--check] [--probe-from HOST]
+
+For every service, in one command: whether it runs, whether it starts at boot
+(and why, or why not), which ports it listens on, whether the firewall lets the
+LAN reach them, how much memory it really uses, and where its data lives. It
+covers the three ways a PengyOS machine runs things: systemd units (system and
+user), Quadlet containers (the system and the user lane) and pengyos-vm VMs.
+It changes nothing; where something is wrong it prints the command that fixes it.
+
+Listed by default: what this machine's owner added (units in /etc/systemd/system
+or ~/.config/systemd/user, every Quadlet, every VM), anything with a listening
+socket, and anything failed. --all adds the image's own services.
+
+Without root it covers system services and your own. Under sudo it covers every
+user with a running manager or linger. What it could not see is said, not left out.
+
+Reachability is worked out from the bind address and the firewall rules
+("by rules"). --probe-from HOST tests it for real over `ssh HOST` ("tested"):
+connecting to yourself proves nothing, because that traffic arrives on lo.
+
+--check exits 1 when an error-level problem is found (warnings do not count).
+Misuse exits 2.
+
+--root DIR (anywhere on the line) is the test hook: files are read under DIR
+(/etc, /home, /proc, /run, /sys, /var), DIR/usr/bin/{systemctl,ss,ip,
+pengyos-firewall,ssh} and DIR's podman generators are run instead of the real
+ones, and $PENGYOS_SERVICES_UID stands in for the caller's uid.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ipaddress
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+PROG = "pengyos-services"
+SCHEMA = 1
+ROOT = ""            # --root
+RESTARTS_LIMIT = 3
+
+QUADLET_KINDS = (".container", ".kube", ".pod")
+SYSTEM_ROOTS = {"multi-user.target", "graphical.target", "default.target",
+                "basic.target", "sysinit.target", "timers.target", "sockets.target"}
+USER_ROOTS = {"default.target", "basic.target", "timers.target", "sockets.target"}
+PROPS = ("Id,LoadState,ActiveState,SubState,Result,NRestarts,ActiveEnterTimestamp,"
+         "FragmentPath,SourcePath,WantedBy,RequiredBy,TriggeredBy,UnitFileState,"
+         "ControlGroup,WorkingDirectory,StateDirectory,ReadWritePaths,"
+         "NextElapseUSecRealtime,Description")
+VM_UNIT = re.compile(r"^pengyos-vm@([a-z0-9][a-z0-9-]*)\.service$")
+
+
+class Misuse(Exception):
+    pass
+
+
+# ------------------------------------------------------------------ plumbing
+def P(path: str) -> Path:
+    """A path on the machine (under --root in tests)."""
+    return Path(ROOT + path) if ROOT else Path(path)
+
+
+def tool(name: str) -> str:
+    if ROOT:
+        for d in ("/usr/bin", "/usr/sbin", "/usr/lib/systemd/system-generators",
+                  "/usr/lib/systemd/user-generators"):
+            if P(f"{d}/{name}").exists():
+                return str(P(f"{d}/{name}"))
+        return str(P(f"/usr/bin/{name}"))
+    for d in ("/usr/lib/systemd/system-generators", "/usr/lib/systemd/user-generators"):
+        if Path(f"{d}/{name}").exists():
+            return f"{d}/{name}"
+    return name
+
+
+def run(argv: list[str], env: dict | None = None, stdin: str | None = None,
+        timeout: int = 20) -> subprocess.CompletedProcess | None:
+    """None when the tool is missing or hangs: a source that fails is an empty section."""
+    try:
+        return subprocess.run([tool(argv[0])] + argv[1:], capture_output=True, text=True,
+                              env={**os.environ, **(env or {})}, input=stdin,
+                              timeout=timeout)
+    except (FileNotFoundError, PermissionError, subprocess.TimeoutExpired):
+        return None
+
+
+def read(path: str) -> str | None:
+    try:
+        return P(path).read_text()
+    except OSError:
+        return None
+
+
+def caller_uid() -> int:
+    if ROOT and os.environ.get("PENGYOS_SERVICES_UID"):
+        return int(os.environ["PENGYOS_SERVICES_UID"])
+    return os.getuid()
+
+
+class User:
+    def __init__(self, name: str, uid: int, gid: int, home: str):
+        self.name, self.uid, self.gid, self.home = name, uid, gid, home
+
+
+def passwd() -> dict[int, User]:
+    users = {}
+    for line in (read("/etc/passwd") or "").splitlines():
+        f = line.split(":")
+        if len(f) >= 7 and f[2].isdigit():
+            users[int(f[2])] = User(f[0], int(f[2]), int(f[3]) if f[3].isdigit() else 0, f[5])
+    if not ROOT:
+        import pwd
+        try:
+            for p in pwd.getpwall():
+                users.setdefault(p.pw_uid, User(p.pw_name, p.pw_uid, p.pw_gid, p.pw_dir))
+        except OSError:
+            pass
+    return users
+
+
+def iso(ts: str | int | float | None) -> str | None:
+    if ts in (None, "", "n/a", "0"):
+        return None
+    if isinstance(ts, str):
+        ts = ts.lstrip("@")
+        try:
+            ts = float(ts)
+        except ValueError:
+            return None
+    if not ts:
+        return None
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+
+
+def size(n: int | None) -> str:
+    if n is None:
+        return "?"
+    for unit, k in (("G", 1 << 30), ("M", 1 << 20), ("K", 1 << 10)):
+        if n >= k:
+            return f"{n / k:.1f}{unit}".replace(".0", "")
+    return f"{n}B"
+
+
+_UPPER: list = []
+
+
+def etc_upper() -> Path | None:
+    """The writable layer of /etc when /etc is an overlay (PengyOS: the image's /etc
+    below, this machine's changes in /data/etc/upper). None on a plain /etc."""
+    if not _UPPER:
+        found = None
+        for line in (read("/proc/self/mountinfo") or "").splitlines():
+            left, _, right = line.partition(" - ")
+            f = left.split()
+            if len(f) > 4 and f[4] == "/etc" and right.startswith("overlay "):
+                for opt in right.split()[-1].split(","):
+                    if opt.startswith("upperdir="):
+                        found = P(opt[9:])
+        _UPPER.append(found)
+    return _UPPER[0]
+
+
+def owner_file(path: str) -> bool:
+    """Was PATH put there (or changed) by this machine's owner, not the image?
+    Under /etc on an overlay /etc: only if it is in the upper layer. Under a plain
+    /etc (a booted disk image): unless the image lists it as its own. Elsewhere
+    (a home directory): yes."""
+    if not path.startswith("/etc/"):
+        return True
+    upper = etc_upper()
+    if upper is not None:
+        q = upper / path[5:]
+        return q.is_symlink() or (q.exists() and not q.is_char_device())
+    return path[1:] not in image_units()
+
+
+_IMAGE_UNITS: list = []
+
+
+def image_units() -> set[str]:
+    """The unit files the image ships in /etc (written by Core's post-build)."""
+    if not _IMAGE_UNITS:
+        _IMAGE_UNITS.append(set((read("/usr/lib/pengyos/image-units.txt") or "").split()))
+    return _IMAGE_UNITS[0]
+
+
+# ------------------------------------------------------------------ scopes
+class Scope:
+    """`system`, or one user's manager."""
+
+    def __init__(self, user: User | None, own: bool, offline: bool = False):
+        self.user = user
+        self.own = own                 # the caller's own user manager (no -M)
+        self.offline = offline         # no manager running: read the files only
+        self.props: dict[str, dict] = {}
+        self.error: str | None = None
+
+    @property
+    def id(self) -> str:
+        return "system" if self.user is None else f"user:{self.user.name}"
+
+    @property
+    def is_user(self) -> bool:
+        return self.user is not None
+
+    def systemctl(self, *args: str) -> subprocess.CompletedProcess | None:
+        argv = ["systemctl"]
+        if self.user is not None:
+            argv.append("--user")
+            if not self.own:
+                argv += ["-M", f"{self.user.name}@"]
+        return run(argv + ["--no-pager", "--timestamp=unix", *args])
+
+    def show(self, units: list[str]) -> None:
+        want = [u for u in dict.fromkeys(units) if u not in self.props]
+        if self.offline:
+            for u in want:
+                self.props[u] = {"Id": u, "LoadState": "offline"}
+            return
+        for i in range(0, len(want), 200):
+            chunk = want[i:i + 200]
+            cp = self.systemctl("show", "-p", PROPS, *chunk)
+            if cp is None or (cp.returncode != 0 and not cp.stdout.strip()):
+                why = (cp.stderr.strip().splitlines() or ["did not run"])[0] if cp else "did not run"
+                self.error = f"systemctl{' --user' if self.is_user else ''} for {self.id}: {why}"
+                for u in chunk:
+                    self.props[u] = {"Id": u, "LoadState": "unknown"}
+                continue
+            blocks = cp.stdout.split("\n\n")
+            got = {}
+            for block in blocks:
+                d = {}
+                for line in block.splitlines():
+                    k, _, v = line.partition("=")
+                    d[k] = v
+                if d.get("Id"):
+                    got[d["Id"]] = d
+            # systemctl show answers in the order asked; Id may be an alias's target.
+            for n, u in enumerate(chunk):
+                if u in got:
+                    self.props[u] = got[u]
+                elif n < len(blocks) and blocks[n].strip():
+                    d = dict(line.partition("=")[::2] for line in blocks[n].splitlines())
+                    self.props[u] = d
+                else:
+                    self.props[u] = {"Id": u, "LoadState": "not-found"}
+
+    def get(self, unit: str) -> dict:
+        if unit not in self.props:
+            self.show([unit])
+        return self.props[unit]
+
+    def loaded_services(self) -> list[str]:
+        if self.offline:
+            return []
+        cp = self.systemctl("list-units", "--type=service", "--all", "--plain", "--no-legend")
+        out = []
+        for line in (cp.stdout if cp else "").splitlines():
+            f = line.split()
+            if f and f[0].endswith(".service"):
+                out.append(f[0])
+        return out
+
+    # where things live, per scope
+    def unit_dirs(self) -> list[str]:
+        if self.user is None:
+            return ["/etc/systemd/system"]
+        return [f"{self.user.home}/.config/systemd/user", "/etc/systemd/user"]
+
+    def wants_dirs(self) -> list[tuple[str, str]]:
+        """(dir, how) pairs whose TARGET.wants/UNIT links mean "starts with TARGET"."""
+        if self.user is None:
+            return [("/etc/systemd/system", "enabled"), ("/run/systemd/generator", "generated"),
+                    ("/run/systemd/generator.late", "generated"),
+                    ("/usr/lib/systemd/system", "image")]
+        u = self.user
+        return [(f"{u.home}/.config/systemd/user", "enabled"), ("/etc/systemd/user", "enabled"),
+                (f"/run/user/{u.uid}/systemd/generator", "generated"),
+                (f"/run/user/{u.uid}/systemd/generator.late", "generated"),
+                ("/usr/lib/systemd/user", "image")]
+
+    def quadlet_files(self) -> list[Path]:
+        files: list[Path] = []
+        if self.user is None:
+            for d in ("/etc/containers/systemd", "/usr/share/containers/systemd"):
+                base = P(d)
+                if base.is_dir():
+                    files += [p for p in sorted(base.rglob("*"))
+                              if p.suffix in QUADLET_KINDS
+                              and "users" not in p.relative_to(base).parts[:1]]
+        else:
+            u = self.user
+            for d, deep in ((f"{u.home}/.config/containers/systemd", True),
+                            ("/etc/containers/systemd/users", False),
+                            (f"/etc/containers/systemd/users/{u.uid}", True)):
+                base = P(d)
+                if base.is_dir():
+                    it = base.rglob("*") if deep else base.glob("*")
+                    files += [p for p in sorted(it) if p.is_file() and p.suffix in QUADLET_KINDS]
+        return files
+
+    def generator(self) -> tuple[list[str], dict]:
+        if self.user is None:
+            return ["podman-system-generator", "--dryrun"], {}
+        u = self.user
+        env = {"HOME": u.home, "XDG_RUNTIME_DIR": f"/run/user/{u.uid}",
+               "XDG_CONFIG_HOME": f"{u.home}/.config"}
+        argv = ["podman-user-generator", "--user", "--dryrun"]
+        if not self.own and not ROOT:
+            argv = ["setpriv", f"--reuid={u.uid}", f"--regid={u.gid}", "--init-groups",
+                    tool("podman-user-generator"), "--user", "--dryrun"]
+        if ROOT:
+            env["PENGYOS_FAKE_USER"] = u.name
+        return argv, env
+
+
+def scopes_to_inspect(users: dict[int, User]) -> tuple[list[Scope], list[str]]:
+    uid = caller_uid()
+    linger = {p.name for p in P("/var/lib/systemd/linger").glob("*")} \
+        if P("/var/lib/systemd/linger").is_dir() else set()
+    running = set()
+    if P("/run/user").is_dir():
+        running = {int(p.name) for p in P("/run/user").iterdir() if p.name.isdigit()}
+    candidates = {u.uid for u in users.values() if u.name in linger} | running
+    # Users with services of their own but no manager running (nobody logged in, no
+    # linger): exactly the ones that will not start at boot. Read from their files.
+    has_own = {u.uid for u in users.values() if u.uid >= 1000 and u.home and any(
+        P(f"{u.home}/{d}").is_dir() for d in (".config/containers/systemd",
+                                              ".config/systemd/user", "vms"))}
+    scopes = [Scope(None, False)]
+    not_seen = []
+    for cuid in sorted(candidates | has_own | ({uid} if uid != 0 else set())):
+        u = users.get(cuid)
+        if u is None:
+            continue
+        if uid == 0:
+            if cuid != 0:
+                scopes.append(Scope(u, False, offline=cuid not in running))
+        elif cuid == uid:
+            scopes.append(Scope(u, True))
+        else:
+            not_seen.append(f"user:{u.name}")
+    return scopes, not_seen
+
+
+# ------------------------------------------------------------------ quadlets
+def parse_ini(text: str) -> dict[str, list[tuple[str, str]]]:
+    out: dict[str, list[tuple[str, str]]] = {}
+    sect = ""
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        while line.endswith("\\") and i + 1 < len(lines):
+            i += 1
+            line = line[:-1] + " " + lines[i].strip()
+        i += 1
+        if not line or line[0] in "#;":
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            sect = line[1:-1]
+            out.setdefault(sect, [])
+            continue
+        k, eq, v = line.partition("=")
+        if eq:
+            out.setdefault(sect, []).append((k.strip(), v.strip()))
+    return out
+
+
+def ini_get(ini: dict, sect: str, key: str) -> list[str]:
+    return [v for k, v in ini.get(sect, []) if k == key]
+
+
+def quadlet_unit(path: Path, ini: dict) -> str:
+    sect = {".container": "Container", ".kube": "Kube", ".pod": "Pod"}[path.suffix]
+    names = ini_get(ini, sect, "ServiceName")
+    if names:
+        n = names[-1]
+        return n if n.endswith(".service") else n + ".service"
+    return path.stem + ("-pod" if path.suffix == ".pod" else "") + ".service"
+
+
+def parse_publish(text: str) -> list[dict]:
+    """PublishPort=[IP:][HOST:]CONTAINER[/PROTO]; only the ones with a host port."""
+    proto = "tcp"
+    if "/" in text:
+        text, proto = text.rsplit("/", 1)
+    addr = ""
+    if text.startswith("["):
+        addr, _, text = text[1:].partition("]")
+        text = text.lstrip(":")
+        parts = [addr] + text.split(":")
+    else:
+        parts = text.split(":")
+    if len(parts) == 2:
+        addr, host, ctr = "", parts[0], parts[1]
+    elif len(parts) == 3:
+        addr, host, ctr = parts[0], parts[1], parts[2]
+    else:
+        return []
+    if not host:
+        return []                       # a random host port
+    lo, _, hi = host.partition("-")
+    if not lo.isdigit() or (hi and not hi.isdigit()):
+        return []
+    ports = range(int(lo), int(hi or lo) + 1)
+    guest = int(ctr) if ctr.isdigit() else None
+    return [{"port": p, "proto": proto, "addr": addr or "0.0.0.0", "guest": guest}
+            for p in list(ports)[:256]]
+
+
+def expand_home(path: str, home: str) -> str:
+    if path.startswith("%h"):
+        return home + path[2:]
+    if path.startswith("~"):
+        return home + path[1:]
+    return path
+
+
+def quadlet_volumes(ini: dict, sect: str, scope: Scope) -> list[str]:
+    home = scope.user.home if scope.user else "/root"
+    store = (f"{home}/.local/share/containers/storage/volumes" if scope.user
+             else "/var/lib/containers/storage/volumes")
+    out = []
+    for v in ini_get(ini, sect, "Volume"):
+        src = v.split(":", 1)[0]
+        if not src or ":" not in v:
+            continue                      # an anonymous volume
+        if src.startswith(("/", "%h", "~")):
+            out.append(expand_home(src, home))
+        elif src.endswith(".volume"):
+            out.append(f"{store}/systemd-{src[:-7]}/_data")
+        else:
+            out.append(f"{store}/{src}/_data")
+    return out
+
+
+# ------------------------------------------------------------------ VMs
+def vms_of(scope: Scope) -> list[dict]:
+    if scope.user is None:
+        return []
+    base = P(f"{scope.user.home}/vms")
+    out = []
+    if base.is_dir():
+        for d in sorted(base.iterdir()):
+            try:
+                conf = json.loads((d / "vm.json").read_text())
+            except (OSError, ValueError):
+                continue
+            out.append({"name": d.name, "conf": conf,
+                        "dir": f"{scope.user.home}/vms/{d.name}",
+                        "source": f"{scope.user.home}/vms/{d.name}/vm.json"})
+    return out
+
+
+# ------------------------------------------------------------------ sockets
+SS_PROC = re.compile(r'\("([^"]*)",pid=(\d+),fd=\d+\)')
+
+
+def bind_of(addr: str) -> str:
+    addr = addr.strip("[]").split("%")[0]
+    if addr in ("*", "0.0.0.0", "::"):
+        return "all"
+    try:
+        if ipaddress.ip_address(addr).is_loopback:
+            return "loopback"
+    except ValueError:
+        pass
+    return addr
+
+
+def listeners() -> tuple[list[dict], bool]:
+    """Sockets from `ss -Htulpn`; the bool says whether ss ran at all."""
+    cp = run(["ss", "-Htulpn"])
+    if cp is None or cp.returncode != 0:
+        return [], False
+    out = []
+    for line in cp.stdout.splitlines():
+        f = line.split(None, 6)
+        if len(f) < 5 or f[0] not in ("tcp", "udp"):
+            continue
+        if f[0] == "tcp" and f[1] != "LISTEN":
+            continue
+        local = f[4]
+        addr, _, port = local.rpartition(":")
+        if not port.isdigit():
+            continue
+        procs = SS_PROC.findall(f[6] if len(f) > 6 else "")
+        out.append({"proto": f[0], "port": int(port), "addr": addr, "bind": bind_of(addr),
+                    "procs": [(n, int(p)) for n, p in procs]})
+    return out, True
+
+
+CG_USER = re.compile(r"/user-(\d+)\.slice/")
+
+
+_CONMONS: list = []
+
+
+def conmons() -> dict[str, list[int]]:
+    """container id -> the pids of its conmon processes."""
+    if not _CONMONS:
+        found: dict[str, list[int]] = {}
+        proc = P("/proc")
+        for d in (proc.iterdir() if proc.is_dir() else []):
+            if not d.name.isdigit():
+                continue
+            try:
+                argv = (d / "cmdline").read_bytes().split(b"\0")
+            except OSError:
+                continue
+            if not argv or not argv[0].endswith(b"conmon") or b"-c" not in argv:
+                continue
+            i = argv.index(b"-c")
+            if i + 1 < len(argv):
+                found.setdefault(argv[i + 1].decode(errors="replace"), []).append(int(d.name))
+        _CONMONS.append(found)
+    return _CONMONS[0]
+
+
+def cgroup_owner(pid: int) -> tuple[str | None, str | None, str]:
+    """(scope uid or None for system, unit, cgroup leaf) for a process."""
+    text = read(f"/proc/{pid}/cgroup") or ""
+    path = ""
+    for line in text.splitlines():
+        if line.startswith("0::"):
+            path = line[3:]
+    parts = [p for p in path.split("/") if p]
+    m = CG_USER.search(path + "/")
+    uid = m.group(1) if m else None
+    units = [p for p in parts if p.endswith(".service") and not p.startswith("user@")]
+    leaf = parts[-1] if parts else "?"
+    if not units and leaf.startswith("libpod-") and not leaf.startswith("libpod-conmon-"):
+        # A container started by `podman run` inside a unit lives in its own scope;
+        # its conmon (`conmon … -c ID`) stays in the unit's cgroup. Follow that.
+        cid = leaf[7:].removesuffix(".scope")
+        for cpid in conmons().get(cid, []):
+            u2, unit2, _ = cgroup_owner(cpid)
+            if unit2:
+                return u2, unit2, leaf
+    if leaf.startswith("libpod-") and len(leaf) > 26:
+        leaf = f"container {leaf[7:19]}"      # `podman ps` shows the same 12 characters
+    return uid, (units[-1] if units else None), leaf
+
+
+# ------------------------------------------------------------------ network & firewall
+def lan_networks() -> tuple[list, list[str]]:
+    """(networks, this machine's LAN addresses), from `ip -j addr`."""
+    cp = run(["ip", "-j", "addr", "show"])
+    nets, addrs = [], []
+    try:
+        data = json.loads(cp.stdout) if cp and cp.returncode == 0 else []
+    except ValueError:
+        data = []
+    for itf in data:
+        name = itf.get("ifname", "")
+        if name == "lo" or name.startswith(("podman", "veth", "tap", "docker", "virbr", "wg")):
+            continue
+        for a in itf.get("addr_info", []):
+            if a.get("scope") != "global" or a.get("family") not in ("inet", "inet6"):
+                continue
+            try:
+                net = ipaddress.ip_interface(f"{a['local']}/{a['prefixlen']}").network
+            except (KeyError, ValueError):
+                continue
+            if net not in nets:
+                nets.append(net)
+            addrs.append(a["local"])
+    return nets, addrs
+
+
+class Firewall:
+    def __init__(self):
+        cp = run(["pengyos-firewall", "status", "--json"])
+        try:
+            d = json.loads(cp.stdout) if cp and cp.returncode == 0 else None
+        except ValueError:
+            d = None
+        self.known = d is not None
+        d = d or {}
+        self.active = d.get("active") == "active"
+        self.desktop = "input-desktop.nft" in d.get("image_rules", [])
+        self.rules = []                   # {lo, hi, proto, cidr, file, label}
+        for r in d.get("opened", []):
+            m = re.match(r"^(\d+)(?:-(\d+))?/(tcp|udp)(?: from (\S+))?$", r.get("opens", ""))
+            if m:
+                self.rules.append({"lo": int(m[1]), "hi": int(m[2] or m[1]), "proto": m[3],
+                                   "cidr": m[4], "file": r.get("file", ""),
+                                   "label": r["opens"]})
+
+    def matching(self, proto: str, port: int) -> list[dict]:
+        return [r for r in self.rules if r["proto"] == proto and r["lo"] <= port <= r["hi"]]
+
+    def verdict(self, proto: str, port: int, lan: list) -> tuple[str, bool]:
+        """(what lets it in, whether the LAN gets in)."""
+        if not self.known:
+            return "unknown (pengyos-firewall status failed)", True
+        if not self.active:
+            return "off (nftables.service not active)", True
+        if (proto, port) in (("tcp", 22), ("udp", 5353)):
+            return "always-open", True
+        rules = self.matching(proto, port)
+        lan_ok = False
+        labels = []
+        for r in rules:
+            if r["cidr"] is None:
+                labels.append("opened (any address)")
+                lan_ok = True
+                continue
+            try:
+                net = ipaddress.ip_network(r["cidr"], strict=False)
+                hit = any(net.version == n.version and net.overlaps(n) for n in lan)
+            except ValueError:
+                hit = False
+            labels.append(f"opened {r['cidr']}" + ("" if hit else " (not the LAN)"))
+            lan_ok = lan_ok or hit
+        if self.desktop and port > 1024:
+            labels.append("image-rule (Desktop: above 1024)")
+            lan_ok = True
+        if labels:
+            return "; ".join(labels), lan_ok
+        return "blocked", False
+
+
+# ------------------------------------------------------------------ the model
+class Service:
+    def __init__(self, scope: Scope, unit: str, kind: str, name: str, source: str | None):
+        self.scope, self.unit, self.kind, self.name, self.source = scope, unit, kind, name, source
+        self.declared: list[dict] = []    # {port, proto, addr, owner, guest}
+        self.bound: list[dict] = []       # listeners mapped to this unit
+        self.data: list[str] = []
+        self.owner_added = kind != "unit"
+        self.quadlet_ini: dict = {}
+        self.vm: dict | None = None
+        self.d: dict = {}
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return self.scope.id, self.unit
+
+
+def find_wants(scope: Scope, unit: str) -> list[tuple[str, str, str]]:
+    """[(target, how, kind)] from TARGET.wants/UNIT links on disk."""
+    out = []
+    tmpl = re.sub(r"@[^.]*\.", "@.", unit)
+    for d, how in scope.wants_dirs():
+        base = P(d)
+        if not base.is_dir():
+            continue
+        for w in list(base.glob("*.wants")) + list(base.glob("*.requires")):
+            for name in (unit, tmpl):
+                if (w / name).exists() or (w / name).is_symlink():
+                    out.append((w.name.rsplit(".", 1)[0], how, w.name.rsplit(".", 1)[1]))
+                    break
+    return out
+
+
+def reaches_root(scope: Scope, unit: str, depth: int = 0, seen: set | None = None
+                 ) -> tuple[str, str] | None:
+    """(root target, chain text) if UNIT is pulled in, directly or not, at manager start."""
+    roots = USER_ROOTS if scope.is_user else SYSTEM_ROOTS
+    seen = seen if seen is not None else set()
+    if unit in seen or depth > 4:
+        return None
+    seen.add(unit)
+    p = scope.get(unit)
+    links = (p.get("WantedBy", "") + " " + p.get("RequiredBy", "")).split()
+    links += [t for t, _, _ in find_wants(scope, unit) if t not in links]
+    for t in links:
+        if t in roots:
+            return t, ""
+    for t in links:
+        r = reaches_root(scope, t, depth + 1, seen)
+        if r:
+            return r[0], (f"{t} → " + r[1]) if r[1] else f"{t} →"
+    return None
+
+
+def wants_how(scope: Scope, unit: str, target: str) -> str:
+    for t, how, kind in find_wants(scope, unit):
+        if t == target:
+            return f"{how}: {target}.{kind}"
+    return f"{target} wants it"
+
+
+def autostart(svc: Service, linger: bool | None) -> tuple[str, str]:
+    scope, unit = svc.scope, svc.unit
+    p = scope.get(unit)
+    r = reaches_root(scope, unit)
+    if not r and svc.kind == "quadlet":
+        roots = USER_ROOTS if scope.is_user else SYSTEM_ROOTS
+        for t in ini_get(svc.quadlet_ini, "Install", "WantedBy") + \
+                ini_get(svc.quadlet_ini, "Install", "RequiredBy"):
+            if t in roots:
+                r = (t, "")
+    if r:
+        target, chain = r
+        if svc.kind == "quadlet":
+            why = f"quadlet [Install] WantedBy={target}" if not chain else f"via {chain} {target}"
+        elif chain:
+            why = f"pulled in by {chain} {target}"
+        else:
+            why = wants_how(scope, unit, target)
+        if scope.is_user:
+            if linger:
+                return "yes", why + "; linger on"
+            return "at-login-only", why + f"; no linger for {scope.user.name}, so only " \
+                   "once they log in"
+        return "yes", why
+    for trig in p.get("TriggeredBy", "").split():
+        tp = scope.get(trig)
+        tr = reaches_root(scope, trig)
+        if trig.endswith(".socket"):
+            state = "listening" if tp.get("ActiveState") == "active" else "not listening"
+            if tr or tp.get("ActiveState") == "active":
+                return f"on-demand ({trig})", f"started by {trig} ({state})"
+        if trig.endswith(".timer"):
+            nxt = iso(tp.get("NextElapseUSecRealtime"))
+            if tr or tp.get("ActiveState") == "active":
+                return (f"via-timer ({trig}" + (f", next run {nxt})" if nxt else ")"),
+                        f"started by {trig}")
+    ctl = "systemctl --user" if scope.is_user else "sudo systemctl"
+    if svc.kind == "vm":
+        return "no", f"pengyos-vm autostart {svc.name} on"
+    if svc.kind == "quadlet":
+        target = "default.target" if scope.is_user else "multi-user.target"
+        return "no", f"no [Install] WantedBy= in {svc.source}: add [Install] WantedBy={target}"
+    state = p.get("UnitFileState", "")
+    if state == "masked":
+        return "no", f"masked: {ctl} unmask {unit}"
+    return "no", f"not enabled ({state or 'no unit file state'}): {ctl} enable {unit}"
+
+
+def memory(scope: Scope, unit: str) -> dict | None:
+    cg = scope.get(unit).get("ControlGroup", "")
+    if not cg:
+        return None
+    base = f"/sys/fs/cgroup{cg}"
+    peak = read(f"{base}/memory.peak")
+    stat = read(f"{base}/memory.stat") or ""
+    st = {}
+    for line in stat.splitlines():
+        k, _, v = line.partition(" ")
+        if v.isdigit():
+            st[k] = int(v)
+    if peak is None and not st:
+        return None
+    p = peak.strip() if peak else ""
+    return {"peak": int(p) if p.isdigit() else None, "anon": st.get("anon"),
+            "file": st.get("file")}
+
+
+def unit_data(svc: Service) -> list[str]:
+    p = svc.scope.get(svc.unit)
+    home = svc.scope.user.home if svc.scope.user else None
+    out = []
+    wd = p.get("WorkingDirectory", "").lstrip("!-")
+    wd = expand_home(wd, home or "/root") if wd else ""
+    if wd and wd not in ("/", home, "/root"):
+        out.append(wd)                    # a home directory is not where state lives
+    for s in p.get("StateDirectory", "").split():
+        out.append(f"{home}/.local/state/{s}" if home else f"/var/lib/{s}")
+    for s in p.get("ReadWritePaths", "").split():
+        out.append(s.lstrip("-+"))
+    return out
+
+
+# ------------------------------------------------------------------ gathering
+def gather(want_all: bool) -> dict:
+    users = passwd()
+    uid = caller_uid()
+    scopes, not_seen = scopes_to_inspect(users)
+    by_uid = {str(s.user.uid): s for s in scopes if s.user}
+    system = scopes[0]
+    socks, ss_ok = listeners()
+    lan, lan_addrs = lan_networks()
+    fw = Firewall()
+    linger_dir = P("/var/lib/systemd/linger")
+
+    services: dict[tuple[str, str], Service] = {}
+    problems: list[dict] = []
+
+    def add(svc: Service) -> Service:
+        return services.setdefault(svc.key, svc)
+
+    # owner-added units, quadlets, VMs
+    for scope in scopes:
+        for d in scope.unit_dirs():
+            base = P(d)
+            if not base.is_dir():
+                continue
+            for f in sorted(base.glob("*.service")):
+                if "@." in f.name:
+                    continue
+                if f.is_symlink() and Path(os.readlink(f)).name != f.name:
+                    continue                  # an alias (dbus-org.….service) or a mask
+                if VM_UNIT.match(f.name):
+                    continue
+                if not owner_file(f"{d}/{f.name}"):
+                    continue                  # the image's own unit, in its /etc
+                s = add(Service(scope, f.name, "unit", f.name[:-8], f"{d}/{f.name}"))
+                s.owner_added = True
+        for f in scope.quadlet_files():
+            ini = parse_ini(f.read_text(errors="replace"))
+            unit = quadlet_unit(f, ini)
+            path = str(f)[len(ROOT):] if ROOT else str(f)
+            s = add(Service(scope, unit, "quadlet", f.stem, path))
+            s.quadlet_ini = ini
+            sect = {".container": "Container", ".kube": "Kube", ".pod": "Pod"}[f.suffix]
+            for pp in ini_get(ini, sect, "PublishPort"):
+                for d in parse_publish(pp):
+                    s.declared.append({**d, "owner": "container publish"})
+            s.data += quadlet_volumes(ini, sect, scope)
+        for vm in vms_of(scope):
+            s = add(Service(scope, f"pengyos-vm@{vm['name']}.service", "vm", vm["name"],
+                            vm["source"]))
+            s.vm = vm
+            c = vm["conf"]
+            if c.get("net", "nat") == "nat":
+                if c.get("ssh_port"):
+                    s.declared.append({"port": int(c["ssh_port"]), "proto": "tcp",
+                                       "addr": "127.0.0.1", "owner": "vm ssh", "guest": 22})
+                for fw_ in c.get("forwards", []):
+                    s.declared.append({"port": int(fw_["host"]), "proto": fw_.get("proto", "tcp"),
+                                       "addr": fw_.get("addr", "127.0.0.1"),
+                                       "owner": "vm forward", "guest": fw_.get("guest")})
+            s.data.append(vm["dir"])
+        # failed image units, and --all
+        loaded = [u for u in scope.loaded_services()
+                  if (scope.id, u) not in services and not (scope.is_user and VM_UNIT.match(u))]
+        scope.show(loaded)
+        for unit in loaded:
+            if want_all or scope.props[unit].get("ActiveState") == "failed":
+                add(Service(scope, unit, "unit", unit[:-8], None))
+
+    # listeners → units: by the process's cgroup; failing that (pasta outside the
+    # unit, or not root and not our process), by a port some service declares
+    declared_at: dict[tuple[str, int], list[Service]] = {}
+    for svc in services.values():
+        for dcl in svc.declared:
+            declared_at.setdefault((dcl["proto"], dcl["port"]), []).append(svc)
+    unowned = []
+    for sk in socks:
+        owner, seen_proc = None, None
+        for pname, pid in sk["procs"]:
+            suid, unit, leaf = cgroup_owner(pid)
+            scope = system if suid is None else by_uid.get(suid)
+            if unit and scope is not None:
+                key = (scope.id, unit)
+                if key not in services:
+                    m = VM_UNIT.match(unit)
+                    add(Service(scope, unit, "vm" if m else "unit",
+                                m.group(1) if m else unit[:-8], None))
+                owner = services[key]
+                services[key].bound.append({**sk, "process": pname, "pid": pid})
+                break
+            seen_proc = seen_proc or (pname, pid, leaf, suid)
+        if owner is not None:
+            continue
+        decl = declared_at.get((sk["proto"], sk["port"]), [])
+        if len(decl) == 1:
+            pname = seen_proc[0] if seen_proc else "?"
+            decl[0].bound.append({**sk, "process": pname, "pid": None})
+            continue
+        if seen_proc is None:
+            who = "owner unknown: run with sudo" if uid != 0 else "owner unknown"
+        else:
+            pname, pid, leaf, suid = seen_proc
+            u = users.get(int(suid)) if suid else None
+            who = f"{pname} (pid {pid}, {leaf}" + (f", user {u.name})" if u else ")")
+        for u in unowned:
+            if (u["port"], u["proto"], u["owner"]) == (sk["port"], sk["proto"], who):
+                if sk["bind"] == "all" or u["bind"] == "all":
+                    u["bind"] = "all"
+                break
+        else:
+            unowned.append({"port": sk["port"], "proto": sk["proto"], "bind": sk["bind"],
+                            "addr": sk["addr"], "owner": who})
+    unowned.sort(key=lambda u: (u["port"], u["proto"]))
+
+    # one systemctl show per scope for everything we list
+    for scope in scopes:
+        scope.show([u for (sid, u) in services if sid == scope.id])
+
+    def linger_of(scope: Scope) -> bool | None:
+        if not scope.is_user:
+            return None
+        return (linger_dir / scope.user.name).exists()
+
+    # per-service fields
+    for svc in services.values():
+        p = svc.scope.get(svc.unit)
+        if svc.source is None:
+            fp = p.get("FragmentPath") or None
+            svc.source = p.get("SourcePath") or fp
+            if fp and any(fp.startswith(d + "/") for d in svc.scope.unit_dirs()) \
+                    and owner_file(fp):
+                svc.owner_added = True
+        linger = linger_of(svc.scope)
+        loaded = p.get("LoadState", "not-found")
+        if loaded == "offline":
+            a, why = autostart(svc, linger)
+        elif loaded == "unknown":
+            a, why = "unknown", svc.scope.error or "systemctl did not answer"
+        elif loaded == "not-found":
+            a, why = "no", "there is no unit (see problems)"
+        else:
+            a, why = autostart(svc, linger)
+        try:
+            restarts = int(p.get("NRestarts", "0") or 0)
+        except ValueError:
+            restarts = 0
+        state = {"not-found": "no-unit", "unknown": "unknown", "offline": "inactive"}.get(
+            loaded, p.get("ActiveState", "unknown"))
+        svc.d = {
+            "name": svc.name, "kind": svc.kind, "scope": svc.scope.id, "unit": svc.unit,
+            "source": svc.source, "state": state, "sub": p.get("SubState") or None,
+            "result": p.get("Result") or None,
+            "since": iso(p.get("ActiveEnterTimestamp")) if state == "active" else None,
+            "restarts": restarts, "autostart": a, "why": why,
+            "memory": memory(svc.scope, svc.unit) if state == "active" else None,
+            "ports": [], "data": list(dict.fromkeys(svc.data + unit_data(svc))),
+        }
+        if svc.scope.is_user:
+            svc.d["linger"] = linger
+        if loaded == "offline":
+            svc.d["sub"] = "no user manager (nobody logged in)"
+        if svc.kind == "unit" and not svc.owner_added and not want_all \
+                and not svc.bound and state != "failed":
+            svc.d["_hide"] = True
+
+        # problems: failed, no unit, linger
+        if state == "failed" or restarts > RESTARTS_LIMIT:
+            ctl = "systemctl --user" if svc.scope.is_user else "systemctl"
+            jctl = "journalctl --user" if svc.scope.is_user else "journalctl"
+            detail = (f"failed ({p.get('Result') or 'unknown result'})" if state == "failed"
+                      else f"restarted {restarts} times since boot")
+            problems.append({"code": "failed", "severity": "error", "service": svc.name,
+                             "scope": svc.scope.id, "detail": detail,
+                             "fix": f"{ctl} status {svc.unit}; {jctl} -u {svc.unit} -b"})
+        if svc.kind == "quadlet" and loaded == "not-found":
+            problems.append(quadlet_problem(svc))
+        if a == "at-login-only":
+            problems.append({"code": "user-no-linger", "severity": "error", "service": svc.name,
+                             "scope": svc.scope.id,
+                             "detail": f"set to start with {svc.scope.user.name}'s manager, "
+                                       f"which only runs after they log in",
+                             "fix": f"sudo loginctl enable-linger {svc.scope.user.name}"})
+
+    # ports
+    claims = []                            # (owner label, service name or None, port dict)
+    for svc in services.values():
+        ports: dict[tuple[str, int], dict] = {}
+        for b in svc.bound:
+            k = (b["proto"], b["port"])
+            e = ports.setdefault(k, {"port": b["port"], "proto": b["proto"], "binds": set(),
+                                     "owner": f"listener ({b['process']})", "listening": True})
+            e["binds"].add(b["bind"])
+            e["listening"] = True
+        for dcl in svc.declared:
+            k = (dcl["proto"], dcl["port"])
+            e = ports.get(k)
+            if e is None:
+                e = ports[k] = {"port": dcl["port"], "proto": dcl["proto"], "binds": set(),
+                                "owner": dcl["owner"], "listening": False}
+            else:
+                e["owner"] = dcl["owner"]
+            e["declared_bind"] = bind_of(dcl["addr"])
+            e["guest"] = dcl.get("guest")
+            if not e["binds"]:
+                e["binds"].add(bind_of(dcl["addr"]))
+        rootful = svc.kind == "quadlet" and not svc.scope.is_user
+        for e in sorted(ports.values(), key=lambda e: (e["port"], e["proto"])):
+            binds = e.pop("binds")
+            bind = "all" if "all" in binds else ("loopback" if binds == {"loopback"}
+                                                  else ", ".join(sorted(binds - {"loopback"})))
+            e["bind"] = bind
+            dnat = rootful and e["owner"] == "container publish"
+            if dnat and svc.d["state"] == "active":
+                e["listening"] = True     # netavark DNATs it: there is no socket to see
+            fwtext, fw_ok = fw.verdict(e["proto"], e["port"], lan)
+            if dnat:
+                fwtext = "not filtered (rootful publish: DNAT, the input rules do not apply)"
+                fw_ok = True
+            e["firewall"] = fwtext
+            e["reachable"] = reachability(e, fw_ok, lan)
+            e["basis"] = "by rules"
+            svc.d["ports"].append(e)
+            claims.append((svc, e))
+
+    # problems about ports
+    for svc, e in claims:
+        if e["bind"] == "loopback" and e["owner"] in ("vm forward", "container publish") \
+                and fw.matching(e["proto"], e["port"]):
+            if svc.kind == "vm":
+                fix = (f"pengyos-vm set {svc.name} --unforward {e['port']} "
+                       f"--forward 0.0.0.0:{e['port']}:{e.get('guest') or e['port']}"
+                       + ("/udp" if e["proto"] == "udp" else ""))
+            else:
+                fix = (f"in {svc.source}, publish on all addresses: PublishPort="
+                       f"{e['port']}:{e.get('guest') or 'PORT'} (not 127.0.0.1:…)")
+            problems.append({"code": "loopback-only-forward", "severity": "error",
+                             "service": svc.name, "scope": svc.scope.id,
+                             "detail": f"{e['port']}/{e['proto']} is opened in the firewall, "
+                                       f"but the {e['owner']} listens on 127.0.0.1 only, so "
+                                       f"the LAN cannot reach it",
+                             "fix": fix})
+        elif svc.owner_added and e["listening"] and e["bind"] != "loopback" \
+                and e["firewall"] == "blocked":
+            net = next((str(n) for n in lan if n.version == 4), None)
+            spec = f"{e['port']}" + ("/udp" if e["proto"] == "udp" else "")
+            problems.append({"code": "served-not-reachable", "severity": "warning",
+                             "service": svc.name, "scope": svc.scope.id,
+                             "detail": f"{spec} listens on {e['bind']}, but the firewall blocks it",
+                             "fix": f"sudo pengyos-firewall allow {spec}"
+                                    + (f" --from {net}" if net else "")})
+
+    # collisions: two owners, one port
+    groups: dict[tuple[str, int], list] = {}
+    for svc, e in claims:
+        b = e.get("declared_bind", e["bind"])
+        groups.setdefault((e["proto"], e["port"]), []).append((svc.name, svc.scope.id, b))
+    for u in unowned:
+        groups.setdefault((u["proto"], u["port"]), []).append((u["owner"], None, u["bind"]))
+    for (proto, port), owners in sorted(groups.items(), key=lambda kv: kv[0][1]):
+        names = list(dict.fromkeys((n, s) for n, s, _ in owners))
+        if len(names) < 2:
+            continue
+        binds = {b for _, _, b in owners}
+        if len(binds) == len(owners) and "all" not in binds:
+            continue                         # distinct specific addresses: no clash
+        who = ", ".join(f"{n} ({s})" if s else n for n, s in names)
+        problems.append({"code": "port-collision", "severity": "error",
+                         "service": names[0][0], "scope": names[0][1],
+                         "detail": f"{port}/{proto} is claimed by {who}; only one can have it",
+                         "fix": "move one of them to another host port (PublishPort=, "
+                                "pengyos-vm set --unforward/--forward, or the unit's config)"})
+
+    # firewall rules with nothing behind them
+    served = {(e["proto"], e["port"]) for _, e in claims if e["listening"]} | \
+             {(u["proto"], u["port"]) for u in unowned}
+    open_not_served = []
+    for r in fw.rules:
+        if any((r["proto"], p) in served for p in range(r["lo"], r["hi"] + 1)):
+            continue
+        declared = sorted({svc.name for svc, e in claims
+                           if e["proto"] == r["proto"] and r["lo"] <= e["port"] <= r["hi"]})
+        item = {"rule": r["label"], "file": r["file"], "declared_by": declared}
+        open_not_served.append(item)
+        spec = f"{r['lo']}" + (f"-{r['hi']}" if r["hi"] != r["lo"] else "") + \
+               ("/udp" if r["proto"] == "udp" else "")
+        problems.append({"code": "open-not-served", "severity": "warning", "service": None,
+                         "scope": "system",
+                         "detail": f"the firewall opens {r['label']}, and nothing listens there"
+                                   + (f" ({', '.join(declared)} would, when running)"
+                                      if declared else ""),
+                         "fix": f"sudo pengyos-firewall remove {spec}"
+                                + (f" --from {r['cidr']}" if r["cidr"] else "")
+                                + " (if it is no longer needed)"})
+
+    osr = {}
+    for line in (read("/etc/os-release") or read("/usr/lib/os-release") or "").splitlines():
+        k, _, v = line.partition("=")
+        osr[k] = v.strip().strip('"')
+    host = (read("/etc/hostname") or "").strip() if ROOT else socket.gethostname()
+    shown = [s.d for s in services.values() if not s.d.pop("_hide", False)]
+    shown.sort(key=lambda d: (d["scope"] != "system", d["scope"], d["kind"], d["name"]))
+    notes = []
+    if uid != 0:
+        notes.append("not root: other users' services, and the owners of sockets that are "
+                     "not yours, are not visible; run it with sudo")
+    notes += [s.error for s in scopes if s.error]
+    if not ss_ok:
+        notes.append("ss did not run: listening ports are not known")
+    if not fw.known:
+        notes.append("pengyos-firewall status did not answer: firewall verdicts are unknown")
+    return {"tool": PROG, "version": SCHEMA, "host": host,
+            "edition": osr.get("VARIANT_ID"), "release": osr.get("IMAGE_VERSION"),
+            "generated_at": iso(time.time()), "privileged": uid == 0,
+            "lan": [str(n) for n in lan], "lan_addresses": lan_addrs,
+            "firewall_active": fw.active if fw.known else None,
+            "services": shown, "unowned_listeners": unowned,
+            "open_not_served": open_not_served, "not_seen": not_seen, "notes": notes,
+            "problems": problems}
+
+
+def reachability(e: dict, fw_ok: bool, lan: list) -> str:
+    if not e["listening"]:
+        return "no — not listening"
+    if e["bind"] == "loopback":
+        return "no — bound to loopback"
+    if e["bind"] != "all":
+        try:
+            addrs = [ipaddress.ip_address(a.strip()) for a in e["bind"].split(",")]
+            if not any(a in n for a in addrs for n in lan):
+                return f"no — bound to {e['bind']}, not a LAN address"
+        except ValueError:
+            pass
+    if not fw_ok:
+        return "no — blocked by the firewall"
+    return "yes"
+
+
+def quadlet_problem(svc: Service) -> dict:
+    argv, env = svc.scope.generator()
+    cp = run(argv, env=env)
+    base = Path(svc.source).name
+    lines = []
+    if cp is not None:
+        for line in (cp.stderr + "\n" + cp.stdout).splitlines():
+            if base in line:
+                lines.append(re.sub(r"^\S*quadlet-generator\[\d+\]:\s*", "", line.strip()))
+    shown = " ".join(argv[-3:] if argv[0] == "setpriv" else argv)
+    detail = (f"{svc.source} produced no {svc.unit}"
+              + (": " + "; ".join(lines) if lines else
+                 f" (the generator said nothing about it; try {shown})"))
+    key = None
+    for line in lines:
+        m = re.search(r"unsupported key '([^']+)' in group '([^']+)'", line)
+        if m:
+            key = f"{m[2]}/{m[1]}"
+    return {"code": "quadlet-no-unit", "severity": "error", "service": svc.name,
+            "scope": svc.scope.id, "detail": detail, "key": key,
+            "fix": (f"remove or rename {key.split('/')[1]}= in {svc.source}, then "
+                    + ("systemctl --user daemon-reload" if svc.scope.is_user
+                       else "sudo systemctl daemon-reload")) if key else
+                   f"fix {svc.source}, then check with {shown}"}
+
+
+# ------------------------------------------------------------------ probing
+def probe(doc: dict, host: str) -> None:
+    targets = []
+    addr4 = next((a for a in doc["lan_addresses"] if ":" not in a), None)
+    for s in doc["services"]:
+        for e in s["ports"]:
+            if e["proto"] != "tcp" or not e["listening"] or e["bind"] == "loopback":
+                continue
+            a = e["bind"] if e["bind"] != "all" else addr4
+            if a and "," not in a:
+                targets.append((e, a))
+    if not targets:
+        return
+    script = "".join(
+        f'if timeout 3 bash -c "exec 3<>/dev/tcp/{a}/{e["port"]}" 2>/dev/null; '
+        f'then echo "{a} {e["port"]} ok"; else echo "{a} {e["port"]} no"; fi\n'
+        for e, a in targets)
+    cp = run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", host, "bash", "-s"],
+             stdin=script, timeout=15 + 4 * len(targets))
+    if cp is None or cp.returncode == 255:
+        doc["notes"].append(f"--probe-from {host}: ssh failed"
+                            + (f" ({cp.stderr.strip()})" if cp and cp.stderr.strip() else ""))
+        return
+    got = {}
+    for line in cp.stdout.splitlines():
+        f = line.split()
+        if len(f) == 3:
+            got[(f[0], f[1])] = f[2]
+    for e, a in targets:
+        r = got.get((a, str(e["port"])))
+        if r is None:
+            continue
+        e["basis"] = f"tested from {host}"
+        if r == "ok":
+            e["reachable"] = "yes"
+        elif e["reachable"] == "yes":
+            e["reachable"] = "no — refused or filtered"
+            doc["problems"].append({"code": "served-not-reachable", "severity": "error",
+                                    "service": None, "scope": None,
+                                    "detail": f"{a}:{e['port']} should be reachable by the "
+                                              f"rules, but {host} could not connect",
+                                    "fix": "check the service's own bind settings and any "
+                                           "firewall between the two machines"})
+
+
+# ------------------------------------------------------------------ output
+def ports_short(d: dict) -> str:
+    out = []
+    for e in d["ports"]:
+        r = e["reachable"]
+        mark = "LAN" if r == "yes" else ("local" if "loopback" in r else
+                                          ("down" if "not listening" in r else "blocked"
+                                           if "firewall" in r else "no"))
+        out.append(f"{e['port']}/{e['proto']}:{mark}")
+    return " ".join(out) or "-"
+
+
+def state_text(d: dict) -> str:
+    if d["state"] == "failed":
+        return f"failed ({d['result']})"
+    if d["state"] == "active" and d["sub"] and d["sub"] != "running":
+        return f"active ({d['sub']})"
+    return d["state"]
+
+
+def print_list(doc: dict) -> None:
+    head = f"{doc['host']}: PengyOS {doc['edition'] or '?'} {doc['release'] or '?'}"
+    if doc["lan"]:
+        head += f", LAN {', '.join(doc['lan'])}"
+    print(head)
+    rows = [("SERVICE", "KIND", "SCOPE", "STATE", "AUTOSTART", "PORTS")]
+    for d in doc["services"]:
+        rows.append((d["name"], d["kind"], d["scope"], state_text(d),
+                     d["autostart"].split(" (")[0], ports_short(d)))
+    w = [max(len(r[i]) for r in rows) for i in range(5)]
+    for r in rows:
+        print("  " + "  ".join(c.ljust(w[i]) for i, c in enumerate(r[:5])) + "  " + r[5])
+    print_tail(doc)
+
+
+def print_one(d: dict, doc: dict) -> None:
+    print(f"{d['name']}  ({d['kind']}, {d['scope']}, {d['unit']})")
+    since = f" since {d['since']}" if d["since"] else ""
+    print(f"  state      {state_text(d)}{since}, {d['restarts']} restarts")
+    print(f"  autostart  {d['autostart']}: {d['why']}")
+    if "linger" in d:
+        print(f"  linger     {'on' if d['linger'] else 'off'}")
+    m = d["memory"]
+    if m:
+        print(f"  memory     peak {size(m['peak'])}, anon {size(m['anon'])}"
+              f" (page cache {size(m['file'])}, not counted)")
+    for e in d["ports"]:
+        print(f"  port       {e['port']}/{e['proto']} {e['owner']}, bind {e['bind']}")
+        print(f"               firewall {e['firewall']}")
+        print(f"               reachable from the LAN: {e['reachable']} ({e['basis']})")
+    for p in d["data"]:
+        print(f"  data       {p}")
+    print(f"  source     {d['source'] or '-'}")
+    own = [p for p in doc["problems"] if p["service"] == d["name"] and p["scope"] == d["scope"]]
+    print_problems(own)
+
+
+def print_problems(problems: list[dict]) -> None:
+    if not problems:
+        return
+    print(f"\nProblems ({len(problems)}):")
+    for p in problems:
+        mark = "✗" if p["severity"] == "error" else "!"
+        who = f" {p['service']} ({p['scope']})" if p["service"] else ""
+        print(f"  {mark} {p['code']}{who}: {p['detail']}")
+        print(f"      fix: {p['fix']}")
+
+
+def print_tail(doc: dict) -> None:
+    if doc["unowned_listeners"]:
+        print("\nListening, but no service owns it:")
+        for u in doc["unowned_listeners"]:
+            print(f"  {u['port']}/{u['proto']} {u['bind']}  {u['owner']}")
+    if doc["open_not_served"]:
+        print("\nOpened in the firewall, nothing listening:")
+        for o in doc["open_not_served"]:
+            print(f"  {o['rule']}  ({o['file']})")
+    print_problems(doc["problems"])
+    for n in doc["notes"]:
+        print(f"\nnote: {n}")
+    if doc["not_seen"]:
+        print(f"note: not inspected (run with sudo): {', '.join(doc['not_seen'])}")
+    print(f"\nLAN = reachable from {', '.join(doc['lan']) or 'the LAN'} (by firewall rules and "
+          f"bind address; --probe-from HOST tests it). `{PROG} status NAME` for one in full.")
+
+
+# ------------------------------------------------------------------ main
+def main(argv: list[str]) -> int:
+    global ROOT
+    if "--root" in argv:
+        i = argv.index("--root")
+        if i + 1 >= len(argv):
+            print(f"{PROG}: --root needs a directory", file=sys.stderr)
+            return 2
+        ROOT = argv[i + 1].rstrip("/")
+        argv = argv[:i] + argv[i + 2:]
+        if not Path(ROOT).is_dir():
+            print(f"{PROG}: no such directory: {ROOT}", file=sys.stderr)
+            return 2
+    ap = argparse.ArgumentParser(prog=PROG, description=__doc__.split("\n\n")[0],
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd")
+    sp = sub.add_parser("status", help="what runs, starts at boot, listens and is reachable")
+    sp.add_argument("name", nargs="?", help="one unit, container or VM, in full")
+    sp.add_argument("--all", action="store_true", help="also the image's own services")
+    sp.add_argument("--json", action="store_true", help="one JSON document (schema version 1)")
+    sp.add_argument("--check", action="store_true", help="exit 1 if an error-level problem is found")
+    sp.add_argument("--probe-from", metavar="HOST", help="test reachability from HOST over ssh")
+    if not argv or argv[0].startswith("-") and argv[0] not in ("-h", "--help"):
+        argv = ["status", *argv]
+    try:
+        a = ap.parse_args(argv)
+    except SystemExit as e:
+        return 0 if e.code == 0 else 2
+    if a.cmd != "status":
+        ap.print_help()
+        return 2
+
+    doc = gather(a.all or bool(a.name))
+    if a.probe_from:
+        probe(doc, a.probe_from)
+    if a.name:
+        n = a.name
+        hits = [d for d in doc["services"]
+                if n in (d["name"], d["unit"], d["unit"].removesuffix(".service"))]
+        if not hits:
+            print(f"{PROG}: no service, container or VM called {n!r} "
+                  f"({PROG} status --all lists everything)", file=sys.stderr)
+            return 2
+        keys = {(d["name"], d["scope"]) for d in hits}
+        doc["services"] = hits
+        doc["problems"] = [p for p in doc["problems"] if (p["service"], p["scope"]) in keys]
+    if a.json:
+        print(json.dumps(doc, indent=1))
+    elif a.name:
+        for i, d in enumerate(doc["services"]):
+            if i:
+                print()
+            print_one(d, doc)
+    else:
+        print_list(doc)
+    if a.check and any(p["severity"] == "error" for p in doc["problems"]):
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except BrokenPipeError:
+        sys.exit(0)
+    except Misuse as e:
+        print(f"{PROG}: {e}", file=sys.stderr)
+        sys.exit(2)

@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The suite drives the shipped script against a sandbox root (--root DIR) with one
+# fake for systemctl, ss, ip, pengyos-firewall, ssh and the podman generators, so
+# it needs no root, no systemd, no podman and no build.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-services"
+expect = "exit0"
+timeout = 600
