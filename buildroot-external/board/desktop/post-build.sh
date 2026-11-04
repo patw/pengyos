@@ -871,6 +871,11 @@ python3 "$(dirname "$0")/../../../scripts/check-daemon-features.py" \
 # starts (the COSMIC tray on behoweather 26.10.14).
 python3 "$(dirname "$0")/../common/check-dbus-units.py" "${TARGET_DIR}"
 
+# --- /usr/share/pengyos.txt: how this system works, and the motd nudge -------
+# Written from the finished tree (commands, stubs, packages), so each later
+# edition's post-build writes it again over what it added.
+python3 "$(dirname "$0")/../common/pengyos-txt.py" "${TARGET_DIR}" "${BUILD_DIR:-}"
+
 # --- Last: every shared library the image needs is in it ------------------------
 # (the edition's later post-build runs this again over the finished tree)
 python3 "$(dirname "$0")/../common/check-needed-libs.py" "${TARGET_DIR}"

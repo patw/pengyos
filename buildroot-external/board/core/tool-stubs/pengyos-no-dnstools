@@ -12,5 +12,6 @@ nslookup). Asking DNS here:
   resolvectl query -t MX example.com      # any record type: -t TXT, -t NS, ...
   resolvectl status                       # which DNS servers each link uses
   getent ahosts example.com               # what programs see (nsswitch, /etc/hosts)
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

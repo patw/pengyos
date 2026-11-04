@@ -4,5 +4,6 @@
 cat >&2 <<'MSG'
 PengyOS: 'sgdisk' is not installed in this image.
   instead, use: parted (GPT) or fdisk — e.g. 'parted -s /dev/sdX mklabel gpt'
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

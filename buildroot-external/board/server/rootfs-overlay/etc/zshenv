@@ -1,0 +1,4 @@
+# /etc/zshenv — read by every zsh, `ssh host cmd` included (Server layer overlay).
+# Keep it to silent exports: output here would break scp and rsync.
+# PENGYOS_README: where this system explains itself (see /etc/profile.d/pengyos-readme.sh).
+export PENGYOS_README=/usr/share/pengyos.txt

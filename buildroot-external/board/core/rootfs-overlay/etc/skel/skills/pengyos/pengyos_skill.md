@@ -7,10 +7,16 @@ habits is the main way to get it wrong, so read this before touching system
 files, installing anything, or explaining what you are running.
 
 ```sh
+cat /usr/share/pengyos.txt   # this edition's own one page: start here
 cat /etc/os-release          # edition, IMAGE_ID, IMAGE_VERSION, BUILD_ID
 cat /proc/cmdline            # which root slot booted, and that this is PengyOS
 ls /etc/pengyos/             # this machine's own config
 ```
+
+`/usr/share/pengyos.txt` is written when the image is built, from what the image
+holds: the commands this edition ships, what it leaves out on purpose (and what to
+use instead), and the package list (`/usr/share/pengyos/packages.txt`). Where this
+skill and that page disagree about this machine, the page is right.
 
 ## What it is
 

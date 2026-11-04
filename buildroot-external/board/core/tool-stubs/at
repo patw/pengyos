@@ -12,5 +12,6 @@ PengyOS: 'at' is not installed; use systemd-run for a one-off job.
 
   These do not survive a reboot. For a recurring or permanent job, write a
   .timer unit (run 'crontab' for an example).
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

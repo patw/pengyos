@@ -4,5 +4,6 @@
 cat >&2 <<'MSG'
 PengyOS: 'blkdiscard' is not installed in this image.
   instead, use: dd (zero the device) or a fresh mkfs
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

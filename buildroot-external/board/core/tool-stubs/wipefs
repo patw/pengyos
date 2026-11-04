@@ -4,5 +4,6 @@
 cat >&2 <<'MSG'
 PengyOS: 'wipefs' is not installed in this image.
   instead, use: parted -s /dev/sdX mklabel gpt (re-labels, clearing signatures), or 'dd if=/dev/zero of=/dev/sdX bs=1M count=4'
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

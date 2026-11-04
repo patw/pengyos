@@ -9,7 +9,9 @@
 #   BUILD_ID       <commit>  the git commit it was built from (-dirty if the
 #                            tree had uncommitted changes)
 # IMAGE_ID/IMAGE_VERSION are the os-release fields image-based systems use
-# (systemd-sysupdate, pengyos-release). /etc/issue is written here too.
+# (systemd-sysupdate, pengyos-release). PENGYOS_README names the page on how
+# this system works, for whoever reads os-release first (`ssh host cmd` shows no
+# motd). /etc/issue is written here too.
 set -eu
 TARGET_DIR="$1" _variant="$2" _variant_id="$3"
 _top="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -35,6 +37,7 @@ IMAGE_VERSION="${_image_version}"
 BUILD_ID="${_build_id}"
 HOME_URL="https://pengyos.catbee.ca/"
 DOCUMENTATION_URL="https://pengyos.catbee.ca/docs/"
+PENGYOS_README="/usr/share/pengyos.txt"
 ANSI_COLOR="1;36"
 OSREL
 # /etc/os-release is the standard link to it (a regular file there would be
