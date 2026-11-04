@@ -794,7 +794,7 @@ def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
     except OSError:
         defined = set()
     groups = [g for g in USER_GROUPS if g in defined]
-    # shadow-utils useradd (busybox addgroup here cannot add a user to a group):
+    # shadow-utils useradd (one call: own group, home, the extra groups):
     # own group (-U), home from /etc/skel (-m), the admin/seat/device groups (-G).
     shell = next((s for s in USER_SHELLS if (root / s.lstrip("/")).exists()), "/bin/sh")
     argv = ["chroot", str(root), "useradd", "-m", "-U", "-s", shell]
@@ -851,14 +851,15 @@ def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
     # password, which every copy of the image would otherwise share.
     # Hash here with our own random salt per account: the image's shadow
     # chpasswd derives both salts from the clock (identical salts, predictable
-    # across machines). busybox mkpasswd takes the salt; the password goes in
-    # on stdin (-P 0), never on argv.
+    # across machines). mkpasswd (whois) takes the salt; the password goes in
+    # on stdin (-P 0), never on argv. The method is whois's name, sha512crypt:
+    # BusyBox's mkpasswd (up to 26.10.57) took "sha512", which whois rejects.
     lines = []
     for user in (answers.username, "root"):
         salt = "".join(secrets.choice(_SALT_CHARS) for _ in range(16))
         hashed = _run(
             run,
-            ["mkpasswd", "-m", "sha512", "-S", salt, "-P", "0"],
+            ["mkpasswd", "-m", "sha512crypt", "-S", salt, "-P", "0"],
             "hashing the password",
             input=answers.password + "\n",
         ).stdout.strip()

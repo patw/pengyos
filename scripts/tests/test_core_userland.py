@@ -10,20 +10,18 @@ without gensub, xargs without -d, diff without -r, time -v, unzip -l, killall -q
 losetup -f, last -x, su -l). That is the "preboot environment" flavour an agent
 hits on a normal install.
 
-So the overlap is resolved in the BusyBox *config*, and this test is what keeps it
-resolved:
+Up to 26.10.57 that overlap was resolved in the BusyBox config (fragments compiling
+out every applet a real package owned). From 26.11.0 BusyBox is not built at all,
+and this test is what keeps the userland whole without it:
 
 1. the Core layer selects uutils (and not GNU coreutils), in every edition;
 2. the recipe is wired (Config.in sourced, .mk, .hash) and its utility set covers
    every name GNU coreutils put in Core today;
-3. every applet the fragments turn off is (a) a real BusyBox symbol — a typo is a
-   silent no-op — and (b) owned by a package the layers enable, so no command
-   disappears;
-4. the fragments are named in the generated defconfigs (a later layer replaces the
-   list, it does not append);
-5. every symbol a layer sets exists in Buildroot 2026.08.1, or is declared by this
+3. BusyBox is off in every defconfig, and every command it ever answered is owned
+   by a package the layers select, or is listed as deliberately dropped with why;
+4. every symbol a layer sets exists in Buildroot 2026.08.1, or is declared by this
    external tree;
-6. /bin/sh is bash, not BusyBox ash.
+5. /bin/sh is bash.
 
 Run: python3 -m pytest scripts/tests -q   (from the repo root)
 """
@@ -42,15 +40,12 @@ CONFIG_IN = EXT / "Config.in"
 CORE_BOARD = EXT / "board/core"
 SERVER_BOARD = EXT / "board/server"
 RECIPE = EXT / "package/uutils-coreutils"
-FRAG_CORE = CORE_BOARD / "busybox.fragment"
-FRAG_SERVER = SERVER_BOARD / "busybox.fragment"
 POST_BUILD_CORE = CORE_BOARD / "post-build.sh"
 
 DEFCONFIGS = ("pengyos_core_defconfig", "pengyos_server_defconfig",
               "pengyos_desktop_defconfig", "pengyos_server_nvidia_defconfig",
               "pengyos_desktop_nvidia_defconfig")
 
-BB_SYMBOLS = Path(__file__).resolve().parent / "fixtures" / "busybox-1.38.0-symbols.txt"
 BR_SYMBOLS = Path(__file__).resolve().parent / "fixtures" / "buildroot-2026.08.1-symbols.txt"
 
 # What GNU coreutils put in Core before the switch. uutils must ship every one of
@@ -70,9 +65,9 @@ GNU_CORE_IN_CORE = (
     "unlink", "uptime", "users", "vdir", "wc", "who", "whoami", "yes",
 )
 
-# Applet -> the package that owns the command once the applet is compiled out.
-# Checked against the layers, so a fragment can never delete a command the image
-# has no other source for.
+# The BusyBox applets compiled out up to 26.10.57 (by their kconfig name) -> the
+# package that owns the command. Kept as the record of what BusyBox once answered:
+# each owner must still be selected, or a command has vanished.
 APPLET_OWNER = {
     # uutils/coreutils (package/uutils-coreutils)
     "CAT": "BR2_PACKAGE_UUTILS_COREUTILS", "LS": "BR2_PACKAGE_UUTILS_COREUTILS",
@@ -168,6 +163,17 @@ APPLET_OWNER = {
     "IPADDR": "BR2_PACKAGE_IPROUTE2", "IPLINK": "BR2_PACKAGE_IPROUTE2",
     "IPROUTE": "BR2_PACKAGE_IPROUTE2", "IPRULE": "BR2_PACKAGE_IPROUTE2",
     "IPNEIGH": "BR2_PACKAGE_IPROUTE2", "IPTUNNEL": "BR2_PACKAGE_IPROUTE2",
+    # 2026-11-03: Vim, and the applets a real tool already shadowed in every edition
+    "VI": "BR2_PACKAGE_VIM", "XXD": "BR2_PACKAGE_VIM", "UNAME": "BR2_PACKAGE_UUTILS_COREUTILS",
+    "HALT": "BR2_INIT_SYSTEMD", "POWEROFF": "BR2_INIT_SYSTEMD",
+    "REBOOT": "BR2_INIT_SYSTEMD", "INIT": "BR2_INIT_SYSTEMD",
+    "SULOGIN": "BR2_PACKAGE_UTIL_LINUX_BINARIES", "HEXDUMP": "BR2_PACKAGE_UTIL_LINUX_BINARIES",
+    "LINUX32": "BR2_PACKAGE_UTIL_LINUX_BINARIES", "LINUX64": "BR2_PACKAGE_UTIL_LINUX_BINARIES",
+    "CHVT": "BR2_PACKAGE_KBD", "OPENVT": "BR2_PACKAGE_KBD", "DEALLOCVT": "BR2_PACKAGE_KBD",
+    "W": "BR2_PACKAGE_PROCPS_NG", "IP": "BR2_PACKAGE_IPROUTE2",
+    "MKE2FS": "BR2_PACKAGE_E2FSPROGS", "MKDOSFS": "BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT",
+    "XZ": "BR2_PACKAGE_XZ", "XZCAT": "BR2_PACKAGE_XZ", "UNXZ": "BR2_PACKAGE_XZ",
+    "LZMA": "BR2_PACKAGE_XZ", "LZCAT": "BR2_PACKAGE_XZ", "UNLZMA": "BR2_PACKAGE_XZ",
 }
 
 
@@ -259,97 +265,149 @@ def test_recipe_ships_every_core_utility_the_image_already_had():
     assert not missing, f"uutils must ship every utility GNU coreutils put in Core: {missing}"
 
 
-# --- 2. the BusyBox fragments are real and complete ---------------------------
-def test_fragment_symbols_are_real_busybox_symbols():
-    """A typo in a fragment is a silent no-op: kconfig drops an unknown CONFIG_
-    name, the applet stays in the image, and the tool is cut-down again."""
-    known = {ln.strip() for ln in BB_SYMBOLS.read_text().splitlines()
-             if ln.strip() and not ln.startswith("#")}
-    assert known, "the BusyBox symbol fixture must not be empty"
-    for frag in (FRAG_CORE, FRAG_SERVER):
-        unknown = sorted({n for n, _ in _fragment_names(frag)} - known)
-        assert not unknown, f"{frag.name} names symbols BusyBox does not declare: {unknown}"
-
-
-def test_every_disabled_applet_has_an_owner_in_the_layers():
-    """No command may vanish: each applet a fragment compiles out must be provided
-    by a package the layers select."""
-    layers = LAYER_CORE.read_text() + LAYER_SERVER.read_text() + LAYER_DESKTOP.read_text()
-    enabled = {s for s in _external_symbols() | set() if f"{s}=y" in layers}
-    enabled |= {m.group(1) for m in re.finditer(r"^(BR2_[A-Z0-9_]+)=y", layers, re.M)}
-    for frag in (FRAG_CORE, FRAG_SERVER):
-        for name, action in _fragment_names(frag):
-            if action == "on":
-                continue  # a feature the fragment turns on, not an applet removed
-            owner = APPLET_OWNER.get(name)
-            if owner is None:
-                # Applets with no owner table entry are the ones deliberately
-                # dropped outright (initramfs / embedded / daemons). They must be
-                # listed as such, not left unclassified.
-                assert name in DELIBERATELY_DROPPED, (
-                    f"{frag.name} disables {name} with no owner recorded — add it to "
-                    "APPLET_OWNER (a package provides it) or DELIBERATELY_DROPPED"
-                )
-                continue
-            assert owner in enabled, (
-                f"{frag.name} compiles out {name}, but {owner} is not selected in any layer"
-            )
-
-
-# Applets the fragments delete outright: they exist to run an initramfs, drive
-# MTD/floppy/serial/console plumbing, or serve a protocol the image does not run.
-DELIBERATELY_DROPPED = {
-    "LINUXRC", "RUN_INIT", "PIVOT_ROOT", "SWITCH_ROOT", "RESUME", "NUKE",
-    "PIPE_PROGRESS", "MAKEDEVS", "MDEV", "UEVENT", "RUNLEVEL", "MT", "PARTPROBE",
-    "SETSERIAL", "FDFORMAT", "FDFLUSH", "FREERAMDISK", "UBIRENAME", "DEVMEM",
-    "SEEDRNG", "I2CGET", "I2CSET", "I2CDUMP", "I2CDETECT", "I2CTRANSFER",
-    "ETHER_WAKE", "NAMEIF", "VCONFIG", "RDATE", "SETLOGCONS", "SETCONSOLE",
-    "LOADFONT", "LOADKMAP", "DUMPKMAP", "SETKEYCODES", "SVC", "SVOK",
-    "FEATURE_USE_INITTAB", "UDHCPC", "FEATURE_UDHCPC_ARPING", "FEATURE_UDHCP_PORT",
-    "SYSLOGD", "KLOGD", "TELNET", "TFTP", "INETD", "DNSD", "SSL_SERVER", "VLOCK",
-    "GETTY", "SHA3SUM", "CRC32",
-    # Nothing provides ifup/ifdown (net-tools does not): networkd and
-    # NetworkManager own the interfaces, and ifupdown-scripts is off.
-    "IFUP", "IFDOWN",
-    # systemd timers schedule; board/core/tool-stubs/crontab says how.
-    "CROND", "CRONTAB",
+# --- 2. no BusyBox, and nothing it answered is lost ----------------------------
+# The applets BusyBox still built in the last image that had it (26.10.57 plus the
+# Vim step), by command name -> the package that answers that name since 26.11.0.
+# "STUB:<file>" means the edition has no such tool and board/core/tool-stubs says
+# what to use; on the editions that do (dig/host/nslookup: Server) the package is
+# named too.
+LAST_APPLETS = {
+    "[": "BR2_PACKAGE_UUTILS_COREUTILS",
+    "sh": "BR2_PACKAGE_BASH",
+    "login": "BR2_PACKAGE_SHADOW", "passwd": "BR2_PACKAGE_SHADOW",
+    "nologin": "BR2_PACKAGE_SHADOW",
+    "adduser": "OVERLAY:usr/bin/adduser", "addgroup": "OVERLAY:usr/bin/addgroup",
+    "deluser": "OVERLAY:usr/bin/deluser", "delgroup": "OVERLAY:usr/bin/delgroup",
+    "setpriv": "BR2_PACKAGE_UTIL_LINUX_SETPRIV",
+    "ping": "BR2_PACKAGE_IPUTILS", "arping": "BR2_PACKAGE_IPUTILS",
+    "traceroute": "BR2_PACKAGE_TRACEROUTE",
+    "netstat": "BR2_PACKAGE_NET_TOOLS", "ifconfig": "BR2_PACKAGE_NET_TOOLS",
+    "route": "BR2_PACKAGE_NET_TOOLS", "arp": "BR2_PACKAGE_NET_TOOLS",
+    "iptunnel": "BR2_PACKAGE_NET_TOOLS",
+    "dnsdomainname": "BR2_PACKAGE_UUTILS_COREUTILS",  # `hostname -d`, post-build.sh
+    "wget": "BR2_PACKAGE_WGET",
+    "nslookup": "STUB:pengyos-no-dnstools",
+    "lspci": "BR2_PACKAGE_PCIUTILS", "lsusb": "BR2_PACKAGE_USBUTILS",
+    "hdparm": "BR2_PACKAGE_HDPARM",
+    "strings": "BR2_PACKAGE_BINUTILS_TARGET", "ar": "BR2_PACKAGE_BINUTILS_TARGET",
+    "bc": "BR2_PACKAGE_BC", "dc": "BR2_PACKAGE_BC",
+    "cpio": "BR2_PACKAGE_CPIO",
+    "dos2unix": "BR2_PACKAGE_DOS2UNIX", "unix2dos": "BR2_PACKAGE_DOS2UNIX",
+    "clear": "BR2_PACKAGE_NCURSES_TARGET_PROGS", "reset": "BR2_PACKAGE_NCURSES_TARGET_PROGS",
+    "mkpasswd": "BR2_PACKAGE_WHOIS",
+    "run-parts": "BR2_PACKAGE_DEBIANUTILS",
+}
+# Applets with no successor, and why (approved 2026-11-03).
+LAST_APPLETS_DROPPED = {
+    # systemd runs and supervises services; the hardware watchdog is systemd's
+    # RuntimeWatchdogSec.
+    "start-stop-daemon", "watchdog",
+    # Embedded/console leftovers: serial terminal, framebuffer, tiny sleeps,
+    # character tables, a hex editor (vim + xxd), SCSI listing (lsblk -S),
+    # terminal sizing (bash/ncurses), the [[ builtin is bash's, ash is bash.
+    "microcom", "fbset", "mim", "usleep", "ascii", "hexedit", "lsscsi", "resize",
+    "[[", "ash",
+    # lzop does both: lzop -d / lzop -dc.
+    "lzopcat", "unlzop",
+    # No sharutils/moreutils recipe in Buildroot: base64 (uutils) and python3 cover
+    # uuencode; ts has no packaged successor.
+    "uuencode", "uudecode", "ts",
+    # ifupdown is gone (networkd/NetworkManager own the interfaces; see below).
+    "ifup", "ifdown",
+    # BusyBox-only shorthands for `ip addr`, `ip link`, ... (iproute2's `ip`).
+    "ipaddr", "iplink", "ipneigh", "iproute", "iprule",
 }
 
 
-def test_fragments_are_named_in_the_generated_defconfigs():
+def _layers_text() -> str:
+    return LAYER_CORE.read_text() + LAYER_SERVER.read_text() + LAYER_DESKTOP.read_text()
+
+
+def _enabled(text: str) -> set[str]:
+    return {m.group(1) for m in re.finditer(r"^(BR2_[A-Z0-9_]+)=y", text, re.M)}
+
+
+def test_busybox_is_not_built_in_any_edition():
     for cfg in DEFCONFIGS:
         text = (EXT / "configs" / cfg).read_text()
-        m = re.search(r'^BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="(.*)"$', text, re.M)
-        assert m, f"{cfg} must name the BusyBox fragment (applets are resolved in config)"
-        assert "board/core/busybox.fragment" in m.group(1), (
-            f"{cfg} must carry the Core fragment: a later layer replaces the list, "
-            "it does not append to it"
-        )
-    for cfg in ("pengyos_server_defconfig", "pengyos_desktop_defconfig",
-                "pengyos_server_nvidia_defconfig", "pengyos_desktop_nvidia_defconfig"):
-        text = (EXT / "configs" / cfg).read_text()
-        assert "board/server/busybox.fragment" in text, f"{cfg} lost the Server fragment"
+        assert re.search(r"^# BR2_PACKAGE_BUSYBOX is not set$", text, re.M), (
+            f"{cfg} must turn BusyBox off (Buildroot defaults it on)")
+        assert "BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES" not in text, cfg
+        assert "BR2_SYSTEM_BIN_SH_BASH=y" in text, f"{cfg}: /bin/sh must be bash"
+    assert not list(EXT.rglob("busybox.fragment")), "a BusyBox fragment with no BusyBox"
 
 
-def test_the_tools_agents_reach_for_are_not_busybox_applets():
-    """The point of the change, stated as a check: each of these has a BusyBox
-    applet, so the applet must be compiled out and the real package selected."""
+def test_every_last_applet_has_a_successor_or_a_reason():
+    core = _enabled(LAYER_CORE.read_text())
+    assert not set(LAST_APPLETS) & LAST_APPLETS_DROPPED
+    for name, owner in LAST_APPLETS.items():
+        if owner.startswith("OVERLAY:"):
+            path = CORE_BOARD / "rootfs-overlay" / owner.split(":", 1)[1]
+            assert path.exists(), f"{name}: {path} missing"
+        elif owner.startswith("STUB:"):
+            stub = CORE_BOARD / "tool-stubs" / name
+            assert stub.is_symlink() and stub.resolve().name == owner.split(":", 1)[1], name
+        else:
+            assert owner in core, f"{name}: Core must select {owner} (every edition needs it)"
+
+
+def test_dns_tools_on_the_server_and_a_pointer_on_core():
+    server = _enabled(LAYER_SERVER.read_text())
+    assert {"BR2_PACKAGE_BIND", "BR2_PACKAGE_BIND_TOOLS"} <= server
+    assert "BR2_PACKAGE_BIND_SERVER=y" not in _layers_text(), "tools only, no named"
+    for name in ("dig", "host", "nslookup"):
+        assert (CORE_BOARD / "tool-stubs" / name).is_symlink(), name
+
+
+def test_every_applet_compiled_out_before_still_has_its_owner():
+    """The record of 26.10.x: each command a real package took over from BusyBox
+    must still come from that package."""
+    enabled = _enabled(_layers_text())
+    for applet, owner in APPLET_OWNER.items():
+        assert owner in enabled, f"{applet}: {owner} is no longer selected in any layer"
+
+
+def test_binutils_brings_no_linker():
+    """strings/ar came with binutils; ld/as must stay the no-toolchain stubs."""
+    mk = (EXT / "external.mk").read_text()
+    assert "BINUTILS_POST_INSTALL_TARGET_HOOKS += PENGYOS_BINUTILS_NO_LINKER" in mk
+    for tool in ("usr/bin/ld ", "usr/bin/as", "usr/bin/ld.bfd"):
+        assert tool in mk, tool
+    for stub in ("ld", "as"):
+        assert (CORE_BOARD / "tool-stubs" / stub).is_symlink(), stub
+
+
+def test_debianutils_does_not_replace_gnu_which():
+    mk = (EXT / "external.mk").read_text()
+    m = re.search(r"define DEBIANUTILS_INSTALL_TARGET_CMDS\n(.*?)endef", mk, re.S)
+    assert m, "debianutils' install must be written out (its make install ships `which`)"
+    assert "run-parts" in m.group(1) and "which" not in m.group(1)
+
+
+def test_hostname_has_one_owner():
+    """net-tools and uutils both install hostname; install order picked one, and
+    dnsdomainname pointed at a binary that did not know the name (Server 26.10.x)."""
+    text = POST_BUILD_CORE.read_text()
+    assert 'ln -sf coreutils "${TARGET_DIR}/usr/bin/hostname"' in text
+    assert "exec hostname -d" in text
+
+
+def test_incremental_trees_lose_busybox_too():
+    text = POST_BUILD_CORE.read_text()
+    assert 'rm -f "${TARGET_DIR}/bin/busybox"' in text
+    assert "removed leftover BusyBox link" in text
+
+
+def test_the_tools_agents_reach_for_are_the_real_packages():
     core = LAYER_CORE.read_text()
-    for applet, sym in (("FIND", "BR2_PACKAGE_UUTILS_FINDUTILS"), ("GREP", "BR2_PACKAGE_GREP"),
-                        ("SED", "BR2_PACKAGE_SED"), ("AWK", "BR2_PACKAGE_GAWK"),
-                        ("XARGS", "BR2_PACKAGE_UUTILS_FINDUTILS"), ("TIME", "BR2_PACKAGE_TIME"),
-                        ("WHICH", "BR2_PACKAGE_WHICH"), ("DIFF", "BR2_PACKAGE_DIFFUTILS"),
-                        ("PATCH", "BR2_PACKAGE_PATCH"), ("UNZIP", "BR2_PACKAGE_UNZIP"),
-                        ("LSOF", "BR2_PACKAGE_LSOF"), ("TREE", "BR2_PACKAGE_TREE"),
-                        ("LOSETUP", "BR2_PACKAGE_UTIL_LINUX_LOSETUP"),
-                        ("LAST", "BR2_PACKAGE_UTIL_LINUX_LAST"),
-                        ("EJECT", "BR2_PACKAGE_UTIL_LINUX_EJECT"),
-                        ("SU", "BR2_PACKAGE_UTIL_LINUX_SU"),
-                        ("KILLALL", "BR2_PACKAGE_PSMISC")):
+    for sym in ("BR2_PACKAGE_UUTILS_FINDUTILS", "BR2_PACKAGE_GREP", "BR2_PACKAGE_SED",
+                "BR2_PACKAGE_GAWK", "BR2_PACKAGE_TIME", "BR2_PACKAGE_WHICH",
+                "BR2_PACKAGE_DIFFUTILS", "BR2_PACKAGE_PATCH", "BR2_PACKAGE_UNZIP",
+                "BR2_PACKAGE_LSOF", "BR2_PACKAGE_TREE", "BR2_PACKAGE_UTIL_LINUX_LOSETUP",
+                "BR2_PACKAGE_UTIL_LINUX_LAST", "BR2_PACKAGE_UTIL_LINUX_EJECT",
+                "BR2_PACKAGE_UTIL_LINUX_SU", "BR2_PACKAGE_PSMISC", "BR2_PACKAGE_VIM",
+                "BR2_PACKAGE_LIBCURL_CURL", "BR2_PACKAGE_WGET"):
         assert f"{sym}=y" in core, f"Core must select {sym}"
-        assert f"# CONFIG_{applet} is not set" in FRAG_CORE.read_text(), (
-            f"Core's fragment must compile out the BusyBox {applet} applet"
-        )
 
 
 # --- 3. nothing in the layers is a made-up symbol ----------------------------
@@ -370,15 +428,14 @@ def test_every_layer_symbol_resolves():
 def test_core_post_build_points_bin_sh_at_bash():
     text = POST_BUILD_CORE.read_text()
     assert re.search(r"ln\s+-sf\s+bash\s+\"\$\{TARGET_DIR\}/usr/bin/sh\"", text), (
-        "/bin/sh must be bash: agents write bash-isms into `sh -c`, and BusyBox ash "
-        "accepts some of them and silently misbehaves on the rest"
+        "/bin/sh must be bash: agents write bash-isms into `sh -c`"
     )
 
 
 def test_no_unit_is_left_calling_the_dropped_ifup():
     """ifupdown-scripts' network.service runs `ip addr flush dev lo; ifup -a`.
     With BusyBox's ifup compiled out it flushed 127.0.0.1 and failed, so the
-    machine had no localhost. Dropping the applet requires dropping the unit."""
+    machine had no localhost. With BusyBox gone nothing provides ifup at all."""
     core = LAYER_CORE.read_text()
     assert re.search(r"^# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set$", core, re.M), (
         "core layer must turn ifupdown-scripts off (its network.service needs ifup)"
@@ -387,3 +444,14 @@ def test_no_unit_is_left_calling_the_dropped_ifup():
     for cfg in DEFCONFIGS:
         text = (EXT / "configs" / cfg).read_text()
         assert "BR2_PACKAGE_IFUPDOWN_SCRIPTS=y" not in text, cfg
+
+
+def test_core_has_the_pam_stack_shadow_login_includes():
+    """shadow's /etc/pam.d/login includes system-auth; without it every console
+    login answered "Permission denied" (Server 26.10.3; Core in the first 26.11.0
+    build, once shadow's login replaced BusyBox's)."""
+    assert "BR2_PACKAGE_SHADOW=y" in LAYER_CORE.read_text()
+    pam = CORE_BOARD / "rootfs-overlay/etc/pam.d"
+    assert "pam_unix.so" in (pam / "system-auth").read_text()
+    assert "pam_unix.so" in (pam / "other").read_text()
+    assert "pam_selinux" in POST_BUILD_CORE.read_text()  # the login cleanup is Core's

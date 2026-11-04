@@ -182,6 +182,11 @@ class FakeRun:
         if argv[:2] == ["sgdisk", "-G"]:
             self.partuuid = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
         if argv[0] == "mkpasswd":
+            # whois mkpasswd (the image's since 26.11.0) rejects BusyBox's "sha512"
+            # with "Invalid method"; the installer must ask for sha512crypt.
+            method = argv[argv.index("-m") + 1]
+            if method != "sha512crypt":
+                return subprocess.CompletedProcess(argv, 1, "", f"Invalid method '{method}'.\n")
             salt = argv[argv.index("-S") + 1]
             stdout = f"$6${salt}$hash-of-{input.strip()}\n"
         if argv[:2] == ["sgdisk", "-i"]:

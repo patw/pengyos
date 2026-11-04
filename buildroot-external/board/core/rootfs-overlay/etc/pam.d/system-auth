@@ -1,10 +1,10 @@
 # PengyOS — the shared stack that shadow's PAM files include (login, passwd,
 # chsh, chfn, chpasswd, newusers, groupmems: "include system-auth").
 # Without this file every one of them failed: console logins on a TTY or the
-# serial port answered "Permission denied" (26.10.3, when shadow was rebuilt
-# with PAM and started installing those files). Plain Unix accounts, as in
-# `other`; sessions get limits, the environment and a logind session, as SSH
-# logins do (pam.d/sshd).
+# serial port answered "Permission denied" (Server 26.10.3, when shadow was
+# rebuilt with PAM; Core on 26.11.0, when shadow's login replaced BusyBox's, so
+# the file moved to Core). Plain Unix accounts, as in `other`; sessions get
+# limits, the environment and a logind session, as SSH logins do (pam.d/sshd).
 auth      required  pam_env.so
 auth      required  pam_unix.so
 account   required  pam_unix.so

@@ -1,0 +1,122 @@
+#!/bin/bash
+# adduser / addgroup / deluser / delgroup for PengyOS, on top of shadow's useradd,
+# groupadd, userdel, groupdel and gpasswd.
+#
+# Up to 26.10.57 these four names were BusyBox applets; shadow's tools are the real
+# ones now, and this keeps the spellings people (and agents) type: Debian's long
+# options and BusyBox's short ones. Anything else: use useradd/usermod/groupadd.
+#
+#   adduser [options] USER            create USER (home, own group, bash), then passwd
+#   adduser USER GROUP                add an existing USER to GROUP
+#   addgroup [--system|-S] [--gid N|-g N] GROUP
+#   addgroup USER GROUP               same as `adduser USER GROUP`
+#   deluser [--remove-home] USER      delete USER
+#   deluser USER GROUP                take USER out of GROUP
+#   delgroup GROUP | delgroup USER GROUP
+set -u
+me=$(basename "$0")
+
+die() { echo "$me: $*" >&2; exit 1; }
+usage() {
+    case "$me" in
+    addgroup) echo "usage: addgroup [--system|-S] [--gid N|-g N] GROUP | addgroup USER GROUP" ;;
+    deluser)  echo "usage: deluser [--remove-home] USER | deluser USER GROUP" ;;
+    delgroup) echo "usage: delgroup GROUP | delgroup USER GROUP" ;;
+    *)        echo "usage: adduser [--system|-S] [--home DIR|-h DIR] [--shell SH|-s SH]"
+              echo "               [--uid N|-u N] [--ingroup G|-G G] [--gecos TEXT|-g TEXT]"
+              echo "               [--disabled-password|-D] [--no-create-home|-H] [-k SKEL] USER"
+              echo "       adduser USER GROUP" ;;
+    esac
+    echo "(PengyOS: a front end to shadow's useradd/groupadd/userdel/gpasswd; use those for anything else)"
+}
+user_exists()  { getent passwd "$1" >/dev/null; }
+group_exists() { getent group "$1" >/dev/null; }
+run() { "$@" || exit $?; }
+
+# --- parse: long (Debian) and short (BusyBox) options ---------------------------
+system= home= shell= uid= gid= ingroup= gecos= nopass= nohome= skel= removehome=
+pos=()
+need() { [ $# -ge 2 ] || die "option $1 needs a value"; }
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --system|-S)            system=1 ;;
+    --home)                 need "$@"; home=$2; shift ;;
+    -h)  if [ "$me" = adduser ]; then need "$@"; home=$2; shift; else usage; exit 0; fi ;;
+    --help)                 usage; exit 0 ;;
+    --shell|-s)             need "$@"; shell=$2; shift ;;
+    --uid|-u)               need "$@"; uid=$2; shift ;;
+    --gid)                  need "$@"; gid=$2; shift ;;
+    --ingroup|-G)           need "$@"; ingroup=$2; shift ;;
+    --gecos|--comment)      need "$@"; gecos=$2; shift ;;
+    -g)  need "$@"; if [ "$me" = addgroup ]; then gid=$2; else gecos=$2; fi; shift ;;
+    --disabled-password|--disabled-login|-D) nopass=1 ;;
+    --no-create-home|-H)    nohome=1 ;;
+    -k)                     need "$@"; skel=$2; shift ;;
+    --remove-home)          removehome=1 ;;
+    --quiet|-q|--force-badname|--allow-badname|--group) ;;  # accepted, nothing to do
+    --)                     shift; pos+=("$@"); break ;;
+    -*)                     usage >&2; die "unknown option: $1" ;;
+    *)                      pos+=("$1") ;;
+    esac
+    shift
+done
+
+[ "$(id -u)" = 0 ] || die "only root may add or remove users and groups (try: sudo $me ...)"
+
+case "$me:${#pos[@]}" in
+adduser:2|addgroup:2)
+    # USER GROUP: membership, the Debian meaning of two names.
+    user_exists "${pos[0]}" || die "user ${pos[0]} does not exist"
+    group_exists "${pos[1]}" || die "group ${pos[1]} does not exist"
+    run gpasswd -a "${pos[0]}" "${pos[1]}"
+    ;;
+deluser:2|delgroup:2)
+    run gpasswd -d "${pos[0]}" "${pos[1]}"
+    ;;
+adduser:1)
+    name=${pos[0]}
+    user_exists "$name" && die "user $name already exists"
+    args=()
+    if [ -n "$system" ]; then
+        args+=(-r -s "${shell:-/usr/sbin/nologin}")
+        [ -n "$home" ] && args+=(-d "$home" -m) || args+=(-M)
+        nopass=1
+    else
+        args+=(-s "${shell:-/bin/bash}")
+        [ -n "$home" ] && args+=(-d "$home")
+        [ -n "$nohome" ] && args+=(-M) || args+=(-m)
+    fi
+    [ -n "$skel" ] && args+=(-k "$skel")
+    [ -n "$uid" ] && args+=(-u "$uid")
+    [ -n "$gecos" ] && args+=(-c "$gecos")
+    if [ -n "$ingroup" ]; then args+=(-g "$ingroup" -N)
+    elif [ -n "$gid" ]; then args+=(-g "$gid" -N)
+    else args+=(-U)
+    fi
+    run useradd "${args[@]}" "$name"
+    if [ -z "$nopass" ]; then
+        if [ -t 0 ]; then
+            passwd "$name" || echo "$me: $name has no password yet: sudo passwd $name" >&2
+        else
+            echo "$me: $name has no password (not a terminal): set one with sudo passwd $name," \
+                 "or log in with an SSH key" >&2
+        fi
+    fi
+    ;;
+addgroup:1)
+    args=()
+    [ -n "$system" ] && args+=(-r)
+    [ -n "$gid" ] && args+=(-g "$gid")
+    run groupadd "${args[@]}" "${pos[0]}"
+    ;;
+deluser:1)
+    args=()
+    [ -n "$removehome" ] && args+=(-r)
+    run userdel "${args[@]}" "${pos[0]}"
+    ;;
+delgroup:1)
+    run groupdel "${pos[0]}"
+    ;;
+*)
+    usage >&2; exit 1 ;;
+esac

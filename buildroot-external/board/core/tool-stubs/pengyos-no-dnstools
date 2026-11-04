@@ -1,0 +1,16 @@
+#!/bin/sh
+# PengyOS stub, installed as nslookup, dig and host on an edition without BIND's
+# tools (Core: BIND needs a C++ runtime Core does not carry). Server and Desktop
+# ship the real ones, and the stub loop in board/core/post-build.sh never puts a
+# stub over a real tool. Up to 26.10.57 Core's nslookup was BusyBox's.
+name=$(basename "$0")
+cat >&2 <<MSG
+PengyOS: '$name' is not installed on Core (Server and Desktop have dig, host and
+nslookup). Asking DNS here:
+
+  resolvectl query example.com            # A/AAAA through systemd-resolved
+  resolvectl query -t MX example.com      # any record type: -t TXT, -t NS, ...
+  resolvectl status                       # which DNS servers each link uses
+  getent ahosts example.com               # what programs see (nsswitch, /etc/hosts)
+MSG
+exit 127

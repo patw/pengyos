@@ -17,6 +17,42 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Removed — BusyBox (2026-11-03)
+
+BusyBox is no longer in the image. Every command it still answered now comes from its
+own package, in Core, so every edition has it:
+
+- **Accounts:** shadow's `login`, `passwd`, `nologin`, `useradd`/`usermod`/`groupadd`,
+  `gpasswd`. `adduser`, `addgroup`, `deluser` and `delgroup` remain, as a front end to
+  them that takes Debian's long options and BusyBox's short ones (`adduser bob`,
+  `adduser bob docker`, `adduser --system svc`).
+- **Network:** iputils `ping`/`arping`/`tracepath`, `traceroute`, net-tools (`netstat
+  -tulpn`, `ifconfig`, `route`, `arp`). **curl and GNU wget on every edition**: Core
+  had only BusyBox's wget. `dig`, `host` and `nslookup` are BIND's tools on Server and
+  Desktop; on Core they print the `resolvectl`/`getent` equivalents.
+- **Hardware:** `lspci` and `lsusb` with names, `hdparm -I`.
+- **Everything else:** `strings`, `ar`, `nm`, `objdump`, `readelf` (binutils, without
+  the linker: `ld` and `as` still point at the dev guest), GNU `bc`/`dc`, `cpio`,
+  `dos2unix`, `lzop`, `clear`/`reset`/`tput`, `mkpasswd` and `whois`, `run-parts`,
+  `setpriv`, and `/usr/bin/[` from uutils.
+- **Gone, no successor:** `start-stop-daemon` and `watchdog` (systemd does both),
+  `microcom`, `fbset`, `hexedit` (use `vim` + `xxd`), `lsscsi` (`lsblk -S`), `ts`,
+  `uuencode`, the `ipaddr`/`iplink`/... shorthands (`ip addr`), and `ash`.
+
+Also fixed: `dnsdomainname` on Server printed "coreutils: missing argument" (net-tools
+and uutils both install `hostname`); it is `hostname -d` now.
+
+### Changed — Vim is the editor, and BusyBox loses what other packages already own (2026-11-03)
+
+First step of taking BusyBox out of the image. **Vim** joins Core (so every edition):
+`vi` is Vim, `:help` works (Buildroot's recipe deletes the help files; `external.mk`
+puts them back), and Vim's `xxd` replaces BusyBox's. BusyBox's `vi` and `xxd` are
+compiled out, along with 23 applets that a real tool already shadowed in every edition
+(`uname`/`whoami` from uutils, `init`/`halt`/`reboot` from systemd, `ip`, `xz`,
+`mke2fs`, `hexdump` and others). The applets BusyBox is still the only provider of
+(most of them on Core: `login`, `passwd`, `ping`, `wget`, `lspci`, ...) go in later
+steps, each with its replacement.
+
 ### Added — the gate refuses merge-conflict markers (2026-11-03)
 
 `check_conflict_markers` fails on any tracked file with a `<<<<<<<` or `>>>>>>>` line

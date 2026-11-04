@@ -119,9 +119,8 @@ BR2_PACKAGE_UUTILS_COREUTILS=y
 # recipe package/uutils-findutils), grep (-P, --include, -o),
 # sed (-E, \b, -i), gawk (gensub, asort, -v), GNU time (-v, -o, -f), which,
 # diffutils (diff -u -r -N), patch, Info-ZIP unzip, gzip, tree, lsof, less,
-# attr (getfattr/setfattr) and psmisc (killall -q, fuser, pstree). BusyBox
-# ships an applet for every one of these; the applets are compiled out (see
-# board/core/busybox.fragment) so there is exactly one implementation of each.
+# attr (getfattr/setfattr) and psmisc (killall -q, fuser, pstree). These replaced
+# BusyBox's cut-down applets; BusyBox itself is gone since 26.11.0 (below).
 BR2_PACKAGE_UUTILS_FINDUTILS=y
 BR2_PACKAGE_GREP=y
 BR2_PACKAGE_SED=y
@@ -142,10 +141,68 @@ BR2_PACKAGE_STRACE=y
 BR2_PACKAGE_LESS=y
 BR2_PACKAGE_ATTR=y
 BR2_PACKAGE_PSMISC=y
-# BusyBox applets are resolved in the config, not by install order: the
-# fragment compiles out every applet another package owns (and the early-boot /
-# embedded ones, since the image has no initramfs and no sysvinit).
-# BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES: set by the server layer
+# Editor: Vim, in every edition (decided 2026-11-03, "developer comfort is critical").
+# Its recipe links vi -> vim, so `vi`, vipw/vigr, git and EDITOR=/bin/vi all get Vim,
+# and its tools bring the real `xxd`. The runtime (syntax, filetypes) is on, and the
+# help files Buildroot deletes are put back in external.mk so `:help` works.
+BR2_PACKAGE_VIM=y
+BR2_PACKAGE_VIM_RUNTIME=y
+# kbd (chvt, openvt, deallocvt, loadkeys) and xz (xz, xzcat, unxz, lzma) were only in
+# the image as dependencies; they are selected by name so a dependency change cannot
+# take a command away.
+BR2_PACKAGE_KBD=y
+BR2_PACKAGE_XZ=y
+
+# --- No BusyBox (26.11.0) -------------------------------------------------------
+# BusyBox was the last embedded-systems piece of the userland: every applet it still
+# provided was the cut-down version of a tool people know (ping with no -W, wget with
+# no certificate check, lspci with no names, login/passwd from the embedded world).
+# Up to 26.10.57 each applet was compiled out as a real package took its name over;
+# from 26.11.0 BusyBox is not built at all, and every command it answered has its own
+# package, here in Core so every edition has it. scripts/tests/test_core_userland.py
+# keeps the map of each former applet to its package (or to "dropped, and why").
+# /bin/sh is bash (board/core/post-build.sh): BusyBox ash is gone with it.
+# BR2_PACKAGE_BUSYBOX is not set
+BR2_SYSTEM_BIN_SH_BASH=y
+# Accounts: shadow (login, passwd, nologin, useradd/usermod/groupadd, gpasswd,
+# chpasswd). board/core/rootfs-overlay/usr/bin/adduser keeps the Debian/BusyBox
+# spelling (adduser, addgroup, deluser, delgroup) working on top of it.
+BR2_PACKAGE_SHADOW=y
+# setpriv: run a command with other uids/caps/no_new_privs (util-linux).
+BR2_PACKAGE_UTIL_LINUX_SETPRIV=y
+# Network inspection: iputils ping/arping/tracepath, traceroute, net-tools
+# (netstat -tulpn, ifconfig, route, arp), next to iproute2's `ip` and `ss`.
+BR2_PACKAGE_IPUTILS=y
+BR2_PACKAGE_TRACEROUTE=y
+BR2_PACKAGE_NET_TOOLS=y
+# Downloads: curl and GNU wget, both, in every edition ("most people use curl
+# nowadays but having both is good"); both verify certificates (ca-certificates).
+# curl was the Server's until 26.11.0, and Core only had BusyBox wget.
+BR2_PACKAGE_LIBCURL=y
+BR2_PACKAGE_LIBCURL_CURL=y
+BR2_PACKAGE_WGET=y
+# DNS: dig, host and nslookup are BIND's tools, in the Server layer (BIND needs the
+# C++ runtime Core does not carry); on Core those names are a stub that shows the
+# resolvectl/getent equivalents (board/core/tool-stubs/pengyos-no-dnstools).
+# Hardware readers that print names, not just numbers: lspci, lsusb, hdparm -I.
+BR2_PACKAGE_PCIUTILS=y
+BR2_PACKAGE_USBUTILS=y
+BR2_PACKAGE_HDPARM=y
+# Binary inspection: strings, ar, nm, objdump, readelf, size, strip, objcopy. The
+# linker and assembler are removed again in external.mk: `ld`/`as` stay the
+# no-toolchain stubs that point at the dev guest.
+BR2_PACKAGE_BINUTILS=y
+BR2_PACKAGE_BINUTILS_TARGET=y
+# The small classics: GNU bc (and dc), cpio, dos2unix/unix2dos, lzop, clear/reset/
+# tput (ncurses), mkpasswd and whois (whois), run-parts/savelog/ischroot
+# (debianutils; its own `which` is removed in external.mk, GNU which owns that name).
+BR2_PACKAGE_BC=y
+BR2_PACKAGE_CPIO=y
+BR2_PACKAGE_DOS2UNIX=y
+BR2_PACKAGE_LZOP=y
+BR2_PACKAGE_NCURSES_TARGET_PROGS=y
+BR2_PACKAGE_WHOIS=y
+BR2_PACKAGE_DEBIANUTILS=y
 # Buildroot's ifupdown-scripts (default y with the default skeleton) installs
 # network.service, which runs `ip addr flush dev lo` and then `ifup -a`. systemd
 # already configures loopback at boot and networkd/NetworkManager own every
@@ -195,8 +252,7 @@ BR2_PACKAGE_CA_CERTIFICATES=y
 BR2_PACKAGE_OPENSSL=y
 # GNU tar: BusyBox's tar applet has no -z/-J and no --ignore-failed-read, so the
 # nightly pengyos-backup failed every run and every upstream "curl … | tar xz"
-# install line (uv, Go, Syncthing) broke. BusyBox defers to it (noclobber); the
-# applet is now compiled out outright (board/core/busybox.fragment).
+# install line (uv, Go, Syncthing) broke.
 BR2_PACKAGE_TAR=y
 
 # --- SSH (US-CORE-2: reach a headless node over the network) ----------------
@@ -419,23 +475,11 @@ BR2_PACKAGE_STARSHIP=y
 BR2_PACKAGE_ZSH_AUTOSUGGESTIONS=y
 BR2_PACKAGE_ZSH_SYNTAX_HIGHLIGHTING=y
 
-# --- Userspace: the full-featured network + hardware readers ---------------
-# The Server's answer to "the tool is there but it is the BusyBox one": real
-# netstat/ifconfig/route/arp (net-tools), real ping (iputils), real traceroute,
-# lspci/lsusb that resolve IDs to names (pciutils, usbutils), and hdparm -I.
-# The matching BusyBox applets are compiled out (board/server/busybox.fragment).
-BR2_PACKAGE_NET_TOOLS=y
-BR2_PACKAGE_IPUTILS=y
-BR2_PACKAGE_TRACEROUTE=y
-BR2_PACKAGE_PCIUTILS=y
-BR2_PACKAGE_USBUTILS=y
-BR2_PACKAGE_HDPARM=y
+# (net-tools, iputils, traceroute, pciutils, usbutils and hdparm were selected here
+# until 26.11.0; with BusyBox gone they are Core's, so every edition has them.)
 # zip: unzip came in with Core; the Server also has to produce archives
 # (backup bundles, artifacts handed to a laptop).
 BR2_PACKAGE_ZIP=y
-# BusyBox fragments: the list is replaced, not appended, by a later layer, so
-# the Server names Core's fragment alongside its own.
-BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/busybox.fragment $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/busybox.fragment"
 
 # --- Userspace: rootless podman ---------------------------------------------
 # podman — the rootless container engine the Server edition runs on. The
@@ -464,12 +508,14 @@ BR2_PACKAGE_GIT=y
 # (podman) that shares $HOME and feels native — our package.
 BR2_PACKAGE_DISTROBOX=y
 # util-linux's standard tools (rev — distrobox-enter needs it —, findmnt, lsblk,
-# a blkid that knows btrfs, …) instead of busybox's cut-down applets.
+# a blkid that knows btrfs, …).
 BR2_PACKAGE_UTIL_LINUX_BINARIES=y
 # curl: every "install X" line (rustup, uv, …) and distrobox itself expect it;
-# busybox wget cannot do HTTPS.
-BR2_PACKAGE_LIBCURL=y
-BR2_PACKAGE_LIBCURL_CURL=y
+# Core selects it (with GNU wget) since 26.11.0.
+# dig, host, nslookup: BIND's tools, no server (Core has a stub pointing at
+# resolvectl; up to 26.10.57 every edition had BusyBox's nslookup only).
+BR2_PACKAGE_BIND=y
+BR2_PACKAGE_BIND_TOOLS=y
 # The openssl command: pengyos-update checks release signatures (ed25519) with
 # it, so the updater carries no crypto code of its own; also handy for admins.
 BR2_PACKAGE_LIBOPENSSL_BIN=y
