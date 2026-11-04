@@ -1,4 +1,5 @@
-"""A kernel version change rebuilds the module packages and drops the old module tree."""
+"""A kernel version change rebuilds the module packages and drops the old module tree;
+a kernel config (fragment) change rebuilds the kernel and the module packages."""
 
 from __future__ import annotations
 
@@ -11,13 +12,14 @@ from pengyos_build.configure import configure_target
 from pengyos_build.targets import Target
 
 
-def _config(version: str | None) -> str:
+def _config(version: str | None, fragments: str = "") -> str:
     if version is None:
         return "BR2_x86_64=y\n# BR2_LINUX_KERNEL is not set\n"
+    frag = f'BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="{fragments}"\n' if fragments else ""
     return (
         "BR2_x86_64=y\nBR2_LINUX_KERNEL=y\nBR2_LINUX_KERNEL_CUSTOM_VERSION=y\n"
         f'BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="{version}"\n'
-        f'BR2_LINUX_KERNEL_VERSION="{version}"\nBR2_PACKAGE_NVIDIA_OPEN=y\n'
+        f'BR2_LINUX_KERNEL_VERSION="{version}"\nBR2_PACKAGE_NVIDIA_OPEN=y\n' + frag
     )
 
 
@@ -162,3 +164,63 @@ def test_turning_the_kernel_off_removes_nothing(tmp_path: Path) -> None:
     _reconfigure(root, target, None)
     assert (output / "target/usr/lib/modules/7.2.13").is_dir()
     assert (output / "build/nvidia-open-615.78.08").exists()
+
+
+# --- a fragment change on the same kernel ---------------------------------------------
+
+FRAGS = "$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/linux.fragment $(BR2_EXTERNAL_PENGYOS_PATH)/board/server/linux.fragment"
+
+
+def _fragment_tree(tmp_path: Path, built_config: str, server_fragment: str):
+    root, target, output = _built_tree(tmp_path, "7.3.1")
+    ext = target.external_tree
+    (ext / "board/core").mkdir(parents=True)
+    (ext / "board/server").mkdir(parents=True)
+    (ext / "board/core/linux.fragment").write_text("CONFIG_DRM_AMDGPU=m\n# CONFIG_DEBUG_INFO is not set\n")
+    (ext / "board/server/linux.fragment").write_text(server_fragment)
+    (output / "build/linux-7.3.1/.config").write_text(built_config)
+    return root, target, output
+
+
+def _reconfigure_frag(root, target):
+    return configure_target(target, root, env={"PATH": "/usr/bin"}, resolver=lambda n: None,
+                            runner=_make_writing(_config("7.3.1", FRAGS)),
+                            show_info=lambda s, o, e: _info())
+
+
+def test_fragment_lines_resolve_the_external_path(tmp_path: Path) -> None:
+    files = kernel.fragment_files(_config("7.3.1", FRAGS), tmp_path)
+    assert files == (tmp_path / "board/core/linux.fragment", tmp_path / "board/server/linux.fragment")
+
+
+def test_new_fragment_line_rebuilds_kernel_and_modules(tmp_path: Path) -> None:
+    # 2026-11-04: ZONE_DEVICE + HSA_AMD on 7.3.1. The kernel reconfigures; nvidia-open
+    # must not keep modules built against the old struct layouts.
+    root, target, output = _fragment_tree(
+        tmp_path, "CONFIG_DRM_AMDGPU=m\nCONFIG_XE=m\n",
+        "# KFD\nCONFIG_HSA_AMD=y\nCONFIG_ZONE_DEVICE=y\n")
+    result = _reconfigure_frag(root, target)
+    assert set(result.rebuilt) == {"linux-7.3.1", "nvidia-open-615.78.08", "v4l2loopback-0.15.1"}
+    assert (output / "build/libglvnd-1.7.0").exists()
+    assert "kernel config changed (CONFIG_HSA_AMD=y, CONFIG_ZONE_DEVICE=y)" in str(result)
+
+
+def test_satisfied_fragments_touch_nothing(tmp_path: Path) -> None:
+    root, target, output = _fragment_tree(
+        tmp_path, "CONFIG_DRM_AMDGPU=m\nCONFIG_HSA_AMD=y\nCONFIG_ZONE_DEVICE=y\n",
+        "CONFIG_HSA_AMD=y\nCONFIG_ZONE_DEVICE=y\n")
+    result = _reconfigure_frag(root, target)
+    assert result.rebuilt == ()
+    assert "kernel config changed" not in str(result)
+
+
+def test_a_newly_unset_line_counts(tmp_path: Path) -> None:
+    root, target, output = _fragment_tree(
+        tmp_path, "CONFIG_DRM_AMDGPU=m\nCONFIG_DEBUG_INFO=y\n", "")
+    result = _reconfigure_frag(root, target)
+    assert "linux-7.3.1" in result.rebuilt
+    assert "# CONFIG_DEBUG_INFO is not set" in str(result)
+
+
+def test_no_built_kernel_nothing_is_stale(tmp_path: Path) -> None:
+    assert kernel.stale_fragment_lines(_config("7.3.1", FRAGS), tmp_path, tmp_path / "out") == ()

@@ -107,6 +107,19 @@ CONFIG_DRM_HYPERV=m
 # by xe only (i915 does not bind them). US-SRV-9 transcodes on /dev/dri, and the
 # Arc cards are the usual transcoding card. Firmware: server.config.
 CONFIG_DRM_XE=m
+# GPU compute on AMD: KFD is /dev/kfd, the ROCm/HIP runtime's device. It has no
+# Kconfig default, so it had never been on: no ROCm container (gufo, halogen,
+# llama.cpp-rocm, PyTorch) could see an AMD GPU on any edition (2026-11-04, Strix
+# Halo). ROCm itself stays in the container, as CUDA's toolkit does on Server
+# NVIDIA. HSA_AMD_SVM is HIP's unified/managed memory (halogen needs it); it
+# depends on DEVICE_PRIVATE, which needs ZONE_DEVICE, which needs memory hot-remove
+# (only as a Kconfig dependency: hotplugged memory stays offline by default).
+CONFIG_HSA_AMD=y
+CONFIG_MEMORY_HOTPLUG=y
+CONFIG_MEMORY_HOTREMOVE=y
+CONFIG_ZONE_DEVICE=y
+CONFIG_DEVICE_PRIVATE=y
+CONFIG_HSA_AMD_SVM=y
 
 # --- Laptops as servers (2026-10-30) -------------------------------------------
 # An old laptop (cracked screen, dead battery) is a normal PengyOS Server: it is

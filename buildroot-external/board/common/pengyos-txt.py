@@ -47,6 +47,7 @@ TOOLS = {
     "pengyos-vm": "VMs in ~/vms: create, start, ssh, console, stop",
     "pengyos-shares": "share folders over SMB: add, remove, passwd",
     "pengyos-webui": "serve pengy-web at boot (no login: loopback only)",
+    "pengyos-gpu-memory": "how much RAM an AMD GPU may use: status, set",
     "pengyos-postmortem": "why did that session or boot end? (the journal)",
     "pengyos-install": "the install engine the installers drive",
     "pengyos-install-tui": "the console installer",
@@ -303,6 +304,13 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
         if quadlet_readme:
             L += ["  /etc/containers/systemd/README has the details."]
         L += [""]
+        if real(target, "pengyos-gpu-memory"):
+            L += ["  An AMD GPU in a container (ROCm stays in the image you run):",
+                  "    podman run --device /dev/kfd --device /dev/dri --group-add keep-groups \\",
+                  "        --ulimit memlock=-1:-1 IMAGE",
+                  "  An APU (Strix Halo) maps system RAM: pengyos-gpu-memory set max, reboot.", ""]
+        if real(target, "nvidia-ctk") or has(target, "etc/cdi/nvidia.yaml"):
+            L += ["  An NVIDIA GPU in a container: podman run --device nvidia.com/gpu=all IMAGE", ""]
         if services:
             L += ["  pengyos-services status shows what this machine serves: every unit,",
                   "  container" + (" and VM" if vm else "") + ", whether it starts after a reboot, its ports, whether",

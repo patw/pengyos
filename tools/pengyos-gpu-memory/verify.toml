@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The suite drives the shipped script against a sandbox root (--root DIR) holding
+# a fake /proc/meminfo, /sys/module/ttm and /sys/class/drm, so it needs no root,
+# no GPU and no build.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-gpu-memory"
+expect = "exit0"
+timeout = 300

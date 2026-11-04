@@ -17,6 +17,35 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — AMD GPU compute in containers: /dev/kfd, crun, memlock, `pengyos-gpu-memory` (2026-11-04)
+
+- The kernel has KFD (`CONFIG_HSA_AMD`, with `HSA_AMD_SVM` and `DEVICE_PRIVATE`), so
+  `/dev/kfd` exists and ROCm containers see an AMD GPU. It has no Kconfig default and
+  had never been on, so no ROCm workload (gufo, halogen, llama.cpp-rocm, PyTorch) ran
+  on any edition. ROCm stays in the container, as CUDA's toolkit does on Server NVIDIA.
+  Server layer: every edition but Core.
+- podman runs containers with crun (`BR2_PACKAGE_CRUN`): rootless `--group-add
+  keep-groups`, which GPU containers use to keep the render and video groups, needs it.
+- No locked-memory limit (`DefaultLimitMEMLOCK=infinity`, system and user managers):
+  GPU inference containers run with `--ulimit memlock=-1`, which a rootless container
+  could not raise above systemd's 8 MiB.
+- `pengyos-gpu-memory status|set SIZE|reset`: how much system RAM an AMD GPU may map
+  (GTT), raised from the kernel's half of RAM up to RAM minus 4 GiB (`ttm.pages_limit`
+  and `amdgpu.gttsize` in `/etc/modprobe.d`, at the next boot). The Strix Halo knob:
+  a 70–120 GB model needs it.
+
+### Added — `/usr/share/pengyos.txt` and the login nudge (2026-11-04)
+
+- Every image has `/usr/share/pengyos.txt`, one page on how this edition works,
+  written at build time from what the image holds: the read-only image and A/B
+  updates, installing software, the dev guest and `dx`, timers instead of cron, the
+  Quadlet lanes and `pengyos-services`, the firewall, the commands it ships, what it
+  leaves out on purpose, and the package list (`/usr/share/pengyos/packages.txt`).
+- The motd's first line names it: `PengyOS Server 26.11.1 -- how this system works:
+  /usr/share/pengyos.txt`. `ssh host cmd` shows no motd, so every "not installed"
+  stub, `/etc/os-release` (`PENGYOS_README`), the skel skills and a silent
+  `PENGYOS_README` export carry the pointer too.
+
 ### Added — `pengyos-services` (2026-11-03)
 
 `pengyos-services status` answers, in one command, what took eight in Pengy's Server

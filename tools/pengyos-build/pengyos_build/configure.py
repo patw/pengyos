@@ -264,6 +264,27 @@ def configure_target(
                 kernel_notes += (
                     f"kernel {old_k} -> {new_k}: removed {tree.relative_to(output)}",
                 )
+        elif new_k:
+            # Same kernel, new config (a fragment line): rebuild the kernel and what
+            # builds against it (kernel.stale_fragment_lines).
+            lines = kernel.stale_fragment_lines(new_config, external, output)
+            if lines:
+                shown = ", ".join(lines[:4]) + (f" (+{len(lines) - 4} more)" if len(lines) > 4 else "")
+                if new_deps is not None:
+                    mods = stale.packages_with_build_dirs(
+                        kernel.module_packages(new_deps) | {"linux"}, output / "build"
+                    )
+                    rebuild = tuple(sorted(set(rebuild) | set(mods)))
+                    built = " ".join(p.name for p in mods) or "none built"
+                    kernel_notes += (
+                        f"kernel config changed ({shown}): rebuilding {built}",
+                    )
+                else:
+                    kernel_notes += (
+                        f"CLEAN BUILD NEEDED: kernel config changed ({shown}), and make "
+                        "show-info failed, so the module packages built against the old "
+                        "config cannot be named for a rebuild",
+                    )
 
     # A recipe change (a .mk, a Config.in select, a patch) moves no symbol of its
     # own package, so the .config diff above cannot see it and Buildroot's stamps

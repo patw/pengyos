@@ -19,10 +19,21 @@ Moving ``BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE`` gives ``linux`` a new build dir
 
 Found 2026-11-02 on the 7.2.13 -> 7.3.1 bump, checked by hand before the
 night's build; this makes the next one automatic.
+
+A kernel *config* change on the same version (a fragment line: 2026-11-04,
+ZONE_DEVICE and HSA_AMD for ROCm) leaves the module packages just as stale: the
+kernel is reconfigured and rebuilt, but nvidia-open and v4l2loopback keep modules
+built against the old struct layouts (ZONE_DEVICE adds a memory zone). Buildroot
+goes by the fragment's mtime, which a branch switch can leave older than the
+kernel's stamp. :func:`stale_fragment_lines` goes by content instead: the lines of
+the fragments the built kernel's ``.config`` does not satisfy. The core
+post-build's ``check-kernel-fragments.py --built`` fails any build whose kernel
+drops a fragment line, so after a finished build every mismatch is a change.
 """
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -80,3 +91,52 @@ def remove_trees(paths: tuple[Path, ...]) -> None:
     for path in paths:
         if path.is_dir() and not path.is_symlink():
             shutil.rmtree(path)
+
+
+_KSET = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=(.*)$")
+_KUNSET = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set$")
+_EXT_VAR = re.compile(r"\$\(BR2_EXTERNAL(?:_[A-Za-z0-9]+)?_PATH\)")
+
+
+def _kconfig(text: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        m = _KSET.match(line.strip())
+        if m:
+            out[m.group(1)] = m.group(2)
+    return out
+
+
+def fragment_files(config_text: str, external: Path) -> tuple[Path, ...]:
+    """The kernel config fragments a Buildroot ``.config`` names, resolved."""
+    raw = parse_config(config_text).get("BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES", "")
+    return tuple(Path(_EXT_VAR.sub(str(external), f)) for f in raw.strip('"').split())
+
+
+def stale_fragment_lines(config_text: str, external: Path, output: Path) -> tuple[str, ...]:
+    """Fragment lines the built kernel's ``.config`` does not satisfy.
+
+    Empty when no kernel has been built yet (nothing to be stale) or every line
+    holds. ``CONFIG_X=v`` needs X=v; ``# CONFIG_X is not set`` needs X unset.
+    """
+    version = kernel_version(config_text)
+    if version is None:
+        return ()
+    built = output / "build" / f"linux-{version}" / ".config"
+    if not built.is_file():
+        return ()
+    have = _kconfig(built.read_text(encoding="utf-8", errors="replace"))
+    bad: list[str] = []
+    for frag in fragment_files(config_text, external):
+        if not frag.is_file():
+            continue
+        for line in frag.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            m = _KSET.match(line)
+            if m and have.get(m.group(1)) != m.group(2):
+                bad.append(line)
+                continue
+            u = _KUNSET.match(line)
+            if u and u.group(1) in have:
+                bad.append(line)
+    return tuple(bad)

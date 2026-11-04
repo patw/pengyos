@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — a kernel config change on the same version rebuilds the modules too (2026-11-04)
+- `configure` rebuilds the kernel and every package built against it (nvidia-open,
+  v4l2loopback) when the built kernel's `.config` no longer satisfies a fragment
+  line, on the same kernel version. A fragment change reconfigured the kernel but
+  left the modules built against the old config (ZONE_DEVICE changes struct
+  layouts). Content, not mtime: `kernel.stale_fragment_lines`.
+
 ### Fixed — a kernel version change now rebuilds the modules built against it
 - **Out-of-tree module packages kept their old-kernel build.** nvidia-open and
   v4l2loopback depend on `linux` by name, so moving the kernel version changed
