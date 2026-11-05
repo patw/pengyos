@@ -41,3 +41,20 @@ def test_memlock_unlimited_for_system_and_user_managers():
         f = EXT / f"board/server/rootfs-overlay/usr/lib/systemd/{scope}.conf.d/60-pengyos-memlock.conf"
         lines = [l.strip() for l in f.read_text().splitlines()]
         assert "[Manager]" in lines and "DefaultLimitMEMLOCK=infinity" in lines, scope
+
+
+def test_desktop_lifts_pipewires_memlock_cap():
+    """PipeWire's 25-pw-rlimits.conf caps @pipewire (every desktop user) at 4 GiB.
+
+    pam_limits applies limits.d in name order and a later entry for the same group
+    wins, so the Desktop override must sort after it and say unlimited.
+    """
+    d = EXT / "board/desktop/rootfs-overlay/etc/security/limits.d"
+    f = d / "60-pengyos-memlock.conf"
+    assert f.name > "25-pw-rlimits.conf"
+    rules = [l.split() for l in f.read_text().splitlines() if l.strip() and not l.startswith("#")]
+    assert ["@pipewire", "-", "memlock", "unlimited"] in rules
+    # nothing sorting after it may put a cap back
+    for other in d.glob("*.conf"):
+        if other.name > f.name:
+            assert "memlock" not in other.read_text(), other.name

@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — Desktop: no 4 GiB locked-memory cap from PipeWire (2026-11-05)
+26.11.1 removed systemd's 8 MiB memlock default so GPU containers can run with
+`--ulimit memlock=-1`. On Desktop, PipeWire's `limits.d/25-pw-rlimits.conf` still
+capped the `pipewire` group (every desktop user) at 4 GiB, soft and hard, through
+pam_limits, so a container asking for no limit quietly got 4 GiB (beholaptop,
+26.11.2). `limits.d/60-pengyos-memlock.conf` sorts after it and sets
+`@pipewire memlock unlimited`; PipeWire's realtime lines are unchanged. Server was
+never affected (no PipeWire).
+
 ### Added — AMD GPU compute in containers: /dev/kfd, crun, memlock, `pengyos-gpu-memory` (2026-11-04)
 
 - The kernel has KFD (`CONFIG_HSA_AMD`, with `HSA_AMD_SVM` and `DEVICE_PRIVATE`), so
