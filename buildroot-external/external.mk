@@ -477,6 +477,21 @@ define PYTHON3_TARGET_INSTALL_PATH
 endef
 PYTHON3_POST_INSTALL_TARGET_HOOKS += PYTHON3_TARGET_INSTALL_PATH
 
+# ...and the compiler: CC, CXX, LDSHARED, BLDSHARED, LINKCC and AR named the build
+# host's cross toolchain (/data/build/.../host/bin/x86_64-buildroot-linux-gnu-gcc).
+# A pip or uv install that had to compile on the target failed with "No such file
+# or directory" for that path, which says nothing useful (behothinkpad, 26.11.1).
+# Strip the prefix: gcc, g++ and gcc-ar are the names the host's no-toolchain stub
+# answers to, so the failure prints the dev-guest recipe instead. -I/-L paths into
+# the build sysroot (MODULE_*_FLAGS) only ever built the stdlib, and stay.
+define PYTHON3_TARGET_TOOLCHAIN_NAMES
+	sed -i 's#$(HOST_DIR)/bin/$(GNU_TARGET_NAME)-##g' \
+		$(TARGET_DIR)/usr/lib/python$(PYTHON3_VERSION_MAJOR)/_sysconfigdata_*.py \
+		$(TARGET_DIR)/usr/lib/python$(PYTHON3_VERSION_MAJOR)/_sysconfig_vars_*.json \
+		$(TARGET_DIR)/usr/lib/python$(PYTHON3_VERSION_MAJOR)/config-*/Makefile
+endef
+PYTHON3_POST_INSTALL_TARGET_HOOKS += PYTHON3_TARGET_TOOLCHAIN_NAMES
+
 # Python bytecode: Buildroot compiles the whole target library in one
 # `compileall` run, and marshal decides which objects to share by reference
 # count — which depends on everything that process compiled before. Two hosts

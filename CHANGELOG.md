@@ -17,6 +17,27 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — uv on the host; Python builds that need a compiler reach the dev guest (2026-11-05)
+- **`uv` and `uvx`** ship in Server and Desktop (`/usr/bin`), built from source
+  (`package/uv`, 0.13.7, the self-update feature left off). The one-venv-per-app
+  recipe (USE-CASES US-SRV-10) runs on the host against its own `python3`. Until
+  now uv came only from the dev guest's installer in `~/.local/bin`, which is not
+  on the host's PATH (Pengy's Server field review, R4).
+- **A Python package that must compile** is built as a wheel in the dev guest for
+  the host's Python and installed on the host with `--find-links`:
+  `dx uvx --python 3.14 pip wheel --no-deps -w ~/wheels PKG==VERSION`, then
+  `uv pip install --find-links ~/wheels PKG`. Proven on behothinkpad (26.11.1) with
+  netifaces from its sdist and a local C extension. pengyos.txt ("BUILDING CODE")
+  and the `gcc`/`cc` stub print it.
+- **Fixed: the host Python named the build host's compiler.** sysconfig's CC, CXX,
+  LDSHARED, BLDSHARED, LINKCC and AR were `/data/build/.../host/bin/x86_64-buildroot-linux-gnu-gcc`,
+  so such an install failed with "No such file or directory" for a path on our
+  build machine and never reached the stub. external.mk strips the prefix (`gcc`,
+  `g++`, `gcc-ar`), and Server's post-build refuses an image that still has it.
+- The dev guest verifies that its `sudo` needs no password (distrobox's rule for a
+  rootless box). The review's "guest sudo wants a password" came from a box made
+  with plain `distrobox`; through `pengyos-guest` it never did.
+
 ### Fixed — Desktop: no 4 GiB locked-memory cap from PipeWire (2026-11-05)
 26.11.1 removed systemd's 8 MiB memlock default so GPU containers can run with
 `--ulimit memlock=-1`. On Desktop, PipeWire's `limits.d/25-pw-rlimits.conf` still

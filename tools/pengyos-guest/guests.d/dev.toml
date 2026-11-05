@@ -18,7 +18,7 @@ packages = [
   "wget", "ca-certificates", "python3", "python3-venv", "golang", "zsh",
 ]
 # Runs as you inside the box, after the packages, on every apply: keep each
-# step idempotent. rustup and uv install into ~/.cargo and ~/.local.
+# step idempotent. rustup installs into ~/.cargo; uv into the box's /usr/local.
 setup = [
   # PATH for the toolchains below, in the box only (/etc is the box's own; your
   # shared ~/.bashrc and ~/.zshrc stay untouched, so the host PATH does not
@@ -34,11 +34,16 @@ setup = [
   # host install: home is shared), and then every rustc/cargo errors "no default is
   # configured". The step above skips in that case, so pick stable when none is set.
   "rustup default >/dev/null 2>&1 || rustup default stable",
-  "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh",
+  # uv into the box's own /usr/local/bin, not the shared ~/.local/bin: the host
+  # ships its own uv (26.11), and ~/.local/bin comes first on the host's PATH.
+  "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sudo env UV_UNMANAGED_INSTALL=/usr/local/bin sh",
 ]
 # What this box promises, checked after setup on every apply: each must succeed,
 # and apply prints the version it found (or fails, naming the command).
 verify = [
   "gcc --version", "cmake --version", "ninja --version", "go version",
   "rustc --version", "cargo --version", "uv --version",
+  # sudo without a password (distrobox's NOPASSWD rule for a rootless box): the
+  # setup steps above use it, and an agent in the box cannot answer a prompt.
+  "sudo -n true && echo sudo: no password needed",
 ]

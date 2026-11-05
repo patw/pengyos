@@ -42,6 +42,22 @@ guest, which has them. Your home directory is the same inside and out:
 
 What you build runs on the host (the guest's glibc is older than the host's).
 Or ship it as a container: ~/.config/containers/systemd/<name>.container
-How this system works: /usr/share/pengyos.txt
 MSG
+# pip and uv reach a C compiler as cc/gcc/c++/g++ (Python's sysconfig names them
+# so on the image: external.mk), so a package that must compile lands here.
+case "$NAME" in
+    cc|gcc|c++|g++)
+        pyver=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)
+        if [ -n "$pyver" ] && command -v uv >/dev/null 2>&1; then
+            cat >&2 <<MSG
+
+A Python package that must compile? Build its wheel in the guest, for this
+host's Python ($pyver), then install it here:
+
+  dx uvx --python $pyver pip wheel --no-deps -w ~/wheels PKG==VERSION
+  uv pip install --find-links ~/wheels PKG
+MSG
+        fi ;;
+esac
+echo "How this system works: /usr/share/pengyos.txt" >&2
 exit 127

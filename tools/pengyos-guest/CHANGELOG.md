@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — dev box: sudo is verified; the wheel recipe (2026-11-05)
+- **`dev.toml`** verifies `sudo -n true`: sudo in the rootless box needs no
+  password (distrobox's `NOPASSWD` rule), the setup steps rely on it, and an agent
+  cannot answer a prompt. A Pengy field review had read "guest sudo wants a
+  password" from a box made with plain `distrobox`, not `pengyos-guest`.
+- The README has the recipe for a Python package that must compile: a wheel built
+  in the box for the host's Python, installed on the host with `--find-links`
+  (proven on behothinkpad, 26.11.1), and says the host ships its own `uv` now.
+- **`dev.toml`, `cuda.toml`**: uv installs into the box's own `/usr/local/bin`
+  (`UV_UNMANAGED_INSTALL`), no longer the shared `~/.local/bin`, which is first on
+  the host's PATH and would hide the host's `/usr/bin/uv`.
+
 ### Added — `verify`: a guest's promises are checked (2026-11-03)
 - **`verify`** in a guest definition lists commands that must succeed after setup.
   `apply` prints the first line of each (`ok  rustc --version: rustc 1.91.0 ...`) and

@@ -52,7 +52,10 @@ The image ships the definitions (`/usr/share/pengyos/guests.d/`):
 
 The first `enter` pulls and provisions the box (about a minute and a half for
 `dev` on a fast link); after that entering takes a fraction of a second. Inside
-it `sudo apt install` works as usual — it changes the box, never the host. To
+it `sudo apt install` works as usual, with no password: distrobox gives you
+`NOPASSWD` sudo in a rootless box (it is your container, and root in it is only
+your user outside), and `dev.toml` verifies that on every `apply`. It changes the
+box, never the host. To
 start fresh, `destroy` it and enter again; your home, `~/.cargo` included, is
 untouched.
 
@@ -100,11 +103,23 @@ dx cargo build --release
 dx --shell
 ```
 
-What the dev box's setup installs as you (rustup, uv) lands in your home, which
-the host shares: `~/.cargo/bin` and `~/.local/bin`. They are deliberately **not**
-put on the host's PATH. `uv` there works on the host against the host's Python;
-`cargo` and `rustc` start but cannot link (the host has no `cc`), so build with
-`dx cargo ...`.
+rustup installs as you, into `~/.cargo`, which the host shares; `~/.cargo/bin`
+is deliberately **not** on the host's PATH: `cargo` and `rustc` there start but
+cannot link (the host has no `cc`), so build with `dx cargo ...`. uv goes into the
+box's own `/usr/local/bin`, because the host has its own in `/usr/bin` (Server and
+Desktop, since 26.11) and `~/.local/bin` comes first on the host's PATH. A box set
+up before 26.11 has uv in `~/.local/bin`, where it hides the host's:
+`rm ~/.local/bin/uv ~/.local/bin/uvx`, then `pengyos-guest apply dev`.
+
+A Python package that has to compile is built in the box, as a wheel for the
+host's Python, and installed on the host from there (`3.14` is the host's
+`python3`; `uv` fetches that Python inside the box):
+
+```sh
+dx uvx --python 3.14 pip wheel --no-deps -w ~/wheels PKG==VERSION   # from PyPI
+dx uv build --wheel --python 3.14 --out-dir ~/wheels                 # your project
+uv pip install --find-links ~/wheels PKG                             # on the host
+```
 
 ## Design
 

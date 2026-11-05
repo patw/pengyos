@@ -172,6 +172,16 @@ def packages(build_dir: Path | None) -> list[tuple[str, str]]:
     return out
 
 
+def python_version(target: Path) -> str | None:
+    """``3.14`` for an image with usr/lib/python3.14/os.py[c], else None."""
+    found = []
+    for d in (target / "usr/lib").glob("python3.*"):
+        m = re.fullmatch(r"python(3\.\d+)", d.name)
+        if m and ((d / "os.py").exists() or (d / "os.pyc").exists()):
+            found.append(m.group(1))
+    return max(found, key=lambda v: int(v.split(".")[1])) if found else None
+
+
 # --------------------------------------------------------------------------
 # The page
 # --------------------------------------------------------------------------
@@ -206,6 +216,7 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
     nm = real(target, "NetworkManager") or real(target, "nmcli")
     wpa = real(target, "wpa_supplicant")
     uv = real(target, "uv")
+    pyver = python_version(target)
     services = real(target, "pengyos-services")
     vm = real(target, "pengyos-vm")
     sudo = real(target, "sudo")
@@ -277,6 +288,14 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
         else:
             L += ["    pengyos-guest enter dev       a shell in the guest"]
         L += ["", "  What you build there runs on the host: the guest's glibc is older.", ""]
+        if pyver and uv and dx:
+            # Proven on behothinkpad (26.11.1, 2026-11-05): netifaces from its sdist
+            # and a local C extension, built in the guest, imported on the host.
+            L += ["  A Python package that must compile (pip or uv stops at gcc): build its",
+                  f"  wheel in the guest for this Python ({pyver}) and install it here:", "",
+                  f"    dx uvx --python {pyver} pip wheel --no-deps -w ~/wheels PKG==VERSION",
+                  f"    dx uv build --wheel --python {pyver} --out-dir ~/wheels  # your project",
+                  "    uv pip install --find-links ~/wheels PKG", ""]
     else:
         L += ["  This edition has no compilers and no dev guest. "
               + ("Build in a container." if podman else "Build on another machine."), ""]
