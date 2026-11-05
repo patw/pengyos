@@ -193,8 +193,10 @@ def test_ssh_cmd_users_get_the_pointer():
         if stub.is_symlink():
             continue
         body = stub.read_text()
-        heredocs = body.count("<<MSG") + body.count("<<'MSG'")
-        assert body.count("/usr/share/pengyos.txt") >= heredocs > 0, stub.name
+        # Every way out of a stub prints the pointer: one per `exit 127`, in a
+        # heredoc or (no-toolchain, after its optional Python hint) an echo.
+        exits = body.count("exit 127")
+        assert body.count("/usr/share/pengyos.txt") >= exits > 0, stub.name
     osr = (EXT / "board/common/os-release.sh").read_text()
     assert 'PENGYOS_README="/usr/share/pengyos.txt"' in osr
     for skill in ("skill_index.md", "pengyos/pengyos_skill.md"):

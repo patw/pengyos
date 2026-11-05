@@ -22,5 +22,7 @@ setup = [
   "echo 'case \":$PATH:\" in *\":$HOME/.cargo/bin:\"*) ;; *) export PATH=\"$HOME/.cargo/bin:$HOME/.local/bin:$PATH\" ;; esac' | sudo tee /etc/pengyos-dev-path.sh >/dev/null",
   "echo '. /etc/pengyos-dev-path.sh' | sudo tee /etc/profile.d/pengyos-dev.sh >/dev/null",
   "grep -q pengyos-dev-path /etc/zsh/zshenv 2>/dev/null || { sudo mkdir -p /etc/zsh && echo '. /etc/pengyos-dev-path.sh' | sudo tee -a /etc/zsh/zshenv >/dev/null; }",
-  "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh",
+  # uv into the box's own /usr/local/bin, not the shared ~/.local/bin: the host
+  # ships its own uv (26.11), and ~/.local/bin comes first on the host's PATH.
+  "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sudo env UV_UNMANAGED_INSTALL=/usr/local/bin sh",
 ]

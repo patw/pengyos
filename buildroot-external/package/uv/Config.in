@@ -1,0 +1,12 @@
+config BR2_PACKAGE_UV
+	bool "uv"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  uv is a Python package and project manager: venvs, pip
+	  install, lock files, tools (uvx) and Python versions, in one
+	  binary. On the host it manages each app's venv against the
+	  system python3; wheels that need compiling are built in the
+	  dev guest (see /usr/share/pengyos.txt).
+
+	  https://github.com/astral-sh/uv

@@ -46,6 +46,8 @@ menu "PengyOS (external tree)"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/starship/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/zsh-autosuggestions/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/zsh-syntax-highlighting/Config.in"
+	# uv: per-app Python venvs on the host (US-SRV-10). Not in Buildroot.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/uv/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-utils/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-user-dirs/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/oo7/Config.in"
