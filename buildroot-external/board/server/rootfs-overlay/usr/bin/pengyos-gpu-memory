@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""pengyos-gpu-memory - how much system RAM an AMD GPU may use (GTT), and set it.
+
+    pengyos-gpu-memory [status] [--json]
+    sudo pengyos-gpu-memory set SIZE [--force]     SIZE: 120G, 90%, or max
+    sudo pengyos-gpu-memory reset
+
+An AMD APU (Strix Halo's Radeon 8060S, any Ryzen iGPU) has no memory of its own.
+It gets a fixed carve-out the BIOS reserves (shown as VRAM), and it maps system
+RAM on demand (GTT). The kernel caps GTT at about half of RAM, so on a 128 GB
+Strix Halo a 70-120 GB model does not load. AMD's advice, followed here: keep the
+BIOS carve-out (the UMA frame buffer) at its minimum and raise the GTT limit.
+
+`set` writes /etc/modprobe.d/60-pengyos-gpu-memory.conf (on the data partition,
+kept across updates): `options ttm pages_limit=` (TTM's limit, in 4 KiB pages: the
+one AMD documents) and `options amdgpu gttsize=` (MiB, older but still read; the
+pair is what gufo's and halogen's Strix Halo hosts run). It takes effect at the
+next boot. The ceiling is RAM minus 4 GiB, so the system keeps memory of its own;
+`max` is that ceiling. Values written for one RAM size are wrong for another, so
+the file records the RAM it was computed for and `status` says when that no longer
+matches. `reset` removes the file (the kernel's default again).
+
+Exit: 0 ok; 2 usage; 3 no amdgpu GPU (set without --force); 4 SIZE out of range;
+5 not root.
+"""
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import os
+import re
+import sys
+import time
+
+CONF = "/etc/modprobe.d/60-pengyos-gpu-memory.conf"
+PAGE = 4096
+GIB = 1 << 30
+MIB = 1 << 20
+RESERVE = 4 * GIB  # the system keeps at least this much for itself
+MIN = 1 * GIB
+
+ROOT = ""  # --root, for tests
+
+
+def p(path: str) -> str:
+    return ROOT + path
+
+
+def read(path: str) -> str | None:
+    try:
+        with open(p(path)) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def mem_total() -> int:
+    for line in (read("/proc/meminfo") or "").splitlines():
+        if line.startswith("MemTotal:"):
+            return int(line.split()[1]) * 1024
+    raise SystemExit("pengyos-gpu-memory: cannot read MemTotal from /proc/meminfo")
+
+
+def gib(n: int | None) -> str:
+    return "?" if n is None else f"{n / GIB:.1f} GiB"
+
+
+def cards() -> list[dict]:
+    out = []
+    for d in sorted(glob.glob(p("/sys/class/drm/card*"))):
+        name = os.path.basename(d)
+        if not re.fullmatch(r"card\d+", name):
+            continue
+        drv = os.path.realpath(os.path.join(d, "device/driver"))
+        if os.path.basename(drv) != "amdgpu":
+            continue
+        rel = d[len(ROOT):]
+
+        def num(f):
+            v = read(f"{rel}/device/{f}")
+            return int(v) if v and v.isdigit() else None
+
+        pci = os.path.basename(os.path.realpath(os.path.join(d, "device")))
+        out.append({"card": name, "pci": pci, "vram": num("mem_info_vram_total"),
+                    "gtt": num("mem_info_gtt_total")})
+    return out
+
+
+def configured() -> dict | None:
+    txt = read(CONF)
+    if txt is None:
+        return None
+    m = re.search(r"pages_limit=(\d+)", txt)
+    r = re.search(r"computed for MemTotal=(\d+)", txt)
+    return {"bytes": int(m.group(1)) * PAGE if m else None,
+            "for_memtotal": int(r.group(1)) if r else None}
+
+
+def status(args) -> int:
+    total = mem_total()
+    live = read("/sys/module/ttm/parameters/pages_limit")
+    live_b = int(live) * PAGE if live and live.isdigit() else None
+    cs = cards()
+    conf = configured()
+    notes = []
+    if not cs:
+        notes.append("no amdgpu GPU found: this setting does nothing here")
+    if conf and conf["bytes"] and live_b is not None and conf["bytes"] != live_b:
+        notes.append("the configured limit is not live yet: reboot")
+    if conf and conf["for_memtotal"] and abs(conf["for_memtotal"] - total) > GIB:
+        notes.append(f"the configured limit was computed for {gib(conf['for_memtotal'])} of RAM, "
+                     f"this machine has {gib(total)}: run `sudo pengyos-gpu-memory set` again")
+    if any(c["vram"] and c["vram"] > 4 * GIB and c["vram"] < total for c in cs):
+        notes.append("if that VRAM is an APU's (Strix Halo, a Ryzen iGPU), it is the BIOS "
+                     "carve-out: set the UMA frame buffer to its minimum in the BIOS, not Auto")
+    doc = {"memtotal": total, "ceiling": total - RESERVE, "ttm_pages_limit_bytes": live_b,
+           "configured": conf, "config_file": CONF, "cards": cs, "notes": notes}
+    if args.json:
+        print(json.dumps(doc, indent=2))
+        return 0
+    print(f"RAM:          {gib(total)}")
+    print(f"GPU may map:  {gib(live_b)} (TTM limit, live)")
+    if conf:
+        print(f"configured:   {gib(conf['bytes'])} ({CONF})")
+    else:
+        print("configured:   kernel default (about half of RAM)")
+    for c in cs:
+        print(f"{c['card']}:        amdgpu {c['pci']}: VRAM {gib(c['vram'])}, GTT {gib(c['gtt'])}")
+    for n in notes:
+        print(f"note: {n}")
+    return 0
+
+
+def parse_size(s: str, total: int) -> int:
+    s = s.strip().lower()
+    if s == "max":
+        return total - RESERVE
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*%", s)
+    if m:
+        return int(total * float(m.group(1)) / 100)
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(g|gb|gib|m|mb|mib)?", s)
+    if not m:
+        raise ValueError(s)
+    unit = (m.group(2) or "g")[0]
+    return int(float(m.group(1)) * (GIB if unit == "g" else MIB))
+
+
+def need_root() -> None:
+    if not ROOT and os.geteuid() != 0:
+        print("pengyos-gpu-memory: this changes /etc/modprobe.d: run it with sudo", file=sys.stderr)
+        raise SystemExit(5)
+
+
+def write_conf(text: str) -> None:
+    path = p(CONF)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def cmd_set(args) -> int:
+    total = mem_total()
+    try:
+        want = parse_size(args.size, total)
+    except ValueError:
+        print(f"pengyos-gpu-memory: SIZE is like 120G, 90% or max, not {args.size!r}", file=sys.stderr)
+        return 2
+    ceiling = total - RESERVE
+    if want > ceiling or want < MIN:
+        print(f"pengyos-gpu-memory: {gib(want)} is out of range: between {gib(MIN)} and "
+              f"{gib(ceiling)} (RAM {gib(total)} minus {gib(RESERVE)} for the system)", file=sys.stderr)
+        return 4
+    if not cards() and not args.force:
+        print("pengyos-gpu-memory: no amdgpu GPU on this machine, so this would do nothing "
+              "(--force writes it anyway)", file=sys.stderr)
+        return 3
+    need_root()
+    pages = want // PAGE
+    mib = want // MIB
+    write_conf(
+        f"# Written by `pengyos-gpu-memory set {args.size}` on {time.strftime('%Y-%m-%d')}:\n"
+        f"# the GPU may map {gib(pages * PAGE)} of system RAM (GTT).\n"
+        f"# computed for MemTotal={total} ({gib(total)}); recompute after changing RAM.\n"
+        f"# Takes effect at the next boot. `sudo pengyos-gpu-memory reset` removes it.\n"
+        f"options ttm pages_limit={pages}\n"
+        f"options amdgpu gttsize={mib}\n")
+    print(f"GPU memory limit set to {gib(pages * PAGE)} of {gib(total)} RAM ({CONF}).")
+    print("Reboot for it to take effect; then `pengyos-gpu-memory status` shows it live.")
+    if want > 0.9 * total:
+        print(f"note: that leaves {gib(total - want)} for everything else when the GPU uses it all.")
+    return 0
+
+
+def cmd_reset(args) -> int:
+    need_root()
+    try:
+        os.remove(p(CONF))
+        print(f"removed {CONF}: the kernel's default (about half of RAM) at the next boot")
+    except FileNotFoundError:
+        print("nothing to reset: the kernel's default is in use")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    global ROOT
+    ap = argparse.ArgumentParser(prog="pengyos-gpu-memory",
+                                 description="How much system RAM an AMD GPU may use (GTT), and set it.")
+    ap.add_argument("--root", default="", help=argparse.SUPPRESS)
+    sub = ap.add_subparsers(dest="cmd")
+    s = sub.add_parser("status", help="RAM, the live and configured GPU limit, each amdgpu GPU")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("set", help="set the limit: 120G, 90%%, or max (RAM minus 4 GiB)")
+    s.add_argument("size")
+    s.add_argument("--force", action="store_true", help="write it even with no amdgpu GPU")
+    sub.add_parser("reset", help="remove the setting (the kernel's default)")
+    ap.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    args = ap.parse_args(argv)
+    ROOT = args.root.rstrip("/")
+    if args.cmd in (None, "status"):
+        return status(args)
+    return {"set": cmd_set, "reset": cmd_reset}[args.cmd](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

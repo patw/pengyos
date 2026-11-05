@@ -4,5 +4,6 @@
 cat >&2 <<'MSG'
 PengyOS: 'blockdev' is not installed in this image.
   instead, use: lsblk -o NAME,SIZE,TYPE  (or read /sys/block/<dev>/*)
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

@@ -486,6 +486,10 @@ BR2_PACKAGE_ZIP=y
 # overlay's podman.socket + drop-in make it usable without a privileged
 # daemon; the package supplies the `podman` binary.
 BR2_PACKAGE_PODMAN=y
+# crun: podman's OCI runtime (podman picks it over runc). Rootless
+# `--group-add keep-groups`, which GPU containers use to keep the user's render
+# and video groups, works only with crun (gufo's and halogen's run lines).
+BR2_PACKAGE_CRUN=y
 
 # --- The developer (US-DEV-*, US-DSK-3) ------------------------------------------
 # Every Server is a build box (and so is every Desktop, which stacks on this).

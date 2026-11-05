@@ -4,5 +4,6 @@
 cat >&2 <<'MSG'
 PengyOS: 'sfdisk' is not installed in this image.
   instead, use: parted or fdisk
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

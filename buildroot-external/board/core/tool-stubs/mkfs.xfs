@@ -4,5 +4,6 @@
 cat >&2 <<'MSG'
 PengyOS: 'mkfs.xfs' is not installed in this image.
   instead, use: mkfs.ext4 / mkfs.btrfs / mkfs.exfat / mkfs.vfat
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

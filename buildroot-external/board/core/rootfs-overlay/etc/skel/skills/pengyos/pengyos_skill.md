@@ -7,10 +7,16 @@ habits is the main way to get it wrong, so read this before touching system
 files, installing anything, or explaining what you are running.
 
 ```sh
+cat /usr/share/pengyos.txt   # this edition's own one page: start here
 cat /etc/os-release          # edition, IMAGE_ID, IMAGE_VERSION, BUILD_ID
 cat /proc/cmdline            # which root slot booted, and that this is PengyOS
 ls /etc/pengyos/             # this machine's own config
 ```
+
+`/usr/share/pengyos.txt` is written when the image is built, from what the image
+holds: the commands this edition ships, what it leaves out on purpose (and what to
+use instead), and the package list (`/usr/share/pengyos/packages.txt`). Where this
+skill and that page disagree about this machine, the page is right.
 
 ## What it is
 
@@ -200,6 +206,13 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
   pengyos-battery-limit` says which). The console screen switches off after 5
   idle minutes (`pengyos-console-blank.service`); a key brings it back. None of
   this runs on the Desktop.
+- **GPU compute runs in containers; the toolkits are not on the host.** NVIDIA
+  (Server/Desktop NVIDIA): `podman run --device nvidia.com/gpu=all IMAGE` (CDI).
+  AMD (ROCm: gufo, halogen, llama.cpp-rocm, PyTorch): `podman run --device /dev/kfd
+  --device /dev/dri --group-add keep-groups --ulimit memlock=-1:-1 IMAGE`; ROCm is in
+  the image. An APU (Strix Halo, Ryzen iGPU) only gets about half of RAM for the GPU
+  until `sudo pengyos-gpu-memory set max` and a reboot; keep the BIOS UMA frame
+  buffer at its minimum. Don't suggest `amd_iommu=off`: it removes the NPU.
 - **sshd is key-only** (password logins over SSH are off). A user with no key in
   `~/.ssh/authorized_keys` can log in at the console and not over SSH.
 - **The Desktop's COSMIC pieces are built on the build host**, not in the image;

@@ -9,6 +9,9 @@ instruction file says what to run and what the output means.
 > read that skill and follow it instead of improvising: it already knows the
 > paths, the flags and the gotchas of the thing you are about to touch.
 
+On a PengyOS machine, `/usr/share/pengyos.txt` is the short version of
+`pengyos/`: this edition's commands, absences and packages, written at build time.
+
 skill structure: `skillname/skillname_skill.md`
 
 | Dir | What | Script? |

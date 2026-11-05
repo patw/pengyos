@@ -29,5 +29,6 @@ PengyOS: 'crontab' is not installed; scheduling is done with systemd timers.
 
   See it run: systemctl --user list-timers; journalctl --user -u backup
   A distrobox guest is no workaround: it runs no init, so cron in it never fires.
+How this system works: /usr/share/pengyos.txt
 MSG
 exit 127

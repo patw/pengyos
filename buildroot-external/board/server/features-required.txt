@@ -67,3 +67,11 @@ exists    usr/lib/locale/locale-archive                    # BR2_GENERATE_LOCALE
 
 # --- Observability (Pengy's Server review, R3) -----------------------------------
 exists    usr/bin/pengyos-services                 # board/core overlay; what runs, autostarts, listens, is reachable
+
+# --- AMD GPU compute in containers (Strix Halo, 2026-11-04) ----------------------
+# ROCm lives in the container; the host gives it /dev/kfd (kernel: server
+# linux.fragment HSA_AMD), crun and no locked-memory limit.
+exec-any  crun                                     # rootless --group-add keep-groups — BR2_PACKAGE_CRUN
+exists    usr/lib/systemd/system.conf.d/60-pengyos-memlock.conf  # --ulimit memlock=-1 in rootless containers
+exists    usr/lib/systemd/user.conf.d/60-pengyos-memlock.conf    # ...and in a user's Quadlets
+exists    usr/bin/pengyos-gpu-memory               # board/server overlay; the APU's GTT limit (unified memory)
