@@ -129,7 +129,11 @@ Errors exit 1 with one `pengyos-update: <message>` line; usage errors exit 2.
     the old slot by hand from the GRUB menu during a trial boots it with the
     marker too. That is harmless, because its `confirm --boot` writes the
     confirmation at once and an emergency there restarts at most once (the
-    next boot has no `pengyos_try`).
+    next boot has no `pengyos_try`). Going back to a release whose updater
+    predates the marker (`apply --version` to an older one) leaves
+    `${pengyos_trial}` on its kernel lines, because the old parser keeps it.
+    Nothing sets it outside the try branch, so it expands to nothing, and the
+    next updater that knows the marker drops it.
 15. Kernel panics reboot after 10 s (`CONFIG_PANIC_TIMEOUT=10`, Server layer).
 16. systemd pets a hardware watchdog (`RuntimeWatchdogSec=60s`, Server layer,
     `iTCO_wdt`/`sp5100_tco` when the board has one; systemd 258 opens the
@@ -204,6 +208,11 @@ Errors exit 1 with one `pengyos-update: <message>` line; usage errors exit 2.
   the second `auto-run` reported `nothing-newer`. The test found one bug:
   `staged` survived a failure, so the login message also claimed "restart to
   start it". `mark_failed` now clears it.
+  On real hardware the same day (the ThinkPad test Server, iTCO watchdog, nightly
+  kernel, so no panic case): a failed health check came back after ~4 min, and
+  emergency mode after 29 s. Both were recorded and not retried. A good release
+  was installed by the timer itself at its `--at` time, then kept. Afterwards
+  `apply --version 26.11.1` from the real feed put the machine back.
 
 ## Out of scope
 - Mail, BotTalk or other notification: the operations layer can read
