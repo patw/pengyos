@@ -38,6 +38,9 @@ PKGS=(
   xvfb ffmpeg qemu-system-gui
   # Repo tooling: tool test suites, the gate
   python3-pytest
+  # pengyos-firewall's tests check the shipped ruleset, plus an example router
+  # bundle, with the real parser (`unshare -rn nft -c -f`), no root needed
+  nftables
   # pengyos-release (signing the download manifests), the nightly's decision page,
   # and the Server tools that read YAML. behoserver had these by hand; a fresh
   # ubuntu:26.04 box has none of them (behopc, 2026-10-26).

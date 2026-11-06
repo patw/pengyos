@@ -15,10 +15,16 @@ What is checked, and why it can be checked without root or an image:
 * the root guard is asserted on the real path (no `--root`): `allow` refuses
   unprivileged, `status` does not.
 
+* the forward chain and the table include the hand-written `forward/` and
+  `table/` subdirectories, which the input chain's `*.nft` never matches;
+* the shipped ruleset parses with the real `nft -c` (in a user + network
+  namespace, so no root). Skipped only where nft or unshare is
+  missing (scripts/provision-build-host.sh installs nftables).
+
 That the rules really load is proven by booting images (docs/qemu-testing.md):
 the Core and Server smoke matrices check that nftables.service finished.
 
-No build, no network, no root, no nftables.
+No build, no network, no root.
 """
 
 from __future__ import annotations
@@ -137,6 +143,69 @@ def test_rule_dir_ships_with_a_readme_the_include_ignores():
     d = CORE / RULE_DIR_REL
     assert (d / "README").is_file()
     assert not list(d.glob("*.nft"))
+
+
+def test_forward_and_table_includes_sit_in_the_right_scope():
+    text = RULESET.read_text()
+    forward = text.split("chain forward {", 1)[1].split("\n    }\n", 1)[0]
+    assert 'include "/etc/pengyos/nftables.d/forward/*.nft"' in forward
+    # The forward policy stays drop; the include only adds accepts.
+    assert "type filter hook forward priority 0; policy drop;" in forward
+    # The table include is at table level: after the last chain, not in one.
+    tail = text.rsplit("chain output {", 1)[1]
+    after_output = tail.split("\n    }\n", 1)[1]
+    assert 'include "/etc/pengyos/nftables.d/table/*.nft"' in after_output
+    # Each subdirectory is included exactly once, and the input chain's glob
+    # does not descend into them (nft globs never recurse).
+    assert text.count("nftables.d/forward/") == 1
+    assert text.count("nftables.d/table/") == 1
+
+
+@pytest.mark.parametrize("sub", ["forward", "table"])
+def test_hand_written_subdirs_ship_with_a_readme_only(sub):
+    d = CORE / RULE_DIR_REL / sub
+    assert (d / "README").is_file()
+    assert not list(d.glob("*.nft"))
+
+
+# --- the real parser ---------------------------------------------------------
+
+
+def _nft_check(tmp_path: Path, bundle: Path | None) -> subprocess.CompletedProcess:
+    """Run the real `nft -c` on the shipped ruleset, its /etc and /usr/lib
+    rule places pointed into tmp_path, optionally with a bundle's files."""
+    # nft lives in /usr/sbin, which a non-root PATH (pengyos-box's) may lack.
+    search = os.pathsep.join([os.environ.get("PATH", ""), "/usr/sbin", "/sbin"])
+    nft = shutil.which("nft", path=search)
+    unshare = shutil.which("unshare", path=search)
+    if not nft or not unshare:
+        pytest.skip("needs nft and unshare (scripts/provision-build-host.sh installs nftables)")
+    etc = tmp_path / "etc" / "pengyos" / "nftables.d"
+    for sub in ("", "forward", "table"):
+        (etc / sub).mkdir(parents=True, exist_ok=True)
+    image = tmp_path / "usr" / "lib" / "pengyos" / "nftables.d"
+    image.mkdir(parents=True)
+    if bundle is not None:
+        src = bundle / "etc" / "pengyos" / "nftables.d"
+        for f in src.rglob("*.nft"):
+            dest = etc / f.relative_to(src)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(f, dest)
+    text = RULESET.read_text()
+    text = text.replace('"/etc/pengyos/nftables.d/', f'"{etc}/')
+    text = text.replace('"/usr/lib/pengyos/nftables.d/', f'"{image}/')
+    assert str(tmp_path) in text
+    conf = tmp_path / "nftables.conf"
+    conf.write_text(text)
+    return subprocess.run(
+        [unshare, "-rn", nft, "-c", "-f", str(conf)],
+        capture_output=True, text=True, timeout=60,
+    )
+
+
+def test_shipped_ruleset_parses_with_real_nft(tmp_path):
+    r = _nft_check(tmp_path, None)
+    assert r.returncode == 0, r.stderr
 
 
 # --- allow -------------------------------------------------------------------
@@ -287,6 +356,32 @@ def test_status_lists_image_rules_and_opened_ports(sandbox):
         {"file": "allow-tcp-8086-from-10.0.23.0_24.nft", "opens": "8086/tcp from 10.0.23.0/24"},
         {"file": "caddy.nft", "opens": "(by hand) caddy.nft"},
     ]
+
+
+def test_status_lists_hand_written_forward_and_table_files(sandbox):
+    rd = sandbox / RULE_DIR_REL
+    (rd / "forward").mkdir(parents=True)
+    (rd / "table").mkdir()
+    (rd / "forward" / "router.nft").write_text('iifname "lan0" oifname "wan0" accept\n')
+    (rd / "table" / "router.nft").write_text("# nat\n")
+    (rd / "forward" / "README").write_text("not a rule\n")
+
+    r = sb(sandbox, "status")
+    assert r.returncode == 0, r.stderr
+    assert "forwarding rules, by hand (/etc/pengyos/nftables.d/forward):\n    router.nft" in r.stdout
+    assert "chains and sets, by hand: NAT etc. (/etc/pengyos/nftables.d/table):\n    router.nft" in r.stdout
+    # They are not input rules, so they are not listed as opened ports.
+    assert "opened on this machine: nothing" in r.stdout
+
+    j = json.loads(sb(sandbox, "status", "--json").stdout)
+    assert j["forward_files"] == ["router.nft"]
+    assert j["table_files"] == ["router.nft"]
+    assert j["opened"] == []
+
+
+def test_status_json_has_empty_forward_and_table_lists_by_default(sandbox):
+    j = json.loads(sb(sandbox, "status", "--json").stdout)
+    assert j["forward_files"] == [] and j["table_files"] == []
 
 
 def test_status_says_so_when_the_firewall_is_not_running(sandbox):

@@ -11,6 +11,9 @@
 # 1024 (/usr/lib/pengyos/nftables.d/input-desktop.nft). Core and Server open
 # nothing more until someone says so, and this is how they say it.
 #
+# A router's forward rules and NAT are files written by hand in
+# /etc/pengyos/nftables.d/forward/ and table/; `status` lists them.
+#
 # `allow` writes one rule file, /etc/pengyos/nftables.d/allow-*.nft, which
 # /etc/nftables.conf includes into its input chain. Then it checks the whole
 # ruleset (`nft -c`) and reloads the firewall. A rule that does not check is
@@ -261,9 +264,29 @@ do_status() {
 "
     done
 
+    # Hand-written forward rules and table-level chains/sets (a router's NAT),
+    # in the two subdirectories nftables.conf includes elsewhere. Listed by
+    # file name, so a NAT rule is never invisible here.
+    forward_json=""
+    forward_human=""
+    for f in "$RULE_DIR"/forward/*.nft; do
+        [ -e "$f" ] || continue
+        forward_json="$forward_json\"${f##*/}\","
+        forward_human="$forward_human    ${f##*/}
+"
+    done
+    table_json=""
+    table_human=""
+    for f in "$RULE_DIR"/table/*.nft; do
+        [ -e "$f" ] || continue
+        table_json="$table_json\"${f##*/}\","
+        table_human="$table_human    ${f##*/}
+"
+    done
+
     if [ "$JSON" = 1 ]; then
-        printf '{"tool":"%s","unit":"%s","active":"%s","always_open":["22/tcp","5353/udp mDNS"],"image_rules":[%s],"opened":[%s]}\n' \
-            "$PROG" "$UNIT" "$active" "${image_json%,}" "${open_json%,}"
+        printf '{"tool":"%s","unit":"%s","active":"%s","always_open":["22/tcp","5353/udp mDNS"],"image_rules":[%s],"opened":[%s],"forward_files":[%s],"table_files":[%s]}\n' \
+            "$PROG" "$UNIT" "$active" "${image_json%,}" "${open_json%,}" "${forward_json%,}" "${table_json%,}"
         return 0
     fi
 
@@ -280,6 +303,14 @@ do_status() {
     else
         echo "  opened on this machine: nothing"
         echo "  sudo $PROG allow PORT[/udp] [--from CIDR]"
+    fi
+    if [ -n "$forward_human" ]; then
+        echo "  forwarding rules, by hand (/etc/pengyos/nftables.d/forward):"
+        printf '%s' "$forward_human"
+    fi
+    if [ -n "$table_human" ]; then
+        echo "  chains and sets, by hand: NAT etc. (/etc/pengyos/nftables.d/table):"
+        printf '%s' "$table_human"
     fi
     return 0
 }

@@ -1,0 +1,21 @@
+This machine's forwarding rules (PengyOS). Empty unless this box routes.
+
+/etc/nftables.conf includes every *.nft file here at the end of the forward
+chain of `table inet pengyos`, whose policy is drop. Each file holds
+forward-chain rule statements, written by hand, e.g. for a router:
+
+    iifname { "lan0", "wg0" } oifname { "wan0", "lan0" } accept
+    iifname "wan0" oifname "lan0" meta nfproto ipv6 drop
+
+The chain already accepts established/related traffic and anything a DNAT rule
+redirected (`ct status dnat accept`), so port forwards need nothing here; the
+DNAT rule in ../table/ is what decides what is exposed.
+
+Check before reloading, then reload (never `nft flush ruleset`: that also
+deletes rootful podman's tables):
+
+    sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables
+
+Files under /etc survive OS updates, and adding them never shadows the image's
+/etc/nftables.conf. An example router bundle is in
+/usr/share/pengyos/examples/router/ on the Server.

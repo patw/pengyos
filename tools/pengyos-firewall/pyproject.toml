@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-firewall"
-version = "0.1.0"
+version = "0.2.0"
 description = "PengyOS tool (shipped in the Core overlay) that opens and closes this machine's own ports on top of the default-deny nftables firewall."
 readme = "README.md"
 requires-python = ">=3.9"
