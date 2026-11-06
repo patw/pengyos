@@ -92,7 +92,7 @@ See `docs/state-layout.md`. `pengyos-release update-publish` writes `update/<IMA
 1. writes the rootfs into the other slot;
 2. runs the **new image's** `/usr/lib/pengyos/update.d/*` steps;
 3. sets `pengyos_try` so the next boot tries the new slot once;
-4. `pengyos-update-confirm.service` keeps the new slot only if it reaches multi-user.
+4. `pengyos-update-confirm.service` (`confirm --boot`) keeps the new slot only if it reaches multi-user and passes the health checks (`update-health.d`); a trial that fails them, panics, hangs or hits emergency mode restarts into the old slot and is remembered as failed. `pengyos-update auto on` (opt-in) installs in a nightly window. See `tools/pengyos-update/spec.md`.
 
 Updates never touch `data`. Update feeds match on `IMAGE_ID`. The UKI / systemd-boot / systemd-sysupdate design in `docs/install-update-architecture.md` is **parked**. Its tools (`pengyos-sysupdate`, `pengyos-bootchain`, `pengyos-uki`, `pengyos-bootcount`, and on 2026-10-27 `pengyos-secureboot-{enroll,keys}`, `pengyos-measured-boot`, `pengyos-btrfs-layout`, `pengyos-mutations`) were retired; anything retired before the 2026-10-07 squash lives only on the `main-prepublic` branch; `pengyos-install plan/install` are still in the tree but unused by any image.
 

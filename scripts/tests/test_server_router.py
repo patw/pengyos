@@ -76,6 +76,7 @@ def test_example_router_bundle_is_complete_and_names_no_hardware():
         "etc/pengyos/nftables.d/router-input.nft",
         "etc/pengyos/nftables.d/forward/router.nft",
         "etc/pengyos/nftables.d/table/router.nft",
+        "etc/pengyos/update-health.d/50-router",
     }
     got = {str(p.relative_to(EXAMPLE)) for p in EXAMPLE.rglob("*") if p.is_file()}
     assert got == want

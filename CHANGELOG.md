@@ -17,6 +17,30 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — updates can run unattended, and a bad one always finds its way back (2026-11-06)
+- **Health-gated confirm.** A trial boot of a new slot is kept only if
+  `/usr/lib/pengyos/update-health.d/` and the machine's
+  `/etc/pengyos/update-health.d/` pass (the image checks that `nftables`,
+  `sshd` and `systemd-networkd` are active where enabled); otherwise the
+  machine restarts into the old slot. Until now a trial whose firewall failed
+  to load was kept as soon as it reached multi-user. The router example
+  bundle ships a `50-router` check.
+- **A trial boot always ends.** GRUB marks trial boots (`pengyos.trial=1`).
+  A trial that drops to emergency/rescue mode, or is not confirmed within 15
+  minutes (`pengyos-update-deadline.service`), restarts, and so does a panic
+  (`CONFIG_PANIC_TIMEOUT=10`, Server layer) or a wedged PID 1 (systemd now pets
+  the iTCO/sp5100 watchdog the Server kernel already had:
+  `RuntimeWatchdogSec=60s`). Before, all of these waited for someone at the
+  power button.
+- **Failed versions are remembered** and not installed again unless asked for
+  by name (`apply --version`). The login message says which one failed and why.
+- **Unattended updates, opt-in**: `sudo pengyos-update auto on [--at 04:00]
+  [--soak 3]`. They install the newest release on the machine's channel that
+  has not failed here and was first seen at least the soak period ago, in a
+  fixed daily window, and restart only after a good install.
+  `pengyos-update-auto.timer` is preset-disabled. pengyos-update 0.3.0 (now
+  with a `spec.md`).
+
 ### Added — a Server can be a router without editing a file the image owns (2026-11-06)
 - **Two include points in the Core firewall** (`/etc/nftables.conf`): the
   forward chain includes `/etc/pengyos/nftables.d/forward/*.nft`, and

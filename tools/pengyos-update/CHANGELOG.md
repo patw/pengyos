@@ -1,5 +1,32 @@
 # Changelog — pengyos-update
 
+## [0.3.0] — 2026-11-06
+
+### Added
+- `spec.md`, the tool's contract (it had none).
+- Health-gated confirm: `confirm --boot` (the boot unit) keeps a trial boot
+  only if `/usr/lib/pengyos/update-health.d/` + `/etc/pengyos/update-health.d/`
+  pass (retried for `health_timeout`, default 180 s); otherwise it records the
+  version as failed and restarts into the old slot. A committed system is
+  never checked or restarted. Until now a trial whose firewall failed to load
+  was kept as soon as it reached multi-user.
+- Failed versions are remembered (`failed` in `state.json`): from a failed check, or found
+  by the old slot's boot when a recorded trial (`trial`, written by `apply`)
+  was booted and never confirmed. `apply` refuses one unless named with
+  `--version`; `check` and the login message say so.
+- `auto` / `auto on [--at] [--soak]` / `auto off` / `auto-run`: opt-in
+  unattended updates in a daily window, newest release that is not failed and
+  has soaked (first seen N days ago, `seen` in `state.json`), restart only
+  after a good install, result in `state.json` (`auto`), `status` and the
+  login message.
+- `status` shows the unattended setting, its last run and failed versions
+  (JSON: `auto`, `failed`, `trial`).
+
+### Changed
+- `check --save` records first sightings of releases for the soak window, and
+  writes the login message from the state file (a failure outranks
+  "available").
+- `rollback` drops a recorded trial.
 
 ## [0.2.0] — 2026-10-31
 

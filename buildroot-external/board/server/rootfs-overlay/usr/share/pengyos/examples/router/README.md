@@ -24,6 +24,7 @@ What goes where, and why:
 | `pengyos/nftables.d/router-input.nft` | the router's own services (DNS, DHCP, WireGuard) |
 | `pengyos/nftables.d/forward/router.nft` | LAN/VPN out; no new IPv6 connections in |
 | `pengyos/nftables.d/table/router.nft` | NAT, port forwards, the WAN ssh guard |
+| `pengyos/update-health.d/50-router` | an update is kept only if the new system still routes (dnsmasq, both ports addressed, the internet answers); otherwise it restarts into the previous one |
 
 The image's `/etc/nftables.conf` includes the three `nftables.d` places, so
 none of this edits a file the image owns, and OS updates keep updating the

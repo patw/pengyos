@@ -1,0 +1,17 @@
+# PengyOS — unattended updates: install and restart in a nightly window.
+#
+# OFF unless an administrator turns it on (preset-disabled):
+#   sudo pengyos-update auto on [--at HH:MM] [--soak DAYS]
+# which writes the time to pengyos-update-auto.timer.d/50-pengyos-time.conf
+# under /etc/systemd/system and enables this timer. No random delay, and not
+# Persistent: a machine that was off at the time does not restart when it
+# comes back, it waits for the next window.
+[Unit]
+Description=Unattended PengyOS update window
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

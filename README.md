@@ -46,8 +46,10 @@ version:
 - Desktop is a 1.4 GB download that writes 4.8 GB to the stick.
 
 After installing, the machine checks for updates daily. An update is written to a
-second root slot and booted once on trial; if it doesn't reach multi-user, the next
-boot returns to the old slot by itself.
+second root slot and booted once on trial; if it doesn't come up and pass its health
+checks (firewall, ssh, network, plus any the machine adds), the machine returns to the
+old slot by itself, even after a panic or a hang, and doesn't retry that version.
+Unattended updates in a nightly window are opt-in: `sudo pengyos-update auto on`.
 
 ## What's different
 

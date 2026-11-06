@@ -1,17 +1,22 @@
 # PengyOS — keep the system slot that just started (pengyos-update).
 #
 # After `pengyos-update apply`, GRUB boots the new image ONCE (grubenv
-# pengyos_try). Reaching multi-user here means it came up, so make its slot the
-# default (pengyos_slot). If it never gets this far, the next boot is the old
-# slot again. Does nothing when the running slot already is the default.
+# pengyos_try, kernel argument pengyos.trial=1). Once it reaches multi-user,
+# `confirm --boot` runs its health checks (/usr/lib/pengyos/update-health.d and
+# /etc/pengyos/update-health.d; retried for health_timeout seconds, default
+# 180): if they pass, its slot becomes the default (pengyos_slot); if not, the
+# version is recorded as failed and the machine restarts into the old slot,
+# still the default. On a boot of the default slot it never checks or
+# restarts anything; it records a trial that did not come back as failed.
 [Unit]
-Description=Keep this PengyOS system slot (it started cleanly)
+Description=Keep this PengyOS system slot (it started cleanly and is healthy)
 After=multi-user.target
 ConditionKernelCommandLine=pengyos.data
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/pengyos-update confirm
+ExecStart=/usr/bin/pengyos-update confirm --boot
+TimeoutStartSec=15min
 
 [Install]
 WantedBy=multi-user.target

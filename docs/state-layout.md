@@ -231,9 +231,14 @@ On the machine, `sudo pengyos-update apply`:
    image; e.g. `50-grub-efi` copies the image's GRUB + font to the ESP, keeping
    `*.prev`; a failing step stops the update), rewrites `grub.cfg` with both
    slots (keeping the installed kernel arguments), and sets `pengyos_try=X`;
-5. on the next boot GRUB clears `pengyos_try` and boots slot X **once**. If it
-   reaches multi-user, `pengyos-update-confirm.service` sets `pengyos_slot=X`
-   (the new default). If it doesn't, the next boot is the old slot again.
+5. on the next boot GRUB clears `pengyos_try` and boots slot X **once**, with
+   `pengyos.trial=1` on the kernel line. If it reaches multi-user and its health
+   checks pass (`/usr/lib/pengyos/update-health.d/`, `/etc/pengyos/update-health.d/`),
+   `pengyos-update-confirm.service` (`confirm --boot`) sets `pengyos_slot=X`
+   (the new default). If a check fails, it restarts; a panic, a wedged PID 1
+   (watchdog), emergency mode or 15 minutes without confirming restart it too.
+   That restart is the old slot again, which records X as failed in
+   `/var/lib/pengyos-update/state.json` (`failed`), so it is not retried by itself.
 
 `pengyos-update rollback` makes the other slot the default again;
 `pengyos-update status` shows both slots. `data` is never touched by an update,

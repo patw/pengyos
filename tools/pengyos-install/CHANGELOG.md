@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `render_grub_cfg` ends each kernel line with `${pengyos_trial}`, which the
+  one-shot `pengyos_try` branch sets to `pengyos.trial=1`: pengyos-update's
+  trial-only units (boot deadline, emergency-mode restart) condition on it.
+  Kernel arguments read back from a grub.cfg drop the variable, as they drop
+  `${pengyos_serial}`.
 - The user the installer creates is also in `systemd-journal`, so `journalctl`
   shows the system journal without sudo (the user is in `wheel` already).
   Existing owners get it from merge-accounts at the first boot of the image.

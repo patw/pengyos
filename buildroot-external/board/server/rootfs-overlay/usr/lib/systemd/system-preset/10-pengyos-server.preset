@@ -27,3 +27,8 @@ disable samba-bgqd.service
 # machine on it. dnsmasq.service is enabled by hand on the one box that is the
 # router; `enable *` would otherwise start it on every Server and Desktop.
 disable dnsmasq.service
+
+# Unattended updates are opt-in (`pengyos-update auto on` enables the timer).
+# Installing stays the administrator's choice; `enable *` would otherwise turn
+# on nightly installs and restarts on every machine.
+disable pengyos-update-auto.timer
