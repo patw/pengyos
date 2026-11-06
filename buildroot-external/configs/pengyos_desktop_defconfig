@@ -542,6 +542,13 @@ BR2_PACKAGE_NVME=y
 # - WireGuard (US-SRV-5): the kernel module was there, but not `wg`, so a tunnel's
 #   keys could not be made (`wg genkey`) or a live one inspected (`wg show`).
 BR2_PACKAGE_WIREGUARD_TOOLS=y
+# - DHCP + DNS for a LAN (2026-11-06): a Server can be the house's router
+#   (USE-CASES "firewall/router"). dnsmasq was Desktop-only, for NM's hotspot;
+#   it moved here and the Desktop inherits it. Buildroot installs only a
+#   sysvinit script, which systemd never runs. The image's own
+#   /usr/lib/systemd/system/dnsmasq.service ships disabled, so a box serves
+#   DHCP only after `systemctl enable --now dnsmasq` and an /etc/dnsmasq.conf.
+BR2_PACKAGE_DNSMASQ=y
 # - ethtool: link speed, offloads, and Wake-on-LAN for a box that sleeps.
 BR2_PACKAGE_ETHTOOL=y
 # - Firmware for the xe GPU driver (server/linux.fragment): US-SRV-9 transcoding
@@ -973,12 +980,10 @@ BR2_PACKAGE_WPA_SUPPLICANT_AUTOSCAN=y
 BR2_PACKAGE_NETWORK_MANAGER=y
 BR2_PACKAGE_NETWORK_MANAGER_CLI=y
 # Wi-Fi hotspot ("share this connection"): NetworkManager's shared mode starts
-# /usr/sbin/dnsmasq for the DNS + DHCP lease pool. external.mk names that path so
-# the build is host-independent, but the image carried no dnsmasq, so a hotspot
-# could never come up. Ship it. Buildroot's dnsmasq only installs an init script
-# under sysvinit, and PengyOS is systemd, so this adds the binary and nothing
-# that starts by itself: NM spawns it per shared connection.
-BR2_PACKAGE_DNSMASQ=y
+# /usr/sbin/dnsmasq for the DNS + DHCP lease pool (external.mk names that path).
+# dnsmasq itself is in the Server layer (2026-11-06), and the Desktop inherits
+# it, so the hotspot keeps working. NM spawns it per shared connection with
+# --conf-file=/dev/null, so a machine's /etc/dnsmasq.conf never reaches it.
 # ...but Buildroot builds systemd-networkd by default, and removing the .network
 # stub left networkd itself enabled: systemd-networkd-wait-online then waited
 # out its 2-minute timeout on every boot and failed. NM is the network service,

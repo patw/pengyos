@@ -1,0 +1,43 @@
+# PengyOS Server: dnsmasq as this machine's DHCP + DNS server (a router, or a
+# LAN's DNS). It ships DISABLED (10-pengyos-server.preset) and starts nothing
+# until a person writes /etc/dnsmasq.conf and runs
+#
+#     sudo systemctl enable --now dnsmasq
+#
+# Buildroot installs only a sysvinit script for dnsmasq, which systemd never
+# runs, so this unit is the only way it starts. NetworkManager's hotspot on the
+# Desktop does not use it: NM runs its own dnsmasq per shared connection with
+# --conf-file=/dev/null.
+#
+# On a box running systemd-resolved (every edition), use `bind-dynamic` (or
+# `bind-interfaces`) with `interface=` lines in /etc/dnsmasq.conf. Without it
+# dnsmasq binds 0.0.0.0:53 and collides with resolved's stub on 127.0.0.53.
+# The lease file is dnsmasq's default, /var/lib/misc/dnsmasq.leases
+# (tmpfiles.d/pengyos-dnsmasq.conf makes the directory).
+[Unit]
+Description=dnsmasq DHCP and DNS server
+Documentation=man:dnsmasq(8)
+ConditionPathExists=/etc/dnsmasq.conf
+After=network.target
+Wants=nss-lookup.target
+Before=nss-lookup.target
+
+[Service]
+Type=simple
+# Check the configuration first, so a typo is one clear line in the journal.
+ExecStartPre=/usr/sbin/dnsmasq --test -C /etc/dnsmasq.conf
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground -C /etc/dnsmasq.conf --pid-file=
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2s
+# Not Pengy: a network daemon, sandboxed as usual. dnsmasq drops to `nobody`
+# itself after binding; it writes only /var/lib/misc and /run.
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target
