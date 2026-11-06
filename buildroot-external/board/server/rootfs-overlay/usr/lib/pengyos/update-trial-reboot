@@ -1,0 +1,40 @@
+#!/bin/sh
+# PengyOS — end a trial boot of a new system that is not going to make it.
+#
+#   update-trial-reboot deadline SECONDS   (pengyos-update-deadline.service)
+#   update-trial-reboot emergency UNIT     (emergency/rescue.service drop-ins)
+#
+# After `pengyos-update apply`, GRUB boots the new slot ONCE and gives it
+# `pengyos.trial=1` on the kernel command line; the old slot stays the default.
+# So any restart of a trial that has not confirmed itself goes back to the old
+# system, and the next boot there records the version as failed. This makes
+# sure that restart happens: when the trial is not confirmed SECONDS after it
+# started, or when it drops to emergency/rescue mode (which would otherwise
+# wait at a console forever on a headless box). Outside a trial boot it does
+# nothing at all.
+grep -qw 'pengyos.trial=1' /proc/cmdline 2>/dev/null || exit 0
+
+say() {
+    echo "pengyos-update: $*" >&2
+    echo "pengyos-update: $*" >/dev/kmsg 2>/dev/null || true
+}
+
+case "$1" in
+deadline)
+    sleep "${2:-900}"
+    [ -e /run/pengyos-update/confirmed ] && exit 0
+    say "this trial boot was not confirmed after ${2:-900} s; restarting into the previous system"
+    ;;
+emergency)
+    say "this trial boot entered ${2:-emergency mode}; restarting into the previous system"
+    ;;
+*)
+    echo "usage: $0 deadline SECONDS | emergency UNIT" >&2
+    exit 2
+    ;;
+esac
+
+systemctl --no-block reboot
+# If an orderly restart cannot get through (a stop job that hangs), force it.
+sleep 300
+systemctl --force --force reboot

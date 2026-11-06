@@ -1,0 +1,29 @@
+Health checks for a new PengyOS system (this machine's own)
+===========================================================
+
+After an update, the new system boots once on trial. `pengyos-update confirm
+--boot` keeps it only if every health check passes; otherwise it records the
+version as failed and restarts into the previous system, which is still the
+default. A committed system is never checked or restarted by this.
+
+The checks are the executables here and in /usr/lib/pengyos/update-health.d/
+(the image's), run in file-name order. A file here replaces the image's file
+of the same name; a symlink to /dev/null switches one off:
+
+    sudo ln -s /dev/null /etc/pengyos/update-health.d/10-critical-units
+
+A check passes by exiting 0. Anything else (or no answer within 60 s) is a
+failure, and its last line of output is the reason shown in
+`pengyos-update status` and the login message. Failing checks are retried every
+10 s for `health_timeout` seconds (/etc/pengyos/update.conf, default 180), so a
+check may wait for DHCP or a tunnel.
+
+Example, a router (/etc/pengyos/update-health.d/50-router, chmod 755):
+
+    #!/bin/sh
+    systemctl is-active --quiet dnsmasq.service || { echo "dnsmasq is not running"; exit 1; }
+    ip -4 addr show dev wan0 scope global | grep -q inet || { echo "wan0 has no address"; exit 1; }
+    ping -c1 -W3 9.9.9.9 >/dev/null || { echo "no route to the internet"; exit 1; }
+
+Keep checks to what the new system must do and the old one demonstrably did:
+a check that fails because a cable is out undoes every update.

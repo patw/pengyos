@@ -1,0 +1,21 @@
+#!/bin/sh
+# PengyOS — health check for a trial boot (pengyos-update confirm --boot).
+#
+# A new system is kept only if what keeps the machine safe and reachable came
+# up: the firewall (with nftables.service failed there is no ruleset at all),
+# ssh (a headless box nobody can reach cannot be fixed) and the network. Each
+# is checked only if it is enabled on this machine. Exit 0 = healthy; the last
+# line of output is the reason otherwise.
+#
+# Machine-specific checks go in /etc/pengyos/update-health.d/ (see its README);
+# a file there with this name replaces this one.
+rc=0
+for unit in nftables.service sshd.service systemd-networkd.service; do
+    systemctl is-enabled --quiet "$unit" 2>/dev/null || continue
+    state=$(systemctl is-active "$unit" 2>/dev/null)
+    if [ "$state" != active ]; then
+        echo "$unit is enabled but $state"
+        rc=1
+    fi
+done
+exit $rc

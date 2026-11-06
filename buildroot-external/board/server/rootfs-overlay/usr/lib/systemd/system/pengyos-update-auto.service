@@ -1,0 +1,18 @@
+# PengyOS — the unattended update run (pengyos-update-auto.timer).
+#
+# Installs the newest release on this machine's channel that is newer, has not
+# failed here and was first seen `auto_soak_days` ago, then restarts into it
+# (only if the install worked). The trial boot keeps it only if its health
+# checks pass. Result: `pengyos-update auto`, /var/lib/pengyos-update/state.json
+# and the login message.
+[Unit]
+Description=Unattended PengyOS update
+Wants=network-online.target
+After=network-online.target pengyos-update-confirm.service
+ConditionKernelCommandLine=pengyos.data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pengyos-update auto-run
+Nice=10
+IOSchedulingClass=idle

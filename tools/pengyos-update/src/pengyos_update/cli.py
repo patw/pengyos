@@ -6,11 +6,13 @@
     pengyos-update confirm             (at boot) keep the slot that just came up
     pengyos-update rollback [--reboot] go back to the other slot
     pengyos-update channel [NAME]      show or set the channel (stable, testing)
+    pengyos-update auto [on|off]       unattended updates in a nightly window (off by default)
 
 An update never touches the running system or the data partition: it writes
 the new image into the *other* root slot and asks GRUB to boot it once. If it
-comes up, ``confirm`` (pengyos-update-confirm.service) makes it the default; if
-it doesn't, the next boot is the old slot again.
+comes up and passes its health checks, ``confirm --boot``
+(pengyos-update-confirm.service) makes it the default; if it doesn't, the next
+boot is the old slot again, and that version is remembered as failed.
 
 Before switching, ``apply`` runs the new image's own update steps
 (``/usr/lib/pengyos/update.d/*`` inside the new system, as root): that is how a
@@ -27,6 +29,7 @@ import fcntl
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -61,6 +64,19 @@ from .system import (
     write_config_value,
 )
 from .state import MOTD, PROGRESS, STATE, Progress, load_state, now_iso, save_state, write_motd
+from . import auto as autopol
+from .trial import (
+    HEALTH_DIRS,
+    clear_trial,
+    failure,
+    forget_failed,
+    health_checks,
+    mark_failed,
+    record_trial,
+    settle_trial,
+    wait_healthy,
+    write_confirmed,
+)
 
 _CHUNK = 4 << 20
 
@@ -156,12 +172,38 @@ def slots_state() -> dict:
     return {"staged": staged, "other": other_version}
 
 
+def login_message(state: dict, current: str) -> str | None:
+    """The login message from what the state file says, or None for none.
+
+    A version that failed here outranks "available" (installing it again would
+    only fail again); an unattended run that went wrong is said too."""
+    available = (state.get("available") or {}).get("version")
+    lines = []
+    for version, f in sorted((state.get("failed") or {}).items(),
+                             key=lambda kv: parse_version(kv[0]), reverse=True):
+        if parse_version(version) > parse_version(current) and isinstance(f, dict):
+            lines.append(f"PengyOS {version} did not start on this machine ({f.get('at', '?')}: "
+                         f"{f.get('reason', '?')}); still running {current}. "
+                         "Details: pengyos-update status")
+            break
+    if available and not failure(state, available) and state.get("staged") != available:
+        lines.append(f"PengyOS {available} is available (you have {current}): "
+                     "sudo pengyos-update apply")
+    elif state.get("staged"):
+        lines.append(f"PengyOS {state['staged']} is installed — restart to start it.")
+    last = state.get("auto") or {}
+    if last.get("result") == "error":
+        lines.append(f"The unattended update failed ({last.get('at', '?')}): {last.get('message', '?')}")
+    return "\n".join(lines) or None
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     image, current, osr = identity()
     cfg = read_config()
     channel = args.channel or cfg["channel"]
     try:
-        entry = find_update(cfg, image, current, channel)
+        entries = parse_feed(fetch(cfg["feed"]))
+        entry = pick_update(entries, image, channel, current)
     except UpdateError as exc:
         if not args.save:
             raise
@@ -178,14 +220,11 @@ def cmd_check(args: argparse.Namespace) -> int:
                                  "notes": entry.notes} if entry else None)}
         if os.geteuid() == 0:
             fields.update(slots_state())
+        # The unattended run's soak window counts from the first sighting.
+        fields["seen"] = autopol.record_seen(load_state(args.state).get("seen") or {}, entries,
+                                             image, channel, dt.datetime.now(dt.timezone.utc))
         state = save_state(args.state, **fields)
-        if entry and state.get("staged") != entry.version:
-            write_motd(f"PengyOS {entry.version} is available (you have {current}): "
-                       "sudo pengyos-update apply", args.motd)
-        elif state.get("staged"):
-            write_motd(f"PengyOS {state['staged']} is installed — restart to start it.", args.motd)
-        else:
-            write_motd(None, args.motd)
+        write_motd(login_message(state, current), args.motd)
     if args.json:
         print(json.dumps({"image": image, "current": current, "channel": channel,
                           "available": entry.version if entry else None}))
@@ -193,7 +232,12 @@ def cmd_check(args: argparse.Namespace) -> int:
         pass
     elif entry:
         say(f"PengyOS {entry.version} is available ({channel}); you have {current}.")
-        say("Install it with:  sudo pengyos-update apply")
+        f = failure(load_state(args.state), entry.version)
+        if f:
+            say(f"It did not start on this machine before ({f.get('at', '?')}: {f.get('reason', '?')}).")
+            say(f"Try it again with:  sudo pengyos-update apply --version {entry.version}")
+        else:
+            say("Install it with:  sudo pengyos-update apply")
     else:
         say(f"Up to date: {image} {current} is the newest on the {channel} channel.")
     return 0 if entry is None else 100 if args.exit_code else 0
@@ -304,6 +348,11 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
         say(f"Up to date: {image} {current} is the newest on the {channel} channel.")
         progress.update("done", 1.0, "Already up to date", version=None)
         return 0
+    f = failure(load_state(args.state), entry.version)
+    if f and not args.version:
+        raise UpdateError(f"PengyOS {entry.version} did not start on this machine before "
+                          f"({f.get('at', '?')}: {f.get('reason', '?')}). To try it again: "
+                          f"sudo pengyos-update apply --version {entry.version}")
     target = layout.other
     say(f"Updating {image} {current} -> {entry.version} (into slot {target}, {layout.slots[target]})")
 
@@ -372,6 +421,8 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
     avail = state.get("available") or {}
     save_state(args.state, staged=man.version, other=man.version,
                available=avail if avail.get("version") not in (None, man.version) else None)
+    record_trial(args.state, man.version, current, target)
+    forget_failed(args.state, man.version)  # asked for by name (--version): a new chance
     record_slots(layout, image, current, args.state)
     write_motd(f"PengyOS {man.version} is installed — restart to start it.", MOTD)
     progress.update("done", 1.0, f"PengyOS {man.version} is ready — restart to start it",
@@ -409,28 +460,64 @@ def write_boot_menu(boot_dir: Path, partuuids: dict[str, str], keep_unparsed: bo
     return True
 
 
+def health_timeout(cfg: dict[str, str]) -> int:
+    try:
+        return max(0, int(cfg.get("health_timeout", "180")))
+    except ValueError:
+        return 180
+
+
 def cmd_confirm(args: argparse.Namespace) -> int:
     require_root()
     _lock = lock()
     layout = detect_layout()
     env = read_env(layout.esp)
-    already = env.get("pengyos_slot", "a") == layout.booted and not env.get("pengyos_try")
+    committed = env.get("pengyos_slot", "a")
+    already = committed == layout.booted and not env.get("pengyos_try")
+    image, version, _ = identity()
+    if already:
+        write_confirmed()
+        if args.boot:
+            # A recorded trial that is not this slot, with pengyos_try consumed,
+            # booted and never kept itself (panic, hang, emergency mode, failed
+            # checks): remember it, so nothing installs it again by itself.
+            bad = settle_trial(args.state, layout.booted, committed, env.get("pengyos_try", ""))
+            if bad:
+                say(f"PengyOS {bad} was tried and did not start; this is {version} again")
+    elif args.boot and committed != layout.booted:
+        # This boot is a trial: keep it only if it is healthy.
+        checks = health_checks(tuple(args.health_dirs) if args.health_dirs else HEALTH_DIRS)
+        say(f"trial boot of {version}: {len(checks)} health check(s) "
+            f"({', '.join(c.name for c in checks) or 'none'})")
+        failures = wait_healthy(checks, health_timeout(read_config()), say=say)
+        if failures:
+            reason = "health check failed: " + "; ".join(failures)
+            mark_failed(args.state, version, reason)
+            say(f"not keeping {version}: {reason}")
+            say(f"restarting into the previous system (slot {committed})")
+            if args.reboot_cmd:
+                subprocess.run(shlex.split(args.reboot_cmd))
+            return 1
+        say("healthy")
     with Esp(layout.esp) as esp:
         if not already:
             esp.set_env(pengyos_slot=layout.booted, pengyos_try="")
         if write_boot_menu(esp.boot_dir, layout.partuuids, keep_unparsed=True):
             say("boot menu rewritten by this system's updater")
-    image, version, _ = identity()
-    record_slots(layout, image, version)
+    record_slots(layout, image, version, args.state)
     if already:
+        write_motd(login_message(load_state(args.state), version), args.motd)
         say(f"slot {layout.booted} is already the default")
         return 0
-    state = load_state()
+    write_confirmed()
+    clear_trial(args.state)
+    forget_failed(args.state, version)  # kept by hand, or healthy after all
+    state = load_state(args.state)
     if state:
         avail = state.get("available") or {}
-        save_state(staged=None, current=version,
-                   available=avail if avail.get("version") != version else None)
-    write_motd(None)
+        state = save_state(args.state, staged=None, current=version,
+                           available=avail if avail.get("version") != version else None)
+    write_motd(login_message(state, version), args.motd)
     say(f"started cleanly: slot {layout.booted} ({version}) is now the default")
     return 0
 
@@ -467,6 +554,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         esp.set_env(pengyos_slot=other, pengyos_try="")
     if load_state():
         save_state(staged=what.split()[1])
+    clear_trial(STATE)
     image, current, _ = identity()
     record_slots(layout, image, current)
     say(f"slot {other} ({what}) is the default from the next restart.")
@@ -533,8 +621,11 @@ def _human(seconds: int) -> str:
 def cmd_status(args: argparse.Namespace) -> int:
     image, current, osr = identity()
     cfg = read_config()
+    saved = load_state(args.state)
     out = {"image": image, "current": current, "build": osr.get("BUILD_ID", ""),
            "channel": cfg["channel"], "feed": cfg["feed"],
+           "auto": {**autopol.settings(cfg), "last": saved.get("auto")},
+           "failed": saved.get("failed") or {}, "trial": saved.get("trial"),
            "slots": [], "slots_source": "none", "slots_at": None, "slots_age_s": None}
     if os.geteuid() == 0:
         layout = detect_layout()
@@ -568,6 +659,15 @@ def cmd_status(args: argparse.Namespace) -> int:
         return 0
     say(f"system:   {osr.get('PRETTY_NAME', image)} ({image} {current}, build {out['build'] or '?'})")
     say(f"channel:  {cfg['channel']}   feed: {cfg['feed']}")
+    pol = out["auto"]
+    say("unattended: " + (f"on, daily at {pol['at']}, soak {pol['soak_days']} day(s)"
+                          if pol["enabled"] else "off (pengyos-update auto on)"))
+    if pol["last"]:
+        last = pol["last"]
+        say(f"  last run {last.get('at', '?')}: {last.get('result', '?')}"
+            + (f" — {last['message']}" if last.get("message") else ""))
+    for version, f in sorted(out["failed"].items(), key=lambda kv: parse_version(kv[0])):
+        say(f"failed:   {version} did not start here ({f.get('at', '?')}: {f.get('reason', '?')})")
     if not out["slots"]:
         say("(run with sudo to see the slots)")
         return 0
@@ -589,6 +689,112 @@ def cmd_channel(args: argparse.Namespace) -> int:
     require_root()
     write_config_value("channel", args.name)
     say(f"channel set to {args.name}")
+    return 0
+
+
+def systemctl(*argv: str, ok: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
+    return run(["systemctl", *argv], f"systemctl {' '.join(argv)}", ok=ok)
+
+
+def cmd_auto(args: argparse.Namespace) -> int:
+    cfg = read_config(args.config)
+    pol = autopol.settings(cfg)
+    if args.mode is None:
+        state = load_state(args.state)
+        say(f"unattended updates: {'on' if pol['enabled'] else 'off'}")
+        if pol["enabled"]:
+            say(f"  every day at {pol['at']}, releases first seen {pol['soak_days']} day(s) ago or "
+                f"more, from the {cfg['channel']} channel; restarts only after a good install")
+        last = state.get("auto")
+        if last:
+            say(f"  last run {last.get('at', '?')}: {last.get('result', '?')}"
+                + (f" — {last['message']}" if last.get("message") else ""))
+        for version, f in sorted((state.get("failed") or {}).items()):
+            say(f"  {version} failed here ({f.get('at', '?')}: {f.get('reason', '?')}); "
+                "it is not installed again unattended")
+        if not pol["enabled"]:
+            say("turn on with:  sudo pengyos-update auto on [--at HH:MM] [--soak DAYS]")
+        return 0
+    require_root()
+    if args.mode == "off":
+        write_config_value("auto", "off", args.config)
+        systemctl("disable", "--now", autopol.TIMER, ok=(0, 1))
+        Path(args.dropin).unlink(missing_ok=True)
+        systemctl("daemon-reload", ok=(0, 1))
+        say("unattended updates are off; `pengyos-update check` still looks daily")
+        return 0
+    at = autopol.parse_at(args.at) if args.at else pol["at"]
+    soak = autopol.parse_soak(args.soak) if args.soak is not None else pol["soak_days"]
+    write_config_value("auto", "on", args.config)
+    write_config_value("auto_at", at, args.config)
+    write_config_value("auto_soak_days", str(soak), args.config)
+    autopol.write_timer_dropin(at, args.dropin)
+    systemctl("daemon-reload")
+    systemctl("enable", "--now", autopol.TIMER)
+    say(f"unattended updates are on: every day at {at}, {cfg['channel']} releases at least "
+        f"{soak} day(s) after this machine first saw them. It restarts only after a "
+        "good install, and a release that does not come up is undone and not retried.")
+    if cfg["channel"] != "stable":
+        say(f"warning: this machine is on the {cfg['channel']} channel — expect a restart most "
+            "nights. `sudo pengyos-update channel stable` for tested releases only.")
+    return 0
+
+
+def _auto_record(path: str, result: str, message: str = "", version: str | None = None) -> None:
+    state = save_state(path, auto={"at": now_iso(), "result": result, "message": message,
+                                   "version": version})
+    try:
+        _, current, _ = identity()
+        write_motd(login_message(state, current), MOTD)
+    except UpdateError:
+        pass
+    say(f"{result}: {message}" if message else result)
+
+
+def cmd_auto_run(args: argparse.Namespace) -> int:
+    require_root()
+    cfg = read_config(args.config)
+    pol = autopol.settings(cfg)
+    if not pol["enabled"]:
+        say("unattended updates are off (pengyos-update auto on)")
+        return 0
+    try:
+        image, current, _ = identity()
+        layout = detect_layout()
+        env = read_env(layout.esp)
+        if env.get("pengyos_slot", "a") != layout.booted:
+            _auto_record(args.state, "skipped", "this boot is a trial that is not confirmed yet")
+            return 0
+        if env.get("pengyos_try"):
+            _auto_record(args.state, "skipped", "an update is already installed and waits for a "
+                                                "restart (sudo systemctl reboot)")
+            return 0
+        channel = cfg["channel"]
+        entries = parse_feed(fetch(cfg["feed"]))
+        now = dt.datetime.now(dt.timezone.utc)
+        state = load_state(args.state)
+        seen = autopol.record_seen(state.get("seen") or {}, entries, image, channel, now)
+        state = save_state(args.state, seen=seen)
+        entry, waiting, until = autopol.pick(entries, image, channel, current, state, seen,
+                                             pol["soak_days"], now)
+        if entry is None:
+            if waiting:
+                _auto_record(args.state, "waiting", f"{waiting.version} is installed from {until} "
+                             f"(soak {pol['soak_days']} days)", waiting.version)
+            else:
+                _auto_record(args.state, "nothing-newer", f"{current} is the newest to install")
+            return 0
+        say(f"unattended update: {current} -> {entry.version}")
+        apply_args = argparse.Namespace(channel=None, version=entry.version, reboot=False,
+                                        keys=args.keys, openssl=args.openssl, state=args.state)
+        _apply(apply_args, Progress(None))
+    except UpdateError as exc:
+        _auto_record(args.state, "error", str(exc))
+        return 1
+    _auto_record(args.state, "applied", f"{entry.version} installed; restarting into it",
+                 entry.version)
+    if args.reboot_cmd:
+        subprocess.run(shlex.split(args.reboot_cmd))
     return 0
 
 
@@ -627,6 +833,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(fn=cmd_apply)
 
     s = sub.add_parser("confirm", help="keep the slot that is running (run at boot)")
+    s.add_argument("--boot", action="store_true",
+                   help="as the boot does it: keep a trial only if its health checks pass "
+                        "(else restart into the previous system), and record trials that failed")
+    s.add_argument("--state", default=STATE, help=argparse.SUPPRESS)
+    s.add_argument("--motd", default=MOTD, help=argparse.SUPPRESS)
+    s.add_argument("--health-dir", dest="health_dirs", action="append", help=argparse.SUPPRESS)
+    s.add_argument("--reboot-cmd", default="systemctl reboot", help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_confirm)
 
     s = sub.add_parser("rollback", help="make the other slot the default again")
@@ -636,6 +849,25 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("channel", help=f"show or set the channel ({CONFIG})")
     s.add_argument("name", nargs="?")
     s.set_defaults(fn=cmd_channel)
+
+    s = sub.add_parser("auto", help="show or set unattended updates (off by default)")
+    s.add_argument("mode", nargs="?", choices=("on", "off"))
+    s.add_argument("--at", metavar="HH:MM", help=f"daily time (default {autopol.DEFAULT_AT})")
+    s.add_argument("--soak", metavar="DAYS",
+                   help="wait this long after a release first appears "
+                        f"(default {autopol.DEFAULT_SOAK_DAYS})")
+    s.add_argument("--config", default=CONFIG, help=argparse.SUPPRESS)
+    s.add_argument("--dropin", default=autopol.TIMER_DROPIN, help=argparse.SUPPRESS)
+    s.add_argument("--state", default=STATE, help=argparse.SUPPRESS)
+    s.set_defaults(fn=cmd_auto)
+
+    s = sub.add_parser("auto-run", help="(pengyos-update-auto.timer) install and restart, if due")
+    s.add_argument("--config", default=CONFIG, help=argparse.SUPPRESS)
+    s.add_argument("--state", default=STATE, help=argparse.SUPPRESS)
+    s.add_argument("--keys", default=KEYS_DIR, help=argparse.SUPPRESS)
+    s.add_argument("--openssl", default="openssl", help=argparse.SUPPRESS)
+    s.add_argument("--reboot-cmd", default="systemctl reboot", help=argparse.SUPPRESS)
+    s.set_defaults(fn=cmd_auto_run)
     return p
 
 

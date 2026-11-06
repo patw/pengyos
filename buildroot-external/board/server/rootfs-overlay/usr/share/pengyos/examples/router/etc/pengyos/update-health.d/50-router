@@ -1,0 +1,9 @@
+#!/bin/sh
+# Router health check for an update's trial boot (pengyos-update confirm --boot).
+# The new system is kept only if it still routes: dnsmasq serves the LAN, the
+# WAN has an address, and the internet answers. Otherwise the machine restarts
+# into the previous system. Retried for health_timeout seconds (update.conf).
+systemctl is-active --quiet dnsmasq.service || { echo "dnsmasq is not running"; exit 1; }
+ip -4 addr show dev wan0 scope global | grep -q inet || { echo "wan0 has no IPv4 address"; exit 1; }
+ip -4 addr show dev lan0 scope global | grep -q inet || { echo "lan0 has no IPv4 address"; exit 1; }
+ping -c1 -W3 9.9.9.9 >/dev/null 2>&1 || { echo "no answer from the internet (9.9.9.9)"; exit 1; }

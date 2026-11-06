@@ -56,8 +56,16 @@ described in [`docs/state-layout.md`](docs/state-layout.md):
 - **Every byte is checked.** Each download is hash-checked before it is used,
   and the root filesystem is hashed again as it is written to the other slot.
 - **A bad update rolls itself back.** A new slot boots once on trial. It
-  becomes the default only if it reaches multi-user; otherwise the next boot
-  returns to the old slot. Updates never write to the `data` partition.
+  becomes the default only if it reaches multi-user and its health checks pass
+  (`nftables`, `sshd` and `systemd-networkd` active where enabled, plus the
+  machine's own in `/etc/pengyos/update-health.d/`). Otherwise the machine
+  restarts into the old slot: on a failed check, a panic (10 s), a wedged
+  PID 1 (hardware watchdog), emergency mode, or no confirmation within 15
+  minutes. The failed version is not installed again unless asked for by name.
+  Updates never write to the `data` partition.
+- **Nothing installs by itself unless an administrator says so.**
+  `pengyos-update auto on` (off by default) installs signed releases, with the
+  same checks as `apply`, in a daily window, after a soak period.
 
 ## Known limitations
 
