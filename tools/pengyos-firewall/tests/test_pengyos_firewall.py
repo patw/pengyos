@@ -18,7 +18,8 @@ What is checked, and why it can be checked without root or an image:
 * the forward chain and the table include the hand-written `forward/` and
   `table/` subdirectories, which the input chain's `*.nft` never matches;
 * the shipped ruleset parses with the real `nft -c` (in a user + network
-  namespace, so no root). Skipped only where nft or unshare is
+  namespace, so no root), alone and with the Server's example router bundle
+  dropped into the three rule places. Skipped only where nft or unshare is
   missing (scripts/provision-build-host.sh installs nftables).
 
 That the rules really load is proven by booting images (docs/qemu-testing.md):
@@ -45,6 +46,7 @@ SCRIPT = CORE / "usr" / "bin" / "pengyos-firewall"
 RULESET = CORE / "etc" / "nftables.conf"
 UNIT = CORE / "etc" / "systemd" / "system" / "nftables.service"
 WANTS = CORE / "etc" / "systemd" / "system" / "multi-user.target.wants" / "nftables.service"
+ROUTER_EXAMPLE = BOARD / "server" / "rootfs-overlay" / "usr" / "share" / "pengyos" / "examples" / "router"
 DESKTOP_RULE = BOARD / "desktop" / "rootfs-overlay" / "usr" / "lib" / "pengyos" / "nftables.d" / "input-desktop.nft"
 HERE = Path(__file__).resolve().parent
 
@@ -205,6 +207,17 @@ def _nft_check(tmp_path: Path, bundle: Path | None) -> subprocess.CompletedProce
 
 def test_shipped_ruleset_parses_with_real_nft(tmp_path):
     r = _nft_check(tmp_path, None)
+    assert r.returncode == 0, r.stderr
+
+
+def test_example_router_bundle_parses_with_real_nft(tmp_path):
+    shipped = sorted(p.relative_to(ROUTER_EXAMPLE) for p in ROUTER_EXAMPLE.rglob("*.nft"))
+    assert [str(p) for p in shipped] == [
+        "etc/pengyos/nftables.d/forward/router.nft",
+        "etc/pengyos/nftables.d/router-input.nft",
+        "etc/pengyos/nftables.d/table/router.nft",
+    ]
+    r = _nft_check(tmp_path, ROUTER_EXAMPLE)
     assert r.returncode == 0, r.stderr
 
 

@@ -12,8 +12,8 @@ and this tool keeps its own semver (only images use the repo-root `VERSION`).
   and `table/` (a router's forward rules, NAT chains and sets), which
   `/etc/nftables.conf` now includes into the forward chain and at table level.
   `--json` gains `forward_files` and `table_files` (empty lists when none).
-- Tests run the real `nft -c` (in `unshare -rn`) on the shipped ruleset;
-  skipped where nft is missing.
+- Tests run the real `nft -c` (in `unshare -rn`) on the shipped ruleset, alone
+  and with the Server's example router bundle; skipped where nft is missing.
 
 ## [0.1.0] - 2026-10-27
 

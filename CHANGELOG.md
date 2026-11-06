@@ -17,6 +17,34 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — a Server can be a router without editing a file the image owns (2026-11-06)
+- **Two include points in the Core firewall** (`/etc/nftables.conf`): the
+  forward chain includes `/etc/pengyos/nftables.d/forward/*.nft`, and
+  `table inet pengyos` includes `/etc/pengyos/nftables.d/table/*.nft` at table
+  level (NAT chains, rate-limit sets, an early input-hook chain). Until now a
+  router had to replace `nftables.conf` wholesale, which shadows every later
+  image's firewall. Subdirectories, so the input chain's `nftables.d/*.nft`
+  (every `pengyos-firewall allow` file) is unchanged; a box that writes nothing
+  there has no NAT chain. `pengyos-firewall status` lists both directories.
+- **dnsmasq moved from the Desktop layer to the Server layer** (the Desktop
+  inherits it, so NetworkManager's hotspot is unchanged), with
+  `/usr/lib/systemd/system/dnsmasq.service`. The unit ships **disabled**:
+  Buildroot's `preset-all` enables any unit no preset names, so
+  `10-pengyos-server.preset` says `disable dnsmasq.service`; otherwise every
+  Server and Desktop would have become a DHCP server. `/var/lib/misc` (the
+  default lease file's directory) is made by tmpfiles.
+- **An example router bundle** on the Server, `/usr/share/pengyos/examples/router/`:
+  NICs named `wan0`/`lan0` by MAC (`.link`), `05-*.network` files that sort
+  before the image's `10-pengyos-ethernet.network` (no deletion needed), IPv6
+  prefix delegation, WireGuard by networkd, dnsmasq with `bind-dynamic` (it
+  coexists with resolved's stub), and the three firewall files. pengyos.txt
+  points at it. Written for moving behorouter (Ubuntu 26.04) to PengyOS Server
+  (`~/Personal/Research/pengyos-router-plan.md`).
+- The firewall tests now run the real `nft -c` on the shipped ruleset, alone and
+  with the example bundle (user namespace, no root); `provision-build-host.sh`
+  installs `nftables` for them. Gotchas they pin: NAT in an inet table must say
+  `dnat ip to` / `snat ip to`, and a `set` cannot be declared inside a chain.
+
 ### Added — uv on the host; Python builds that need a compiler reach the dev guest (2026-11-05)
 - **`uv` and `uvx`** ship in Server and Desktop (`/usr/bin`), built from source
   (`package/uv`, 0.13.7, the self-update feature left off). The one-venv-per-app

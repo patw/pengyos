@@ -1,0 +1,31 @@
+# WAN: DHCPv4 + IPv6 (RA, DHCPv6 prefix delegation) from the ISP. Named 05- so
+# it sorts before the image's 10-pengyos-ethernet.network: networkd applies the
+# first file that matches, so the image file needs no deleting and still
+# catches any other wired NIC.
+[Match]
+Name=wan0
+
+[Link]
+MTUBytes=1500
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
+IPv6PrivacyExtensions=no
+# This box serves its own DNS (dnsmasq); the ISP's servers are not used.
+DNSDefaultRoute=no
+
+[DHCPv4]
+UseMTU=no
+UseDNS=no
+UseHostname=no
+
+[DHCPv6]
+UseDNS=no
+PrefixDelegationHint=::/64
+WithoutRA=solicit
+
+[IPv6AcceptRA]
+UseMTU=no
+UseDNS=no
+DHCPv6Client=always

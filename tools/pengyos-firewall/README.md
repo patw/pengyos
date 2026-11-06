@@ -43,7 +43,8 @@ directory (input-chain statements only), and `status` lists it as "by hand".
 A router's rules are not ports, so they are written by hand in two
 subdirectories, which `status` lists by name: `forward/*.nft` (forward-chain
 statements) and `table/*.nft` (whole chains and sets at table level: NAT,
-rate-limit sets). Each has a README.
+rate-limit sets). Each has a README; the Server ships a complete example in
+`/usr/share/pengyos/examples/router/`.
 
 ## Tests
 
@@ -52,6 +53,7 @@ cd tools/pengyos-firewall && python3 -m pytest -q
 ```
 
 The suite runs the real script against a sandbox root (`--root DIR`), with a
-fake `nft` and a fake `systemctl`. It needs no root. One test also runs the
-real `nft -c` on the shipped ruleset in a user namespace; it skips where nft is not installed. That the
+fake `nft` and a fake `systemctl`. It needs no root. Two tests also run the
+real `nft -c` on the shipped ruleset (with and without the example router
+bundle) in a user namespace; they skip where nft is not installed. That the
 rules load for real is proven by booting the images: see `spec.md`.

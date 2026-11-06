@@ -1,0 +1,10 @@
+# Name the WAN port wan0, by its MAC, so nothing else names hardware: the
+# firewall, dnsmasq and the .network files all say wan0. On new hardware only
+# the two MACs change. MTUBytes here is applied by udev before any DHCP runs
+# (an ISP that pushes a small MTU cannot win; see also UseMTU=no in 05-wan).
+[Match]
+MACAddress=00:00:00:00:00:01
+
+[Link]
+Name=wan0
+MTUBytes=1500
