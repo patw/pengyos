@@ -91,7 +91,7 @@ Errors exit 1 with one `pengyos-update: <message>` line; usage errors exit 2.
    check waiting for DHCP is not a failure.
 8. If they all pass, the slot is committed (as in 0.2) and the trial record
    is cleared. If any still fails: the trial is marked failed (step 11), the
-   login message says so, and the machine reboots (`systemctl reboot`). The
+   login message says so, and the machine reboots (`systemctl --no-block reboot`). The
    committed slot is still the old one and GRUB has already cleared
    `pengyos_try`, so that boot is the old system.
 9. `confirm` without `--boot` (the command `apply`'s refusal tells the user
@@ -189,6 +189,21 @@ Errors exit 1 with one `pengyos-update: <message>` line; usage errors exit 2.
   made to panic, to hang before `multi-user.target`, to enter emergency mode,
   and to fail a health check each come back to the old slot with no input and
   record the version as failed. The next `auto-run` does not reinstall it.
+  Done 2026-11-06 (q35/OVMF, iTCO watchdog, base 26.11.50, `auto on --soak 0`);
+  times are from the trial's start to the old system booting:
+
+  | Trial | How it ended | Old system booting after |
+  |---|---|---|
+  | panic in preinit | kernel panic, "Rebooting in 10 seconds" | ~20 s |
+  | emergency mode (a required mount's device is missing, 20 s timeout) | the emergency drop-in rebooted it | ~25 s |
+  | `nftables.service` failed | health check failed for 180 s, then `confirm --boot` rebooted it | ~3 min |
+  | hang before `multi-user.target` | the deadline rebooted it at 900 s | 15 min |
+  | healthy (control) | kept; the slot was committed | n/a |
+
+  In each failure, `failed` named the version, the login message said so, and
+  the second `auto-run` reported `nothing-newer`. The test found one bug:
+  `staged` survived a failure, so the login message also claimed "restart to
+  start it". `mark_failed` now clears it.
 
 ## Out of scope
 - Mail, BotTalk or other notification: the operations layer can read

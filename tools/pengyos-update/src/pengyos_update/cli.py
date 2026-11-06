@@ -839,7 +839,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--state", default=STATE, help=argparse.SUPPRESS)
     s.add_argument("--motd", default=MOTD, help=argparse.SUPPRESS)
     s.add_argument("--health-dir", dest="health_dirs", action="append", help=argparse.SUPPRESS)
-    s.add_argument("--reboot-cmd", default="systemctl reboot", help=argparse.SUPPRESS)
+    s.add_argument("--reboot-cmd", default="systemctl --no-block reboot", help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_confirm)
 
     s = sub.add_parser("rollback", help="make the other slot the default again")
@@ -866,7 +866,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--state", default=STATE, help=argparse.SUPPRESS)
     s.add_argument("--keys", default=KEYS_DIR, help=argparse.SUPPRESS)
     s.add_argument("--openssl", default="openssl", help=argparse.SUPPRESS)
-    s.add_argument("--reboot-cmd", default="systemctl reboot", help=argparse.SUPPRESS)
+    s.add_argument("--reboot-cmd", default="systemctl --no-block reboot", help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_auto_run)
     return p
 

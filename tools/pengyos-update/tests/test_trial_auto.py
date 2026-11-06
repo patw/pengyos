@@ -134,6 +134,23 @@ def test_mark_failed_keeps_other_failures(tmp_path):
     assert set(read(state)["failed"]) == {"26.11.1", "26.11.4"}
 
 
+def test_a_failed_trial_is_no_longer_called_staged(tmp_path):
+    # Found in QEMU: after a failed trial the login message still said
+    # "26.11.60 is installed — restart to start it", but a restart boots the old slot.
+    state = str(tmp_path / "state.json")
+    cli.save_state(state, staged="26.11.4", current="26.11.3")
+    record_trial(state, "26.11.4", "26.11.3", "b")
+    assert settle_trial(state, booted="a", committed="a", pending_try="") == "26.11.4"
+    s = read(state)
+    assert s["staged"] is None
+    msg = cli.login_message(s, "26.11.3")
+    assert "did not start" in msg and "restart to start it" not in msg
+    # A different staged version is not touched.
+    cli.save_state(state, staged="26.11.5")
+    mark_failed(state, "26.11.4", "again")
+    assert read(state)["staged"] == "26.11.5"
+
+
 # --- confirm --boot --------------------------------------------------------------
 
 class _Layout:

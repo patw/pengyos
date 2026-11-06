@@ -43,11 +43,17 @@ def clear_trial(state_path: str) -> None:
 
 
 def mark_failed(state_path: str, version: str, reason: str) -> None:
-    """Remember ``version`` as failed on this machine; drop the trial record."""
+    """Remember ``version`` as failed on this machine; drop the trial record.
+
+    It is no longer staged either: GRUB consumed the one-shot try, so a restart
+    boots the old system, and the login message must not say otherwise."""
     state = load_state(state_path)
     failed = dict(state.get("failed") or {})
     failed[version] = {"at": now_iso(), "reason": reason}
-    save_state(state_path, failed=failed, trial=None)
+    fields = {"failed": failed, "trial": None}
+    if state.get("staged") == version:
+        fields["staged"] = None
+    save_state(state_path, **fields)
 
 
 def forget_failed(state_path: str, version: str) -> None:
