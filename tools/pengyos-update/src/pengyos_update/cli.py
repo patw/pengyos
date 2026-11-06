@@ -69,6 +69,7 @@ from .trial import (
     HEALTH_DIRS,
     clear_trial,
     failure,
+    failures_ahead,
     forget_failed,
     health_checks,
     mark_failed,
@@ -666,7 +667,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         last = pol["last"]
         say(f"  last run {last.get('at', '?')}: {last.get('result', '?')}"
             + (f" — {last['message']}" if last.get("message") else ""))
-    for version, f in sorted(out["failed"].items(), key=lambda kv: parse_version(kv[0])):
+    for version, f in failures_ahead(saved, current):
         say(f"failed:   {version} did not start here ({f.get('at', '?')}: {f.get('reason', '?')})")
     if not out["slots"]:
         say("(run with sudo to see the slots)")
@@ -709,7 +710,11 @@ def cmd_auto(args: argparse.Namespace) -> int:
         if last:
             say(f"  last run {last.get('at', '?')}: {last.get('result', '?')}"
                 + (f" — {last['message']}" if last.get("message") else ""))
-        for version, f in sorted((state.get("failed") or {}).items()):
+        try:
+            shown = failures_ahead(state, identity()[1])
+        except UpdateError:  # not a PengyOS system: show them all
+            shown = sorted((state.get("failed") or {}).items())
+        for version, f in shown:
             say(f"  {version} failed here ({f.get('at', '?')}: {f.get('reason', '?')}); "
                 "it is not installed again unattended")
         if not pol["enabled"]:

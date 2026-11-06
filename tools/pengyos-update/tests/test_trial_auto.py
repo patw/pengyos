@@ -481,6 +481,27 @@ def test_status_shows_unattended_and_failures(tmp_path, monkeypatch, capsys):
     assert j["auto"]["enabled"] and j["failed"]["26.11.4"]["reason"] == "r"
 
 
+def test_status_and_auto_hide_failures_older_than_the_running_system(tmp_path, monkeypatch, capsys):
+    # Found on the ThinkPad: 26.11.71/72 failed, 26.11.73 was kept, and status
+    # still listed both failures under it.
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"failed": {"26.11.71": {"at": "t", "reason": "old"},
+                                           "26.11.75": {"at": "t", "reason": "new"},
+                                           "junk": {"at": "t", "reason": "x"}}}))
+    monkeypatch.setattr(cli, "identity", lambda: ("pengyos-server", "26.11.73", {}))
+    monkeypatch.setattr(cli, "read_config", lambda *a: {"feed": "f", "channel": "stable", "auto": "on"})
+    monkeypatch.setattr(cli.os, "geteuid", lambda: 1000)
+    assert cli.main(["status", "--state", str(path)]) == 0
+    out = capsys.readouterr().out
+    assert "26.11.75 did not start here" in out and "26.11.71" not in out and "junk" not in out
+    assert cli.main(["auto", "--state", str(path)]) == 0
+    out = capsys.readouterr().out
+    assert "26.11.75 failed here" in out and "26.11.71" not in out
+    # The record itself is kept, for --json and the operations layer.
+    assert cli.main(["status", "--json", "--state", str(path)]) == 0
+    assert set(json.loads(capsys.readouterr().out)["failed"]) == {"26.11.71", "26.11.75", "junk"}
+
+
 def test_the_shipped_health_check_and_trial_helper_parse():
     """The image's shell pieces are at least valid sh."""
     repo = Path(__file__).resolve().parents[3]

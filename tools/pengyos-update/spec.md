@@ -115,7 +115,9 @@ Errors exit 1 with one `pengyos-update: <message>` line; usage errors exit 2.
     installs. `check --save` puts the failure in the login message instead of
     "available".
 13. `auto-run` never installs a failed version. A newer release is eligible
-    again (failures are per exact version).
+    again (failures are per exact version). `status` and `auto` list only
+    failures of versions newer than the running one; older ones stay in the
+    state file and `status --json`.
 
 ### A trial boot always ends
 14. `render_grub_cfg` ends each kernel line with `${pengyos_serial}

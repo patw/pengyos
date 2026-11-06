@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from .release import UpdateError, parse_version
 from .state import load_state, now_iso, save_state
 
 HEALTH_DIRS = ("/usr/lib/pengyos/update-health.d", "/etc/pengyos/update-health.d")
@@ -67,6 +68,21 @@ def failure(state: dict, version: str) -> dict | None:
     """``{"at", "reason"}`` if ``version`` failed here, else None."""
     f = (state.get("failed") or {}).get(version)
     return f if isinstance(f, dict) else None
+
+
+def failures_ahead(state: dict, current: str) -> list[tuple[str, dict]]:
+    """The recorded failures of versions newer than ``current``, oldest first.
+
+    An older one stopped mattering once a newer release was kept; it stays in
+    the state file (and ``status --json``) but is not shown."""
+    out = []
+    for version, f in (state.get("failed") or {}).items():
+        try:
+            if isinstance(f, dict) and parse_version(version) > parse_version(current):
+                out.append((version, f))
+        except UpdateError:  # a malformed key is not worth failing status over
+            continue
+    return sorted(out, key=lambda kv: parse_version(kv[0]))
 
 
 def settle_trial(state_path: str, booted: str, committed: str, pending_try: str) -> str | None:
