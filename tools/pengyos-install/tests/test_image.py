@@ -48,7 +48,22 @@ def test_render_grub_cfg():
     assert 'set default="pengyos-${pengyos_try}"' in cfg and "save_env pengyos_try" in cfg
     assert cfg.index("save_env pengyos_try") < cfg.index("menuentry")
     custom = render_grub_cfg({"a": "x"}, kernel_args="ro quiet")
-    assert "root=PARTUUID=x ro quiet ${pengyos_serial}\n" in custom
+    assert "root=PARTUUID=x ro quiet ${pengyos_serial} ${pengyos_trial}\n" in custom
+
+
+def test_render_grub_cfg_marks_a_trial_boot_on_the_kernel_line():
+    # pengyos-update's trial-only units (boot deadline, emergency-mode reboot)
+    # need to know a boot is a one-shot trial: only the pengyos_try branch sets it.
+    cfg = render_grub_cfg({"a": "x", "b": "y"})
+    head, _, entries = cfg.partition("menuentry")
+    assert head.index('set pengyos_trial=""') < head.index('if [ -n "${pengyos_try}" ]; then')
+    branch = head[head.index('if [ -n "${pengyos_try}" ]; then'):]
+    branch = branch[:branch.index("\nfi\n")]
+    assert '    set pengyos_trial="pengyos.trial=1"' in branch
+    assert head.count("pengyos.trial=1") == 1
+    assert "pengyos.trial" not in KERNEL_ARGS
+    for line in (l for l in cfg.splitlines() if l.lstrip().startswith("linux ")):
+        assert line.endswith(" ${pengyos_serial} ${pengyos_trial}")
 
 
 def test_render_grub_cfg_quiets_the_kernel_on_a_real_uart_but_not_qemu():
@@ -71,18 +86,19 @@ def test_render_grub_cfg_serial_console_only_where_grub_finds_a_uart():
     probe = 'if serial --unit=0 --speed=115200; then\n    set pengyos_serial="console=ttyS0,115200"\n'
     assert probe in cfg and cfg.index(probe) < cfg.index("menuentry")
     for line in (l for l in cfg.splitlines() if l.lstrip().startswith("linux ")):
-        assert line.endswith(" console=tty0 ${pengyos_serial}")
+        assert line.endswith(" console=tty0 ${pengyos_serial} ${pengyos_trial}")
         assert "console=ttyS0" not in line
 
 
 @pytest.mark.parametrize("old", [
     "ro quiet console=tty0 console=ttyS0,115200",          # before 2026-10-03
-    "ro quiet console=tty0 ${pengyos_serial}",             # re-read from a new grub.cfg
+    "ro quiet console=tty0 ${pengyos_serial}",             # re-read from a 0.1.0 grub.cfg
+    "ro quiet console=tty0 ${pengyos_serial} ${pengyos_trial}",  # re-read from a new one
 ])
 def test_render_grub_cfg_rewrites_an_older_serial_console(old):
     line = next(l for l in render_grub_cfg({"a": "x"}, kernel_args=old).splitlines()
                 if l.lstrip().startswith("linux "))
-    assert line.endswith("root=PARTUUID=x ro quiet console=tty0 ${pengyos_serial}")
+    assert line.endswith("root=PARTUUID=x ro quiet console=tty0 ${pengyos_serial} ${pengyos_trial}")
 
 
 @pytest.mark.parametrize(

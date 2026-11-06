@@ -181,11 +181,12 @@ def test_grub_cfg_roundtrip():
     """What apply writes keeps the installed kernel arguments."""
     from pengyos_install.image import render_grub_cfg
     cfg = render_grub_cfg({"a": "AAA", "b": "BBB"}, "ro quiet pengyos.data=4")
-    assert kernel_args_from_grub_cfg(cfg) == "ro quiet pengyos.data=4 ${pengyos_serial}"
+    assert kernel_args_from_grub_cfg(cfg) == "ro quiet pengyos.data=4 ${pengyos_serial} ${pengyos_trial}"
     assert "--id pengyos-b" in cfg and "save_env pengyos_try" in cfg
     # apply re-renders from what it reads back: stable, one serial variable.
     again = render_grub_cfg({"a": "AAA", "b": "BBB"}, kernel_args_from_grub_cfg(cfg))
     assert again == cfg and again.count("${pengyos_serial}") == 2  # one per entry
+    assert again.count("${pengyos_trial}") == 2
 
 
 def test_grub_cfg_from_before_the_serial_probe():
@@ -195,7 +196,7 @@ def test_grub_cfg_from_before_the_serial_probe():
            "console=tty0 console=ttyS0,115200\n}\n")
     new = render_grub_cfg({"a": "8783"}, kernel_args_from_grub_cfg(old))
     assert "console=ttyS0,115200\n" not in new.split("fi\n")[-1]
-    assert "root=PARTUUID=8783 ro pengyos.data=4 console=tty0 ${pengyos_serial}\n" in new
+    assert "root=PARTUUID=8783 ro pengyos.data=4 console=tty0 ${pengyos_serial} ${pengyos_trial}\n" in new
 
 
 def test_parser():

@@ -147,7 +147,11 @@ KERNEL_ARGS = ("ro rootwait init=/usr/lib/pengyos/preinit pengyos.data=4 audit=0
 #: The GRUB variable render_grub_cfg ends every kernel line with: the serial
 #: console, or nothing when the machine has no working serial port.
 SERIAL_CONSOLE_VAR = "${pengyos_serial}"
-_SERIAL_ARGS = (SERIAL_CONSOLE_VAR, "console=ttyS0,115200")
+#: ...then the trial marker: ``pengyos.trial=1`` on a one-shot trial boot of a
+#: new slot (``pengyos_try``), nothing otherwise. pengyos-update's trial-only
+#: units (the boot deadline, the emergency-mode reboot) condition on it.
+TRIAL_VAR = "${pengyos_trial}"
+_SERIAL_ARGS = (SERIAL_CONSOLE_VAR, TRIAL_VAR, "console=ttyS0,115200")
 
 _CHUNK = 4 * 1024 * 1024
 _SALT_CHARS = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -511,8 +515,10 @@ def render_grub_cfg(slots: dict[str, str], kernel_args: str = KERNEL_ARGS) -> st
     ``console=tty0`` is named again after it, so the screen is /dev/console and
     shows systemd's boot and shutdown status, which otherwise went only to the
     serial port (2026-10-31: a shutdown waiting on a VM looked hung).
+    A trial boot (``pengyos_try``) also gets ``pengyos.trial=1`` through
+    ``${pengyos_trial}``, so the trial's own safety units can tell it is one.
     ``kernel_args`` may carry an older grub.cfg's fixed serial console or the
-    variable itself; both are dropped before the variable is appended."""
+    variables themselves; they are dropped before the variables are appended."""
     kernel_args = " ".join(a for a in kernel_args.split() if a not in _SERIAL_ARGS)
     out = [
         "# PengyOS — written by pengyos-install / pengyos-update for this disk.",
@@ -531,11 +537,13 @@ def render_grub_cfg(slots: dict[str, str], kernel_args: str = KERNEL_ARGS) -> st
         "fi",
         "load_env",
         'set default="pengyos-a"',
+        'set pengyos_trial=""',
         'if [ "${pengyos_slot}" = "b" ]; then set default="pengyos-b"; fi',
         'if [ -n "${pengyos_try}" ]; then',
         '    set default="pengyos-${pengyos_try}"',
         '    set pengyos_try=""',
         "    save_env pengyos_try",
+        '    set pengyos_trial="pengyos.trial=1"',
         "fi",
         "# A serial console only where GRUB finds a real UART at COM1; on real",
         "# hardware (not QEMU) with loglevel=4, so kernel messages don't crawl out of it,",
@@ -554,7 +562,7 @@ def render_grub_cfg(slots: dict[str, str], kernel_args: str = KERNEL_ARGS) -> st
         out += [
             f'menuentry "PengyOS (slot {slot})" --id pengyos-{slot} {{',
             f"    linux /slot-{slot}/bzImage root=PARTUUID={slots[slot].lower()} "
-            f"{kernel_args} {SERIAL_CONSOLE_VAR}",
+            f"{kernel_args} {SERIAL_CONSOLE_VAR} {TRIAL_VAR}",
             "}",
         ]
     return "\n".join(out) + "\n"
