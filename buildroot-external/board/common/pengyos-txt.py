@@ -213,6 +213,7 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
     quadlet_readme = has(target, "etc/containers/systemd/README")
     flatpak = real(target, "flatpak")
     desktop_fw = has(target, "usr/lib/pengyos/nftables.d/input-desktop.nft")
+    router_example = has(target, "usr/share/pengyos/examples/router/README.md")
     nm = real(target, "NetworkManager") or real(target, "nmcli")
     wpa = real(target, "wpa_supplicant")
     uv = real(target, "uv")
@@ -348,6 +349,10 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
     L += [f"  Open a port: {S}pengyos-firewall allow PORT [--from CIDR]; see the rules:",
           "  pengyos-firewall status. A container's published port is closed to the",
           "  LAN until you open it."]
+    if router_example:
+        L += ["  To make this machine a router (NAT, DHCP + DNS with dnsmasq, WireGuard):",
+              "  /usr/share/pengyos/examples/router/README.md. Its files go in /etc and",
+              "  edit nothing the image owns."]
     if nm:
         L += ["  Networks are NetworkManager's (nmcli, or the panel)."]
     elif wpa:

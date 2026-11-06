@@ -1,0 +1,6 @@
+# Input chain (included by /etc/nftables.conf): what this router serves.
+iifname { "lan0", "wg0" } udp dport { 53, 67 } accept
+iifname { "lan0", "wg0" } tcp dport 53 ct state new accept
+# WireGuard, and the ISP's DHCPv6 replies (prefix delegation).
+iifname "wan0" udp dport 51820 accept
+iifname "wan0" udp sport 547 udp dport 546 accept

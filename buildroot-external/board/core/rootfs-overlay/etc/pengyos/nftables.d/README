@@ -14,3 +14,7 @@ Manage them with pengyos-firewall instead of by hand:
 /etc survives OS updates, and so do these files. They add to the image's
 ruleset without replacing /etc/nftables.conf, so the image can still update
 that file. This README is not a .nft file, so the firewall ignores it.
+
+Two subdirectories are included elsewhere and are written by hand:
+forward/ (rules in the forward chain, for a box that routes) and table/
+(whole chains and sets: NAT, rate-limit sets). Each has its own README.

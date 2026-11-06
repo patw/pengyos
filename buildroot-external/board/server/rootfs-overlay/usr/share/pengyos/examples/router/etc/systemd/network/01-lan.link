@@ -1,0 +1,6 @@
+# Name the LAN port lan0, by its MAC (see 01-wan.link).
+[Match]
+MACAddress=00:00:00:00:00:02
+
+[Link]
+Name=lan0

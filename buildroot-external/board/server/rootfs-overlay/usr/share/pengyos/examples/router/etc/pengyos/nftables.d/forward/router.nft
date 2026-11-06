@@ -1,0 +1,7 @@
+# Forward chain: the LAN and the VPN go out and reach each other. Nothing is
+# started from the WAN into the LAN except what table/router.nft DNATs (the
+# chain's `ct status dnat accept`). The IPv6 drop is explicit: LAN hosts have
+# public v6 addresses, and only their own outbound traffic comes back in.
+iifname { "lan0", "wg0" } oifname { "wan0", "lan0" } accept
+iifname "lan0" oifname "wg0" accept
+iifname "wan0" oifname "lan0" meta nfproto ipv6 drop

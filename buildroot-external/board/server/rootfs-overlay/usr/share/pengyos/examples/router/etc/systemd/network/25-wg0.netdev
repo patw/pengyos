@@ -1,0 +1,20 @@
+# WireGuard by networkd itself (no wg-quick). The key file must be readable by
+# networkd only:
+#   wg genkey | sudo tee /etc/systemd/network/wg0.key | wg pubkey
+#   sudo chown root:systemd-network /etc/systemd/network/wg0.key
+#   sudo chmod 0640 /etc/systemd/network/wg0.key
+# (wg-quick@wg0 with /etc/wireguard/wg0.conf also works, but PostUp/PostDown
+# lines that call iptables fail: PengyOS has nft, no iptables.)
+[NetDev]
+Name=wg0
+Kind=wireguard
+MTUBytes=1420
+
+[WireGuard]
+PrivateKeyFile=/etc/systemd/network/wg0.key
+ListenPort=51820
+
+# One section per peer (phone, laptop).
+[WireGuardPeer]
+PublicKey=REPLACE_WITH_THE_PEERS_PUBLIC_KEY=
+AllowedIPs=192.168.51.2/32

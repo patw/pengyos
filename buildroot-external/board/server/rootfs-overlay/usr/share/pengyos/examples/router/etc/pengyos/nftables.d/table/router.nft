@@ -1,0 +1,28 @@
+# Table level: NAT and a WAN guard. An inet table, so NAT names its family.
+
+# The image's input chain accepts ssh on every interface; a router's WAN has
+# a public IPv6 address. Drop ssh to the router from the WAN first (priority
+# -10 runs before the input chain, and a drop is final).
+chain router_wan_guard {
+    type filter hook input priority -10; policy accept;
+    iifname "wan0" tcp dport 22 drop
+}
+
+# Port forwards. Example: ssh to a LAN server, rate-limited per source.
+set router_ssh_ratelimit {
+    type ipv4_addr; size 65536; flags dynamic,timeout; timeout 1m;
+}
+chain router_dnat {
+    type nat hook prerouting priority dstnat; policy accept;
+    iifname "wan0" tcp dport 22 add @router_ssh_ratelimit { ip saddr limit rate over 5/minute burst 5 packets } drop
+    iifname "wan0" tcp dport 22 dnat ip to 192.168.50.10:22
+    # Hairpin: LAN clients using the public address reach the same server.
+    iifname { "lan0", "wg0" } tcp dport 22 ip daddr != 192.168.50.1 fib daddr type local dnat ip to 192.168.50.10:22
+}
+
+chain router_snat {
+    type nat hook postrouting priority srcnat; policy accept;
+    oifname "wan0" meta nfproto ipv4 masquerade
+    # Hairpin replies must come back through the router.
+    iifname "lan0" oifname "lan0" ip saddr 192.168.50.0/24 snat ip to 192.168.50.1
+}

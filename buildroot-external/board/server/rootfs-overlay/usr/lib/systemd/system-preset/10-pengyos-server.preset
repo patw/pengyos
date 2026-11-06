@@ -22,3 +22,8 @@ disable nmb.service
 disable winbind.service
 disable samba.service
 disable samba-bgqd.service
+
+# dnsmasq (DHCP + DNS) is opt-in: a second DHCP server on a LAN breaks every
+# machine on it. dnsmasq.service is enabled by hand on the one box that is the
+# router; `enable *` would otherwise start it on every Server and Desktop.
+disable dnsmasq.service

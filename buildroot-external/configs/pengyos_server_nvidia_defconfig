@@ -542,6 +542,13 @@ BR2_PACKAGE_NVME=y
 # - WireGuard (US-SRV-5): the kernel module was there, but not `wg`, so a tunnel's
 #   keys could not be made (`wg genkey`) or a live one inspected (`wg show`).
 BR2_PACKAGE_WIREGUARD_TOOLS=y
+# - DHCP + DNS for a LAN (2026-11-06): a Server can be the house's router
+#   (USE-CASES "firewall/router"). dnsmasq was Desktop-only, for NM's hotspot;
+#   it moved here and the Desktop inherits it. Buildroot installs only a
+#   sysvinit script, which systemd never runs. The image's own
+#   /usr/lib/systemd/system/dnsmasq.service ships disabled, so a box serves
+#   DHCP only after `systemctl enable --now dnsmasq` and an /etc/dnsmasq.conf.
+BR2_PACKAGE_DNSMASQ=y
 # - ethtool: link speed, offloads, and Wake-on-LAN for a box that sleeps.
 BR2_PACKAGE_ETHTOOL=y
 # - Firmware for the xe GPU driver (server/linux.fragment): US-SRV-9 transcoding

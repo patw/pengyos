@@ -1,0 +1,30 @@
+This machine's own chains and sets (PengyOS). Empty unless this box needs them.
+
+/etc/nftables.conf includes every *.nft file here at table level, inside
+`table inet pengyos`. A file holds whole `chain` and `set` definitions, which
+is what a router's NAT needs:
+
+    set router_ssh_ratelimit { type ipv4_addr; flags dynamic,timeout; timeout 1m; }
+    chain router_dnat {
+        type nat hook prerouting priority dstnat; policy accept;
+        iifname "wan0" tcp dport 22 dnat ip to 10.0.23.3:22
+    }
+    chain router_snat {
+        type nat hook postrouting priority srcnat; policy accept;
+        oifname "wan0" meta nfproto ipv4 masquerade
+    }
+
+This is an inet table, so NAT statements name the family: `dnat ip to`,
+`snat ip to`. Sets live here, never inside a chain. A chain hooked to input at
+a priority below 0 runs before the image's input chain, and a drop there is
+final; that is how to keep the image's always-open ssh off a WAN link:
+
+    chain router_wan_guard {
+        type filter hook input priority -10; policy accept;
+        iifname "wan0" tcp dport 22 drop
+    }
+
+Prefix every chain and set with router_ (or this machine's own word) so it
+never collides with a name the image uses. Check, then reload:
+
+    sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables

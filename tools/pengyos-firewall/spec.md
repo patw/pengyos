@@ -32,7 +32,9 @@ pengyos-firewall --root DIR …        # test hook: write under DIR, no root nee
 - `status` is read-only and works unprivileged. It shows whether
   nftables.service is active, what is always open, the image's edition rules
   (`/usr/lib/pengyos/nftables.d/input-*.nft`), and every rule file in
-  `/etc/pengyos/nftables.d/`, including ones written by hand.
+  `/etc/pengyos/nftables.d/`, including ones written by hand, then by name
+  the hand-written files in `forward/` and `table/` (JSON: `forward_files`,
+  `table_files`).
 - Misuse exits 2 with a message naming the misuse, and writes nothing.
   `allow` twice is one rule; `remove` of a port not opened is a no-op.
 
@@ -42,6 +44,7 @@ pengyos-firewall --root DIR …        # test hook: write under DIR, no root nee
 | `buildroot-external/board/core/rootfs-overlay/usr/bin/pengyos-firewall` | `/usr/bin/pengyos-firewall` (every edition) |
 | `buildroot-external/board/core/rootfs-overlay/etc/nftables.conf` | `/etc/nftables.conf`: the ruleset, which includes the rule dir |
 | `buildroot-external/board/core/rootfs-overlay/etc/pengyos/nftables.d/README` | `/etc/pengyos/nftables.d/`: the rule dir, with a README |
+| `…/etc/pengyos/nftables.d/{forward,table}/README` | the hand-written forward-chain and table-level places (a router's rules and NAT) |
 | `tools/pengyos-firewall/` | the test suite and its docs (not in the image) |
 
 Runtime state: one file per opened port,
