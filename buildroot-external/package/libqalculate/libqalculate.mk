@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-LIBQALCULATE_VERSION = 5.12.0
+LIBQALCULATE_VERSION = 5.13.2
 LIBQALCULATE_SITE = https://github.com/Qalculate/libqalculate/releases/download/v$(LIBQALCULATE_VERSION)
 LIBQALCULATE_LICENSE = GPL-2.0+
 LIBQALCULATE_LICENSE_FILES = COPYING

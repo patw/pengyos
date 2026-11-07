@@ -1,3 +1,5 @@
 # Locally computed
-sha256  f3dfdcf97d5a9e3a5bc0ebe66afd184721b606276eee3ba0ada8c92a5e71d44c  libqalculate-5.12.0.tar.gz
+# From https://github.com/Qalculate/libqalculate/releases/download/v5.13.2/libqalculate-5.13.2.tar.gz
+sha256  81af6c54018d5cbc9ce4df5a82c3ffb7b195193d72dcabb904f522b69936f3e6  libqalculate-5.13.2.tar.gz
 sha256  edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  COPYING
+
