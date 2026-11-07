@@ -37,6 +37,9 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   `.config` gives the same options on 7.3.3 under `olddefconfig`. Neither
   point release touches the kthread nullfs root or `scoped_with_init_fs()`,
   which the nvidia-open RTD3 patch (0001) relies on.
+- The post-build kernel-config check now reads the configured kernel's
+  `.config`. It used whichever `linux-*/` build dir it found first, which after
+  a version bump can be the stale one.
 
 ### Added — updates can run unattended, and a bad one always finds its way back (2026-11-06)
 - **Health-gated confirm.** A trial boot of a new slot is kept only if

@@ -18,8 +18,22 @@ TARGET_DIR="$1"
 # Kconfig drops a fragment line whose dependencies are unmet without a word, and
 # anything we rely on that only x86_64_defconfig provides can vanish on a kernel
 # bump (board/*/kernel-required.txt). Fail the build instead of shipping it.
-KCONFIG="$(find "${BUILD_DIR}" -maxdepth 2 -path '*/linux-[0-9]*/.config' 2>/dev/null | head -1)"
-if [ -n "${KCONFIG}" ] && [ -n "${BR2_CONFIG:-}" ]; then
+# Check the kernel this build is configured for, not whichever linux-*/ dir find
+# lists first: after a version bump the old build dir stays behind, and on the
+# 7.3.1 -> 7.3.3 bump (2026-11-07) the check read the stale 7.3.1 .config, failing
+# Server on an option the new kernel had (and passing Core on the wrong config).
+KCONFIG=""
+if [ -n "${BR2_CONFIG:-}" ]; then
+    KVER="$(sed -n 's/^BR2_LINUX_KERNEL_VERSION="\(.*\)"$/\1/p' "${BR2_CONFIG}")"
+    if [ -n "${KVER}" ]; then
+        KCONFIG="${BUILD_DIR}/linux-${KVER}/.config"
+        [ -f "${KCONFIG}" ] || {
+            echo "post-build: no built kernel config at ${KCONFIG}" >&2
+            exit 1
+        }
+    fi
+fi
+if [ -n "${KCONFIG}" ]; then
     python3 "$(dirname "$0")/../../../scripts/check-kernel-fragments.py" \
         --built "${KCONFIG}" --br-config "${BR2_CONFIG}" || {
         echo "post-build: the kernel config lost options listed above" >&2
