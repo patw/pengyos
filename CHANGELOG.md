@@ -17,6 +17,27 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed — Pengy 1.15.0: chat search, Edit Chat, bulk rename, web dark mode; Linux 7.3.3 (2026-11-07)
+- **Pengy 1.14.1 -> 1.15.0** in every edition (CLI, web, and the Qt app on
+  Desktop). New: **chat search** (Ctrl+K in the app, a search box in the web
+  UI, `/search` in the CLI) that also searches message text and jumps to the
+  match; an **Edit Chat** dialog (rename, have the model generate a title,
+  export as Markdown; `/title` in the CLI); **Bulk Rename Chats** in Settings,
+  which never touches a name you typed; and **dark mode in the web UI**,
+  following the shared theme setting.
+- Fixes that matter on PengyOS: stopping a tool can no longer signal every
+  process the user owns. The old `kill -9 -<pgid>` could be misread as
+  `kill(-1)` and log the whole session out; it now calls `kill(2)` directly.
+  `javascript:` and `data:` links in model replies are stripped in the web UI.
+  The 1.14.2 dependency refresh brings rustls 0.23.46, rustls-webpki 0.103.16,
+  zstd 0.13.4, zip 9 and primp 2.
+- **Linux 7.3.1 -> 7.3.3**, stable point releases in the same series. The
+  tarball hash in `patches/linux/7.3.3/linux.hash` is checked against
+  kernel.org's signed sha256sums.asc. Every edition's shipped kernel
+  `.config` gives the same options on 7.3.3 under `olddefconfig`. Neither
+  point release touches the kthread nullfs root or `scoped_with_init_fs()`,
+  which the nvidia-open RTD3 patch (0001) relies on.
+
 ### Added — updates can run unattended, and a bad one always finds its way back (2026-11-06)
 - **Health-gated confirm.** A trial boot of a new slot is kept only if
   `/usr/lib/pengyos/update-health.d/` and the machine's
