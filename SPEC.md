@@ -91,7 +91,7 @@ Chosen once, inherited everywhere.
 | **Storage** | **A/B ext4 system slots** (read-only) + a **btrfs `data`** partition; `/etc` an overlay on `data` | GPL-2.0 | btrfs root with snapshots (designed, parked) | 🟢 |
 | **Swap** | zram (`zram-generator`) | MIT | swap partition | 🟢 |
 | **Time / trust** | chrony; ca-certificates; OpenSSL | GPL-2.0 / MPL-2.0 / Apache-2.0 | timesyncd | 🟢 |
-| **Remote** | OpenSSH, key-only; host keys generated on first boot | BSD | — | 🟢 |
+| **Remote** | OpenSSH, key-only by default; host keys generated on first boot. Server and Desktop: password logins for people's accounts are an opt-in (installer "Keys or password", `pengyos-ssh-password on`), never for root. Added 2026-11-07 after people with no SSH key could not get in at all | BSD | password logins on by default (Debian, Ubuntu Server) | 🟢 |
 | **GPU monitor** | **nvtop** (Server and Desktop) — our recipe `package/nvtop`: NVIDIA through NVML (dlopened, so one build serves every edition), AMD through libdrm_amdgpu, Intel through DRM fdinfo | GPL-3.0 | `nvidia-smi` alone (NVIDIA only, a snapshot with no history); btop (a whole system monitor, for the GPU view alone) | 🟢 |
 | **LSM** | **Yama** (`ptrace_scope=1`) and **Landlock** since 26.10.23; no MAC policy yet (the kernel has no AppArmor or SELinux) | GPL-2.0 | SELinux | 🟡 |
 | **Signing** | **ed25519** detached signatures (`tools/pengyos-sign`) on update manifests | MIT | GPG | 🟢 |
@@ -174,7 +174,7 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
   serial console; the GRUB menu is full-screen.
 - **Userspace:** systemd (journald, udevd, logind, networkd, resolved), D-Bus, uutils
   coreutils and uutils findutils (Rust), util-linux, kmod, iproute2, procps-ng, bash, Python 3, nftables,
-  chrony, OpenSSH (key-only). The text/search tools come from the projects that define
+  chrony, OpenSSH (key-only by default). The text/search tools come from the projects that define
   the behaviour: find/xargs (uutils findutils), grep, sed, gawk, GNU time, which,
   diffutils, patch, gzip, Info-ZIP unzip, tar, tree, lsof, less, attr, psmisc, Vim,
   curl and GNU wget, shadow (login, passwd, useradd), iputils, net-tools, traceroute,

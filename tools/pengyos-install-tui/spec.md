@@ -13,8 +13,10 @@ attached, then run headless and reached over SSH, by its owner or by an agent
 
 - work on the bare Linux console, where nothing can be pasted, and on old
   1024x768/1366x768 panels;
-- leave the machine reachable over SSH, which is key-only, without anyone typing
-  a public key by hand;
+- leave the machine reachable over SSH, which is key-only by default, without
+  anyone typing a public key by hand; and, for someone with no key at all, offer
+  password logins as an explicit, warned opt-in ("Keys or password", reversible
+  with `pengyos-ssh-password`);
 - install exactly what the GUI installs (same engine, same validation).
 
 Unattended / fleet installs are a non-goal (see below).

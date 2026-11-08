@@ -33,6 +33,11 @@ def _choice_page(session: Session, page, inp, out: TextIO) -> None:
         yes = _read(inp, "Log in automatically, skipping the login screen? [y/N]: ")
         session.choose(page, 1 if yes.strip().lower() in ("y", "yes") else 0)
         return
+    if page.key == "ssh_login":
+        yes = _read(inp, "Also let SSH accept your password? Less secure; root still "
+                         "needs a key. [y/N]: ")
+        session.choose(page, 1 if yes.strip().lower() in ("y", "yes") else 0)
+        return
     opts = session.options(page)
     numbers = [i for i, o in enumerate(opts) if o.enabled]
     for i, o in enumerate(opts):
@@ -160,3 +165,8 @@ def ask_plain(session: Session, *, inp: Callable[[str], str], secret: Callable[[
             _choice_page(session, page, inp, out)
         else:
             _form_page(session, page, inp, secret, out)
+        # Go on from where this page now sits: skipping Wi-Fi at its password
+        # drops the password page, and a plain i += 1 then jumped over the page
+        # after it (the SSH page, so a key was never asked for).
+        pages = session.pages()
+        i = pages.index(page) + 1 if page in pages else i - 1

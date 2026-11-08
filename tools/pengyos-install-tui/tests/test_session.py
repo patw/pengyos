@@ -7,7 +7,7 @@ from conftest import DISKS, GH_KEYS, HOST_KEYS, HOST_PASSWORD, KEY, FakeFetch
 
 from pengyos_install.image import Disk
 from pengyos_install_tui.keys import KeyFetchError
-from pengyos_install_tui.session import ACCOUNT, DISK, LOGIN, NAME, PENGY, SSH, Session
+from pengyos_install_tui.session import ACCOUNT, DISK, LOGIN, NAME, PENGY, SSH, SSH_LOGIN, Session
 
 
 def make(manifest, fetcher=None, disks=DISKS):
@@ -20,7 +20,7 @@ def page(s, key):
 
 def test_server_pages_have_no_login_page(manifest):
     assert [p.key for p in make(manifest).pages()] == \
-        ["disk", "name", "account", "ssh", "pengy", "review"]
+        ["disk", "name", "account", "ssh", "ssh_login", "pengy", "review"]
 
 
 def test_desktop_adds_the_login_page(desktop_manifest):
@@ -183,6 +183,34 @@ def test_pengy_is_optional_but_key_needs_a_url(manifest):
     assert (a.pengy_base_url, a.pengy_model) == ("http://10.0.0.5:11434/v1", "qwen3:8b")
 
 
+def test_ssh_login_choice(manifest, fetcher):
+    s = make(manifest, fetcher)
+    assert [o.label for o in s.options(SSH_LOGIN)] == ["Keys only", "Keys or password"]
+    assert s.chosen(SSH_LOGIN) == 0 and s.answers().ssh_password is False
+    s.set("key_source", "patw")
+    s.finish(SSH)
+    assert not dict(s.review())["SSH"].endswith("or password")
+    s.choose(SSH_LOGIN, 1)
+    assert s.chosen(SSH_LOGIN) == 1 and s.answers().ssh_password is True
+    assert dict(s.review())["SSH"].endswith(", or password")
+    s.choose(SSH_LOGIN, 0)
+    assert s.answers().ssh_password is False
+
+
+def test_ssh_password_without_keys(manifest):
+    s = make(manifest)
+    s.finish(SSH)
+    s.finish(SSH)
+    s.choose(SSH_LOGIN, 1)
+    assert dict(s.review())["SSH"] == "no key: password"
+
+
+def test_ssh_login_choice_does_not_touch_autologin(desktop_manifest):
+    s = make(desktop_manifest)
+    s.choose(SSH_LOGIN, 1)
+    assert s.answers().autologin is False and s.chosen(LOGIN) == 0
+
+
 def test_desktop_login_choice(desktop_manifest):
     s = make(desktop_manifest)
     assert s.chosen(LOGIN) == 0 and s.answers().autologin is False
@@ -229,7 +257,7 @@ def test_no_wifi_pages_without_a_wifi_card(manifest):
 
 def test_wifi_pages_come_before_ssh(manifest):
     s, w = wifi_session(manifest, wired="10.0.0.9")
-    assert keys(s) == ["disk", "name", "account", "wifi", "ssh", "pengy", "review"]
+    assert keys(s) == ["disk", "name", "account", "wifi", "ssh", "ssh_login", "pengy", "review"]
     assert s.scan() is None and w.scans == 1
     opts = s.options(WIFI)
     assert [o.label for o in opts] == ["No Wi-Fi", "Home", "Cafe", "Scan again"]

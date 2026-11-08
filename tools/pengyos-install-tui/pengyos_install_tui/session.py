@@ -9,12 +9,13 @@ engine's own :meth:`pengyos_install.image.ProvisionAnswers.validate`.
 
 Pages::
 
-    disk -> name -> account -> [wifi -> [wifi_password]] -> ssh -> pengy
-         -> [login, Desktop only] -> review
+    disk -> name -> account -> [wifi -> [wifi_password]] -> ssh -> ssh_login
+         -> pengy -> [login, Desktop only] -> review
 
 The Wi-Fi pages appear only where there is a Wi-Fi interface (a laptop), and the
 password page only for a secured network. They come before the SSH page, whose
-key import needs the network.
+key import needs the network. The ssh_login page asks whether SSH also accepts
+the password (keys only is the default; pengyos-ssh-password changes it later).
 """
 
 from __future__ import annotations
@@ -88,15 +89,23 @@ ACCOUNT = Page(
 )
 SSH = Page(
     "ssh", "SSH access",
-    "SSH on PengyOS accepts keys only, never passwords. Import public keys from a "
-    "GitHub user, a URL, or user@host (another machine's authorized_keys, copied "
-    "with its password); paste one; or leave all empty to log in here only.",
+    "SSH logins use keys. Import public keys from a GitHub user, a URL, or "
+    "user@host (another machine's authorized_keys, copied with its password); "
+    "paste one; or leave all empty. The next page can allow passwords instead.",
     (
         Field("key_source", "Import keys from", "GitHub user, http(s):// URL or user@host",
               optional=True),
         Field("key_password", "Password", "only for user@host", secret=True, optional=True),
         Field("ssh_key", "Or paste a key", "ssh-ed25519 AAAA... you@host", optional=True),
     ),
+)
+SSH_LOGIN = Page(
+    "ssh_login", "SSH login",
+    "Keys are the safer way in: only a computer holding your key can log in. A "
+    "password is easier to start with, but anyone who can reach this machine can "
+    "try to guess it. root always needs a key. Change it later with "
+    "pengyos-ssh-password.",
+    choice=True,
 )
 PENGY = Page(
     "pengy", "Set up Pengy",
@@ -131,6 +140,11 @@ REVIEW = Page(
     "review", "Ready to install",
     "Check the summary. Installing ERASES EVERYTHING on the chosen disk.",
     (Field("confirm", f"Type '{CONFIRM_WORD}' to install"),),
+)
+
+SSH_LOGIN_OPTIONS = (
+    Option("Keys only", "recommended"),
+    Option("Keys or password", "less secure: passwords can be guessed"),
 )
 
 LOGIN_OPTIONS = (
@@ -168,6 +182,8 @@ class Session:
         self.values: dict[str, str] = dict(DEFAULTS)
         self.disk: engine.Disk | None = None
         self.autologin = False
+        #: "Keys or password" on the ssh_login page (default: keys only).
+        self.ssh_password = False
         #: Keys imported on the ssh page, and where from.
         self.imported: Imported | None = None
         self.imported_from: KeySource | None = None
@@ -202,7 +218,7 @@ class Session:
             pages.append(WIFI)
             if self.network and self.network.secured:
                 pages.append(WIFI_PASSWORD)
-        pages += [SSH, PENGY]
+        pages += [SSH, SSH_LOGIN, PENGY]
         if self.edition == "desktop":
             pages.append(LOGIN)
         pages.append(REVIEW)
@@ -230,6 +246,8 @@ class Session:
                            self.disk_note(d), self._disk_ok(d)) for d in self.disks]
         if page.key == "login":
             return list(LOGIN_OPTIONS)
+        if page.key == "ssh_login":
+            return list(SSH_LOGIN_OPTIONS)
         if page.key == "wifi":
             wired = f"wired: {self.wired}" if self.wired else "no network cable connected"
             rows = [Option("No Wi-Fi", wired)]
@@ -262,6 +280,8 @@ class Session:
         if page.key == "wifi":
             nets = self.networks or []
             return nets.index(self.network) + 1 if self.network in nets else 0
+        if page.key == "ssh_login":
+            return 1 if self.ssh_password else 0
         return 1 if self.autologin else 0
 
     def choose(self, page: Page, index: int) -> str | None:
@@ -279,6 +299,8 @@ class Session:
             self.network = self.networks[index - 1] if index else None
             if self.network is None or self._joined and self._joined[0] != self.network.ssid:
                 self._leave()
+        elif page.key == "ssh_login":
+            self.ssh_password = index == 1
         else:
             self.autologin = index == 1
         return None
@@ -415,7 +437,8 @@ class Session:
                 self.ssh_skip_warned = True
                 # On the page's last field, so one more Enter skips.
                 return ("ssh_key", "without a key this machine can only be used "
-                        "from its own keyboard; press Enter again to skip")
+                        "from its own keyboard, unless you allow passwords on the "
+                        "next page; press Enter again to skip")
         if page.key == "wifi" and self.network and not self.network.secured \
                 and self._joined != (self.network.ssid, ""):
             return self._join("")
@@ -438,6 +461,7 @@ class Session:
         return engine.ProvisionAnswers(
             hostname=v.get("hostname", ""), username=v.get("username", ""),
             password=v.get("password", ""), authorized_keys=self.authorized_keys,
+            ssh_password=self.ssh_password,
             autologin=self.autologin and self.edition == "desktop",
             pengy_base_url=base_url,
             pengy_api_key=v.get("pengy_api_key", "") if base_url else "",
@@ -458,7 +482,7 @@ class Session:
         a, d = self.answers(), self.disk
         keys = [k for k in a.authorized_keys.splitlines() if k.strip()]
         if not keys:
-            ssh = "no key: console login only"
+            ssh = "no key: password" if a.ssh_password else "no key: console login only"
         else:
             sources = []
             if self.imported:
@@ -469,6 +493,8 @@ class Session:
             if self.values.get("ssh_key"):
                 sources.append("1 pasted")
             ssh = f"{len(keys)} key{'s' if len(keys) != 1 else ''} ({', '.join(sources)})"
+            if a.ssh_password:
+                ssh += ", or password"
         if a.pengy_base_url:
             pengy = a.pengy_base_url + (f"  model {a.pengy_model}" if a.pengy_model else "")
         else:

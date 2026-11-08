@@ -137,6 +137,8 @@ def test_install_through_the_real_terminal(tmp_path, payload, term):
     t.send("\t\t\r")
     t.read_until("own keyboard")
     t.send("\r")
+    t.read_until("SSH login")
+    t.send("\r")                              # Keys only
     t.read_until("Set up Pengy")
     t.send("\r\r\r")
     t.read_until("Ready to install")

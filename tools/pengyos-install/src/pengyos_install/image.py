@@ -119,6 +119,8 @@ PENGY_SYSTEM_MESSAGE = (
 )
 #: Where a user's Pengy settings live (PengyR's ``pengy_config_dir``).
 PENGY_CONFIG_REL = ".config/pengy/settings.json"
+#: The image's switch for SSH password logins (board/server overlay).
+SSH_PASSWORD_TOOL = "/usr/bin/pengyos-ssh-password"
 #: Pengy talks to an OpenAI-compatible endpoint: http(s) only, no spaces.
 _PENGY_URL_RE = re.compile(r"^https?://[^\s\x00-\x1f]+$")
 #: Model names and API keys are single tokens (``qwen3:8b``, ``sk-…``).
@@ -383,6 +385,10 @@ class ProvisionAnswers:
     #: SSH public keys (authorized_keys lines) for the user. The Server's sshd is
     #: key-only, so without one the user can log in only at the console.
     authorized_keys: str = ""
+    #: SSH also accepts the user's password, not only keys (opt-in: the
+    #: installer's "Keys or password"). root stays key-only. The image's
+    #: ``pengyos-ssh-password`` writes the setting, so it can be undone later.
+    ssh_password: bool = False
     #: Desktop only: start straight into this user's desktop at boot instead of
     #: the login screen (opt-in, like Ubuntu's "Log in automatically").
     autologin: bool = False
@@ -834,6 +840,18 @@ def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
         os.chmod(ssh / "authorized_keys", 0o600)
         _run(run, ["chroot", str(root), "chown", "-R", f"{answers.username}:{answers.username}",
                    f"/home/{answers.username}/.ssh"], "giving the user their SSH keys")
+
+    # SSH password logins, when chosen. The image's own tool writes them (an
+    # sshd_config.d drop-in and the login reminder), so the installer and a later
+    # `pengyos-ssh-password on` leave the same files, and `off` undoes either.
+    # --offline: no sshd runs in the target to check or reload.
+    if answers.ssh_password:
+        if not (root / SSH_PASSWORD_TOOL.lstrip("/")).exists():
+            raise ImageInstallError(
+                "this image cannot allow SSH password logins (it has no "
+                f"{SSH_PASSWORD_TOOL}); install with keys only")
+        _run(run, ["chroot", str(root), SSH_PASSWORD_TOOL, "on", "--offline"],
+             "allowing SSH password logins")
 
     # The assistant's endpoint, when the wizard was given one. Pengy ships
     # unconfigured (its defaults are the local Ollama port and no model), and

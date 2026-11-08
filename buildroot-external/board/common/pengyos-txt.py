@@ -48,6 +48,7 @@ TOOLS = {
     "pengyos-shares": "share folders over SMB: add, remove, passwd",
     "pengyos-webui": "serve pengy-web at boot (no login: loopback only)",
     "pengyos-gpu-memory": "how much RAM an AMD GPU may use: status, set",
+    "pengyos-ssh-password": "SSH password logins: status, on, off (keys only)",
     "pengyos-postmortem": "why did that session or boot end? (the journal)",
     "pengyos-install": "the install engine the installers drive",
     "pengyos-install-tui": "the console installer",
@@ -342,8 +343,13 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
               "  reboot, its ports and whether the firewall lets the LAN reach them.", ""]
 
     L += ["NETWORK AND FIREWALL", ""]
-    L += ["  The firewall denies inbound connections by default; ssh (22, keys only,",
-          "  no passwords) and mDNS are open."]
+    if real(target, "pengyos-ssh-password"):
+        L += ["  The firewall denies inbound connections by default; ssh (22) and mDNS",
+              "  are open. SSH takes keys only unless passwords were allowed:",
+              "  pengyos-ssh-password shows which, and how to set up a key."]
+    else:
+        L += ["  The firewall denies inbound connections by default; ssh (22, keys only,",
+              "  no passwords) and mDNS are open."]
     if desktop_fw:
         L += ["  This Desktop also opens every port above 1024."]
     L += [f"  Open a port: {S}pengyos-firewall allow PORT [--from CIDR]; see the rules:",

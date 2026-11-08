@@ -106,6 +106,8 @@ pub enum Message {
     SetConfirm(String),
     /// "Log in automatically" switched (off by default).
     SetAutologin(bool),
+    /// "Allow SSH logins with a password" switched (off by default).
+    SetSshPassword(bool),
     /// The assistant's base URL field changed.
     SetPengyBaseUrl(String),
     /// The assistant's API key field changed.
@@ -136,6 +138,9 @@ pub struct AppModel {
     confirm: String,
     /// Start straight into the desktop at boot, skipping the login screen.
     autologin: bool,
+    /// SSH also accepts the user's password, not only keys (less safe; root
+    /// still needs a key). Off by default; `pengyos-ssh-password` changes it later.
+    ssh_password: bool,
     /// The assistant's endpoint (the Pengy screen). All three are optional: an
     /// empty base URL means the screen was skipped and Pengy keeps the defaults
     /// the image ships. The key is held here (like the password) and reaches
@@ -245,32 +250,20 @@ impl AppModel {
         else {
             return Task::none();
         };
-        let mut args: Vec<String> = [
-            "image", "--target", disk, "--hostname", host, "--user", user,
-            "--yes", "--password-stdin", "--progress", "json",
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-        if self.autologin {
-            args.push("--autologin".into());
-        }
-        // The assistant's endpoint, only when the screen was filled in. The key
-        // rides on stdin (line 2, after the password), never on argv.
+        // The argv is built (and tested) in crate::engine_args. The password,
+        // and the API key when there is one, go on stdin, never on argv.
         let base_url = self.pengy_base_url.trim().to_string();
         let api_key = self.pengy_api_key.trim().to_string();
-        let pengy_model = self.pengy_model.trim().to_string();
-        if !base_url.is_empty() {
-            args.push("--pengy-base-url".into());
-            args.push(base_url.clone());
-            if !api_key.is_empty() {
-                args.push("--pengy-api-key-stdin".into());
-            }
-            if !pengy_model.is_empty() {
-                args.push("--pengy-model".into());
-                args.push(pengy_model.clone());
-            }
-        }
+        let args = crate::engine_args::engine_args(&crate::engine_args::InstallOptions {
+            disk: disk.to_string(),
+            hostname: host.to_string(),
+            username: user.to_string(),
+            autologin: self.autologin,
+            ssh_password: self.ssh_password,
+            pengy_base_url: base_url.clone(),
+            pengy_api_key: !api_key.is_empty(),
+            pengy_model: self.pengy_model.clone(),
+        });
         let engine = self.flags.engine.clone();
         let password = self.password.clone();
         self.run = Run::Running;
@@ -378,6 +371,7 @@ impl cosmic::Application for AppModel {
             pengy_model: String::new(),
             confirm: String::new(),
             autologin: false,
+            ssh_password: false,
             progress: 0.0,
             status: String::new(),
             run: Run::NotStarted,
@@ -412,6 +406,7 @@ impl cosmic::Application for AppModel {
             }
             Message::SetConfirm(c) => self.confirm = c,
             Message::SetAutologin(on) => self.autologin = on,
+            Message::SetSshPassword(on) => self.ssh_password = on,
             // The Pengy screen: keep the text locally (the key is a secret and
             // the engine reads it from stdin) and mirror it into the model so
             // the plan and the Summary screen agree with what is on screen.
@@ -640,6 +635,17 @@ impl AppModel {
                     // had to be made twice.
                     .control(widget::toggler(self.autologin).on_toggle(Message::SetAutologin)),
             )
+            .add(
+                item::builder("Allow SSH logins with a password")
+                    .description(
+                        "Log in to this computer from another one over the network with \
+                         this password. Less secure than SSH keys: anyone who can reach \
+                         this computer can try to guess it. root still can't. Turn it off \
+                         later with: sudo pengyos-ssh-password off",
+                    )
+                    // A plain switch, for the same reason as the one above.
+                    .control(widget::toggler(self.ssh_password).on_toggle(Message::SetSshPassword)),
+            )
             .into()
     }
 
@@ -693,6 +699,11 @@ impl AppModel {
                     "Automatic"
                 } else {
                     "Password required"
+                })))
+                .add(item::builder("SSH").control(text::body(if self.ssh_password {
+                    "Password allowed (less secure; root needs a key)"
+                } else {
+                    "Keys only (none added: add one later)"
                 })))
                 .add(item::builder("Pengy").control(text::body(if self.pengy_base_url.trim().is_empty() {
                     "Not configured — Pengy keeps its defaults".to_string()

@@ -45,7 +45,7 @@ def screen(app, h=24, w=80):
     return "\n".join(app.render(h, w).text())
 
 
-def fill_to_review(app, *, source="patw", password=""):
+def fill_to_review(app, *, source="patw", password="", ssh_password=False):
     press(app, "enter")                         # disk (preselected)
     press(app, "enter")                         # name: keep "pengyos"
     type_(app, "pat"); press(app, "enter")
@@ -57,6 +57,9 @@ def fill_to_review(app, *, source="patw", password=""):
     press(app, "tab", "enter")                  # ssh
     if not source:
         press(app, "enter")                     # acknowledge the skip warning
+    if ssh_password:
+        press(app, "down")                      # ssh_login: "Keys or password"
+    press(app, "enter")                         # ssh_login
     press(app, "enter", "enter", "enter")       # pengy: all empty
 
 
@@ -79,7 +82,7 @@ def test_editor_scrolls_and_masks():
 def test_first_page_lists_disks_and_highlights_the_usable_one(manifest):
     app = make_app(manifest)
     text = screen(app)
-    assert "PengyOS Server 26.10.50 installer" in text and "Step 1 of 6" in text
+    assert "PengyOS Server 26.10.50 installer" in text and "Step 1 of 7" in text
     assert "Choose a disk" in text
     assert "(the installer stick)" in text and "too small" in text
     frame = app.render(24, 80)
@@ -190,7 +193,10 @@ def test_skipping_ssh_needs_a_second_enter(manifest):
     type_(app, "hunter22"); press(app, "enter")
     press(app, "tab", "tab", "enter")
     assert app.page.key == "ssh" and "own keyboard" in screen(app)
-    press(app, "enter", "enter")
+    assert "allow passwords on the" in screen(app)
+    press(app, "enter")
+    assert app.page.key == "ssh_login"
+    press(app, "enter")
     assert app.page.key == "pengy"
 
 
@@ -265,6 +271,37 @@ def test_no_disk(manifest):
     assert app.result == 1
 
 
+def test_ssh_login_page_defaults_to_keys_only(manifest):
+    app = make_app(manifest)
+    fill_to_review(app)
+    assert app.s.answers().ssh_password is False
+    assert "or password" not in dict(app.s.review())["SSH"]
+
+
+def test_ssh_login_keys_or_password(manifest):
+    inst = FakeInstall()
+    app = make_app(manifest, install=inst)
+    fill_to_review(app, source="", ssh_password=True)
+    assert app.page.key == "review" and app.s.answers().ssh_password is True
+    assert "no key: password" in screen(app)
+    type_(app, "erase"); press(app, "enter")
+    ((_, answers, _),) = inst.calls
+    assert answers.ssh_password is True
+    assert app.mode == "done"
+    text = " ".join(screen(app, 40, 120).split())  # the page wraps long lines
+    assert "ssh pat@pengyos" in text and "sudo pengyos-ssh-password off" in text
+
+
+def test_ssh_login_page_warns(manifest):
+    app = make_app(manifest)
+    fill_to_review(app)
+    press(app, "esc", "esc")                    # review -> pengy -> ssh_login
+    assert app.page.key == "ssh_login"
+    text = screen(app, 30, 100)
+    assert "Keys only" in text and "recommended" in text
+    assert "Keys or password" in text and "can be guessed" in text and "root always needs a key" in text
+
+
 def test_desktop_login_page(desktop_manifest):
     app = make_app(desktop_manifest)
     fill_to_review(app)
@@ -320,6 +357,8 @@ def test_keys_from_another_machine(manifest, fetcher):
     assert "wrong" not in screen(app)             # masked
     press(app, *["backspace"] * 5)
     type_(app, HOST_PASSWORD); press(app, "tab", "enter")
+    assert app.page.key == "ssh_login"
+    press(app, "enter")
     assert app.page.key == "pengy"
     assert fetcher.calls == [("pat@behoserver", "wrong"), ("pat@behoserver", HOST_PASSWORD)]
     press(app, "enter", "enter", "enter")
@@ -378,7 +417,7 @@ def test_wifi_rescan_and_skip(manifest):
     assert w.scans == 2 and app.page.key == "wifi"
     press(app, "1", "enter")                        # No Wi-Fi
     assert app.page.key == "ssh" and w.joined == []
-    press(app, "tab", "tab", "enter", "enter", "enter", "enter", "enter")
+    press(app, "tab", "tab", "enter", "enter", "enter", "enter", "enter", "enter")
     assert "wired (10.0.0.9)" in screen(app)
 
 

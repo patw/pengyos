@@ -4,6 +4,14 @@
 # injected at build time into /root/.ssh/authorized_keys
 # (see board/server/post-build.sh, PENGYOS_AUTHORIZED_KEYS_FILE).
 # Console access is unaffected (the serial getty autologins).
+#
+# Drop-ins first: sshd keeps the FIRST value it reads for a setting, so a file in
+# sshd_config.d/ overrides the lines below. `pengyos-ssh-password on` (or the
+# installer's "Keys or password" choice) writes 50-pengyos-ssh-password.conf
+# there, which turns PasswordAuthentication on for people's accounts; root stays
+# key-only (PermitRootLogin prohibit-password). /etc is the data overlay, so the
+# drop-in outlives updates and this file still comes from the image.
+Include /etc/ssh/sshd_config.d/*.conf
 Port 22
 PermitRootLogin prohibit-password
 PasswordAuthentication no

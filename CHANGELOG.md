@@ -17,6 +17,33 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added — SSH password logins, opt-in, for people who have no key yet (2026-11-07)
+- **The installers ask how SSH logs in.** The console installer has an "SSH
+  login" page, *Keys only* (recommended, still the default) or *Keys or
+  password*; the Desktop installer has an "Allow SSH logins with a password"
+  switch on its account screen (off by default). Both warn that a password can be
+  guessed by anyone who can reach port 22. Field report: people new to Linux and Windows
+  admins could not get into a fresh Server at all, because they had never made a
+  key and the key import assumes they have one. Key-only stays the default; a
+  password is now a visible, warned choice that can be undone.
+- **`pengyos-ssh-password status | on | off`** (Server and Desktop) changes it
+  later. `on` writes `/etc/ssh/sshd_config.d/50-pengyos-ssh-password.conf`,
+  checks it with `sshd -t` and reloads sshd; every login then shows a reminder
+  (`/etc/motd.d/`). `status` lists each account's keys and, while passwords are
+  on, the two commands that make a key and copy it over (`ssh-keygen`,
+  `ssh-copy-id`, or the PowerShell line for Windows). `off` refuses while no
+  account has a key, since SSH would then work for nobody (`--force` overrides).
+- **What stays the same:** root never logs in with a password over SSH
+  (`PermitRootLogin prohibit-password`). The image's `sshd_config` now begins
+  with `Include /etc/ssh/sshd_config.d/*.conf` (sshd keeps the first value it
+  reads), so the drop-in overrides `PasswordAuthentication no` without editing
+  the image's file, and it lives in the `/etc` overlay on `data`, kept across
+  updates. With passwords on, an address that keeps failing waits longer between
+  tries (`PerSourcePenalties authfail:15s`; OpenSSH's default is 5 s). The Server's
+  sshd.service gains `ExecReload` (`sshd -t`, then SIGHUP).
+- **Fixed:** the line-by-line installer skipped the SSH page after "Enter to skip
+  Wi-Fi", so no key was asked for.
+
 ### Changed — Pengy 1.15.0: chat search, Edit Chat, bulk rename, web dark mode; Linux 7.3.3 (2026-11-07)
 - **Pengy 1.14.1 -> 1.15.0** in every edition (CLI, web, and the Qt app on
   Desktop). New: **chat search** (Ctrl+K in the app, a search box in the web

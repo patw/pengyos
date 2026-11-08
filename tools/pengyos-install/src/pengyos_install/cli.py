@@ -214,7 +214,7 @@ def cmd_image(args, *, out=None, err=None) -> int:
     # the second.
     answers = image_install.ProvisionAnswers(
         hostname=args.hostname, username=args.user, password=_read_password(args),
-        authorized_keys=keys, autologin=args.autologin,
+        authorized_keys=keys, ssh_password=args.ssh_password, autologin=args.autologin,
         pengy_base_url=args.pengy_base_url, pengy_api_key=_read_pengy_api_key(args),
         pengy_model=args.pengy_model,
     )
@@ -340,7 +340,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_image.add_argument("--authorized-keys", default=None, metavar="FILE",
                          help="SSH public keys for the user (an authorized_keys file); "
-                              "the Server's sshd accepts keys only")
+                              "the Server's sshd accepts keys only, unless --ssh-password")
+    p_image.add_argument("--ssh-password", action="store_true",
+                         help="let SSH accept the user's password as well as keys (less "
+                              "safe; root stays key-only; undo with pengyos-ssh-password off)")
     p_image.add_argument("--autologin", action="store_true",
                          help="Desktop: log the user in automatically at boot instead of "
                               "showing the login screen (off by default)")
