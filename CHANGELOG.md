@@ -17,6 +17,12 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: Server root filesystem was full (2026-11-08)
+- The Server image's root filesystem grows from 1 GiB to 1.5 GiB, and the NVIDIA
+  Server's from 1.6 GiB to 2.2 GiB. The first 26.11.9 Server build no longer
+  fit: it booted with about 16 MB free and failed its boot check. Installed
+  machines have 8 GiB slots (4 GiB on early installs), so updates are unaffected.
+
 ### Added: fan control (2026-11-08)
 - `pengyos-fans` sets fan profiles (quiet, balanced, full, or as the firmware set
   them) and per-fan curves on desktop boards and USB fan controllers, and the

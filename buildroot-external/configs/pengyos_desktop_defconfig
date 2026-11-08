@@ -687,6 +687,12 @@ BR2_PACKAGE_LIBVNCSERVER=y
 # --- Pengy web UI (package/pengy; the CLI comes from Core) --------------------
 BR2_PACKAGE_PENGY_WEB=y
 
+# Root filesystem: 1536M since 26.11.9 (Core's 1G until then). 26.11.9's Server
+# held ~1041 MB, more than 1G: the image booted with ~16 MB free, and systemd's
+# first writes failed with "No space left on device". Slots are 8 GiB (4 on early
+# installs); this leaves ~500 MB to grow.
+# BR2_TARGET_ROOTFS_EXT2_SIZE: set by the desktop layer
+
 # ############################################################################
 # ## layer: desktop
 # ############################################################################
