@@ -96,6 +96,18 @@ def test_on_writes_the_dropin_checks_and_reloads(tmp_path):
     assert status(r)["password_logins"] is True
 
 
+def test_on_leaves_the_penalties_at_openssh_defaults(tmp_path):
+    # 26.11.6 wrote PerSourcePenalties authfail:15s, which made sshd drop the
+    # connection ssh-copy-id installs the key with (its two probes count as
+    # failures). Running `on` again rewrites an old drop-in without it.
+    r = machine(tmp_path)
+    (r / DROPIN).parent.mkdir(parents=True, exist_ok=True)
+    (r / DROPIN).write_text("PasswordAuthentication yes\nPerSourcePenalties authfail:15s\n")
+    run(r, "on")
+    active = [l for l in (r / DROPIN).read_text().splitlines() if l and not l.startswith("#")]
+    assert active == ["PasswordAuthentication yes"]
+
+
 def test_on_is_undone_when_sshd_rejects_it(tmp_path):
     r = machine(tmp_path)
     pr = run(r, "on", check=False, FAKE_SSHD_FAIL="1")

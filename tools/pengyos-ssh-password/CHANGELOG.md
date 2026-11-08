@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1 — 2026-11-08
+
+- Fixed: `ssh-copy-id`, which `status` recommends, failed while passwords were
+  on. Its two probe connections (one offering no credentials, one trying the new
+  key) count as failed authentication, and at `PerSourcePenalties authfail:15s`
+  that crossed sshd's 15 s threshold, so the third connection, the one that
+  copies the key, was dropped. The drop-in no longer sets PerSourcePenalties;
+  OpenSSH's defaults (5 s a failure) still slow a guesser. Found by a new-user
+  install run in QEMU. On a machine that turned passwords on with 0.1.0,
+  `sudo pengyos-ssh-password on` rewrites the drop-in.
+
 ## 0.1.0 — 2026-11-07
 
 - First release. `on` lets SSH accept people's passwords as well as keys

@@ -11,8 +11,10 @@ password logins an explicit, visible, reversible choice.
 ## Contract
 
 1. Default image: `PasswordAuthentication no`, root `prohibit-password`. Unchanged.
-2. `on`, as root: write the drop-in (`PasswordAuthentication yes`,
-   `PerSourcePenalties authfail:15s`) and the motd reminder. Unless `--offline`:
+2. `on`, as root: write the drop-in (`PasswordAuthentication yes` only; repeated
+   failures are slowed by OpenSSH's default `PerSourcePenalties`, never raised,
+   because `ssh-copy-id`'s two probe connections count as failures) and the motd
+   reminder. `on` while on rewrites the drop-in. Unless `--offline`:
    `sshd -t` must pass, otherwise the drop-in is removed (if `on` created it) and the
    exit is 6. Reload sshd if it is active.
 3. `off`, as root: when no account (uid 1000-59999, with a login shell) has a key in

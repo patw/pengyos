@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — `ssh-copy-id` works while SSH passwords are on (2026-11-08)
+- 26.11.6's password drop-in set `PerSourcePenalties authfail:15s`.
+  `ssh-copy-id` opens two probe connections before the one that copies the key,
+  and sshd counts both as failed authentication; at 15 s each that crossed its
+  15 s threshold and the copy was dropped, so the key setup the tool recommends
+  failed on Linux and macOS (the Windows PowerShell line, one connection, worked).
+  The drop-in now leaves OpenSSH's defaults (5 s a failure), which still slow a
+  guesser. Found by driving the Desktop installer as a new user under QEMU.
+  Machines that turned passwords on under 26.11.6: run
+  `sudo pengyos-ssh-password on` once.
+
 ### Added — SSH password logins, opt-in, for people who have no key yet (2026-11-07)
 - **The installers ask how SSH logs in.** The console installer has an "SSH
   login" page, *Keys only* (recommended, still the default) or *Keys or
@@ -38,8 +49,8 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   with `Include /etc/ssh/sshd_config.d/*.conf` (sshd keeps the first value it
   reads), so the drop-in overrides `PasswordAuthentication no` without editing
   the image's file, and it lives in the `/etc` overlay on `data`, kept across
-  updates. With passwords on, an address that keeps failing waits longer between
-  tries (`PerSourcePenalties authfail:15s`; OpenSSH's default is 5 s). The Server's
+  updates. (26.11.6 also set `PerSourcePenalties authfail:15s`; removed in
+  26.11.7, see above.) The Server's
   sshd.service gains `ExecReload` (`sshd -t`, then SIGHUP).
 - **Fixed:** the line-by-line installer skipped the SSH page after "Enter to skip
   Wi-Fi", so no key was asked for.
