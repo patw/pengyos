@@ -1,27 +1,29 @@
 # PengyOS Hardware Monitor (pengyos-hwmon)
 #
-# A libcosmic front-end to the HWall collectors: temperatures, fans, voltages,
-# clocks, utilization, power and storage health, in one dense table with
-# current/min/max columns and a per-sensor warning/critical threshold editor.
+# Front-ends to the HWall collectors: temperatures, fans, voltages, clocks,
+# utilization, power and storage health, in one dense table with current/min/max
+# columns. The libcosmic window (Desktop) adds a per-sensor warning/critical
+# threshold editor; the ratatui terminal view (Server, ssh) is the cut-down one.
 #
 # Layout follows the other in-tree apps (pengyos-updates, pengyos-install-gui):
 #   * the collection and formatting live in hwall-core / hwall-app (upstream
 #     HWall, MIT, pinned by commit below) - untouched, not forked;
 #   * libcosmic is behind the `cosmic` feature, so a plain `cargo test`/`cargo
 #     build` needs no display and no libcosmic checkout;
-#   * `--check` prints one collection pass as text and works without the
-#     feature, which is what a future Server TUI will build on.
+#   * the terminal view is behind the `tui` feature (ratatui, no libcosmic);
+#   * `--check` prints one collection pass as text and works without either.
 #
-# Built by scripts/build-cosmic.sh into $PENGYOS_COSMIC_BUILD/install-gui, the
-# same target dir as the other COSMIC apps, so it shares their libcosmic build.
+# Built by scripts/build-cosmic.sh: `cosmic,tui` into $PENGYOS_COSMIC_BUILD/install-gui
+# (the Desktop binary, sharing the other apps' libcosmic build) and `tui` alone
+# into $PENGYOS_COSMIC_BUILD/hwmon-tui (the Server binary).
 
 [package]
 name = "pengyos-hwmon"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Pat Wendorf"]
-description = "PengyOS Hardware Monitor: sensors, fans, power and clocks (COSMIC)."
+description = "PengyOS Hardware Monitor: sensors, fans, power and clocks (COSMIC window and terminal view)."
 repository = "https://github.com/patw/pengyos"
 homepage = "https://github.com/patw/pengyos/tree/main/tools/pengyos-hwmon"
 
@@ -29,6 +31,9 @@ homepage = "https://github.com/patw/pengyos/tree/main/tools/pengyos-hwmon"
 default = []
 # The libcosmic GUI. Off by default so the crate builds and tests anywhere.
 cosmic = ["dep:libcosmic"]
+# The terminal view (Server image, ssh, the Linux console). The Desktop build
+# turns both on, so `pengyos-hwmon --tui` works in a terminal there too.
+tui = ["dep:ratatui"]
 
 [[bin]]
 name = "pengyos-hwmon"
@@ -40,6 +45,10 @@ path = "src/main.rs"
 # Pinned by commit; HWall is MIT, see LICENSE and THIRD-PARTY.md.
 hwall-core = { git = "https://github.com/pulpul-s/HWall", rev = "500cc4599254061bab93d116f9b30e0e6529fd4e" }
 hwall-app = { git = "https://github.com/pulpul-s/HWall", rev = "500cc4599254061bab93d116f9b30e0e6529fd4e" }
+
+# The terminal front-end. Same ratatui/crossterm as HWall's own CLI at the
+# pinned commit; no default features, so no extra backends are compiled in.
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm_0_29", "layout-cache"], optional = true }
 
 # Same pinned libcosmic as the other in-tree apps, so all of them share one
 # libcosmic build in CARGO_TARGET_DIR=~/cosmic-build/install-gui.

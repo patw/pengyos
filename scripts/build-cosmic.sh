@@ -22,7 +22,8 @@
 # --fetch-only only checks the components out (to read or patch them).
 #
 # The apps' target dir is $PENGYOS_COSMIC_BUILD/install-gui (default
-# ~/cosmic-build/install-gui), which post-build reads.
+# ~/cosmic-build/install-gui), which post-build reads. The Server's terminal-only
+# Hardware Monitor goes to $PENGYOS_COSMIC_BUILD/hwmon-tui (`pengyos-hwmon-tui`).
 #
 # Host requirements: scripts/provision-build-host.sh --desktop (the -dev packages
 # the apps link against, and rustup's toolchain).
@@ -139,9 +140,13 @@ fi
 if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ]; then
     for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-usage pengyos-gamepads pengyos-printers pengyos-firmware pengyos-sharing pengyos-remote-desktop pengy-games pengyos-hwmon; do
         wanted "${app}" || continue
-        echo "[cosmic] cargo build --release -p ${app} --features cosmic --locked"
+        features=cosmic
+        # The Hardware Monitor's Desktop binary carries the terminal view too,
+        # so `pengyos-hwmon --tui` (and plain `pengyos-hwmon` over ssh) works there.
+        [ "${app}" = pengyos-hwmon ] && features=cosmic,tui
+        echo "[cosmic] cargo build --release -p ${app} --features ${features} --locked"
         (cd "${REPO}/tools/${app}" && \
-            CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p "${app}" --features cosmic --locked)
+            CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p "${app}" --features "${features}" --locked)
         built=$((built + 1))
     done
 fi
@@ -152,6 +157,17 @@ if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted pengyos-rdp-server; 
     echo "[cosmic] cargo build --release -p pengyos-rdp-server --locked"
     (cd "${REPO}/tools/pengyos-rdp-server" && \
         CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p pengyos-rdp-server --locked)
+    built=$((built + 1))
+fi
+
+# The Server's Hardware Monitor: the same crate with only the terminal view, so
+# no libcosmic, wayland or GPU libraries. Its own target dir, because a build with
+# different features into install-gui would overwrite the Desktop binary.
+# board/server/post-build.sh reads ${BUILD}/hwmon-tui/release/pengyos-hwmon.
+if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted pengyos-hwmon-tui; then
+    echo "[cosmic] cargo build --release -p pengyos-hwmon --features tui --locked (Server)"
+    (cd "${REPO}/tools/pengyos-hwmon" && \
+        CARGO_TARGET_DIR="${BUILD}/hwmon-tui" cargo build --release -p pengyos-hwmon --features tui --locked)
     built=$((built + 1))
 fi
 
