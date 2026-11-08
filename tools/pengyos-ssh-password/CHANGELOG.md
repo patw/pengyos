@@ -9,5 +9,5 @@
   overrides). `status` lists each account's key count and, while passwords are
   on, how to make a key and copy it over (`ssh-copy-id`, or the Windows
   PowerShell one-liner). root never logs in with a password over SSH.
-  `on --offline` writes the files only: the installer's "Keys or password"
-  choice runs it in the new system.
+  `on --offline` writes the files only: both installers' password choice runs
+  it in the new system.

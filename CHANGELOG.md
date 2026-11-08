@@ -18,9 +18,11 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 ## [Unreleased]
 
 ### Added — SSH password logins, opt-in, for people who have no key yet (2026-11-07)
-- **The installer asks how SSH logs in**: *Keys only* (recommended, still the
-  default) or *Keys or password*, which warns that a password can be guessed by
-  anyone who can reach port 22. Field report: people new to Linux and Windows
+- **The installers ask how SSH logs in.** The console installer has an "SSH
+  login" page, *Keys only* (recommended, still the default) or *Keys or
+  password*; the Desktop installer has an "Allow SSH logins with a password"
+  switch on its account screen (off by default). Both warn that a password can be
+  guessed by anyone who can reach port 22. Field report: people new to Linux and Windows
   admins could not get into a fresh Server at all, because they had never made a
   key and the key import assumes they have one. Key-only stays the default; a
   password is now a visible, warned choice that can be undone.

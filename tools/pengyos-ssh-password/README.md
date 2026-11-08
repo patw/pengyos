@@ -12,8 +12,8 @@ sudo pengyos-ssh-password off --force    # keys only even so: SSH then works for
 
 PengyOS's sshd accepts keys only, and that stays the default. It is the safer
 setting, but someone who has never made an SSH key cannot get in at all. The
-installer asks the question ("Keys only" or "Keys or password"), and this command
-changes the answer later. While passwords are on, the usual way to get a key
+installers ask: "Keys only" or "Keys or password" on the console installer, "Allow
+SSH logins with a password" on the Desktop's. This command changes the answer later. While passwords are on, the usual way to get a key
 there becomes easy: log in once with the password, or run `ssh-copy-id` (Windows:
 the PowerShell line that `status` prints). Then turn passwords off.
 

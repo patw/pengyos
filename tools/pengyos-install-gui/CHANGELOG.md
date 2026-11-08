@@ -7,6 +7,17 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- **"Allow SSH logins with a password"** on the account screen (off by default),
+  with a warning that a password can be guessed by anyone who can reach the
+  computer and that root still can't log in this way. The Summary shows an SSH
+  row. It passes `--ssh-password` to the engine, which runs the image's
+  `pengyos-ssh-password on --offline`, so `sudo pengyos-ssh-password off` turns it
+  off later. The Desktop installer has no SSH key page, so until now a Desktop was
+  reachable over SSH only after someone put a key there by hand.
+- The engine command line is built in `engine_args` (std only, unit-tested)
+  instead of inline in the libcosmic app.
+
 ### Changed
 - **"Log in automatically" now says it also skips the lock screen after
   sleep.** The image no longer locks the automatic-login user's session on

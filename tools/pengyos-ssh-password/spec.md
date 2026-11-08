@@ -22,8 +22,11 @@ password logins an explicit, visible, reversible choice.
    unreadable); and while on, the steps to make and copy a key, with this machine's
    name filled in.
 5. No mode of the tool lets root log in with a password.
-6. The installer (`pengyos-install`, `ProvisionAnswers.ssh_password`) turns it on with
-   `chroot <target> pengyos-ssh-password on --offline`, so both write the same files.
+6. The installers turn it on through the engine (`ProvisionAnswers.ssh_password`,
+   `pengyos-install image --ssh-password`): the console installer's "Keys or
+   password" and the Desktop installer's "Allow SSH logins with a password". The
+   engine runs `chroot <target> pengyos-ssh-password on --offline`, so all of them
+   write the same files.
 
 ## Acceptance
 
