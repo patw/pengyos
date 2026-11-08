@@ -213,8 +213,12 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
   the image. An APU (Strix Halo, Ryzen iGPU) only gets about half of RAM for the GPU
   until `sudo pengyos-gpu-memory set max` and a reboot; keep the BIOS UMA frame
   buffer at its minimum. Don't suggest `amd_iommu=off`: it removes the NPU.
-- **sshd is key-only** (password logins over SSH are off). A user with no key in
-  `~/.ssh/authorized_keys` can log in at the console and not over SSH.
+- **sshd is key-only by default** (password logins over SSH are off). A user with
+  no key in `~/.ssh/authorized_keys` can log in at the console and not over SSH.
+  On Server and Desktop, `sudo pengyos-ssh-password on` lets people's accounts log
+  in with a password too (root never); `pengyos-ssh-password` says which is on and
+  how to set up a key; `off` refuses until some account has one. Suggest keys
+  first, but don't lecture someone who just needs to get in.
 - **The Desktop's COSMIC pieces are built on the build host**, not in the image;
   a Desktop machine has no COSMIC source and no cargo toolchain for it.
 - **Reboots, firmware writes, destructive removals, keys and spending are the

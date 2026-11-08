@@ -7,6 +7,22 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **An "SSH login" page** after the SSH keys page: *Keys only* (recommended, the
+  default) or *Keys or password*, with a warning that passwords can be guessed.
+  root always needs a key. The engine's `ssh_password` answer runs the image's
+  `pengyos-ssh-password on --offline`, so `sudo pengyos-ssh-password off` turns
+  it off later. Field report (2026-11-07): people who had never made an SSH key
+  could not get into their new Server at all. The review says "no key: password"
+  or "…, or password", the done page says how to go back to keys only, and the
+  no-key warning on the SSH page points at the new page. The line-by-line
+  front-end asks it as a y/N question.
+
+### Fixed
+- **The line-by-line installer skipped the SSH page after "Enter to skip Wi-Fi".**
+  Skipping Wi-Fi at its password drops the password page from the list, and the
+  page index then jumped over the page after it, so no key was ever asked for.
+  It now continues from the page's position in the recomputed list. The test
+  that should have caught it had been written around the skip.
 - **A Wi-Fi page** (`wifi.py`), on machines with a Wi-Fi card: a laptop server
   may have no Ethernet port, and the SSH key import needs the network. It lists
   the networks in range (`iw`), asks a secured one's password, and joins with

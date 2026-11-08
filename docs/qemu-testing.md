@@ -137,7 +137,8 @@ required) and cleans it up on exit.
 
 ## 4. SSH into a booted guest
 
-The images run a **key-only** `sshd` (`PermitRootLogin prohibit-password`); the
+The images run a **key-only** `sshd` by default (`PermitRootLogin prohibit-password`;
+`pengyos-ssh-password on` lets the Server's people log in with a password too); the
 authorized key is injected **at build time**, so build the target with a key set:
 
 ```sh

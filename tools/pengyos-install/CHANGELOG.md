@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `ProvisionAnswers.ssh_password` / `image --ssh-password`: SSH also accepts the
+  user's password, not only keys (opt-in; root stays key-only). It runs the image's
+  `pengyos-ssh-password on --offline` in the target, so the installed machine can
+  turn it off again with `pengyos-ssh-password off`. Asked for on an image without
+  that tool, the install fails with a message instead of quietly going key-only.
+
 ### Changed
 - `render_grub_cfg` ends each kernel line with `${pengyos_trial}`, which the
   one-shot `pengyos_try` branch sets to `pengyos.trial=1`: pengyos-update's

@@ -38,14 +38,19 @@ up front.
      log in here. The host key is accepted on first sight (a LAN machine).
 
    A pasted key can be added too. Lines with options (`from="..."`,
-   `command="..."`) are skipped and counted in the review. sshd is key-only,
-   so leaving everything empty is allowed only after a warning: the machine can
-   then be used only from its own keyboard.
-6. **Pengy**: the assistant's base URL, API key (masked) and model. Optional:
+   `command="..."`) are skipped and counted in the review. sshd is key-only by
+   default, so leaving everything empty is allowed only after a warning: the
+   machine can then be used only from its own keyboard, unless the next page
+   allows passwords.
+6. **SSH login**: *Keys only* (recommended) or *Keys or password*. The second
+   lets SSH accept the account's password too (root still needs a key), for people
+   who have no key yet. It is less safe, and the page says so. `pengyos-ssh-password`
+   on the installed machine changes it later (`off` once a key is set up).
+7. **Pengy**: the assistant's base URL, API key (masked) and model. Optional:
    leave the URL empty and Pengy keeps the image's defaults.
-7. **Logging in** (Desktop images only): log in automatically or ask for the
+8. **Logging in** (Desktop images only): log in automatically or ask for the
    password (the default).
-8. **Review**: the summary. Type `erase` to install.
+9. **Review**: the summary. Type `erase` to install.
 
 Then a progress page, and a last page that says how to reach the machine
 (`ssh <user>@<hostname>`).

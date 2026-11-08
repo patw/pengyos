@@ -37,6 +37,7 @@ def test_full_install_with_reprompts(payload):
          "Pat", "pat",                  # username
          "",                            # GitHub user: skip
          "not-a-key", KEY,              # key: refused, then a real one
+         "",                            # SSH login: keys only (N)
          "",                            # Pengy: Enter skips the page
          "erase"],
         ["short", "short", "hunter22", "nomatch", "hunter22", "hunter22"],
@@ -58,7 +59,7 @@ def test_full_install_with_reprompts(payload):
 
 def test_github_keys(payload):
     gh = FakeFetch()
-    rc, out, calls = _drive(payload, ["1", "box", "pat", "patw", "", "", "erase"],
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "patw", "", "", "", "erase"],
                             ["hunter22", "hunter22"], fetcher=gh)
     assert rc == 0 and gh.calls == [("github.com/patw", "")]
     assert "Password for" not in out  # only asked for user@host
@@ -68,7 +69,7 @@ def test_github_keys(payload):
 
 
 def test_skipping_ssh_warns_then_asks_again(payload):
-    rc, out, calls = _drive(payload, ["1", "box", "pat", "", "", "", "", "erase"],
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "", "", "", "", "", "erase"],
                             ["hunter22", "hunter22"])
     assert rc == 0 and "only be used from its own keyboard" in out
     assert "console login only" in out
@@ -77,7 +78,7 @@ def test_skipping_ssh_warns_then_asks_again(payload):
 def test_pengy_page_fills_the_endpoint_answers(payload):
     rc, out, calls = _drive(
         payload,
-        ["1", "box", "pat", "", KEY, "http://10.0.23.6:8086/v1", "qwen3:8b", "erase"],
+        ["1", "box", "pat", "", KEY, "", "http://10.0.23.6:8086/v1", "qwen3:8b", "erase"],
         ["hunter22", "hunter22", "sk-secret"],
     )
     assert rc == 0
@@ -90,21 +91,30 @@ def test_pengy_page_fills_the_endpoint_answers(payload):
 
 
 def test_pengy_page_reprompts_a_bad_url(payload):
-    rc, out, calls = _drive(payload, ["1", "box", "pat", "", KEY, "not a url", "", "erase"],
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "", KEY, "", "not a url", "", "erase"],
                             ["hunter22", "hunter22"])
     assert rc == 0 and "invalid Pengy base URL" in out
     assert calls[0][1].pengy_base_url == ""
 
 
+def test_ssh_password_opt_in_line_by_line(payload):
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "", "", "", "y", "", "erase"],
+                            ["hunter22", "hunter22"])
+    assert rc == 0
+    ((_, answers, _),) = calls
+    assert answers.ssh_password is True and answers.authorized_keys == ""
+    assert "no key: password" in out
+
+
 def test_desktop_autologin_opt_in(desktop_payload):
-    rc, out, calls = _drive(desktop_payload, ["1", "box", "pat", "", KEY, "", "y", "erase"],
+    rc, out, calls = _drive(desktop_payload, ["1", "box", "pat", "", KEY, "", "", "y", "erase"],
                             ["hunter22", "hunter22"])
     assert rc == 0 and "automatic" in out
     assert calls[0][1].autologin is True
 
 
 def test_not_confirmed_changes_nothing(payload):
-    rc, out, calls = _drive(payload, ["1", "box", "pat", "", KEY, "", "no"],
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "", KEY, "", "", "no"],
                             ["hunter22", "hunter22"])
     assert rc == 1 and calls == [] and "Nothing was changed" in out
 
@@ -134,7 +144,7 @@ def test_not_a_terminal_falls_back_to_plain(payload, monkeypatch):
     """stdin/stdout not TTYs (a pipe, a test): the line-by-line installer runs."""
     monkeypatch.setenv("TERM", "xterm")
     out = io.StringIO()
-    answers = iter(["1", "box", "pat", "", KEY, "", "no"])
+    answers = iter(["1", "box", "pat", "", KEY, "", "", "no"])
     secrets = iter(["hunter22", "hunter22"])
     rc = run_install(inp=lambda p: next(answers), secret=lambda p: next(secrets), out=out,
                      payload=payload, disks=DISKS, install=lambda *a, **k: None)
@@ -143,7 +153,7 @@ def test_not_a_terminal_falls_back_to_plain(payload, monkeypatch):
 
 def test_keys_from_another_machine(payload):
     f = FakeFetch()
-    rc, out, calls = _drive(payload, ["1", "box", "pat", "pat@behoserver", "", "", "", "erase"],
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "pat@behoserver", "", "", "", "", "erase"],
                             ["hunter22", "hunter22", "wrong", HOST_PASSWORD], fetcher=f)
     assert rc == 0 and "refused the password" in out
     assert f.calls == [("pat@behoserver", "wrong"), ("pat@behoserver", HOST_PASSWORD)]
@@ -156,7 +166,7 @@ def test_wifi_line_by_line(payload):
     from conftest import WIFI_PASSWORD, FakeWifi
 
     w = FakeWifi()
-    lines = iter(["1", "box", "pat", "7", "r", "1", "", KEY, "", "erase"])
+    lines = iter(["1", "box", "pat", "7", "r", "1", "", KEY, "", "", "erase"])
     secrets = iter(["hunter22", "hunter22", "wrong password", WIFI_PASSWORD])
     out = io.StringIO()
     calls = []
@@ -176,7 +186,7 @@ def test_wifi_password_enter_skips_wifi(payload):
     from conftest import FakeWifi
 
     w = FakeWifi()
-    lines = iter(["1", "box", "pat", "1", "", KEY, "", "erase"])
+    lines = iter(["1", "box", "pat", "1", "", KEY, "", "", "erase"])
     secrets = iter(["hunter22", "hunter22", ""])
     out = io.StringIO()
     rc = run_install(inp=lambda p: next(lines), secret=lambda p: next(secrets), out=out,
@@ -204,7 +214,7 @@ def test_restart_without_the_trigger_falls_back_to_systemctl(tmp_path):
 
 
 def test_plain_install_restarts_through_restart(payload):
-    lines = iter(["1", "box", "pat", "", KEY, "", "erase", ""])
+    lines = iter(["1", "box", "pat", "", KEY, "", "", "erase", ""])
     secrets = iter(["hunter22", "hunter22"])
     seen = []
     rc = run_install(inp=lambda p: next(lines), secret=lambda p: next(secrets),

@@ -456,14 +456,19 @@ class App:
     def _draw_done(self, fr: Frame, x: int, width: int, h: int) -> str:
         a = self.s.answers()
         lines = [f"Log in as {a.username} at this keyboard once it restarts."]
-        if a.authorized_keys:
+        if a.authorized_keys or a.ssh_password:
             lines += ["", "From another computer on your network:", "",
                       f"    ssh {a.username}@{a.hostname}", "",
                       "If that name does not resolve, run 'ip -brief address' at the "
                       "console to see the machine's address."]
+            if a.ssh_password:
+                lines += ["", "SSH also accepts your password. Once you have set up "
+                          "a key, run 'sudo pengyos-ssh-password off'; "
+                          "'pengyos-ssh-password' shows how."]
         else:
             lines += ["", "SSH accepts keys only and none was added: put one in "
-                      f"/home/{a.username}/.ssh/authorized_keys from the console first."]
+                      f"/home/{a.username}/.ssh/authorized_keys from the console first, "
+                      "or allow passwords with 'sudo pengyos-ssh-password on'."]
         row = self._heading(fr, x, width, "PengyOS is installed", "")
         row -= 1
         for para in lines:

@@ -33,6 +33,11 @@ def _choice_page(session: Session, page, inp, out: TextIO) -> None:
         yes = _read(inp, "Log in automatically, skipping the login screen? [y/N]: ")
         session.choose(page, 1 if yes.strip().lower() in ("y", "yes") else 0)
         return
+    if page.key == "ssh_login":
+        yes = _read(inp, "Also let SSH accept your password? Less secure; root still "
+                         "needs a key. [y/N]: ")
+        session.choose(page, 1 if yes.strip().lower() in ("y", "yes") else 0)
+        return
     opts = session.options(page)
     numbers = [i for i, o in enumerate(opts) if o.enabled]
     for i, o in enumerate(opts):

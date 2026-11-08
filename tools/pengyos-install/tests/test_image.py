@@ -240,6 +240,51 @@ def test_install_image_autologin_opt_in(tmp_path, monkeypatch):
     assert "[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=pat\n" in text
 
 
+def _ssh_password_install(tmp_path, monkeypatch, *, tool: bool, ssh_password: bool):
+    payload = _payload(tmp_path, b"R" * 8192, b"E" * 4096)
+    target = tmp_path / "vda"
+    target.touch()
+    for n in (1, 2, 3, 4):
+        (tmp_path / f"vda{n}").touch()
+    esp_dir, root = tmp_path / "esp", tmp_path / "root"
+    (esp_dir / "EFI" / "BOOT").mkdir(parents=True)
+    (root / "etc" / "ssh").mkdir(parents=True)
+    (root / "data").mkdir()
+    (root / "etc" / "group").write_text("root:x:0:\nwheel:x:10:root\n")
+    if tool:
+        (root / "usr" / "bin").mkdir(parents=True)
+        (root / "usr" / "bin" / "pengyos-ssh-password").touch()
+    monkeypatch.setattr(im, "TARGET_ESP", str(esp_dir))
+    monkeypatch.setattr(im, "TARGET_ROOT", str(root))
+    monkeypatch.setattr(im, "EFIVARS", str(tmp_path / "no-efivars"))
+    run = FakeRun(root)
+    answers = ProvisionAnswers("srv", "pat", "hunter22", ssh_password=ssh_password)
+    install_image(str(target), answers, payload_dir=str(payload), confirm=True, run=run,
+                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"),
+                  wifi_configs=str(tmp_path / "none"))
+    return [c for c in run.calls if "/usr/bin/pengyos-ssh-password" in c]
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_install_image_ssh_password_opt_in(tmp_path, monkeypatch):
+    """"Keys or password" runs the image's own switch, offline, in the target."""
+    calls = _ssh_password_install(tmp_path, monkeypatch, tool=True, ssh_password=True)
+    assert calls == [["chroot", str(tmp_path / "root"), "/usr/bin/pengyos-ssh-password",
+                      "on", "--offline"]]
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_install_image_ssh_keys_only_by_default(tmp_path, monkeypatch):
+    assert _ssh_password_install(tmp_path, monkeypatch, tool=True, ssh_password=False) == []
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_install_image_ssh_password_needs_the_tool(tmp_path, monkeypatch):
+    """Asked for on an image without the switch: say so, never install key-only silently."""
+    with pytest.raises(im.ImageInstallError, match="cannot allow SSH password logins"):
+        _ssh_password_install(tmp_path, monkeypatch, tool=False, ssh_password=True)
+
+
 @pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
 def test_install_image_end_to_end(tmp_path, monkeypatch):
     rootfs, esp = bytes(range(256)) * 4096, b"FAT" * 5000

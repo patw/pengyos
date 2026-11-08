@@ -16,7 +16,8 @@
 > (`pengyos-install-tui install`) on tty1; the layout, preinit, account merge
 > and payload are shared (they live in the Server layer, which the Desktop
 > stacks on; the stick is built by `board/common/installer-image.sh`). The
-> installer can give the user an SSH key: the Server's sshd is key-only.
+> installer can give the user an SSH key: the Server's sshd is key-only unless
+> the user chose "Keys or password" (`/etc/ssh/sshd_config.d/`, `pengyos-ssh-password`).
 >
 > **2026-09-28:** `data` is now **btrfs** with a subvolume per area (see below) so
 > machine state can be snapshotted — the basis for the agent's reversible Tier-1

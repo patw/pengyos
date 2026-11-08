@@ -76,6 +76,11 @@ exists    usr/lib/systemd/system.conf.d/60-pengyos-memlock.conf  # --ulimit meml
 exists    usr/lib/systemd/user.conf.d/60-pengyos-memlock.conf    # ...and in a user's Quadlets
 exists    usr/bin/pengyos-gpu-memory               # board/server overlay; the APU's GTT limit (unified memory)
 
+# --- SSH password logins, opt-in (operator 2026-11-07) ----------------------------
+# Keys only by default; sshd reads sshd_config.d/ first, so the drop-in can turn
+# passwords on (root stays keys-only).
+exists    usr/bin/pengyos-ssh-password             # board/server overlay; on | off | status
+
 # --- Python apps on the host: uv (Pengy's field review R4, 2026-11-05) -----------
 # One venv per app against the system python3 (US-SRV-10). Wheels that need
 # compiling are built in the dev guest; pengyos.txt has the recipe.

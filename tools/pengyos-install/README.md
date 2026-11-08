@@ -53,7 +53,7 @@ pengyos-install install --release rel.json --layout plan.json [--config install.
 pengyos-install provision-plan --config install.toml [--layout layout.json] [--slot a] [--json]
 pengyos-install disks [--json]
 pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
-                      [--password-stdin] [--authorized-keys FILE] [--autologin]
+                      [--password-stdin] [--authorized-keys FILE] [--ssh-password] [--autologin]
                       [--pengy-base-url URL [--pengy-api-key KEY | --pengy-api-key-stdin]
                        [--pengy-model NAME]]
                       [--progress text|json]
@@ -86,7 +86,7 @@ pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
   off by default, so the desktop starts at its login screen) — make the
   desktop log them in at boot (`/etc/pengyos/autologin.conf`, changeable later
   with `pengyos-autologin`), give them the SSH public keys in
-  `--authorized-keys FILE` (the Server's sshd accepts keys only), set the user's and root's password (random salt each), copy the
+  `--authorized-keys FILE` (the Server's sshd accepts keys only, unless `--ssh-password`: then it also accepts the user's password, root stays key-only, and the image's `pengyos-ssh-password on --offline` writes the setting so `pengyos-ssh-password off` undoes it), set the user's and root's password (random salt each), copy the
   live session's NetworkManager profiles (e.g. the Wi-Fi joined on the stick)
   or, on the Server, its `wpa_supplicant-nl80211-<iface>.conf` with that
   interface's `wpa_supplicant-nl80211@` unit enabled,

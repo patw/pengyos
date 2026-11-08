@@ -28,6 +28,10 @@ After=sshd-keygen.service
 Type=simple
 ExecStartPre=/usr/sbin/sshd -t
 ExecStart=/usr/sbin/sshd -D -e
+# `systemctl reload sshd` (pengyos-ssh-password): check, then sshd re-reads its
+# configuration on SIGHUP; open sessions stay.
+ExecReload=/usr/sbin/sshd -t
+ExecReload=/usr/bin/kill -HUP $MAINPID
 RuntimeDirectory=sshd
 PIDFile=/run/sshd.pid
 Restart=on-failure
