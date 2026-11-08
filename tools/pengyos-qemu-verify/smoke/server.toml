@@ -56,8 +56,15 @@ description = "systemd is PID 1"
 [[check]]
 id = "distro-welcome"
 kind = "present"
-pattern = "Welcome to .*PengyOS Server"
-description = "systemd read our os-release: the running system is PengyOS Server"
+# systemd writes this line in pieces, so a kernel message can land between
+# them: on 26.11.6 (Core, uefi) the console read 'Welcome[    1.504036]
+# systemd[1]: Detected architecture x86-64.' and then ' to ...PengyOS Core',
+# and the one-line pattern failed a good image. Each optional group allows one
+# injected console line at a write boundary, and only a timestamped one
+# ('[    1.504036] ...'), so the words cannot be found scattered across the log
+# (tests/test_smoke.py: the real split log passes, look-alikes do not).
+pattern = "Welcome(?:\\[ *[0-9]+\\.[0-9]+\\][^\\n]{0,200}\\n)? to (?:\u001b\\[[0-9;]*m)*(?:\\[ *[0-9]+\\.[0-9]+\\][^\\n]{0,200}\\n)?(?:\u001b\\[[0-9;]*m)*PengyOS Server"
+description = "systemd read our os-release: the running system is PengyOS Server, even when a kernel message split the line"
 
 # --- network -----------------------------------------------------------------
 

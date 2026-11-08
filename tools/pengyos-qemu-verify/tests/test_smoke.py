@@ -814,3 +814,62 @@ def test_server_autologin_shell_accepts_the_starship_prompt():
     assert run_assertions(old, (check.to_assertion(),))[0].passed is True
     outcome = smoke.run_matrix(matrix, "img", boot_fn=_boot_from(SERVER_STARSHIP_LOG))
     assert outcome.passed is True, [v.failed_checks for v in outcome.variants]
+
+
+# --- the 26.11.6 finding: a kernel message inside systemd's "Welcome to" ----
+# The fixture is the real Core uefi capture from the 26.11.6 release run, which
+# failed distro-welcome (and only that) on a good image.
+
+CORE_WELCOME_SPLIT_LOG = FIXTURES / "serial_core_interleaved_welcome.log"
+ESC = "\x1b"
+
+
+def _welcome(matrix_path=None):
+    return _check(smoke.load_matrix(matrix_path), "distro-welcome").to_assertion()
+
+
+def test_distro_welcome_survives_a_kernel_message_splitting_its_line():
+    log_text = CORE_WELCOME_SPLIT_LOG.read_text(encoding="utf-8", errors="replace")
+    # The one-line pattern this check used to carry misses the real split log.
+    assert re.search(r"Welcome to .*PengyOS Core", log_text) is None
+    result = run_assertions(log_text, (_welcome(),))[0]
+    assert result.passed is True
+
+
+def test_core_matrix_passes_the_real_split_welcome_boot():
+    """The split must cost the one check that was flaking, nothing else."""
+    matrix = smoke.load_matrix()
+    outcome = smoke.run_matrix(matrix, "img", boot_fn=_boot_from(CORE_WELCOME_SPLIT_LOG))
+    assert outcome.passed is True, [v.failed_checks for v in outcome.variants]
+
+
+@pytest.mark.parametrize("log_path", [CORE_UEFI_LOG, CORE_INTERLEAVED_LOG])
+def test_distro_welcome_still_passes_unsplit_core_boots(log_path):
+    log_text = log_path.read_text(encoding="utf-8", errors="replace")
+    assert run_assertions(log_text, (_welcome(),))[0].passed is True
+
+
+@pytest.mark.parametrize("log_path", [SERVER_UEFI_LOG, SERVER_TPM_LOG])
+def test_distro_welcome_still_passes_server_boots(log_path):
+    log_text = log_path.read_text(encoding="utf-8", errors="replace")
+    assert run_assertions(log_text, (_welcome(str(SERVER_MATRIX)),))[0].passed is True
+
+
+def test_distro_welcome_split_at_the_other_write_boundary():
+    """A kernel line after ' to ' and its colour code, before the name."""
+    log_text = (f"{ESC}[0;1;39mWelcome to {ESC}[0m"
+                "[    1.504036] systemd[1]: Detected architecture x86-64.\r\n"
+                f"{ESC}[1;36mPengyOS Core 26.11{ESC}[0m{ESC}[0;1;39m!{ESC}[0m\r\n")
+    assert run_assertions(log_text, (_welcome(),))[0].passed is True
+
+
+@pytest.mark.parametrize("label,log_text", [
+    ("another edition", f"{ESC}[0;1;39mWelcome to {ESC}[0m{ESC}[1;36mPengyOS Server 26.11{ESC}[0m!\r\n"),
+    ("another distro", f"{ESC}[0;1;39mWelcome to {ESC}[0m{ESC}[1;36mBuildroot 2026.08{ESC}[0m!\r\n"),
+    # The gap is one timestamped console line, not any text: these words appear
+    # in a boot, but not as systemd's greeting.
+    ("words far apart", "Welcome\r\nsome other output\r\n to PengyOS Core\r\n"),
+    ("two kernel lines", "Welcome[    1.5] a\r\n[    1.6] b\r\n to PengyOS Core\r\n"),
+])
+def test_distro_welcome_refuses_look_alikes(label, log_text):
+    assert run_assertions(log_text, (_welcome(),))[0].passed is False, label

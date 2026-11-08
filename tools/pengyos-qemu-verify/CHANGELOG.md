@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`distro-welcome` no longer fails a good image when a kernel message splits
+  systemd's greeting.** systemd writes "Welcome to <name>!" in pieces, and on the
+  26.11.6 release run (Core, uefi) the console read `Welcome[    1.504036]
+  systemd[1]: Detected architecture x86-64.` and then ` to ...PengyOS Core`, so
+  the one-line pattern missed it and stopped the release. Core and Server now
+  allow one timestamped console line at each write boundary, as `network-target`
+  has since 26.10.3. Tested against that real capture
+  (`tests/fixtures/serial_core_interleaved_welcome.log`), and against look-alikes
+  that must still fail: another edition's greeting, the words scattered across
+  other output, two injected lines.
+
 ### Changed
 - **The Core matrix now requires the firewall** (`nftables-loaded`, the same
   check as the Server matrix). The default-deny ruleset moved from the Server
