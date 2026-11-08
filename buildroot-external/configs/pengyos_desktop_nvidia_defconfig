@@ -687,6 +687,12 @@ BR2_PACKAGE_LIBVNCSERVER=y
 # --- Pengy web UI (package/pengy; the CLI comes from Core) --------------------
 BR2_PACKAGE_PENGY_WEB=y
 
+# Root filesystem: 1536M since 26.11.9 (Core's 1G until then). 26.11.9's Server
+# held ~1041 MB, more than 1G: the image booted with ~16 MB free, and systemd's
+# first writes failed with "No space left on device". Slots are 8 GiB (4 on early
+# installs); this leaves ~500 MB to grow.
+# BR2_TARGET_ROOTFS_EXT2_SIZE: set by the nvidia layer
+
 # ############################################################################
 # ## layer: desktop
 # ############################################################################
@@ -1477,6 +1483,9 @@ BR2_PACKAGE_NVIDIA_OPEN=y
 BR2_PACKAGE_NVIDIA_CONTAINER_TOOLKIT=y
 
 # The driver's compute userspace + GSP firmware add ~350 MB to the Server.
+# 2200M since 26.11.9: 26.11.8 left 36 MB free in 1600M, and 26.11.9's sensor
+# drivers and Hardware Monitor would not have fit. Slots are 8 GiB (4 on early
+# installs), so the image has room; this leaves ~600 MB to grow.
 # BR2_TARGET_ROOTFS_EXT2_SIZE: set by the nvidia layer
 
 # ############################################################################

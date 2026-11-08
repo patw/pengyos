@@ -389,7 +389,7 @@ BR2_LINUX_KERNEL_DEFCONFIG="x86_64"
 # (i915/amdgpu/wifi firmware, e2fsprogs/parted/btrfs/xfs) add up to hundreds of MB.
 BR2_TARGET_ROOTFS_EXT2=y
 BR2_TARGET_ROOTFS_EXT2_4=y
-BR2_TARGET_ROOTFS_EXT2_SIZE="1G"
+# BR2_TARGET_ROOTFS_EXT2_SIZE: set by the server layer
 # Post-build tweaks: hostname, provenance copy, GRUB menu install.
 # BR2_ROOTFS_POST_BUILD_SCRIPT: set by the server layer
 
@@ -686,3 +686,9 @@ BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/
 
 # --- Pengy web UI (package/pengy; the CLI comes from Core) --------------------
 BR2_PACKAGE_PENGY_WEB=y
+
+# Root filesystem: 1536M since 26.11.9 (Core's 1G until then). 26.11.9's Server
+# held ~1041 MB, more than 1G: the image booted with ~16 MB free, and systemd's
+# first writes failed with "No space left on device". Slots are 8 GiB (4 on early
+# installs); this leaves ~500 MB to grow.
+BR2_TARGET_ROOTFS_EXT2_SIZE="1536M"
