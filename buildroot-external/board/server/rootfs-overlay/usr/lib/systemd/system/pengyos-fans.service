@@ -1,0 +1,40 @@
+# PengyOS: fan profiles (pengyos-fans). Applies the saved profile at boot and,
+# for fans the chip cannot run by itself (USB controllers, non-Nuvoton boards, a
+# fan told to follow the GPU), sets their duty every 2 seconds.
+#
+# With nothing to drive (no map yet, the firmware profile, or only chip curves,
+# which the chip runs alone) `run` applies and exits 0. The file
+# /etc/pengyos/fans.json exists only after `sudo pengyos-fans detect` or a laptop
+# profile, so machines that never use fan control never start this.
+#
+# Stopping (or a crash, or SIGKILL: ExecStopPost runs for all of them) hands each
+# software-driven fan back to its chip's curve or its device's own mode, else full
+# speed, so no fan is ever left at a low fixed duty.
+#
+# Sandboxed except for what it is for: it writes hwmon files in /sys, which
+# ProtectKernelTunables= would make read-only, and runs nvidia-smi for the GPU
+# temperature.
+[Unit]
+Description=Fan profiles and curves
+ConditionPathExists=/etc/pengyos/fans.json
+After=systemd-modules-load.service
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/pengyos-fans run
+ExecStopPost=/usr/bin/pengyos-fans release
+Restart=on-failure
+RestartSec=5
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

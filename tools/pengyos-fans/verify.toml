@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The suite drives the shipped script against a sandbox root (--root DIR) holding
+# fake hwmon chips whose fans follow their PWMs (a thread plays the fan), so it
+# needs no root, no fans and no build.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-fans"
+expect = "exit0"
+timeout = 600

@@ -17,6 +17,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: fan control (2026-11-08)
+- `pengyos-fans` sets fan profiles (quiet, balanced, full, or as the firmware set
+  them) and per-fan curves on desktop boards and USB fan controllers, and the
+  firmware's profiles on laptops. `sudo pengyos-fans detect` first finds which
+  control drives which fan. Server and Desktop.
+- On Nuvoton boards the profile is written into the chip's own curve, so nothing
+  has to keep running. Fans the chip cannot run (USB controllers, other chips, a
+  fan told to follow the GPU) get a software curve from `pengyos-fans.service`,
+  which hands each fan back to the chip, the device or full speed when it stops.
+
 ### Added: USB fan hub and AIO cooler drivers (2026-11-08)
 - The kernel now carries the in-tree drivers for USB fan controllers, AIO
   coolers and PSUs: Corsair Commander Pro and HXi/RMi/AXi PSUs, NZXT Kraken

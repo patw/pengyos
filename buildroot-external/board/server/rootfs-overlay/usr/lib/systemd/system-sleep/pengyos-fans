@@ -1,0 +1,6 @@
+#!/bin/sh
+# Some Super-I/O chips and USB controllers lose their curve over suspend; put the
+# saved fan profile back on resume. A no-op without /etc/pengyos/fans.json.
+[ "$1" = post ] || exit 0
+[ -e /etc/pengyos/fans.json ] || exit 0
+exec /usr/bin/pengyos-fans apply
