@@ -850,7 +850,8 @@ def describe(cfg: dict) -> dict:
                "chip_curve": chip_curve_capable(ch["chip"], ch),
                "max_points": (len(ch["baseline"]["curve"]) - 1) if chip_curve_capable(ch["chip"], ch) else 8,
                "curve": None if cfg["profile"] == "firmware" or ch.get("role") != "fan"
-               else [list(p) for p in points_for(cfg["profile"], ch)]}
+               # what the fan really gets: no point below its minimum
+               else [[t, max(d, floor_of(ch))] for t, d in points_for(cfg["profile"], ch)]}
         if chip is not None:
             base = os.path.join(chip["path"], f"pwm{ch['pwm']}")
             v = num(base)

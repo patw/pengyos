@@ -200,6 +200,8 @@ def test_a_fan_that_stalls_at_the_floor_gets_its_own_minimum(m):
     assert "stops below 40%, so never under 45%" in out
     assert m.conf()["channels"]["nct6797:pwm4"]["min_duty"] == 45
     run(m, "profile", "quiet")
+    row = json.loads(run(m, "status", "--json").stdout)["channels"][0]
+    assert row["curve"] == [[40, 45], [60, 45], [75, 60], [85, 100]]  # as the fan gets it
     assert [d for _, d in points(m, 4)][:2] == [round(45 * 2.55), round(45 * 2.55)]
 
 

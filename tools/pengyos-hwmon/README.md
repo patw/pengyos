@@ -148,6 +148,7 @@ same rev the other apps use; `Cargo.lock` is committed and the build is `--locke
 | `--tui` | The terminal view, even on a desktop session. |
 | `--hardware` | Start the terminal view on the Hardware inventory. |
 | `--view sensors\|hardware\|limits\|fans` | Start the window on a given pane. |
+| `--edit-fan CHANNEL` | With `--view fans`: open that fan's editor once the view loads (screenshots, checks). |
 | `--applet` | The Fans panel applet (cosmic-panel starts it from `io.catbee.pengyos.FansApplet.desktop`). |
 | `--stress-scroll`, `--stress-repaint` | Developer flags: drive synthetic scrolling/repainting so the rendering budget can be measured (`/proc/<pid>/stat`). |
 

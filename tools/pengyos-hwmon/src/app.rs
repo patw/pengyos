@@ -47,7 +47,13 @@ pub fn run(args: &[String]) -> cosmic::iced::Result {
         .any(|arg| arg == "--stress-scroll" || arg == "--stress-repaint");
 
     let settings = Settings::default().size(Size::new(700.0, 620.0));
-    cosmic::app::run::<HWall>(settings, (start, stress))
+    // --edit-fan CHANNEL opens that fan's editor once the Fans view has loaded
+    // (screenshots and checks; with --view fans).
+    let edit_fan = args
+        .iter()
+        .position(|arg| arg == "--edit-fan")
+        .and_then(|i| args.get(i + 1).cloned());
+    cosmic::app::run::<HWall>(settings, (start, stress, edit_fan))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -386,6 +392,8 @@ struct HWall {
     fans_busy: Option<&'static str>,
     fans_error: Option<String>,
     fan_edit: Option<FanEdit>,
+    /// --edit-fan: open this channel's editor when the status arrives
+    edit_on_load: Option<String>,
     view: View,
     interval: Duration,
     last_update: Option<Instant>,
@@ -1005,13 +1013,41 @@ impl HWall {
             page = page.push(widget::text::caption(why.clone()).class(theme::Text::Color(warn())));
         }
 
+        // The editor sits above the table, so it is in view the moment Edit is
+        // pressed, however small the window and however far down the fan is.
+        if let Some(edit) = &self.fan_edit {
+            if let Some(c) = status.channels.iter().find(|c| c.id == edit.id) {
+                let title = if c.name.is_empty() {
+                    c.id.clone()
+                } else {
+                    format!("{} · {}", c.name, c.id)
+                };
+                page = page.push(
+                    widget::container(
+                        widget::column::with_capacity(2)
+                            .push(
+                                widget::container(
+                                    widget::text::heading(format!("Editing {title}"))
+                                        .class(theme::Text::Color(accent())),
+                                )
+                                .padding([0, 24]),
+                            )
+                            .push(fan_editor(edit, &status.profile, busy)),
+                    )
+                    .padding([8, 0])
+                    .class(theme::Container::Card),
+                );
+            }
+        }
+
         if !status.channels.is_empty() {
             let heading = widget::row::with_capacity(5)
                 .push(widget::text::caption_heading("Fan").width(Length::Fill))
                 .push(col_heading("Speed"))
                 .push(col_heading("Duty"))
                 .push(widget::text::caption_heading("Control").width(Length::Fixed(220.0)))
-                .spacing(8)
+                .push(widget::Space::new().width(Length::Fixed(56.0)))
+                .spacing(16)
                 .padding([2, 6]);
             let mut table = widget::column::with_capacity(status.channels.len() + 1).push(heading);
             for c in &status.channels {
@@ -1041,15 +1077,10 @@ impl HWall {
                                 .width(Length::Fixed(220.0)),
                         )
                         .push(edit_button)
-                        .spacing(8)
+                        .spacing(16)
                         .padding([2, 6])
                         .align_y(Alignment::Center),
                 );
-                if editing {
-                    if let Some(edit) = &self.fan_edit {
-                        table = table.push(fan_editor(edit, &status.profile, busy));
-                    }
-                }
             }
             page = page.push(table);
         }
@@ -1071,7 +1102,7 @@ impl HWall {
 
 impl cosmic::Application for HWall {
     type Executor = cosmic::executor::Default;
-    type Flags = (View, bool);
+    type Flags = (View, bool, Option<String>);
     type Message = Message;
 
     const APP_ID: &'static str = APP_ID;
@@ -1084,8 +1115,8 @@ impl cosmic::Application for HWall {
         &mut self.core
     }
 
-    fn init(core: Core, flags: (View, bool)) -> (Self, Task<Message>) {
-        let (start_view, stress) = flags;
+    fn init(core: Core, flags: (View, bool, Option<String>)) -> (Self, Task<Message>) {
+        let (start_view, stress, edit_on_load) = flags;
         let store = SettingsStore::discover();
         let settings = store.load();
         let interval = Duration::from_millis(settings.interval_ms.max(200));
@@ -1114,6 +1145,7 @@ impl cosmic::Application for HWall {
             fans_busy: None,
             fans_error: None,
             fan_edit: None,
+            edit_on_load,
             view: start_view,
             interval,
             last_update: None,
@@ -1181,7 +1213,12 @@ impl cosmic::Application for HWall {
                 self.settings.sensor_alerts.remove(&key);
                 self.persist();
             }
-            Message::FansLoaded(status) => self.fans = Some(status),
+            Message::FansLoaded(status) => {
+                self.fans = Some(status);
+                if let Some(id) = self.edit_on_load.take() {
+                    return self.update(Message::EditFan(Some(id)));
+                }
+            }
             Message::SetFanProfile(name) => {
                 return self.fan_command(fans::profile_argv(name), "Changing the profile...")
             }
