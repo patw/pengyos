@@ -9,10 +9,16 @@
 
 This app is a new front-end, not a fork: HWall's GTK crate is not used at all,
 and neither `hwall-core` nor `hwall-app` is patched. `pengyos-hwmon` adds the
-libcosmic view (`src/app.rs`), the TJ Max policy (`src/tjmax.rs`) and the
-headless `--check` mode.
+libcosmic view (`src/app.rs`), the terminal view (`src/tui.rs`), the TJ Max
+policy (`src/tjmax.rs`) and the headless `--check` mode.
 
 ## libcosmic
 
 - Upstream: <https://github.com/pop-os/libcosmic>, MPL-2.0
 - Pinned to the same rev as the other in-tree PengyOS apps; not vendored.
+
+## ratatui (terminal view)
+
+- Upstream: <https://github.com/ratatui/ratatui>, MIT
+- crates.io `0.30.2` with crossterm 0.29, the same versions HWall's own CLI uses
+  at the pinned commit; only with `--features tui`.

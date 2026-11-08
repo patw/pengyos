@@ -1,10 +1,14 @@
 # pengyos-hwmon — PengyOS Hardware Monitor
 
-A hardware monitor for the COSMIC desktop: temperatures, fans, voltages, clocks,
-utilization, power and storage health in one dense table, with **Value / Min /
-Max** columns and a per-sensor **warning / critical** threshold editor.
+A hardware monitor: temperatures, fans, voltages, clocks, utilization, power and
+storage health in one dense table, with **Value / Min / Max** columns.
 
-It is the GUI half of "what is this machine actually doing". The collection
+- On the **Desktop** it is a COSMIC window, with a per-sensor **warning /
+  critical** threshold editor.
+- On the **Server** (and over ssh to any PengyOS machine) it is a **terminal
+  view** of the same table: `pengyos-hwmon` in a shell, or on the console.
+
+Both answer "what is this machine actually doing" from one data path. The collection
 library is [HWall](https://github.com/pulpul-s/HWall) (MIT), which reads sysfs
 and the standard helper tools and never needs root: `hwmon`, `thermal`,
 `powercap`, `/proc/stat`, `nvme`, `smartctl`, `dmidecode`, `ethtool`,
@@ -27,9 +31,41 @@ policy, and this crate is only the view.
 
 `Pause` freezes sampling without losing the table; `Reset stats` clears min/max.
 
+## Terminal view
+
+The cut-down sibling for the Server image, ssh sessions and the Linux console
+(`--features tui`, ratatui). The Sensors table with the same colours and limit
+line per device, and the Hardware inventory. There is no Limits editor; rules
+saved by the Desktop app (`~/.config/hwall/settings.json`) are read and still
+colour the table, and the terminal view never writes that file.
+
+| Key | Does |
+|---|---|
+| Up/Down, `j`/`k`, PgUp/PgDn, Home/End | scroll |
+| `/` | filter by name (Enter keeps it, Esc clears it) |
+| `p` or Space | pause / resume sampling |
+| `r` | reset Min and Max |
+| `+` / `-` | sample less / more often (0.5 to 10 s, 2 s to start) |
+| `h` or Tab | sensors / hardware inventory |
+| `?` | the key list |
+| `q`, Esc, Ctrl-C | quit |
+
+Drawn for the console first: 16 colours (a rule's `#rrggbb` becomes red or
+yellow), no mouse, and it fits 80x25. Below 64 columns only Value is shown, and a
+device's limit shortens before its name does.
+
+Which front-end starts: the window when the binary has it and there is a display
+(`WAYLAND_DISPLAY` or `DISPLAY`), the terminal view otherwise. `--tui` forces the
+terminal view on a desktop session.
+
 ## Where the limits come from
 
-1. `hwmon`'s own `*_crit`, then `*_max` — the kernel/firmware answer.
+1. `hwmon`'s own `*_crit`, then `*_max` — the kernel/firmware answer. hwall-core
+   drops these from any sensor whose value lm-sensors supplied (a `compute`
+   line could rescale it), and PengyOS ships lm-sensors, so for temperatures
+   the app reads `tempN_crit` / `_emergency` / `_max` from sysfs itself, next to
+   the sensor's `tempN_input`. A temperature limit outside 20..150 °C is a
+   "not set" sentinel (NVMe uses 65261.85 °C) and is ignored.
 2. Otherwise the CPU family table (`src/tjmax.rs`), keyed on `cpu_family` /
    `model_number` from `/proc/cpuinfo`: AMD families 23/25/26 → 95 °C, Intel
    family 6 → 100 °C, GPU → 95 °C, storage → 80 °C.
@@ -37,7 +73,9 @@ policy, and this crate is only the view.
 
 Only the first has any authority; the table exists because `k10temp` and AMD
 iGPUs publish no `*_crit` at all, and a red number nobody can explain is worse
-than no red number — hence the provenance in the device header.
+than no red number — hence the provenance in the device header. The header shows
+the device's kernel limit if any sensor has one (the highest), otherwise the
+highest table limit, so an NVMe drive shows its composite sensor's `crit`.
 
 ## Board sensors need one line of configuration
 
@@ -56,8 +94,8 @@ Those two rows need unprivileged perf counters: the kernel default
 (`perf_event_paranoid=2`) only allows a process to profile itself, while these
 read system-wide (`perf_event_open` with `pid=-1`). The image ships
 `/usr/lib/sysctl.d/60-pengyos-perf-events.conf` in **core** (every edition) that
-sets it to `0`, alongside the sensor drivers, because the Server TUI wants the
-same rows. Without it the app still runs - those rows are simply absent.
+sets it to `0`, alongside the sensor drivers, because the Server's terminal view
+shows the same rows. Without it the app still runs - those rows are simply absent.
 
 `energy_uj` is a separate dead end: it is mode `0400 root`, so RAPL is only
 readable through the perf counters.
@@ -67,22 +105,33 @@ readable through the perf counters.
 ```sh
 # headless (no libcosmic, no display) - what the gate runs
 cargo test
+cargo test --features tui
 cargo run -- --check
 
-# the GUI (what the image builds, via scripts/build-cosmic.sh)
-cargo build --release --features cosmic
+# the terminal view alone (the Server binary)
+cargo run --features tui
+
+# window + terminal view (the Desktop binary)
+cargo build --release --features cosmic,tui
 ```
 
-The image builds it into `$PENGYOS_COSMIC_BUILD/install-gui` alongside the other
-COSMIC apps, so it shares their libcosmic build. libcosmic is pinned to the same
-rev they use; `Cargo.lock` is committed and the build is `--locked`.
+`scripts/build-cosmic.sh` builds the Desktop binary (`cosmic,tui`) into
+`$PENGYOS_COSMIC_BUILD/install-gui` alongside the other COSMIC apps, so it shares
+their libcosmic build, and the Server binary (`tui`, links only libc and
+libgcc_s) into `$PENGYOS_COSMIC_BUILD/hwmon-tui`; `build-cosmic.sh
+pengyos-hwmon-tui` builds just that one, which is what a Server-only release
+runs. The Server's post-build installs it, and the Desktop's post-build (which
+runs after it) replaces it with the Desktop binary. libcosmic is pinned to the
+same rev the other apps use; `Cargo.lock` is committed and the build is `--locked`.
 
 ## Flags
 
 | Flag | Meaning |
 |---|---|
-| `--check` | One collection pass, printed as text. Works with or without the GUI feature; this is what a Server TUI will build on. |
-| `--view sensors\|hardware\|limits` | Start on a given pane. |
+| `--check` | One collection pass printed as text: every sensor, grouped by device, with each device's limit and its source. Works in every build; for scripts, agents and rescue shells. |
+| `--tui` | The terminal view, even on a desktop session. |
+| `--hardware` | Start the terminal view on the Hardware inventory. |
+| `--view sensors\|hardware\|limits` | Start the window on a given pane. |
 | `--stress-scroll`, `--stress-repaint` | Developer flags: drive synthetic scrolling/repainting so the rendering budget can be measured (`/proc/<pid>/stat`). |
 
 ## Performance

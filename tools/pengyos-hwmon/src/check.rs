@@ -1,9 +1,10 @@
 //! `--check`: one full collection pass, printed as text.
 //!
 //! The GUI's whole data path without the widgets, so it runs over ssh, in a
-//! rescue shell, and on a Server image with no graphical session. A future TUI
-//! builds on the same snapshot.
+//! rescue shell, from a script or an agent, and in a build with no front-end at
+//! all. Every sensor is printed, grouped by device, with each device's limit.
 
+use crate::tjmax;
 use hwall_app::{build_sensor_rows, AppSettings, RowKind, RowOptions};
 use hwall_core::{CollectOptions, CollectionProfile, MonitorCollector, SnapshotStatistics};
 use std::collections::BTreeMap;
@@ -49,15 +50,32 @@ pub fn run() {
         rows.len(),
         snapshot.warnings.len(),
     );
-    for row in rows
+    // Every row, grouped by device, with the limit a temperature is judged
+    // against: what an agent or an ssh session reads to answer "is it hot?".
+    let limits: std::collections::HashMap<&str, tjmax::Limit> = snapshot
+        .devices
         .iter()
-        .filter(|row| row.kind == RowKind::Sensor)
-        .take(8)
-    {
-        println!(
-            "  {:<28} {:<30} {:>12}  {}",
-            row.device_id, row.label, row.current, row.status
-        );
+        .filter_map(|device| tjmax::device_limit(device).map(|limit| (device.id.as_str(), limit)))
+        .collect();
+    for row in &rows {
+        match row.kind {
+            RowKind::Device => match limits.get(row.device_id.as_str()) {
+                Some(limit) => println!(
+                    "{}  (limit {:.0} °C, {})",
+                    row.label, limit.celsius, limit.note
+                ),
+                None => println!("{}", row.label),
+            },
+            RowKind::Header => println!("  {}", row.label),
+            RowKind::Sensor => {
+                let status = if tjmax::is_ok_status(&row.status) {
+                    String::new()
+                } else {
+                    format!("  {}", row.status)
+                };
+                println!("    {:<36} {:>12}{status}", row.label, row.current);
+            }
+        }
     }
     for warning in &snapshot.warnings {
         println!("  warning: {warning}");

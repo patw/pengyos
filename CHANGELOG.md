@@ -21,6 +21,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 - The Desktop image ships `pengyos-hwmon`, a COSMIC hardware monitor:
   temperatures, fans, voltages, clocks, power and disk health in one table, with
   per-sensor warning limits. It is built on HWall's collectors (MIT, pinned).
+- The Server image ships the same tool as a terminal view: `pengyos-hwmon` in a
+  shell, over ssh or on the console shows the table with the same limit colours,
+  plus the hardware inventory. On the Desktop it starts in the terminal by itself
+  when there is no display. `pengyos-hwmon --check` prints every sensor as text.
+- Temperature limits now come from the kernel on a real install. hwall-core hides
+  them whenever lm-sensors is present, which PengyOS always is, so every limit
+  had been a table default; and NVMe's "no threshold" value (65261 °C) is no
+  longer taken for a limit.
 - Every edition now ships the ITE, Fintek and Winbond Super-I/O drivers plus the
   ASUS EC/WMI and DIMM sensor drivers, and loads the Super-I/O ones at boot,
   because they cannot auto-load. Desktop boards gain 34 to 43 sensors each.

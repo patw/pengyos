@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.0
+
+For PengyOS 26.11.9: the Server's terminal view, and kernel limits that survive
+lm-sensors.
+
+- Terminal view (`--features tui`, ratatui): the Sensors table with Value / Min /
+  Max and the same amber/red limit colouring, the Hardware inventory, a name
+  filter, pause, min/max reset and sampling interval. Built for the Linux
+  console (16 colours, 80x25) as well as ssh. The Server image ships it as
+  `pengyos-hwmon`; the Desktop binary carries it too (`--tui`, and it starts
+  there by itself when there is no display, e.g. over ssh). It reads the
+  Desktop app's saved aliases and alert rules but never writes them.
+- `--check` prints every sensor grouped by device, with each device's limit and
+  where it came from, instead of the first eight rows.
+- Fixed: on a real PengyOS install no limit ever came from the kernel. hwall-core
+  drops min/max/crit from sensors whose value lm-sensors supplied, and PengyOS
+  ships lm-sensors, so every temperature fell back to the table. Celsius limits
+  are now read from sysfs next to the sensor's `tempN_input` when that happens.
+- Fixed: a temperature limit outside 20..150 °C is ignored. NVMe reports "no
+  threshold" as 65261.85 °C on its extra sensors, which became the drive's limit.
+- The device limit prefers a kernel limit over any table default, then the
+  highest, and is one function shared by every front-end, so they always name the
+  same source.
+
 ## 0.1.0
 
 First version, for PengyOS Desktop 26.11.9.

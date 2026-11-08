@@ -109,6 +109,13 @@ case " ${TARGETS[*]} " in
             say "PengyOS libcosmic apps (scripts/build-cosmic.sh)"
             "${REPO}/scripts/build-cosmic.sh"
         fi ;;
+    *" pengyos-server"*)
+        # No Desktop in this release, but the Server still ships the terminal
+        # Hardware Monitor, which is host-built the same way (no libcosmic).
+        if [ "${SKIP_COSMIC}" = 0 ]; then
+            say "Server Hardware Monitor (scripts/build-cosmic.sh pengyos-hwmon-tui)"
+            "${REPO}/scripts/build-cosmic.sh" pengyos-hwmon-tui
+        fi ;;
 esac
 
 for t in "${TARGETS[@]}"; do

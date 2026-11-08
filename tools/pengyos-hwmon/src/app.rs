@@ -15,15 +15,15 @@ use hwall_app::{
     RowKind, RowOptions, SensorRow, SettingsStore,
 };
 use hwall_core::{
-    CollectOptions, CollectionProfile, Device, DeviceClass, MonitorCollector, MonitorPoll,
-    MonitorRequestResult, MonitorWorker, Sensor, Snapshot, SnapshotStatistics, Unit,
+    CollectOptions, CollectionProfile, MonitorCollector, MonitorPoll, MonitorRequestResult,
+    MonitorWorker, Snapshot, SnapshotStatistics, Unit,
 };
 use std::collections::BTreeMap;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::tjmax;
+use crate::tjmax::{self, is_ok_status, sensor_limit, Heat, Limit};
 
 const APP_ID: &str = "io.catbee.pengyos.Hwmon";
 const TICK: Duration = Duration::from_millis(250);
@@ -77,14 +77,6 @@ enum Message {
 /// Where the sampling worker is in its lifecycle. The first full discovery
 /// takes seconds (hwmon walk + helper processes), so it never runs on the UI
 /// thread.
-/// A resolved limit: the number the red/amber colour is measured against, and
-/// where it came from, so the UI can say so.
-#[derive(Debug, Clone, Copy)]
-struct Limit {
-    celsius: f64,
-    note: &'static str,
-}
-
 enum Sampler {
     Booting(Receiver<MonitorWorker>),
     Ready(MonitorWorker),
@@ -186,7 +178,6 @@ impl HWall {
         self.limits.clear();
         self.device_limits.clear();
         for device in &self.snapshot.devices {
-            let mut device_limit: Option<Limit> = None;
             for sensor in &device.sensors {
                 let key = (device.id.clone(), sensor.id.clone());
                 if let Some(value) = sensor.value {
@@ -194,15 +185,9 @@ impl HWall {
                 }
                 if let Some(limit) = sensor_limit(device, sensor) {
                     self.limits.insert(key, limit);
-                    if sensor.unit == Unit::Celsius {
-                        device_limit = Some(match device_limit {
-                            Some(best) if best.celsius >= limit.celsius => best,
-                            _ => limit,
-                        });
-                    }
                 }
             }
-            if let Some(limit) = device_limit {
+            if let Some(limit) = tjmax::device_limit(device) {
                 self.device_limits.insert(device.id.clone(), limit);
             }
         }
@@ -869,67 +854,14 @@ fn num_cell(text: String, color: Option<Color>, dimmed_row: bool) -> Element<'st
     cell.into()
 }
 
-fn is_ok_status(status: &str) -> bool {
-    matches!(status, "Normal" | "ok" | "OK" | "")
-}
-
 fn warn() -> Color {
     Color::from_rgb(0.91, 0.62, 0.13)
 }
 
-/// The limit a reading is judged against.
-///
-/// Order matters: a limit the firmware/kernel actually reports always wins. The
-/// class defaults below only fill the gap where sysfs has no `*_crit`/`*_max`
-/// at all — which is the normal case for `k10temp` and for AMD iGPUs — and they
-/// are deliberately conservative, because a red number that nobody can explain
-/// is worse than no red number. The resolved limit is printed in the device
-/// section header so the colour is never magic.
-fn sensor_limit(device: &Device, sensor: &Sensor) -> Option<Limit> {
-    let kernel = |celsius: f64, note: &'static str| Limit { celsius, note };
-    if let Some(critical) = sensor.critical.filter(|c| c.is_finite() && *c > 0.0) {
-        return Some(kernel(critical, "kernel crit"));
-    }
-    if let Some(max) = sensor.max.filter(|m| m.is_finite() && *m > 0.0) {
-        return Some(kernel(max, "kernel max"));
-    }
-    if sensor.unit != Unit::Celsius {
-        return None;
-    }
-    if device.class == DeviceClass::Cpu {
-        let vendor = device.vendor.as_deref();
-        let family = property_u32(device, "cpu_family");
-        let model = property_u32(device, "model_number");
-        if let Some(limit) = tjmax::cpu(vendor, family, model) {
-            return Some(Limit {
-                celsius: limit.celsius,
-                note: limit.note,
-            });
-        }
-    }
-    tjmax::class_default(device.class).map(|limit| Limit {
-        celsius: limit.celsius,
-        note: limit.note,
-    })
-}
-
-fn property_u32(device: &Device, name: &str) -> Option<u32> {
-    match device.properties.get(name)? {
-        hwall_core::PropertyValue::Unsigned(value) => u32::try_from(*value).ok(),
-        hwall_core::PropertyValue::Integer(value) => u32::try_from(*value).ok(),
-        hwall_core::PropertyValue::String(value) => value.trim().parse().ok(),
-        _ => None,
-    }
-}
-
-/// Red inside 5 °C of the limit, amber inside 15 °C, nothing otherwise.
+/// The theme colour for a [`Heat`] level (red near the limit, amber close to it).
 fn heat(value: Option<f64>, limit: Option<f64>) -> Option<Color> {
-    let (value, limit) = (value?, limit?);
-    if value >= limit - 5.0 {
-        Some(Color::from_rgb(0.88, 0.29, 0.24))
-    } else if value >= limit - 15.0 {
-        Some(warn())
-    } else {
-        None
-    }
+    tjmax::heat(value, limit).map(|level| match level {
+        Heat::Hot => Color::from_rgb(0.88, 0.29, 0.24),
+        Heat::Warm => warn(),
+    })
 }

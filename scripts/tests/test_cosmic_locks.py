@@ -73,7 +73,10 @@ def test_the_build_never_resolves_and_always_passes_locked():
     body = re.sub(r"\nrelock\(\) \{.*?\n\}\n", "\n", code, flags=re.S)
     assert "generate-lockfile" not in body and "cargo fetch" not in body, \
         "only --relock may resolve a lock"
-    assert re.search(r"cargo build --release -p \"\$\{app\}\" --features cosmic --locked", body)
+    builds = [l for l in body.splitlines() if re.search(r"\bcargo build\b", l) and "echo" not in l]
+    assert any('-p "${app}"' in l for l in builds), "the in-tree app loop builds with cargo"
+    assert builds and all("--locked" in l for l in builds), \
+        f"every cargo build is --locked: {[l for l in builds if '--locked' not in l]}"
 
 
 def test_the_package_never_resolves_and_always_passes_locked():

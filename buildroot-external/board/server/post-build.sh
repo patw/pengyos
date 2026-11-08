@@ -90,6 +90,19 @@ else
     echo "post-build: no python3 in the target — the installer is NOT installed"
 fi
 
+# --- Hardware Monitor, terminal view ------------------------------------------
+# tools/pengyos-hwmon built with only its terminal front-end (ratatui; links libc
+# and libgcc_s, nothing else) by scripts/build-cosmic.sh pengyos-hwmon-tui. The
+# sensor drivers and the perf_event sysctl it reads are in core. The Desktop's
+# post-build runs after this one and replaces it with the window + terminal build.
+HWMON_TUI="${PENGYOS_COSMIC_BUILD:-$HOME/cosmic-build}/hwmon-tui/release/pengyos-hwmon"
+if [ -x "${HWMON_TUI}" ]; then
+    install -Dm0755 "${HWMON_TUI}" "${TARGET_DIR}/usr/bin/pengyos-hwmon"
+    echo "post-build: installed pengyos-hwmon (terminal view)"
+else
+    echo "post-build: ${HWMON_TUI} not built - no Hardware Monitor (scripts/build-cosmic.sh pengyos-hwmon-tui)"
+fi
+
 # --- Partition & state layout (docs/state-layout.md) --------------------------
 # Installed systems boot the root slot READ-ONLY with `pengyos.data=N`; preinit
 # (/usr/lib/pengyos/preinit, the kernel's init=) mounts the data partition on
