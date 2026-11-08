@@ -17,6 +17,8 @@ mod app;
 // without a display (and without libcosmic) - `cargo test` covers it. A build
 // with neither front-end uses only part of it (`--check`).
 #[cfg_attr(not(any(feature = "cosmic", feature = "tui")), allow(dead_code))]
+mod fans;
+#[cfg_attr(not(any(feature = "cosmic", feature = "tui")), allow(dead_code))]
 mod tjmax;
 #[cfg(feature = "tui")]
 mod tui;

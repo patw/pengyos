@@ -8,9 +8,13 @@
 //! left out is the Limits editor; rules saved by the Desktop app (or by hand in
 //! `~/.config/hwall/settings.json`) are read and still colour the table.
 //!
+//! The Fans view shows what `pengyos-fans` reports and the commands that change
+//! it; the terminal view itself never writes a fan setting.
+//!
 //! Drawn for the Linux console first: 16 colours (a truecolor rule colour is
 //! mapped down to red or yellow), no mouse, and it works at 80x25.
 
+use crate::fans;
 use crate::tjmax::{self, is_ok_status, sensor_limit, Heat, Limit};
 use hwall_app::{
     build_hardware_inventory, build_sensor_rows, hardware_inventory_text, AppSettings, RowKind,
@@ -42,7 +46,11 @@ const INPUT_POLL: Duration = Duration::from_millis(100);
 enum View {
     Sensors,
     Hardware,
+    Fans,
 }
+
+/// How often the Fans view asks pengyos-fans again (it starts a process).
+const FANS_EVERY: Duration = Duration::from_secs(2);
 
 /// Entry point called by `main` for `--tui` (or whenever there is no display).
 pub fn run(hardware: bool) -> io::Result<()> {
@@ -66,6 +74,8 @@ struct Tui {
     limits: HashMap<(String, String), Limit>,
     device_limits: HashMap<String, Limit>,
     hardware_lines: Vec<String>,
+    fan_lines: Vec<String>,
+    fans_at: Option<Instant>,
     view: View,
     scroll: usize,
     body_height: usize,
@@ -109,6 +119,8 @@ impl Tui {
             limits: HashMap::new(),
             device_limits: HashMap::new(),
             hardware_lines: Vec::new(),
+            fan_lines: Vec::new(),
+            fans_at: None,
             view,
             scroll: 0,
             body_height: 1,
@@ -129,6 +141,7 @@ impl Tui {
         let mut dirty = true;
         while !self.quit {
             dirty |= self.pump();
+            dirty |= self.pump_fans();
             if dirty {
                 terminal.draw(|frame| self.draw(frame))?;
                 dirty = false;
@@ -250,10 +263,29 @@ impl Tui {
         self.clamp_scroll();
     }
 
+    /// Refresh the Fans view when it is showing and due. Returns whether it changed.
+    fn pump_fans(&mut self) -> bool {
+        if self.view != View::Fans || self.paused {
+            return false;
+        }
+        if self.fans_at.is_some_and(|at| at.elapsed() < FANS_EVERY) {
+            return false;
+        }
+        self.fans_at = Some(Instant::now());
+        let lines = match fans::query() {
+            Ok(status) => fans::lines(&status),
+            Err(why) => vec![why],
+        };
+        let changed = lines != self.fan_lines;
+        self.fan_lines = lines;
+        changed
+    }
+
     fn line_count(&self) -> usize {
         match self.view {
             View::Sensors => self.rows.len(),
             View::Hardware => self.hardware_lines.len(),
+            View::Fans => self.fan_lines.len(),
         }
     }
 
@@ -316,8 +348,10 @@ impl Tui {
             KeyCode::Tab | KeyCode::Char('h') => {
                 self.view = match self.view {
                     View::Sensors => View::Hardware,
-                    View::Hardware => View::Sensors,
+                    View::Hardware => View::Fans,
+                    View::Fans => View::Sensors,
                 };
+                self.fans_at = None;
                 self.scroll = 0;
                 self.rebuild();
             }
@@ -355,6 +389,15 @@ impl Tui {
             View::Hardware => {
                 frame.render_widget(Paragraph::new(Line::styled(" Hardware", bold())), heading);
                 self.hardware_lines
+                    .iter()
+                    .skip(self.scroll)
+                    .take(usize::from(list.height))
+                    .map(|text| Line::raw(fit(&format!(" {text}"), width)))
+                    .collect()
+            }
+            View::Fans => {
+                frame.render_widget(Paragraph::new(Line::styled(" Fans", bold())), heading);
+                self.fan_lines
                     .iter()
                     .skip(self.scroll)
                     .take(usize::from(list.height))
@@ -424,7 +467,8 @@ impl Tui {
         }
         let view = match self.view {
             View::Sensors => "h hardware",
-            View::Hardware => "h sensors",
+            View::Hardware => "h fans",
+            View::Fans => "h sensors",
         };
         spans.push(Span::styled(
             format!(" q quit  / filter  p pause  {view}  ? more keys"),
@@ -532,7 +576,7 @@ fn draw_help(frame: &mut Frame<'_>) {
         "p or Space          pause / resume sampling",
         "r                   reset Min and Max",
         "+ / -               sample less / more often",
-        "h or Tab            sensors <-> hardware inventory",
+        "h or Tab            sensors, hardware, fans",
         "q or Esc            quit",
         "",
         "Amber: within 15 °C of the limit. Red: within 5 °C.",

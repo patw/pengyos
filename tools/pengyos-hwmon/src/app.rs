@@ -1,4 +1,4 @@
-//! The libcosmic front-end: window, table, limits editor.
+//! The libcosmic front-end: window, table, limits editor, fans.
 //!
 //! HWall does all the collection (`hwall-core`) and all the presentation policy
 //! (`hwall-app`); this module is only the view + event loop, which is what makes
@@ -23,6 +23,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::fans::{self, FanStatus};
 use crate::tjmax::{self, is_ok_status, sensor_limit, Heat, Limit};
 
 const APP_ID: &str = "io.catbee.pengyos.Hwmon";
@@ -36,6 +37,7 @@ pub fn run(args: &[String]) -> cosmic::iced::Result {
         Some(index) => match args.get(index + 1).map(String::as_str) {
             Some("hardware") => View::Hardware,
             Some("limits") => View::Limits,
+            Some("fans") => View::Fans,
             _ => View::Sensors,
         },
         None => View::Sensors,
@@ -54,7 +56,12 @@ enum View {
     Hardware,
     /// Warning / critical thresholds (the hwall-app alert rules, per sensor).
     Limits,
+    /// Fan profiles, through pengyos-fans.
+    Fans,
 }
+
+/// How often the Fans pane asks pengyos-fans again (it starts a process).
+const FANS_EVERY: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -72,6 +79,11 @@ enum Message {
     SetCritical(String, f64),
     /// Drop the rule for one sensor key (back to the resolved limit only).
     ClearRule(String),
+    FansLoaded(Result<FanStatus, String>),
+    SetFanProfile(&'static str),
+    DetectFans,
+    /// A pkexec pengyos-fans command finished; Err is what to show.
+    FansDone(Result<(), String>),
 }
 
 /// Where the sampling worker is in its lifecycle. The first full discovery
@@ -108,6 +120,11 @@ struct HWall {
     scroll_y: f32,
     viewport_h: f32,
     inventory: Option<HardwareInventory>,
+    fans: Option<Result<FanStatus, String>>,
+    fans_at: Option<Instant>,
+    /// what a running pkexec command is doing ("Detecting fans...")
+    fans_busy: Option<&'static str>,
+    fans_error: Option<String>,
     view: View,
     interval: Duration,
     last_update: Option<Instant>,
@@ -618,6 +635,158 @@ impl HWall {
     }
 }
 
+impl HWall {
+    /// Ask pengyos-fans for its status, off the UI thread, when the pane shows.
+    fn maybe_load_fans(&mut self) -> Task<Message> {
+        if self.view != View::Fans || self.fans_busy.is_some() {
+            return Task::none();
+        }
+        if self.fans_at.is_some_and(|at| at.elapsed() < FANS_EVERY) {
+            return Task::none();
+        }
+        self.fans_at = Some(Instant::now());
+        cosmic::task::future(async move {
+            let status = thread::spawn(fans::query)
+                .join()
+                .unwrap_or_else(|_| Err("pengyos-fans status crashed".into()));
+            Message::FansLoaded(status)
+        })
+    }
+
+    /// Run `pkexec pengyos-fans ...` off the UI thread (it asks for a password).
+    fn fan_command(&mut self, argv: Vec<String>, doing: &'static str) -> Task<Message> {
+        if self.fans_busy.is_some() {
+            return Task::none();
+        }
+        self.fans_busy = Some(doing);
+        self.fans_error = None;
+        cosmic::task::future(async move {
+            let result = thread::spawn(move || fans::run(&argv))
+                .join()
+                .unwrap_or_else(|_| Err("pengyos-fans crashed".into()));
+            Message::FansDone(result)
+        })
+    }
+
+    fn fans_view(&self) -> Element<'_, Message> {
+        let mut page = widget::column::with_capacity(8).spacing(10).padding(12);
+        let status = match &self.fans {
+            None => {
+                return widget::container(widget::text::body("Reading fan controls..."))
+                    .padding(12)
+                    .height(Length::Fill)
+                    .into()
+            }
+            Some(Err(why)) => {
+                return widget::container(widget::text::body(why.clone()))
+                    .padding(12)
+                    .height(Length::Fill)
+                    .into()
+            }
+            Some(Ok(status)) => status,
+        };
+        page = page.push(widget::text::body(fans::summary(status)));
+
+        let can_profile = match status.kind {
+            fans::Kind::Channels => !status.channels.is_empty(),
+            fans::Kind::Platform => true,
+            fans::Kind::Nothing => false,
+        };
+        let busy = self.fans_busy.is_some();
+        if can_profile {
+            let mut buttons = widget::row::with_capacity(4).spacing(8);
+            for name in fans::PROFILES {
+                if name == "firmware" && status.kind == fans::Kind::Platform {
+                    continue;
+                }
+                let label = match name {
+                    "quiet" => "Quiet",
+                    "balanced" => "Balanced",
+                    "full" => "Full speed",
+                    _ => "As the firmware set it",
+                };
+                let current = status.kind == fans::Kind::Channels && status.profile == name;
+                let button = if current {
+                    widget::button::suggested(label)
+                } else {
+                    widget::button::standard(label)
+                };
+                buttons = buttons.push(if busy || current {
+                    button
+                } else {
+                    button.on_press(Message::SetFanProfile(name))
+                });
+            }
+            page = page.push(buttons);
+        }
+        if status.kind == fans::Kind::Channels {
+            let label = if status.channels.is_empty() {
+                "Detect fans"
+            } else {
+                "Detect again"
+            };
+            let button = widget::button::standard(label);
+            page = page.push(if busy {
+                button
+            } else {
+                button.on_press(Message::DetectFans)
+            });
+        }
+        if let Some(doing) = self.fans_busy {
+            page = page.push(widget::text::caption(doing).class(theme::Text::Color(dimmed())));
+        }
+        if let Some(why) = &self.fans_error {
+            page = page.push(widget::text::caption(why.clone()).class(theme::Text::Color(warn())));
+        }
+
+        if !status.channels.is_empty() {
+            let heading = widget::row::with_capacity(5)
+                .push(widget::text::caption_heading("Fan").width(Length::Fill))
+                .push(col_heading("Speed"))
+                .push(col_heading("Duty"))
+                .push(widget::text::caption_heading("Control").width(Length::Fixed(220.0)))
+                .spacing(8)
+                .padding([2, 6]);
+            let mut table = widget::column::with_capacity(status.channels.len() + 1).push(heading);
+            for c in &status.channels {
+                let title = if c.name.is_empty() {
+                    c.id.clone()
+                } else {
+                    format!("{} · {}", c.name, c.id)
+                };
+                let left_alone = c.control == "left alone";
+                table = table.push(
+                    widget::row::with_capacity(4)
+                        .push(widget::text::body(title).width(Length::Fill))
+                        .push(num_cell(fans::rpm_text(c), None, left_alone))
+                        .push(num_cell(fans::duty_text(c), None, left_alone))
+                        .push(
+                            widget::text::caption(c.control.clone())
+                                .class(theme::Text::Color(dimmed()))
+                                .width(Length::Fixed(220.0)),
+                        )
+                        .spacing(8)
+                        .padding([2, 6]),
+                );
+            }
+            page = page.push(table);
+        }
+        if !status.undetected.is_empty() {
+            page = page.push(
+                widget::text::caption(format!("Not mapped yet: {}", status.undetected.join(", ")))
+                    .class(theme::Text::Color(dimmed())),
+            );
+        }
+        page = page.push(
+            widget::text::caption(
+                "Changes ask for an administrator's password. In a terminal: sudo pengyos-fans --help",
+            )
+            .class(theme::Text::Color(dimmed())),
+        );
+        widget::scrollable(page).height(Length::Fill).into()
+    }
+}
+
 impl cosmic::Application for HWall {
     type Executor = cosmic::executor::Default;
     type Flags = (View, bool);
@@ -658,6 +827,10 @@ impl cosmic::Application for HWall {
             scroll_y: 0.0,
             viewport_h: 0.0,
             inventory: None,
+            fans: None,
+            fans_at: None,
+            fans_busy: None,
+            fans_error: None,
             view: start_view,
             interval,
             last_update: None,
@@ -674,7 +847,10 @@ impl cosmic::Application for HWall {
 
     fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
         match message {
-            Message::Tick => self.pump(),
+            Message::Tick => {
+                self.pump();
+                return self.maybe_load_fans();
+            }
             Message::StressTick => {
                 // --stress-repaint: same message rate, no scrolling at all, so the
                 // only cost measured is view + layout + raster.
@@ -722,6 +898,22 @@ impl cosmic::Application for HWall {
                 self.settings.sensor_alerts.remove(&key);
                 self.persist();
             }
+            Message::FansLoaded(status) => self.fans = Some(status),
+            Message::SetFanProfile(name) => {
+                return self.fan_command(fans::profile_argv(name), "Changing the profile...")
+            }
+            Message::DetectFans => {
+                return self.fan_command(
+                    fans::detect_argv(),
+                    "Detecting fans: each spins up for a few seconds...",
+                )
+            }
+            Message::FansDone(result) => {
+                self.fans_busy = None;
+                self.fans_error = result.err();
+                self.fans_at = None;
+                return self.maybe_load_fans();
+            }
         }
         Task::none()
     }
@@ -749,6 +941,9 @@ impl cosmic::Application for HWall {
             widget::button::standard("Limits")
                 .on_press(Message::SetView(View::Limits))
                 .into(),
+            widget::button::standard("Fans")
+                .on_press(Message::SetView(View::Fans))
+                .into(),
         ]
     }
 
@@ -770,6 +965,7 @@ impl cosmic::Application for HWall {
             View::Sensors => self.sensors_view(),
             View::Hardware => self.hardware_view(),
             View::Limits => self.limits_view(),
+            View::Fans => self.fans_view(),
         };
 
         widget::column::with_capacity(2)

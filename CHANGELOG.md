@@ -26,6 +26,9 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   has to keep running. Fans the chip cannot run (USB controllers, other chips, a
   fan told to follow the GPU) get a software curve from `pengyos-fans.service`,
   which hands each fan back to the chip, the device or full speed when it stops.
+- The Hardware Monitor has a Fans view: each fan's speed, duty and who runs it.
+  In the window, profile buttons and Detect ask for an administrator's password;
+  the terminal view shows the commands.
 
 ### Added: USB fan hub and AIO cooler drivers (2026-11-08)
 - The kernel now carries the in-tree drivers for USB fan controllers, AIO

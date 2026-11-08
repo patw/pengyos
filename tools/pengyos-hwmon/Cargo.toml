@@ -19,7 +19,7 @@
 
 [package]
 name = "pengyos-hwmon"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 authors = ["Pat Wendorf"]
@@ -45,6 +45,10 @@ path = "src/main.rs"
 # Pinned by commit; HWall is MIT, see LICENSE and THIRD-PARTY.md.
 hwall-core = { git = "https://github.com/pulpul-s/HWall", rev = "500cc4599254061bab93d116f9b30e0e6529fd4e" }
 hwall-app = { git = "https://github.com/pulpul-s/HWall", rev = "500cc4599254061bab93d116f9b30e0e6529fd4e" }
+
+# Reads `pengyos-fans status --json` for the Fans view. Already in the tree
+# through hwall-app, so the lock gains no new crate.
+serde_json = "1"
 
 # The terminal front-end. Same ratatui/crossterm as HWall's own CLI at the
 # pinned commit; no default features, so no extra backends are compiled in.
