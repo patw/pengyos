@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-fans"
-version = "0.1.0"
+version = "0.2.0"
 description = "PengyOS tool (shipped in the Server overlay): fan profiles and curves on Super-I/O boards and USB fan controllers, firmware profiles on laptops."
 readme = "README.md"
 requires-python = ">=3.9"

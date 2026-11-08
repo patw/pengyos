@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — 2026-11-08
+
+- `detect` compares full speed with 20 % instead of with how the fan was found,
+  so a fan that was already fast is found (behoserver's case fans under load were
+  missed). A fan that stops at 20 % gets its own minimum: the lowest duty that
+  restarts it, plus 5 % (behotv's fan4 stopped on `quiet`). Pumps are only sped
+  up.
+- `curve CHANNEL TEMP:DUTY ... | default`: a fan's own curve. `status --json`
+  reports each fan's curve, whether it is its own, and its minimum.
+
 ## 0.1.0 — 2026-11-08
 
 - First version: `status [--json]`, `detect`, `profile quiet|balanced|full|firmware`,

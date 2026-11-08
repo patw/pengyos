@@ -46,9 +46,12 @@ failing towards full speed.
    only `platform_profile`, it shows the firmware profiles. With neither, it says
    the firmware runs the fans and there is nothing to control (exit 0).
 2. **detect** (root): for every controllable channel, one at a time: remember
-   `pwmN_enable`, `pwmN` and the curve points, set full speed for 6 seconds,
-   record each fan whose RPM rose by at least max(150, 15 %), then write the
-   remembered values back and read them again. A signal or an error mid-test
+   `pwmN_enable`, `pwmN` and the curve points; set full speed for 6 seconds,
+   then 20 % for 9; the fan whose RPM differs most between the two (at least
+   max(150, 25 %)) is the one it drives. If it stopped at 20 %, try 30, 40, 50,
+   60 % from standstill: the first that turns it, plus 5, is its `min_duty` (70
+   if none). A pump (fan label) is only sped up. Then write the remembered values
+   back and read them again. A signal or an error mid-test
    restores the channel first. The map and the remembered values (the
    **baseline**) go to `/etc/pengyos/fans.json`; names and roles set before keep.
    It then applies the saved profile.
@@ -69,16 +72,22 @@ failing towards full speed.
      full map to low-power (or quiet), balanced, performance; through
      power-profiles-daemon when it runs (it remembers the choice), otherwise
      straight to sysfs, saved and reapplied at boot.
-   - Duty is never below 20 % on a `fan` channel, so a fan never stops.
+   - Duty is never below 20 %, nor below the channel's `min_duty`, on a `fan`
+     channel, so a fan never stops.
 4. **name CHANNEL TEXT**, **role CHANNEL fan|pump|none**, **follow CHANNEL
    chip|cpu|gpu|cpu+gpu** (root): edit the map and apply. `chip` is only for
    chip-curve channels. `gpu` curves are shifted 10 °C up (GPUs run hotter by
    design); `cpu+gpu` takes the higher duty of the two, and is the CPU curve
    alone while no GPU temperature can be read. `gpu` and `cpu+gpu` are refused
    (exit 2) when no GPU temperature can be read at all.
-5. **apply** (root): apply the saved profile again. Run at boot by the service,
+5. **curve CHANNEL TEMP:DUTY ...|default** (root): the channel's own curve,
+   used instead of the profile's by `quiet` and `balanced` (not `full`, not
+   `firmware`). 2-8 points, temperatures 0-100 rising, duties not falling, the
+   last 100 %; a chip-curve channel takes at most its chip's points less one.
+   Exit 2 otherwise.
+6. **apply** (root): apply the saved profile again. Run at boot by the service,
    and after resume by a systemd sleep hook (some chips forget on suspend).
-6. **run** (root, the service): apply, then drive the software channels until
+7. **run** (root, the service): apply, then drive the software channels until
    stopped. A temperature that cannot be read for 3 ticks in a row sets that
    channel to full speed. Duty goes up at once and down by at most 4 points per
    tick. The map is re-read when the file changes. With no software channel it
@@ -86,11 +95,11 @@ failing towards full speed.
    (ExecStopPost, for a killed process), each software channel is handed back:
    a chip-curve channel gets the profile as a chip curve, others their device's
    automatic mode, else full speed. Never left at a low fixed duty.
-7. Every writer takes `/run/pengyos-fans.lock`; `run` skips a tick when it is
+8. Every writer takes `/run/pengyos-fans.lock`; `run` skips a tick when it is
    held, so `detect` is never fought.
-8. Changing commands restart the service (`systemctl restart`), except under
+9. Changing commands restart the service (`systemctl restart`), except under
    `--root` (tests).
-9. Exit: 0 ok; 2 usage; 3 nothing to control; 4 not detected yet; 5 not root;
+10. Exit: 0 ok; 2 usage; 3 nothing to control; 4 not detected yet; 5 not root;
    6 unknown channel; 7 a write failed (the channel was restored).
 
 ## Acceptance

@@ -7,6 +7,7 @@
     sudo pengyos-fans name CHANNEL "Front intake"
     sudo pengyos-fans role CHANNEL fan|pump|none
     sudo pengyos-fans follow CHANNEL chip|cpu|gpu|cpu+gpu
+    sudo pengyos-fans curve CHANNEL 30:25 60:45 80:100   its own curve (or: default)
     sudo pengyos-fans apply                        the saved profile again (boot, resume)
     pengyos-fans run | release                     the service (see pengyos-fans.service)
 
@@ -58,7 +59,8 @@ PROFILES = {
 NAMES = ("quiet", "balanced", "full", "firmware")
 FOLLOWS = ("chip", "cpu", "gpu", "cpu+gpu")
 GPU_OFFSET = 10      # GPUs run hotter by design
-FLOOR = 20           # % - a fan channel never stops
+FLOOR = 20           # % - the lowest duty a profile asks for; detect raises it per fan
+PROBE = (20, 30, 40, 50, 60)  # % - detect's slow test, then the restart test after a stall
 RAMP_DOWN = 4        # % per tick
 FAIL_TICKS = 3
 LAPTOP = {"quiet": ("quiet", "low-power"), "balanced": ("balanced",), "full": ("performance",),
@@ -294,11 +296,28 @@ def interp(points, t: float) -> float:
     return points[-1][1]
 
 
-def target_duty(profile: str, follow: str, cpu: float | None, gpu: float | None) -> float | None:
+def duty_raw(percent: float) -> int:
+    return max(0, min(255, round(percent * 255 / 100)))
+
+
+def floor_of(ch: dict) -> int:
+    """The lowest duty this fan may get: 20 %, or what detect measured it needs."""
+    return max(FLOOR, int(ch.get("min_duty") or FLOOR))
+
+
+def points_for(profile: str, ch: dict) -> list:
+    """The curve a channel follows: its own (`curve`), else the profile's."""
+    if profile == "full":
+        return PROFILES["full"]
+    return ch.get("curve") or PROFILES[profile]
+
+
+def target_duty(profile: str, ch: dict, cpu: float | None, gpu: float | None) -> float | None:
     """Percent, or None when the temperature it follows cannot be read."""
-    pts = PROFILES[profile]
     if profile == "full":
         return 100.0
+    pts = points_for(profile, ch)
+    follow = ch.get("follow", "cpu")
     want = []
     if follow in ("cpu", "chip", "cpu+gpu"):
         if cpu is None:
@@ -310,16 +329,17 @@ def target_duty(profile: str, follow: str, cpu: float | None, gpu: float | None)
         # cpu+gpu without a GPU reading (none fitted, or one that cannot be
         # read) is the CPU curve alone: the CPU part still protects the case.
         want.append(interp(pts, gpu - GPU_OFFSET))
-    return max(FLOOR, max(want))
+    return max(floor_of(ch), max(want))
 
 
-def chip_points(profile: str, baseline: list[list[int]]) -> list[list[int]]:
-    """The profile laid onto the chip's points; the last (critical) one stays."""
+def chip_points(profile: str, ch: dict) -> list[list[int]]:
+    """The curve laid onto the chip's points; the last (critical) one stays."""
+    baseline = ch["baseline"]["curve"]
     k = len(baseline) - 1
     crit = baseline[-1][0]
     if profile == "full":
         return [[t, 255] for t, _ in baseline[:-1]]
-    pts = PROFILES[profile]
+    pts = points_for(profile, ch)
     if k < len(pts):
         pts = pts[:k - 1] + pts[-1:]
     pts = [list(x) for x in pts]
@@ -328,7 +348,7 @@ def chip_points(profile: str, baseline: list[list[int]]) -> list[list[int]]:
     out = []
     for i, (t, d) in enumerate(pts):
         t = min(t, crit - (k - i))
-        out.append([max(t, 0), round(max(FLOOR, d) * 255 / 100)])
+        out.append([max(t, 0), duty_raw(max(floor_of(ch), d))])
     return out
 
 
@@ -344,7 +364,7 @@ def hand_back(name: str, base: str, ch: dict, profile: str) -> str:
     """Give a channel back to something that runs without us. Returns what it did."""
     b = ch.get("baseline", {})
     if chip_curve_capable(name, ch):
-        pts = b["curve"][:-1] if profile == "firmware" else chip_points(profile, b["curve"])
+        pts = b["curve"][:-1] if profile == "firmware" else chip_points(profile, ch)
         write_chip_curve(base, pts)
         write(f"{base}_enable", b["enable"])
         return "chip curve"
@@ -388,13 +408,13 @@ def apply(cfg: dict, quiet: bool = False, hand_back_firmware: bool = False) -> l
                 if not quiet:
                     say(f"  {cid}: back to {did}")
             elif not software(chip["name"], ch):
-                write_chip_curve(base, chip_points(profile, ch["baseline"]["curve"]))
+                write_chip_curve(base, chip_points(profile, ch))
                 write(f"{base}_enable", ch["baseline"]["enable"])
             else:
                 if os.path.exists(f"{base}_enable"):
                     write(f"{base}_enable", 1)
-                d = target_duty(profile, ch.get("follow", "cpu"), cpu, gpu)
-                write(base, round((100 if d is None else d) * 255 / 100))
+                d = target_duty(profile, ch, cpu, gpu)
+                write(base, duty_raw(100 if d is None else d))
                 soft.append(cid)
         except OSError as e:
             raise Fail(7, f"pengyos-fans: {cid}: {e}")
@@ -453,8 +473,8 @@ def cmd_detect(args) -> int:
 
     signal.signal(signal.SIGINT, on_signal)
     signal.signal(signal.SIGTERM, on_signal)
-    say(f"Testing {len(targets)} fan control(s): each runs at full speed for about "
-        f"{int(SPIN)} seconds, then goes back.")
+    say(f"Testing {len(targets)} fan control(s), one at a time: full speed, then slow, "
+        f"about {int(SPIN * 2.5 + SETTLE)} seconds each, then back as it was.")
     found = {}
     try:
         for chip, n in targets:
@@ -465,21 +485,50 @@ def cmd_detect(args) -> int:
                 b["pwm"] = None
             before = fan_rpms(chips)
             pending.append((base, b))
+            low = PROBE[0]
             try:
                 if b["enable"] is not None:
                     write(f"{base}_enable", 1)
+                # Full speed, then the lowest duty a profile may use. Comparing the
+                # two (not full against "as found") finds a fan that was already
+                # fast, e.g. a busy server's case fans, and shows whether the fan
+                # stalls at that duty.
                 write(base, 255)
                 time.sleep(SPIN)
-                during = fan_rpms(chips)
+                hi = fan_rpms(chips)
+                rose = [k for k, v in hi.items() if v - before.get(k, 0) >= max(150, before.get(k, 0) * 0.15)]
+                own = [k for k in rose if k.startswith(chip["key"] + ":")]
+                is_pump = any("pump" in (read(os.path.join(chip["path"], f"{k.split(':')[1]}_label")) or "").lower()
+                              for k in own)
+                lo: dict[str, int] = {}
+                if not is_pump:  # a pump is never slowed, not even to test it
+                    write(base, duty_raw(low))
+                    time.sleep(SPIN * 1.5)  # time to coast down, or stall
+                    lo = fan_rpms(chips)
+                    fell = [k for k, v in hi.items() if v - lo.get(k, 0) >= max(150, v * 0.25)]
+                    own_fell = [k for k in fell if k.startswith(chip["key"] + ":")]
+                    if own_fell or fell:
+                        own, rose = own_fell, fell
+                fan = max(own or rose, key=lambda k: hi[k] - lo.get(k, before.get(k, 0)), default=None)
+                min_duty = FLOOR
+                if fan and lo and lo.get(fan, 0) == 0:
+                    # It stopped at the floor: find the lowest duty that starts it
+                    # from standstill and keeps it turning, plus a margin.
+                    min_duty = None
+                    for d in PROBE[1:]:
+                        write(base, duty_raw(d))
+                        time.sleep(SPIN)
+                        if fan_rpms(chips).get(fan, 0) > 0:
+                            min_duty = d + 5
+                            break
+                    if min_duty is None:
+                        min_duty = PROBE[-1] + 10
             except OSError as e:
                 restore()
                 say(f"  {cid}: could not take control ({e}); left as it was")
                 continue
             restore()
             time.sleep(SETTLE)
-            rose = [k for k, v in during.items() if v - before.get(k, 0) >= max(150, before.get(k, 0) * 0.15)]
-            own = [k for k in rose if k.startswith(chip["key"] + ":")]
-            fan = (own or rose or [None])[0]
             fan_n = fan.split(":fan")[1] if fan and fan.startswith(chip["key"] + ":") else None
             label = (read(os.path.join(chip["path"], f"fan{fan_n}_label")) or "") if fan_n else ""
             prev = old.get(cid, {})
@@ -487,13 +536,23 @@ def cmd_detect(args) -> int:
                                                                   "fan" if fan else "none")
             entry = {"chip": chip["name"], "device": chip["device"], "pwm": n,
                      "fan": f"fan{fan_n}" if fan_n else (fan or None), "role": role,
-                     "baseline": b, "name": prev.get("name", ""), "follow": prev.get("follow", "")}
+                     "baseline": b, "name": prev.get("name", ""), "follow": prev.get("follow", ""),
+                     "min_duty": min_duty}
+            if prev.get("curve"):
+                entry["curve"] = prev["curve"]
             if prev.get("role_set"):
                 entry["role_set"] = True
             if not entry["follow"]:
                 entry["follow"] = "chip" if chip_curve_capable(chip["name"], entry) else "cpu"
             found[cid] = entry
-            what = f"drives {fan} ({before.get(fan, 0)} -> {during.get(fan)} RPM)" if fan else "no fan answered"
+            if not fan:
+                what = "no fan answered"
+            elif lo:
+                what = f"drives {fan} ({lo.get(fan, 0)} RPM at {low}% .. {hi[fan]} RPM at 100%)"
+                if min_duty > FLOOR:
+                    what += f"; stops below {min_duty - 5}%, so never under {min_duty}%"
+            else:
+                what = f"drives {fan} ({before.get(fan, 0)} -> {hi[fan]} RPM)"
             say(f"  {cid}: {what}" + ("  [pump]" if role == "pump" else ""))
     finally:
         restore()
@@ -571,6 +630,58 @@ def edit(args, field: str, value) -> int:
         os.close(fd)
     restart_service()
     say(f"{args.channel}: {field} = {value or '-'}")
+    return 0
+
+
+def parse_curve(words: list[str]) -> list[list[int]]:
+    """`30:25 50:40 70:70 80:100` (°C:percent) -> [[30, 25], ...], checked."""
+    pts = []
+    for w in words:
+        t, sep, d = w.partition(":")
+        if not sep or not t.strip().isdigit() or not d.strip().rstrip("%").isdigit():
+            raise Fail(2, f"pengyos-fans: {w!r} is not TEMP:DUTY (e.g. 60:40 for 40 % at 60 °C)")
+        pts.append([int(t), int(d.strip().rstrip("%"))])
+    if not 2 <= len(pts) <= 8:
+        raise Fail(2, "pengyos-fans: a curve has 2 to 8 points")
+    for (t0, d0), (t1, d1) in zip(pts, pts[1:]):
+        if t1 <= t0 or d1 < d0:
+            raise Fail(2, "pengyos-fans: temperatures must rise and duties must not fall along the curve")
+    if pts[0][0] < 0 or pts[-1][0] > 100 or any(not 0 <= d <= 100 for _, d in pts):
+        raise Fail(2, "pengyos-fans: temperatures 0-100 °C, duties 0-100 %")
+    if pts[-1][1] != 100:
+        raise Fail(2, "pengyos-fans: the last point must be 100 %, so a hot machine always gets full speed")
+    return pts
+
+
+def cmd_curve(args) -> int:
+    need_root()
+    cfg = load()
+    ch = cfg["channels"].get(args.channel)
+    if ch is None:
+        known = ", ".join(sorted(cfg["channels"])) or "none (run sudo pengyos-fans detect)"
+        raise Fail(6, f"pengyos-fans: no channel {args.channel}; known: {known}")
+    if args.points == ["default"]:
+        ch.pop("curve", None)
+        what = "the profile's curve"
+    else:
+        pts = parse_curve(args.points)
+        k = len(ch["baseline"].get("curve", [])) - 1
+        if not software(ch["chip"], ch) and len(pts) > k:
+            raise Fail(2, f"pengyos-fans: {args.channel}'s chip holds {k} points; give at most {k}")
+        floor = floor_of(ch)
+        if pts[0][1] < floor:
+            say(f"Note: {args.channel} never goes below {floor}% (its fan stops lower, or the 20% floor).")
+        ch["curve"] = pts
+        what = " ".join(f"{t}:{d}" for t, d in pts)
+    fd = lock()
+    try:
+        save(cfg)
+        apply(cfg, quiet=True)
+    finally:
+        os.close(fd)
+    restart_service()
+    say(f"{args.channel}: curve = {what}" + ("  (used by quiet and balanced; the profile is firmware now)"
+                                            if cfg["profile"] == "firmware" else ""))
     return 0
 
 
@@ -668,7 +779,7 @@ def tick(cfg: dict, last: dict, fails: dict) -> None:
         if chip is None or ch.get("role") != "fan" or not software(chip["name"], ch):
             continue
         base = os.path.join(chip["path"], f"pwm{ch['pwm']}")
-        d = target_duty(cfg["profile"], ch.get("follow", "cpu"), cpu, gpu)
+        d = target_duty(cfg["profile"], ch, cpu, gpu)
         if d is None:
             fails[cid] = fails.get(cid, 0) + 1
             d = 100.0 if fails[cid] >= FAIL_TICKS else last.get(cid, 100.0)
@@ -680,7 +791,7 @@ def tick(cfg: dict, last: dict, fails: dict) -> None:
         try:
             if os.path.exists(f"{base}_enable") and read(f"{base}_enable") != "1":
                 write(f"{base}_enable", 1)   # a resume or the BIOS took it back
-            write(base, round(d * 255 / 100))
+            write(base, duty_raw(d))
         except OSError as e:
             say(f"pengyos-fans: {cid}: {e}")
 
@@ -693,7 +804,9 @@ def describe(cfg: dict) -> dict:
     for cid, ch, chip in resolve(cfg, chips):
         row = {"id": cid, "name": ch.get("name", ""), "role": ch.get("role"), "fan": ch.get("fan"),
                "follow": ch.get("follow"), "present": chip is not None, "rpm": None, "duty": None,
-               "control": "absent"}
+               "control": "absent", "min_duty": floor_of(ch), "own_curve": bool(ch.get("curve")),
+               "curve": None if cfg["profile"] == "firmware" or ch.get("role") != "fan"
+               else [list(p) for p in points_for(cfg["profile"], ch)]}
         if chip is not None:
             base = os.path.join(chip["path"], f"pwm{ch['pwm']}")
             v = num(base)
@@ -712,6 +825,8 @@ def describe(cfg: dict) -> dict:
                 sel = num(f"{base}_temp_sel")
                 src = read(os.path.join(chip["path"], f"temp{sel}_label")) if sel else None
                 row["control"] = "chip curve" + (f" ({src})" if src else "")
+            if row["own_curve"] and row["control"] not in ("left alone", "firmware"):
+                row["control"] += ", own curve"
         out["channels"].append(row)
     known = {(ch["chip"], ch["device"], ch["pwm"]) for ch in cfg["channels"].values()}
     for c in chips:
@@ -781,6 +896,9 @@ def main(argv: list[str]) -> int:
     s = sub.add_parser("follow", help="the temperature a channel follows")
     s.add_argument("channel")
     s.add_argument("value", choices=FOLLOWS)
+    s = sub.add_parser("curve", help="a fan's own curve: TEMP:DUTY ... (e.g. 30:25 60:45 80:100), or default")
+    s.add_argument("channel")
+    s.add_argument("points", nargs="+")
     sub.add_parser("apply", help="apply the saved profile again")
     s = sub.add_parser("run", help="drive the software curves (the service)")
     s.add_argument("--ticks", type=int, default=None, help=argparse.SUPPRESS)
@@ -796,7 +914,7 @@ def main(argv: list[str]) -> int:
             return edit(args, "name", args.text.strip())
         if args.cmd in ("role", "follow"):
             return edit(args, args.cmd, args.value)
-        return {"detect": cmd_detect, "profile": cmd_profile, "apply": cmd_apply,
+        return {"detect": cmd_detect, "profile": cmd_profile, "apply": cmd_apply, "curve": cmd_curve,
                 "run": cmd_run, "release": cmd_release}[args.cmd](args)
     except Fail as e:
         print(str(e), file=sys.stderr)

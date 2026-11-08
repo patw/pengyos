@@ -10,6 +10,8 @@ sudo pengyos-fans profile quiet                # or balanced, full, firmware
 sudo pengyos-fans name nct6798:pwm1 "CPU"
 sudo pengyos-fans follow nct6798:pwm2 cpu+gpu  # a case fan that also cools the graphics card
 sudo pengyos-fans role nct6798:pwm6 pump       # never touched by a profile
+sudo pengyos-fans curve nct6798:pwm1 30:25 60:45 75:70 85:100   # its own curve (°C:%)
+sudo pengyos-fans curve nct6798:pwm1 default    # back to the profile's
 ```
 
 ## What can be controlled
@@ -35,7 +37,13 @@ GPU fans belong to the GPU driver and are not touched.
 | `full` | 100 % |
 | `firmware` | Whatever the BIOS or the device set up (the default). |
 
-A fan never goes below 20 %. A fan that follows the GPU uses the same curve 10 °C
+A fan never goes below 20 %, or below the minimum `detect` measured for it: some
+fans stop at 20 % (behotv's rear fan did), and those get the lowest duty that
+restarts them from standstill, plus 5 %.
+
+A fan can have **its own curve** (`curve CHANNEL TEMP:DUTY ...`, 2 to 8 points,
+rising, ending at 100 %), which `quiet` and `balanced` use for it instead of
+theirs; `full` is still full. A Nuvoton chip holds 4 points per fan. A fan that follows the GPU uses the same curve 10 °C
 higher, because GPUs are built to run hotter; `cpu+gpu` takes whichever of the two
 asks for more, and is the CPU curve alone while no GPU temperature can be read. A
 fan following `gpu` alone goes to full speed when it cannot be read.
@@ -74,9 +82,13 @@ Testing 5 fan control(s): each runs at full speed for about 6 seconds, then goes
 Saved to /etc/pengyos/fans.json.
 ```
 
-Each control is set to full speed for 6 seconds; a fan whose speed rises by at
-least 150 RPM (and 15 %) is the one it drives. Its settings are then written back
-and read again; Ctrl-C mid-test restores it first. A control with no fan answering
+Each control is set to full speed for 6 seconds, then to 20 % for 9: the fan
+whose speed differs most between the two (at least 150 RPM and 25 %) is the one it
+drives. Comparing full against slow, rather than against how it was found, also
+finds a fan that was already fast, like a busy server's case fans. A fan that
+stopped at 20 % is tried again at 30, 40, 50 and 60 % to find where it restarts.
+A pump (its fan's label says so) is only ever sped up. Each control's settings
+are then written back and read again; Ctrl-C mid-test restores it first. A control with no fan answering
 may be an empty header, or a pump or fan without a speed wire: it is left alone
 (`role ... fan` to include it). Run `detect` again after moving fans around; names
 and roles you set are kept.

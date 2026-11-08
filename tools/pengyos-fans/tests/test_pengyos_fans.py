@@ -56,7 +56,7 @@ class Machine:
         return h
 
     def pwm(self, h: Path, n: int, value=58, enable="5", curve=NCT_CURVE, fan: int | None = None,
-            idle=500, label=None, readable=True):
+            idle=500, label=None, readable=True, stall=0):
         (h / f"pwm{n}").write_text(f"{value}\n" if readable else "")
         if enable is not None:
             (h / f"pwm{n}_enable").write_text(f"{enable}\n")
@@ -68,19 +68,26 @@ class Machine:
             (h / f"fan{fan}_input").write_text(f"{idle}\n")
             if label:
                 (h / f"fan{fan}_label").write_text(label + "\n")
-            self.links[h / f"pwm{n}"] = (h / f"fan{fan}_input", h / f"pwm{n}_enable", idle)
+            self.links[h / f"pwm{n}"] = (h / f"fan{fan}_input", h / f"pwm{n}_enable", idle, stall)
 
     def physics(self):
-        """Fans spin at ~1550 RPM in manual 255, else at their idle speed."""
+        """In manual mode a fan turns at 300 + 1250 * duty RPM (1550 at full) and
+        stops below its stall duty (percent); otherwise at its idle speed, which is
+        whatever the chip's own curve gives it."""
         def loop():
             while not self.stop.is_set():
-                for pwm, (fan, en, idle) in self.links.items():
+                for pwm, (fan, en, idle, stall) in self.links.items():
                     try:
                         v = int((pwm.read_text().strip() or "0"))
                         e = en.read_text().strip() if en.exists() else "1"
                     except (OSError, ValueError):
                         continue
-                    rpm = idle + int((1550 - idle) * v / 255) if e == "1" else idle
+                    if e != "1":
+                        rpm = idle
+                    elif v * 100 < stall * 255:
+                        rpm = 0
+                    else:
+                        rpm = 300 + int(1250 * v / 255)
                     fan.write_text(f"{rpm}\n")
                 time.sleep(0.01)
         self.thread = threading.Thread(target=loop, daemon=True)
@@ -162,7 +169,7 @@ def test_detect_maps_each_control_to_its_fan_and_puts_it_back(m):
     behopc(m)
     before = {f: m.r(nct_path(m, 0) + f) for f in os.listdir(m.root / nct_path(m, 0)) if f.startswith("pwm")}
     out = run(m, "detect").stdout
-    assert "nct6798:pwm1: drives nct6798:fan1 (538 -> 1550 RPM)" in out
+    assert "nct6798:pwm1: drives nct6798:fan1 (550 RPM at 20% .. 1550 RPM at 100%)" in out
     assert "nct6798:pwm5: no fan answered" in out
     c = m.conf()["channels"]
     assert {k: v["fan"] for k, v in c.items()} == {
@@ -183,6 +190,30 @@ def test_detect_maps_each_control_to_its_fan_and_puts_it_back(m):
     assert m.conf()["profile"] == "firmware"
 
 
+def test_a_fan_that_stalls_at_the_floor_gets_its_own_minimum(m):
+    # behotv's fan4 stopped at 20 % on the first hardware test (2026-11-08)
+    m.chip("k10temp", "pci0000:00/0000:00:18.3", [("Tctl", 40)])
+    h = m.chip("nct6797", "platform/nct6775.2592", [("SYSTIN", 30)])
+    m.pwm(h, 4, value=122, fan=4, idle=725, stall=35)
+    m.physics()
+    out = run(m, "detect").stdout
+    assert "stops below 40%, so never under 45%" in out
+    assert m.conf()["channels"]["nct6797:pwm4"]["min_duty"] == 45
+    run(m, "profile", "quiet")
+    assert [d for _, d in points(m, 4)][:2] == [round(45 * 2.55), round(45 * 2.55)]
+
+
+def test_a_fan_already_near_full_speed_is_still_found(m):
+    # behoserver under load: case fans already at ~1450 RPM on the BIOS curve
+    m.chip("k10temp", "pci0000:00/0000:00:18.3", [("Tctl", 75)])
+    h = m.chip("nct6798", "platform/nct6775.656", [("SYSTIN", 30)])
+    m.pwm(h, 1, value=193, fan=1, idle=1450)
+    m.physics()
+    out = run(m, "detect").stdout
+    assert "nct6798:pwm1: drives nct6798:fan1" in out
+    assert m.conf()["channels"]["nct6798:pwm1"]["role"] == "fan"
+
+
 def test_detect_keeps_names_and_roles(m):
     behopc(m)
     run(m, "detect")
@@ -199,7 +230,7 @@ def test_detect_marks_a_pump_by_its_label(m):
     h = m.chip("x53", "pci0000:00/usb1/1-2/1-2:1.0", [("Coolant temp", 31)])
     m.pwm(h, 1, value=150, enable="2", curve=None, fan=1, idle=1800, label="Pump speed")
     m.pwm(h, 2, value=80, enable="2", curve=None, fan=2, idle=600, label="Fan speed")
-    m.links[h / "pwm1"] = (h / "fan1_input", h / "pwm1_enable", 1300)
+    m.links[h / "pwm1"] = (h / "fan1_input", h / "pwm1_enable", 1300, 0)
     m.physics()
     run(m, "detect")
     c = m.conf()["channels"]
@@ -406,6 +437,43 @@ def test_follow_gpu_needs_a_gpu(m):
     run(m, "detect")
     pr = run(m, "follow", "nct6798:pwm2", "gpu", check=False, env=dict(os.environ, PATH="/usr/bin:/bin"))
     assert pr.returncode == 2 and "no GPU temperature" in pr.stderr
+
+
+def test_a_fan_gets_its_own_curve_on_the_chip(m):
+    behopc(m)
+    run(m, "detect")
+    run(m, "profile", "balanced")
+    run(m, "curve", "nct6798:pwm2", "30:25", "60:40", "75:70", "85:100")
+    assert points(m, 2) == [(30, 64), (60, 102), (75, 178), (85, 255), (125, 255)]
+    assert points(m, 1)[0] == (35, 76)  # the others keep the profile
+    st = json.loads(run(m, "status", "--json").stdout)
+    row = next(r for r in st["channels"] if r["id"] == "nct6798:pwm2")
+    assert row["own_curve"] and row["curve"] == [[30, 25], [60, 40], [75, 70], [85, 100]]
+    assert row["control"].endswith(", own curve")
+    run(m, "profile", "full")
+    assert [d for _, d in points(m, 2)] == [255] * 5  # full is full, own curve or not
+    run(m, "profile", "quiet")
+    run(m, "curve", "nct6798:pwm2", "default")
+    assert points(m, 2)[0] == (40, 51)
+
+
+def test_curves_are_checked(m):
+    behopc(m)
+    run(m, "detect")
+    for bad in (["30:25"], ["60:20", "40:50", "80:100"], ["30:50", "60:40", "80:100"],
+                ["30:25", "60:80"], ["30-25", "80:100"], ["30:25", "40:30", "50:40", "60:50", "80:100"]):
+        pr = run(m, "curve", "nct6798:pwm1", *bad, check=False)
+        assert pr.returncode == 2, bad
+    assert "holds 4 points" in pr.stderr
+
+
+def test_a_software_fan_follows_its_own_curve(m):
+    commander(m, cpu=50)
+    run(m, "detect")
+    run(m, "profile", "quiet")
+    run(m, "curve", "corsaircpro:pwm1", "40:30", "60:50", "80:100")
+    assert cp(m, 1) == round(40 * 255 / 100)
+    assert cp(m, 2) == round((20 + 10 * 15 / 20) * 255 / 100)  # quiet at 50 °C
 
 
 def test_follow_chip_needs_a_chip_curve(m):
