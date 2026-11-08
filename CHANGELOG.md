@@ -17,6 +17,30 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: fan control (2026-11-08)
+- `pengyos-fans` sets fan profiles (quiet, balanced, full, or as the firmware set
+  them) and per-fan curves on desktop boards and USB fan controllers, and the
+  firmware's profiles on laptops. `sudo pengyos-fans detect` first finds which
+  control drives which fan. Server and Desktop.
+- On Nuvoton boards the profile is written into the chip's own curve, so nothing
+  has to keep running. Fans the chip cannot run (USB controllers, other chips, a
+  fan told to follow the GPU) get a software curve from `pengyos-fans.service`,
+  which hands each fan back to the chip, the device or full speed when it stops.
+- The Hardware Monitor has a Fans view: each fan's speed, duty and who runs it,
+  and in the window an editor for each fan's name and curve. The terminal view
+  shows the commands.
+- A Fans applet in the Desktop panel switches the profile in one click. It is
+  invisible on machines with nothing to control. Administrators at the computer
+  change fan settings without a password (a polkit rule for `pengyos-fans` only).
+
+### Added: USB fan hub and AIO cooler drivers (2026-11-08)
+- The kernel now carries the in-tree drivers for USB fan controllers, AIO
+  coolers and PSUs: Corsair Commander Pro and HXi/RMi/AXi PSUs, NZXT Kraken
+  (X42-X72, X53-Z73, 2023) and the RGB & Fan Controller, Aquacomputer D5 Next,
+  Octo, Quadro and friends, ASUS ROG Ryujin II/III and Gigabyte Waterforce. Their
+  fans, pumps and coolant temperatures show up in the Hardware Monitor. Each
+  loads only when its device is plugged in.
+
 ### Added: Hardware Monitor and board sensors (2026-11-08)
 - The Desktop image ships `pengyos-hwmon`, a COSMIC hardware monitor:
   temperatures, fans, voltages, clocks, power and disk health in one table, with

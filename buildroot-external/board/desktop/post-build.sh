@@ -335,6 +335,20 @@ if [ -d "${COSMIC_PANEL_SRC}" ]; then
         [ -e "$d/keep_style_on_maximize" ] || echo false > "$d/keep_style_on_maximize"
     done
     echo "post-build: installed cosmic-panel default_schema -> /usr/share/cosmic/"
+    # The Fans applet (pengyos-hwmon --applet) goes on the default panel, just
+    # left of the volume applet. It draws nothing on a machine with no fan
+    # controls, so it can be on every Desktop. Inserted, not a replaced file, so
+    # the rest of the list stays upstream's. An existing user's panel config in
+    # ~/.config wins: they add it from Settings > Desktop > Panel > Applets.
+    wings="${TARGET_DIR}/usr/share/cosmic/com.system76.CosmicPanel.Panel/v1/plugins_wings"
+    if [ -x "${TARGET_DIR}/usr/bin/pengyos-hwmon" ] && ! grep -q io.catbee.pengyos.FansApplet "$wings"; then
+        grep -q '"com.system76.CosmicAppletAudio"' "$wings" || {
+            echo "post-build: ERROR no CosmicAppletAudio in $wings to put the Fans applet next to" >&2
+            exit 1
+        }
+        sed -i 's/"com.system76.CosmicAppletAudio"/"io.catbee.pengyos.FansApplet", "com.system76.CosmicAppletAudio"/' "$wings"
+        echo "post-build: Fans applet added to the default panel"
+    fi
 else
     echo "post-build: ${COSMIC_PANEL_SRC} absent — COSMIC panel defaults NOT installed (panel will be empty)"
 fi

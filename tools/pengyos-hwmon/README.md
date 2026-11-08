@@ -28,14 +28,30 @@ policy, and this crate is only the view.
 | **Sensors** | Every device, grouped, with Value / Min / Max since start. Values turn **amber within 15 °C** and **red within 5 °C** of the sensor's limit. The limit and where it came from are shown in the device header (`limit 95 °C · Zen3/Zen3+/Zen4`). |
 | **Hardware** | Inventory: processors, memory, graphics, storage, network, Bluetooth, PCI, USB, batteries, firmware. |
 | **Limits** | Per-sensor warning and critical thresholds (the hwall-app alert rules). Prefilled at limit−15 / limit−5. Saved to `~/.config/hwall/settings.json`; a configured rule always wins over the built-in limit. |
+| **Fans** | What [`pengyos-fans`](../pengyos-fans/) can control here and how it is set: each fan with its speed, duty and whether the chip curve or the service runs it. Profile buttons (Quiet, Balanced, Full speed, As the firmware set it) and Detect. **Edit** on a fan opens its editor: name, what the control drives (fan, pump, nothing), what its speed follows (the chip's sensor, CPU, GPU, or whichever is hotter) and its own curve as °C → % points, checked the way `pengyos-fans curve` checks them. Every change runs `pkexec /usr/bin/pengyos-fans ...`. A laptop shows its firmware profiles; a mini PC says there is nothing to control. |
 
 `Pause` freezes sampling without losing the table; `Reset stats` clears min/max.
+
+## The Fans panel applet
+
+`pengyos-hwmon --applet` is a fan icon in the COSMIC panel (the image puts it left
+of the volume applet). Its popup switches the profile in one click and lists each
+fan's speed; "Curves and names..." opens the window on the Fans view. It is the
+same binary as the window, so it shares the Fans code and the libcosmic build. On
+a machine with no fan controls it draws nothing, so it can be on every Desktop's
+panel (laptops already have power profiles in COSMIC's battery applet).
+
+Changes go through `pkexec /usr/bin/pengyos-fans`. The Desktop's polkit rule
+(`/etc/polkit-1/rules.d/60-pengyos-fans.rules`) lets an administrator (wheel) at
+the computer run that one program without a password, as for printers, updates
+and shares; anyone else, and any ssh session, is asked for one.
 
 ## Terminal view
 
 The cut-down sibling for the Server image, ssh sessions and the Linux console
 (`--features tui`, ratatui). The Sensors table with the same colours and limit
-line per device, and the Hardware inventory. There is no Limits editor; rules
+line per device, the Hardware inventory, and the Fans view (read-only: it shows
+the `sudo pengyos-fans ...` commands to type). There is no Limits editor; rules
 saved by the Desktop app (`~/.config/hwall/settings.json`) are read and still
 colour the table, and the terminal view never writes that file.
 
@@ -46,7 +62,7 @@ colour the table, and the terminal view never writes that file.
 | `p` or Space | pause / resume sampling |
 | `r` | reset Min and Max |
 | `+` / `-` | sample less / more often (0.5 to 10 s, 2 s to start) |
-| `h` or Tab | sensors / hardware inventory |
+| `h` or Tab | sensors, hardware inventory, fans |
 | `?` | the key list |
 | `q`, Esc, Ctrl-C | quit |
 
@@ -131,7 +147,9 @@ same rev the other apps use; `Cargo.lock` is committed and the build is `--locke
 | `--check` | One collection pass printed as text: every sensor, grouped by device, with each device's limit and its source. Works in every build; for scripts, agents and rescue shells. |
 | `--tui` | The terminal view, even on a desktop session. |
 | `--hardware` | Start the terminal view on the Hardware inventory. |
-| `--view sensors\|hardware\|limits` | Start the window on a given pane. |
+| `--view sensors\|hardware\|limits\|fans` | Start the window on a given pane. |
+| `--edit-fan CHANNEL` | With `--view fans`: open that fan's editor once the view loads (screenshots, checks). |
+| `--applet` | The Fans panel applet (cosmic-panel starts it from `io.catbee.pengyos.FansApplet.desktop`). |
 | `--stress-scroll`, `--stress-repaint` | Developer flags: drive synthetic scrolling/repainting so the rendering budget can be measured (`/proc/<pid>/stat`). |
 
 ## Performance

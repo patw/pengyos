@@ -71,4 +71,8 @@ exec      usr/bin/pengyos-remote-desktop           # the Remote Desktop window �
 exec      usr/bin/openssl                          # pengyos-remote makes the TLS certificate — BR2_PACKAGE_LIBOPENSSL_BIN
 exec      usr/bin/pengyos-sharing                  # the File Sharing window — scripts/build-cosmic.sh + desktop post-build.sh
 exists    etc/polkit-1/rules.d/60-pengyos-shares.rules   # lets wheel run pkexec /usr/bin/pengyos-shares from it — desktop overlay
+# --- Fan control from the panel and the Hardware Monitor ----------------------
+exec      usr/bin/pengyos-fans                     # profiles and curves — server overlay
+exists    etc/polkit-1/rules.d/60-pengyos-fans.rules   # lets wheel run pkexec /usr/bin/pengyos-fans without a password — desktop overlay
+contains  usr/share/cosmic/com.system76.CosmicPanel.Panel/v1/plugins_wings io.catbee.pengyos.FansApplet   # the Fans applet on the default panel — desktop post-build.sh
 exists    etc/security/limits.d/60-pengyos-memlock.conf   # after PipeWire's 25-pw-rlimits.conf: no 4 GiB memlock cap for @pipewire

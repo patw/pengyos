@@ -62,6 +62,7 @@ TOOLS = {
     "pengyos-disks": "the Disks app: partition, format, write images",
     "pengyos-usage": "the Disk Usage app: what is taking the space",
     "pengyos-hwmon": "Hardware Monitor: temps, fans, power",
+    "pengyos-fans": "fan profiles: status, detect, profile (as root)",
     "pengyos-firmware": "the Firmware app (fwupd)",
     "pengyos-gamepads": "the Gamepads app: list and test controllers",
     "pengyos-printers": "the Printers app: printers, queue, test page",

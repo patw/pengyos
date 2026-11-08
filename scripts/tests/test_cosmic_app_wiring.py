@@ -248,6 +248,31 @@ def test_file_sharing_is_wired_with_its_polkit_rule():
     )
 
 
+def test_fan_control_is_wired_with_its_applet_and_polkit_rule():
+    """The Hardware Monitor's Fans view and its panel applet drive pengyos-fans
+    through pkexec: the CLI, the rule that lets wheel run it without a password,
+    the applet's launcher (cosmic-panel finds an applet by that file's name), its
+    icon and its place on the default panel must all be there."""
+    assert "pengyos-hwmon" in _app_list()
+    assert "pengyos-hwmon" in _installed_bins()
+    assert "pengyos-fans" in _overlay_bins()
+    overlay = ROOT / "buildroot-external" / "board" / "desktop" / "rootfs-overlay"
+    rules = (overlay / "etc/polkit-1/rules.d/60-pengyos-fans.rules").read_text()
+    assert '"org.freedesktop.policykit.exec"' in rules
+    assert '"/usr/bin/pengyos-fans"' in rules
+    assert 'isInGroup("wheel")' in rules and "subject.local" in rules and "subject.active" in rules
+    fans = (ROOT / "tools/pengyos-hwmon/src/fans.rs").read_text()
+    assert 'pub const FANS: &str = "/usr/bin/pengyos-fans";' in fans
+    applet = (ROOT / "tools/pengyos-hwmon/src/applet.rs").read_text()
+    assert 'const APP_ID: &str = "io.catbee.pengyos.FansApplet";' in applet
+    entry = (APPS_DIR / "io.catbee.pengyos.FansApplet.desktop").read_text()
+    assert "Exec=pengyos-hwmon --applet" in entry and "X-CosmicApplet=true" in entry
+    assert "Icon=io.catbee.pengyos.FansApplet-symbolic" in entry
+    assert (overlay / "usr/share/icons/hicolor/scalable/apps/io.catbee.pengyos.FansApplet-symbolic.svg").is_file()
+    post = POST_BUILD.read_text(encoding="utf-8")
+    assert '"io.catbee.pengyos.FansApplet", "com.system76.CosmicAppletAudio"' in post
+
+
 def test_remote_desktop_is_wired():
     """The Remote Desktop window drives pengyos-remote, which runs the RDP server
     (a host-built binary in /usr/libexec) through a user unit in the session."""

@@ -165,6 +165,25 @@ CONFIG_SENSORS_ASUS_WMI=m
 CONFIG_SENSORS_SPD5118=m
 CONFIG_SENSORS_SPD5118_DETECT=y
 CONFIG_SENSORS_JC42=m
+# USB fan hubs, AIO coolers and PSUs, which report fans and coolant temperatures
+# over USB HID and most of which take PWM writes. Unlike the Super-I/O drivers
+# above, these bind by USB ID, so udev loads one only when its device is plugged
+# in: nothing is probed on a machine without one. All need USB_HID (built in).
+# Corsair Commander Pro: 6 fans, 4 temperature probes, a PWM per fan.
+CONFIG_SENSORS_CORSAIR_CPRO=m
+# Corsair HXi/RMi/AXi power supplies: rails, power, the PSU fan and temperatures.
+CONFIG_SENSORS_CORSAIR_PSU=m
+# NZXT: Kraken X42-X72 (read-only), Kraken X53-Z73 and 2023 (pump and fan duty),
+# and the RGB & Fan Controller / Smart Device v2 (3 fans).
+CONFIG_SENSORS_NZXT_KRAKEN2=m
+CONFIG_SENSORS_NZXT_KRAKEN3=m
+CONFIG_SENSORS_NZXT_SMART2=m
+# Aquacomputer D5 Next, Octo, Quadro, Farbwerk, High Flow Next.
+CONFIG_SENSORS_AQUACOMPUTER_D5NEXT=m
+# ASUS ROG Ryujin II/III AIOs (pump and fan duty); Gigabyte Waterforce AIOs
+# (read-only).
+CONFIG_SENSORS_ASUS_ROG_RYUJIN=m
+CONFIG_SENSORS_GIGABYTE_WATERFORCE=m
 # AMD SMBus (SPD, RGB over SMBus).
 CONFIG_I2C_PIIX4=m
 # AMD Secure Processor: CCP crypto offload + the PSP interface.

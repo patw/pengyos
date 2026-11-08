@@ -1,0 +1,16 @@
+// PengyOS: administrators (wheel) at the computer may change fan profiles and
+// curves from the Fans panel applet and the Hardware Monitor without a password,
+// the way they manage printers, updates and shares. Both run
+// `pkexec /usr/bin/pengyos-fans ...`; only that program is allowed. Its worst
+// case is a noisy machine: every profile keeps fans above the speed they stall
+// at, and the last point of every curve is full speed. Everyone else, and any
+// session that is not local and active (ssh), is asked for an administrator's
+// password (pkexec's default). Operator's decision, 2026-11-08.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/pengyos-fans" &&
+        subject.local && subject.active && subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

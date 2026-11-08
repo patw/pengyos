@@ -1,0 +1,970 @@
+#!/usr/bin/env python3
+"""pengyos-fans - fan profiles and curves for the fans this machine can control.
+
+    pengyos-fans [status] [--json]
+    sudo pengyos-fans detect                       find which control drives which fan
+    sudo pengyos-fans profile quiet|balanced|full|firmware
+    sudo pengyos-fans name CHANNEL "Front intake"
+    sudo pengyos-fans role CHANNEL fan|pump|none
+    sudo pengyos-fans follow CHANNEL chip|cpu|gpu|cpu+gpu
+    sudo pengyos-fans curve CHANNEL 30:25 60:45 80:100   its own curve (or: default)
+    sudo pengyos-fans apply                        the saved profile again (boot, resume)
+    pengyos-fans run | release                     the service (see pengyos-fans.service)
+
+What can be controlled depends on the hardware:
+- Desktop boards with a Super-I/O chip (Nuvoton, ITE, Fintek, Winbond) and USB fan
+  controllers and AIO coolers (Corsair Commander Pro, NZXT, Aquacomputer, ...).
+- Laptops: the firmware's profiles only (platform_profile).
+- Most mini PCs: nothing; their embedded controller owns the fan.
+
+Where it can, the chip runs the curve itself: on a Nuvoton chip in Smart Fan IV the
+profile is written into the chip's own curve points and nothing has to keep
+running. Every other channel, and a channel told to follow the GPU (which the chip
+cannot see), gets a software curve from `pengyos-fans run`, the service. If that
+stops, each channel is handed back to the chip's curve or the device's own mode,
+else full speed: never left at a low fixed duty.
+
+`detect` spins each control to full speed for a few seconds to see which fan
+answers, then puts it back. The map and the original settings live in
+/etc/pengyos/fans.json; `profile firmware` writes the original settings back.
+
+Exit: 0 ok; 2 usage; 3 nothing to control; 4 not detected yet; 5 not root;
+6 unknown channel; 7 a write failed.
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import glob
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+CONF = "/etc/pengyos/fans.json"
+LOCK = "/run/pengyos-fans.lock"
+SERVICE = "pengyos-fans.service"
+
+SUPERIO = ("nct", "it87", "it86", "it88", "f71", "f81", "w83")
+CHIP_CURVE = ("nct",)        # Smart Fan IV curve points we know the meaning of
+EXCLUDED = ("corsairpsu",)   # a PSU's fan is the PSU's business
+PROFILES = {
+    "quiet": [(40, 20), (60, 35), (75, 60), (85, 100)],
+    "balanced": [(35, 30), (55, 45), (70, 70), (80, 100)],
+    "full": [(0, 100)],
+}
+NAMES = ("quiet", "balanced", "full", "firmware")
+FOLLOWS = ("chip", "cpu", "gpu", "cpu+gpu")
+GPU_OFFSET = 10      # GPUs run hotter by design
+FLOOR = 20           # % - the lowest duty a profile asks for; detect raises it per fan
+PROBE = (20, 30, 40, 50, 60)  # % - detect's slow test, then the restart test after a stall
+RAMP_DOWN = 4        # % per tick
+FAIL_TICKS = 3
+LAPTOP = {"quiet": ("quiet", "low-power"), "balanced": ("balanced",), "full": ("performance",),
+          "firmware": ("balanced",)}
+PPD = {"low-power": "power-saver", "quiet": "power-saver", "balanced": "balanced",
+       "performance": "performance"}
+
+ROOT = ""            # --root, for tests
+REALROOT = ""
+SPIN = 6.0           # seconds at full speed per channel in detect
+SETTLE = 4.0         # seconds for a fan to settle after it is put back
+TICK = 2.0
+
+
+class Fail(Exception):
+    def __init__(self, code: int, msg: str):
+        super().__init__(msg)
+        self.code = code
+
+
+def p(path: str) -> str:
+    return ROOT + path
+
+
+def read(path: str) -> str | None:
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def num(path: str) -> int | None:
+    v = read(path)
+    try:
+        return int(v) if v is not None else None
+    except ValueError:
+        return None
+
+
+def write(path: str, value) -> None:
+    with open(path, "w") as f:
+        f.write(f"{value}\n")
+
+
+def writable(path: str) -> bool:
+    try:
+        return bool(os.stat(path).st_mode & 0o222)
+    except OSError:
+        return False
+
+
+# --- hardware --------------------------------------------------------------------
+
+def hwmons() -> list[dict]:
+    out = []
+    for h in glob.glob(p("/sys/class/hwmon/hwmon*")):
+        dev = os.path.realpath(os.path.join(h, "device")) if os.path.exists(os.path.join(h, "device")) else ""
+        if ROOT and dev.startswith(REALROOT + "/"):
+            dev = dev[len(REALROOT):]
+        out.append({"path": h, "name": read(os.path.join(h, "name")) or "?", "device": dev})
+    out.sort(key=lambda c: (c["name"], c["device"]))
+    seen: dict[str, int] = {}
+    for c in out:
+        seen[c["name"]] = seen.get(c["name"], 0) + 1
+        c["key"] = c["name"] if seen[c["name"]] == 1 else f"{c['name']}.{seen[c['name']]}"
+    return out
+
+
+def controllable(chip: dict) -> bool:
+    name = chip["name"]
+    if name.startswith(EXCLUDED):
+        return False
+    return name.startswith(SUPERIO) or "/usb" in chip["device"]
+
+
+def indices(h: str, prefix: str) -> list[int]:
+    found = set()
+    try:
+        names = os.listdir(h)
+    except OSError:
+        return []  # unplugged while we looked (a USB controller)
+    for f in names:
+        if f.startswith(prefix):
+            rest = f[len(prefix):].split("_")[0]
+            if rest.isdigit():
+                found.add(int(rest))
+    return sorted(found)
+
+
+def pwm_channels(chip: dict) -> list[int]:
+    h = chip["path"]
+    return [n for n in indices(h, "pwm") if writable(os.path.join(h, f"pwm{n}"))]
+
+
+def curve(base: str) -> list[list[int]]:
+    """[(temp °C, duty 0-255)] for every auto point, the last being critical."""
+    pts = []
+    i = 1
+    while os.path.exists(f"{base}_auto_point{i}_pwm"):
+        t, d = num(f"{base}_auto_point{i}_temp"), num(f"{base}_auto_point{i}_pwm")
+        if t is None or d is None:
+            return []
+        pts.append([t // 1000, d])
+        i += 1
+    return pts
+
+
+def chip_curve_capable(name: str, ch: dict) -> bool:
+    b = ch.get("baseline", {})
+    return name.startswith(CHIP_CURVE) and b.get("enable") == "5" and len(b.get("curve", [])) >= 3
+
+
+def fan_rpms(chips: list[dict]) -> dict[str, int]:
+    out = {}
+    for c in chips:
+        for n in indices(c["path"], "fan"):
+            v = num(os.path.join(c["path"], f"fan{n}_input"))
+            if v is not None:
+                out[f"{c['key']}:fan{n}"] = v
+    return out
+
+
+def temps_by_label(chips: list[dict], names: tuple, labels: tuple) -> list[float]:
+    out = []
+    for c in chips:
+        if not c["name"].startswith(names):
+            continue
+        for n in indices(c["path"], "temp"):
+            label = (read(os.path.join(c["path"], f"temp{n}_label")) or "").lower()
+            if labels and not any(label.startswith(l) for l in labels):
+                continue
+            v = num(os.path.join(c["path"], f"temp{n}_input"))
+            if v is not None:
+                out.append(v / 1000)
+    return out
+
+
+def cpu_temp(chips: list[dict]) -> float | None:
+    t = (temps_by_label(chips, ("coretemp",), ("package id",))
+         or temps_by_label(chips, ("k10temp", "zenpower"), ("tctl", "tdie"))
+         or temps_by_label(chips, ("coretemp", "k10temp", "zenpower"), ()))
+    return max(t) if t else None
+
+
+_nv_cache: tuple[float, list[float]] = (0.0, [])
+
+
+def gpu_temp(chips: list[dict]) -> float | None:
+    global _nv_cache
+    t = temps_by_label(chips, ("amdgpu",), ("junction", "edge"))
+    smi = shutil.which("nvidia-smi")
+    if smi:
+        if time.monotonic() - _nv_cache[0] > 4:
+            vals = []
+            try:
+                r = subprocess.run([smi, "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
+                                   capture_output=True, text=True, timeout=10)
+                vals = [float(x) for x in r.stdout.split() if x.replace(".", "", 1).isdigit()]
+            except (OSError, subprocess.SubprocessError, ValueError):
+                vals = []
+            _nv_cache = (time.monotonic(), vals)
+        t += _nv_cache[1]
+    return max(t) if t else None
+
+
+# --- the map ---------------------------------------------------------------------
+
+def load() -> dict:
+    try:
+        with open(p(CONF)) as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        cfg = {}
+    cfg.setdefault("version", 1)
+    cfg.setdefault("profile", "firmware")
+    cfg.setdefault("channels", {})
+    return cfg
+
+
+def save(cfg: dict) -> None:
+    path = p(CONF)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".new"
+    with open(tmp, "w") as f:
+        json.dump(cfg, f, indent=2, sort_keys=True)
+        f.write("\n")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def resolve(cfg: dict, chips: list[dict]) -> list[tuple[str, dict, dict | None]]:
+    """(channel id, its map entry, the chip it is on now or None if absent)."""
+    by = {(c["name"], c["device"]): c for c in chips}
+    return [(cid, ch, by.get((ch["chip"], ch["device"]))) for cid, ch in sorted(cfg["channels"].items())]
+
+
+def software(name: str, ch: dict) -> bool:
+    return not (chip_curve_capable(name, ch) and ch.get("follow", "chip") == "chip")
+
+
+def lock(blocking: bool = True):
+    path = p(LOCK)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+    except BlockingIOError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def need_root() -> None:
+    if not ROOT and os.geteuid() != 0:
+        raise Fail(5, "pengyos-fans: this changes fan settings; run it with sudo")
+
+
+def restart_service() -> None:
+    if ROOT or not shutil.which("systemctl"):
+        return
+    subprocess.run(["systemctl", "restart", "--no-block", SERVICE], capture_output=True)
+
+
+# --- curves ----------------------------------------------------------------------
+
+def interp(points, t: float) -> float:
+    if t <= points[0][0]:
+        return points[0][1]
+    for (t0, d0), (t1, d1) in zip(points, points[1:]):
+        if t <= t1:
+            return d0 + (d1 - d0) * (t - t0) / max(t1 - t0, 1e-9)
+    return points[-1][1]
+
+
+def duty_raw(percent: float) -> int:
+    return max(0, min(255, round(percent * 255 / 100)))
+
+
+def floor_of(ch: dict) -> int:
+    """The lowest duty this fan may get: 20 %, or what detect measured it needs."""
+    return max(FLOOR, int(ch.get("min_duty") or FLOOR))
+
+
+def points_for(profile: str, ch: dict) -> list:
+    """The curve a channel follows: its own (`curve`), else the profile's."""
+    if profile == "full":
+        return PROFILES["full"]
+    return ch.get("curve") or PROFILES[profile]
+
+
+def target_duty(profile: str, ch: dict, cpu: float | None, gpu: float | None) -> float | None:
+    """Percent, or None when the temperature it follows cannot be read."""
+    if profile == "full":
+        return 100.0
+    pts = points_for(profile, ch)
+    follow = ch.get("follow", "cpu")
+    want = []
+    if follow in ("cpu", "chip", "cpu+gpu"):
+        if cpu is None:
+            return None
+        want.append(interp(pts, cpu))
+    if follow == "gpu" and gpu is None:
+        return None
+    if follow in ("gpu", "cpu+gpu") and gpu is not None:
+        # cpu+gpu without a GPU reading (none fitted, or one that cannot be
+        # read) is the CPU curve alone: the CPU part still protects the case.
+        want.append(interp(pts, gpu - GPU_OFFSET))
+    return max(floor_of(ch), max(want))
+
+
+def chip_points(profile: str, ch: dict) -> list[list[int]]:
+    """The curve laid onto the chip's points; the last (critical) one stays."""
+    baseline = ch["baseline"]["curve"]
+    k = len(baseline) - 1
+    crit = baseline[-1][0]
+    if profile == "full":
+        return [[t, 255] for t, _ in baseline[:-1]]
+    pts = points_for(profile, ch)
+    if k < len(pts):
+        pts = pts[:k - 1] + pts[-1:]
+    pts = [list(x) for x in pts]
+    while len(pts) < k:
+        pts.append([pts[-1][0] + 1, 100])
+    out = []
+    for i, (t, d) in enumerate(pts):
+        t = min(t, crit - (k - i))
+        out.append([max(t, 0), duty_raw(max(floor_of(ch), d))])
+    return out
+
+
+def write_chip_curve(base: str, pts: list[list[int]]) -> None:
+    for i, (t, d) in enumerate(pts, start=1):
+        write(f"{base}_auto_point{i}_temp", t * 1000)
+        write(f"{base}_auto_point{i}_pwm", d)
+
+
+# --- applying --------------------------------------------------------------------
+
+def hand_back(name: str, base: str, ch: dict, profile: str) -> str:
+    """Give a channel back to something that runs without us. Returns what it did."""
+    b = ch.get("baseline", {})
+    if chip_curve_capable(name, ch):
+        pts = b["curve"][:-1] if profile == "firmware" else chip_points(profile, ch)
+        write_chip_curve(base, pts)
+        write(f"{base}_enable", b["enable"])
+        return "chip curve"
+    en = b.get("enable")
+    if en is not None and en not in ("0", "1") and os.path.exists(f"{base}_enable"):
+        write(f"{base}_enable", en)
+        return "device's own mode"
+    if profile == "firmware" and b.get("pwm") is not None:
+        if en == "1":
+            write(f"{base}_enable", 1)
+        write(base, b["pwm"])
+        return "its original duty"
+    if os.path.exists(f"{base}_enable") and read(f"{base}_enable") != "1":
+        write(f"{base}_enable", 1)
+    write(base, 255)
+    return "full speed (it has no curve of its own)"
+
+
+def apply(cfg: dict, quiet: bool = False, hand_back_firmware: bool = False) -> list[str]:
+    """Apply the saved profile. Returns the software-driven channel ids.
+
+    `firmware` means "as the BIOS or device set it up", so at boot, after resume and
+    after detect it writes nothing. Only choosing it (`profile firmware`) hands the
+    channels back, because only then were they ours."""
+    chips = hwmons()
+    profile = cfg["profile"]
+    if not cfg["channels"]:
+        laptop_apply(cfg, quiet)
+        return []
+    if profile == "firmware" and not hand_back_firmware:
+        return []
+    soft = []
+    cpu, gpu = cpu_temp(chips), gpu_temp(chips)
+    for cid, ch, chip in resolve(cfg, chips):
+        if chip is None or ch.get("role") != "fan":
+            continue
+        base = os.path.join(chip["path"], f"pwm{ch['pwm']}")
+        try:
+            if profile == "firmware":
+                did = hand_back(chip["name"], base, ch, "firmware")
+                if not quiet:
+                    say(f"  {cid}: back to {did}")
+            elif not software(chip["name"], ch):
+                write_chip_curve(base, chip_points(profile, ch))
+                write(f"{base}_enable", ch["baseline"]["enable"])
+            else:
+                if os.path.exists(f"{base}_enable"):
+                    write(f"{base}_enable", 1)
+                d = target_duty(profile, ch, cpu, gpu)
+                write(base, duty_raw(100 if d is None else d))
+                soft.append(cid)
+        except OSError as e:
+            raise Fail(7, f"pengyos-fans: {cid}: {e}")
+    return soft
+
+
+def laptop_apply(cfg: dict, quiet: bool) -> None:
+    lp = cfg.get("platform_profile")
+    if lp and os.path.exists(p("/sys/firmware/acpi/platform_profile")):
+        write(p("/sys/firmware/acpi/platform_profile"), lp)
+
+
+def platform_choices() -> list[str]:
+    return (read(p("/sys/firmware/acpi/platform_profile_choices")) or "").split()
+
+
+def ppd_running() -> bool:
+    if ROOT or not shutil.which("powerprofilesctl"):
+        return False
+    return subprocess.run(["powerprofilesctl", "get"], capture_output=True).returncode == 0
+
+
+# --- commands --------------------------------------------------------------------
+
+def say(line: str = "") -> None:
+    print(line, flush=True)
+
+
+def one_fan_each(found: dict) -> list[str]:
+    """If two controls claimed the same fan, the one that moved it most keeps it;
+    the other is left alone. Drops the `_swing` bookkeeping. Returns what it said."""
+    said = []
+    by_fan: dict[str, list[str]] = {}
+    for cid, e in found.items():
+        if e.get("fan"):
+            key = e["fan"] if ":" in e["fan"] else f"{cid.split(':')[0]}:{e['fan']}"
+            by_fan.setdefault(key, []).append(cid)
+    for fan, cids in sorted(by_fan.items()):
+        if len(cids) > 1:
+            keep = max(cids, key=lambda c: found[c].get("_swing", 0))
+            for c in cids:
+                if c != keep:
+                    found[c]["fan"] = None
+                    if not found[c].get("role_set"):
+                        found[c]["role"] = "none"
+                    said.append(f"  {c}: moves {fan} less than {keep} does; left alone")
+    for e in found.values():
+        e.pop("_swing", None)
+    return said
+
+
+def settle(chips: list[dict]) -> None:
+    """Wait for the fans to stop changing speed (a fan back on its chip curve, or
+    restarting after the stall test, takes seconds), up to four SETTLEs."""
+    time.sleep(SETTLE)
+    prev = fan_rpms(chips)
+    for _ in range(3):
+        time.sleep(SETTLE / 2)
+        now = fan_rpms(chips)
+        if all(abs(v - prev.get(k, v)) <= max(60, v * 0.05) for k, v in now.items()):
+            return
+        prev = now
+        time.sleep(SETTLE / 2)
+
+
+def cmd_detect(args) -> int:
+    need_root()
+    chips = [c for c in hwmons() if controllable(c)]
+    targets = [(c, n) for c in chips for n in pwm_channels(c)]
+    if not targets:
+        raise Fail(3, "pengyos-fans: no fan controls on this machine (see `pengyos-fans status`)")
+    cfg = load()
+    old = cfg["channels"]
+    fd = lock()
+    pending: list = []
+
+    def restore():
+        while pending:
+            base, b = pending.pop()
+            try:
+                if b["curve"]:
+                    write_chip_curve(base, b["curve"][:-1])
+                if b["enable"] is not None:
+                    write(f"{base}_enable", b["enable"])
+                if b["pwm"] is not None and b["enable"] in (None, "1"):
+                    write(base, b["pwm"])
+            except OSError as e:
+                say(f"  !! could not put {base} back: {e}")
+
+    def on_signal(signum, frame):
+        restore()
+        raise SystemExit(1)
+
+    signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGTERM, on_signal)
+    say(f"Testing {len(targets)} fan control(s), one at a time: full speed, then slow, "
+        f"about {int(SPIN * 2.5 + SETTLE * 2)} seconds each, then back as it was.")
+    found = {}
+    try:
+        for chip, n in targets:
+            base = os.path.join(chip["path"], f"pwm{n}")
+            cid = f"{chip['key']}:pwm{n}"
+            b = {"enable": read(f"{base}_enable"), "pwm": read(base), "curve": curve(base)}
+            if b["pwm"] is not None and not b["pwm"].isdigit():
+                b["pwm"] = None
+            before = fan_rpms(chips)
+            pending.append((base, b))
+            low = PROBE[0]
+            try:
+                if b["enable"] is not None:
+                    write(f"{base}_enable", 1)
+                # Full speed, then the lowest duty a profile may use. Comparing the
+                # two (not full against "as found") finds a fan that was already
+                # fast, e.g. a busy server's case fans, and shows whether the fan
+                # stalls at that duty.
+                write(base, 255)
+                time.sleep(SPIN)
+                hi = fan_rpms(chips)
+                rose = [k for k, v in hi.items() if v - before.get(k, 0) >= max(150, before.get(k, 0) * 0.15)]
+                own = [k for k in rose if k.startswith(chip["key"] + ":")]
+                is_pump = any("pump" in (read(os.path.join(chip["path"], f"{k.split(':')[1]}_label")) or "").lower()
+                              for k in own)
+                lo: dict[str, int] = {}
+                if not is_pump:  # a pump is never slowed, not even to test it
+                    write(base, duty_raw(low))
+                    time.sleep(SPIN * 1.5)  # time to coast down, or stall
+                    lo = fan_rpms(chips)
+                    # Only a fan that is clearly faster at full than at 20 % is
+                    # driven by this control; one still settling from the last
+                    # test can rise against "before" without that (behotv, pwm5).
+                    rose = [k for k, v in hi.items() if v - lo.get(k, 0) >= max(150, v * 0.25)]
+                    own = [k for k in rose if k.startswith(chip["key"] + ":")]
+                fan = max(own or rose, key=lambda k: hi[k] - lo.get(k, before.get(k, 0)), default=None)
+                min_duty = FLOOR
+                if fan and lo and lo.get(fan, 0) == 0:
+                    # It stopped at the floor: find the lowest duty that starts it
+                    # from standstill and keeps it turning, plus a margin.
+                    min_duty = None
+                    for d in PROBE[1:]:
+                        write(base, duty_raw(d))
+                        time.sleep(SPIN)
+                        if fan_rpms(chips).get(fan, 0) > 0:
+                            min_duty = d + 5
+                            break
+                    if min_duty is None:
+                        min_duty = PROBE[-1] + 10
+            except OSError as e:
+                restore()
+                say(f"  {cid}: could not take control ({e}); left as it was")
+                continue
+            restore()
+            settle(chips)
+            fan_n = fan.split(":fan")[1] if fan and fan.startswith(chip["key"] + ":") else None
+            label = (read(os.path.join(chip["path"], f"fan{fan_n}_label")) or "") if fan_n else ""
+            prev = old.get(cid, {})
+            role = prev.get("role") if prev.get("role_set") else ("pump" if "pump" in label.lower() else
+                                                                  "fan" if fan else "none")
+            entry = {"chip": chip["name"], "device": chip["device"], "pwm": n,
+                     "fan": f"fan{fan_n}" if fan_n else (fan or None), "role": role,
+                     "baseline": b, "name": prev.get("name", ""), "follow": prev.get("follow", ""),
+                     "min_duty": min_duty}
+            if prev.get("curve"):
+                entry["curve"] = prev["curve"]
+            if fan:
+                entry["_swing"] = hi[fan] - lo.get(fan, before.get(fan, 0))
+            if prev.get("role_set"):
+                entry["role_set"] = True
+            if not entry["follow"]:
+                entry["follow"] = "chip" if chip_curve_capable(chip["name"], entry) else "cpu"
+            found[cid] = entry
+            if not fan:
+                what = "no fan answered"
+            elif lo:
+                what = f"drives {fan} ({lo.get(fan, 0)} RPM at {low}% .. {hi[fan]} RPM at 100%)"
+                if min_duty > FLOOR:
+                    what += f"; stops below {min_duty - 5}%, so never under {min_duty}%"
+            else:
+                what = f"drives {fan} ({before.get(fan, 0)} -> {hi[fan]} RPM)"
+            say(f"  {cid}: {what}" + ("  [pump]" if role == "pump" else ""))
+    finally:
+        restore()
+        os.close(fd)
+    for line in one_fan_each(found):
+        say(line)
+    cfg["channels"] = found
+    save(cfg)
+    say(f"Saved to {CONF}.")
+    soft = apply(cfg, quiet=True)
+    restart_service()
+    if cfg["profile"] == "firmware":
+        say("Profile: firmware (unchanged). Choose one: sudo pengyos-fans profile quiet|balanced|full")
+    elif soft:
+        say(f"Profile {cfg['profile']} applied; the service drives {', '.join(soft)}.")
+    return 0
+
+
+def cmd_profile(args) -> int:
+    need_root()
+    cfg = load()
+    name = args.name
+    if not cfg["channels"]:
+        chips = [c for c in hwmons() if controllable(c) and pwm_channels(c)]
+        if chips:
+            raise Fail(4, "pengyos-fans: run `sudo pengyos-fans detect` first, to learn which control drives which fan")
+        choices = platform_choices()
+        if not choices:
+            raise Fail(3, "pengyos-fans: this machine's fans are run by its firmware; there is nothing to set")
+        want = next((c for c in LAPTOP[name] if c in choices), None)
+        if want is None:
+            raise Fail(3, f"pengyos-fans: the firmware offers {' '.join(choices)}, none of them {name}")
+        if ppd_running() and want in PPD:
+            subprocess.run(["powerprofilesctl", "set", PPD[want]], check=False)
+            say(f"Firmware profile: {want} (through power-profiles-daemon, which keeps it across boots).")
+            return 0
+        write(p("/sys/firmware/acpi/platform_profile"), want)
+        cfg["profile"] = name
+        cfg["platform_profile"] = want
+        save(cfg)
+        say(f"Firmware profile: {want} (saved; set again at every boot).")
+        return 0
+    fd = lock()
+    try:
+        cfg["profile"] = name
+        save(cfg)
+        soft = apply(cfg, hand_back_firmware=True)
+    finally:
+        os.close(fd)
+    restart_service()
+    if name != "firmware":
+        say(f"Profile: {name}." + (f" The service drives {', '.join(soft)}." if soft else ""))
+    else:
+        say("Profile: firmware.")
+    return 0
+
+
+def edit(args, field: str, value) -> int:
+    need_root()
+    cfg = load()
+    ch = cfg["channels"].get(args.channel)
+    if ch is None:
+        known = ", ".join(sorted(cfg["channels"])) or "none (run sudo pengyos-fans detect)"
+        raise Fail(6, f"pengyos-fans: no channel {args.channel}; known: {known}")
+    if field == "follow" and value == "chip" and not chip_curve_capable(ch["chip"], ch):
+        raise Fail(2, f"pengyos-fans: {args.channel} has no curve of its own to follow; use cpu, gpu or cpu+gpu")
+    if field == "follow" and value in ("gpu", "cpu+gpu") and gpu_temp(hwmons()) is None:
+        raise Fail(2, "pengyos-fans: no GPU temperature can be read on this machine (amdgpu or nvidia-smi)")
+    ch[field] = value
+    if field == "role":
+        ch["role_set"] = True
+    fd = lock()
+    try:
+        save(cfg)
+        apply(cfg, quiet=True)
+    finally:
+        os.close(fd)
+    restart_service()
+    say(f"{args.channel}: {field} = {value or '-'}")
+    return 0
+
+
+def parse_curve(words: list[str]) -> list[list[int]]:
+    """`30:25 50:40 70:70 80:100` (°C:percent) -> [[30, 25], ...], checked."""
+    pts = []
+    for w in words:
+        t, sep, d = w.partition(":")
+        if not sep or not t.strip().isdigit() or not d.strip().rstrip("%").isdigit():
+            raise Fail(2, f"pengyos-fans: {w!r} is not TEMP:DUTY (e.g. 60:40 for 40 % at 60 °C)")
+        pts.append([int(t), int(d.strip().rstrip("%"))])
+    if not 2 <= len(pts) <= 8:
+        raise Fail(2, "pengyos-fans: a curve has 2 to 8 points")
+    for (t0, d0), (t1, d1) in zip(pts, pts[1:]):
+        if t1 <= t0 or d1 < d0:
+            raise Fail(2, "pengyos-fans: temperatures must rise and duties must not fall along the curve")
+    if pts[0][0] < 0 or pts[-1][0] > 100 or any(not 0 <= d <= 100 for _, d in pts):
+        raise Fail(2, "pengyos-fans: temperatures 0-100 °C, duties 0-100 %")
+    if pts[-1][1] != 100:
+        raise Fail(2, "pengyos-fans: the last point must be 100 %, so a hot machine always gets full speed")
+    return pts
+
+
+def cmd_curve(args) -> int:
+    need_root()
+    cfg = load()
+    ch = cfg["channels"].get(args.channel)
+    if ch is None:
+        known = ", ".join(sorted(cfg["channels"])) or "none (run sudo pengyos-fans detect)"
+        raise Fail(6, f"pengyos-fans: no channel {args.channel}; known: {known}")
+    if args.points == ["default"]:
+        ch.pop("curve", None)
+        what = "the profile's curve"
+    else:
+        pts = parse_curve(args.points)
+        k = len(ch["baseline"].get("curve", [])) - 1
+        if not software(ch["chip"], ch) and len(pts) > k:
+            raise Fail(2, f"pengyos-fans: {args.channel}'s chip holds {k} points; give at most {k}")
+        floor = floor_of(ch)
+        if pts[0][1] < floor:
+            say(f"Note: {args.channel} never goes below {floor}% (its fan stops lower, or the 20% floor).")
+        ch["curve"] = pts
+        what = " ".join(f"{t}:{d}" for t, d in pts)
+    fd = lock()
+    try:
+        save(cfg)
+        apply(cfg, quiet=True)
+    finally:
+        os.close(fd)
+    restart_service()
+    say(f"{args.channel}: curve = {what}" + ("  (used by quiet and balanced; the profile is firmware now)"
+                                            if cfg["profile"] == "firmware" else ""))
+    return 0
+
+
+def cmd_apply(args) -> int:
+    need_root()
+    cfg = load()
+    if not cfg["channels"] and not cfg.get("platform_profile"):
+        return 0
+    fd = lock()
+    try:
+        apply(cfg, quiet=True)
+    finally:
+        os.close(fd)
+    return 0
+
+
+def cmd_release(args) -> int:
+    need_root()
+    cfg = load()
+    if cfg["profile"] == "firmware":
+        return 0  # nothing is ours; `profile firmware` already handed it all back
+    chips = hwmons()
+    for cid, ch, chip in resolve(cfg, chips):
+        if chip is None or ch.get("role") != "fan" or not software(chip["name"], ch):
+            continue
+        base = os.path.join(chip["path"], f"pwm{ch['pwm']}")
+        try:
+            did = hand_back(chip["name"], base, ch, cfg["profile"])
+            say(f"{cid}: handed back to {did}")
+        except OSError as e:
+            say(f"{cid}: could not hand back: {e}")
+    return 0
+
+
+def cmd_run(args) -> int:
+    need_root()
+    stop = {"now": False}
+
+    def on_signal(signum, frame):
+        stop["now"] = True
+
+    signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGINT, on_signal)
+    cfg, mtime = load(), None
+    try:
+        mtime = os.stat(p(CONF)).st_mtime
+    except OSError:
+        pass
+    fd = lock()
+    try:
+        soft = apply(cfg, quiet=True)
+    finally:
+        os.close(fd)
+    # Configured, not just present: a USB controller may enumerate after boot, and
+    # tick() picks it up when it does.
+    wanted = [cid for cid, ch in sorted(cfg["channels"].items())
+              if ch.get("role") == "fan" and software(ch["chip"], ch)]
+    if not wanted or cfg["profile"] == "firmware":
+        say("pengyos-fans: nothing for the service to drive; the chips run their own curves")
+        return 0
+    absent = sorted(set(wanted) - set(soft))
+    say(f"pengyos-fans: driving {', '.join(wanted)} ({cfg['profile']})"
+        + (f"; not present yet: {', '.join(absent)}" if absent else ""))
+    last: dict[str, float] = {}
+    fails: dict[str, int] = {}
+    ticks = 0
+    try:
+        while not stop["now"] and (args.ticks is None or ticks < args.ticks):
+            ticks += 1
+            try:
+                m = os.stat(p(CONF)).st_mtime
+            except OSError:
+                m = None
+            if m != mtime:
+                mtime, cfg = m, load()
+                if cfg["profile"] == "firmware":
+                    break
+            fd = lock(blocking=False)
+            if fd is not None:
+                try:
+                    tick(cfg, last, fails)
+                finally:
+                    os.close(fd)
+            if args.ticks is None or ticks < args.ticks:
+                time.sleep(TICK)
+    finally:
+        cmd_release(args)
+    return 0
+
+
+def tick(cfg: dict, last: dict, fails: dict) -> None:
+    chips = hwmons()
+    cpu, gpu = cpu_temp(chips), gpu_temp(chips)
+    for cid, ch, chip in resolve(cfg, chips):
+        if chip is None or ch.get("role") != "fan" or not software(chip["name"], ch):
+            continue
+        base = os.path.join(chip["path"], f"pwm{ch['pwm']}")
+        d = target_duty(cfg["profile"], ch, cpu, gpu)
+        if d is None:
+            fails[cid] = fails.get(cid, 0) + 1
+            d = 100.0 if fails[cid] >= FAIL_TICKS else last.get(cid, 100.0)
+        else:
+            fails[cid] = 0
+            if cid in last and d < last[cid]:
+                d = max(d, last[cid] - RAMP_DOWN)
+        last[cid] = d
+        try:
+            if os.path.exists(f"{base}_enable") and read(f"{base}_enable") != "1":
+                write(f"{base}_enable", 1)   # a resume or the BIOS took it back
+            write(base, duty_raw(d))
+        except OSError as e:
+            say(f"pengyos-fans: {cid}: {e}")
+
+
+def describe(cfg: dict) -> dict:
+    chips = hwmons()
+    rpms = fan_rpms(chips)
+    out = {"profile": cfg["profile"], "profiles": list(NAMES), "channels": [], "undetected": [],
+           "platform_profile": None, "kind": "none"}
+    for cid, ch, chip in resolve(cfg, chips):
+        row = {"id": cid, "name": ch.get("name", ""), "role": ch.get("role"), "fan": ch.get("fan"),
+               "follow": ch.get("follow"), "present": chip is not None, "rpm": None, "duty": None,
+               "control": "absent", "min_duty": floor_of(ch), "own_curve": bool(ch.get("curve")),
+               "chip_curve": chip_curve_capable(ch["chip"], ch),
+               "max_points": (len(ch["baseline"]["curve"]) - 1) if chip_curve_capable(ch["chip"], ch) else 8,
+               "curve": None if cfg["profile"] == "firmware" or ch.get("role") != "fan"
+               # what the fan really gets: no point below its minimum
+               else [[t, max(d, floor_of(ch))] for t, d in points_for(cfg["profile"], ch)]}
+        if chip is not None:
+            base = os.path.join(chip["path"], f"pwm{ch['pwm']}")
+            v = num(base)
+            row["duty"] = None if v is None else round(v * 100 / 255)
+            fan = ch.get("fan")
+            if fan:
+                key = fan if ":" in fan else f"{cid.split(':')[0]}:{fan}"
+                row["rpm"] = rpms.get(key)
+            if ch.get("role") != "fan":
+                row["control"] = "left alone"
+            elif cfg["profile"] == "firmware":
+                row["control"] = "firmware"
+            elif software(chip["name"], ch):
+                row["control"] = f"software curve ({ch.get('follow', 'cpu')})"
+            else:
+                sel = num(f"{base}_temp_sel")
+                src = read(os.path.join(chip["path"], f"temp{sel}_label")) if sel else None
+                row["control"] = "chip curve" + (f" ({src})" if src else "")
+            if row["own_curve"] and row["control"] not in ("left alone", "firmware"):
+                row["control"] += ", own curve"
+        out["channels"].append(row)
+    known = {(ch["chip"], ch["device"], ch["pwm"]) for ch in cfg["channels"].values()}
+    for c in chips:
+        if controllable(c):
+            for n in pwm_channels(c):
+                if (c["name"], c["device"], n) not in known:
+                    out["undetected"].append(f"{c['key']}:pwm{n}")
+    choices = platform_choices()
+    if choices:
+        out["platform_profile"] = {"current": read(p("/sys/firmware/acpi/platform_profile")), "choices": choices}
+    out["kind"] = ("channels" if out["channels"] or out["undetected"]
+                   else "platform" if choices else "none")
+    return out
+
+
+def cmd_status(args) -> int:
+    d = describe(load())
+    if args.json:
+        print(json.dumps(d, indent=2))
+        return 0
+    if d["kind"] == "none":
+        say("This machine's fans are run by its firmware; there is nothing to control.")
+        return 0
+    if d["kind"] == "platform":
+        pp = d["platform_profile"]
+        say(f"Firmware fan profile: {pp['current']}  (offered: {' '.join(pp['choices'])})")
+        say("Change it: sudo pengyos-fans profile quiet|balanced|full")
+        return 0
+    say(f"Profile: {d['profile']}   (sudo pengyos-fans profile {'|'.join(NAMES)})")
+    if d["channels"]:
+        say()
+        rows = [("CHANNEL", "NAME", "FAN", "SPEED", "DUTY", "CONTROL")]
+        for r in d["channels"]:
+            rows.append((r["id"], r["name"] or "-", r["fan"] or "-",
+                         "-" if r["rpm"] is None else f"{r['rpm']} RPM",
+                         "-" if r["duty"] is None else f"{r['duty']}%",
+                         r["control"] + ("" if r["role"] != "pump" else ", pump")))
+        w = [max(len(r[i]) for r in rows) for i in range(6)]
+        for r in rows:
+            say("  " + "  ".join(r[i].ljust(w[i]) for i in range(5)) + "  " + r[5])
+    if d["undetected"]:
+        say()
+        say(f"Not mapped yet: {', '.join(d['undetected'])}")
+        say("Run `sudo pengyos-fans detect` (each fan spins up for a few seconds).")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    global ROOT, REALROOT, SPIN, SETTLE, TICK
+    ap = argparse.ArgumentParser(prog="pengyos-fans", description="Fan profiles and curves.")
+    ap.add_argument("--root", default="", help=argparse.SUPPRESS)
+    ap.add_argument("--spin", type=float, default=SPIN, help=argparse.SUPPRESS)
+    ap.add_argument("--settle", type=float, default=SETTLE, help=argparse.SUPPRESS)
+    ap.add_argument("--tick", type=float, default=TICK, help=argparse.SUPPRESS)
+    sub = ap.add_subparsers(dest="cmd")
+    s = sub.add_parser("status", help="what can be controlled and how it is set")
+    s.add_argument("--json", action="store_true")
+    sub.add_parser("detect", help="find which control drives which fan (spins each up briefly)")
+    s = sub.add_parser("profile", help="quiet, balanced, full, or firmware (as the BIOS set it)")
+    s.add_argument("name", choices=NAMES)
+    s = sub.add_parser("name", help="give a channel a name")
+    s.add_argument("channel")
+    s.add_argument("text")
+    s = sub.add_parser("role", help="fan (follows profiles), pump or none (left alone)")
+    s.add_argument("channel")
+    s.add_argument("value", choices=("fan", "pump", "none"))
+    s = sub.add_parser("follow", help="the temperature a channel follows")
+    s.add_argument("channel")
+    s.add_argument("value", choices=FOLLOWS)
+    s = sub.add_parser("curve", help="a fan's own curve: TEMP:DUTY ... (e.g. 30:25 60:45 80:100), or default")
+    s.add_argument("channel")
+    s.add_argument("points", nargs="+")
+    sub.add_parser("apply", help="apply the saved profile again")
+    s = sub.add_parser("run", help="drive the software curves (the service)")
+    s.add_argument("--ticks", type=int, default=None, help=argparse.SUPPRESS)
+    sub.add_parser("release", help="hand software-driven channels back (the service's stop)")
+    ap.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    args = ap.parse_args(argv)
+    ROOT, SPIN, SETTLE, TICK = args.root.rstrip("/"), args.spin, args.settle, args.tick
+    REALROOT = os.path.realpath(ROOT) if ROOT else ""
+    try:
+        if args.cmd in (None, "status"):
+            return cmd_status(args)
+        if args.cmd == "name":
+            return edit(args, "name", args.text.strip())
+        if args.cmd in ("role", "follow"):
+            return edit(args, args.cmd, args.value)
+        return {"detect": cmd_detect, "profile": cmd_profile, "apply": cmd_apply, "curve": cmd_curve,
+                "run": cmd_run, "release": cmd_release}[args.cmd](args)
+    except Fail as e:
+        print(str(e), file=sys.stderr)
+        return e.code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
