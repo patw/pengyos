@@ -85,7 +85,8 @@ CONFIG_HIDRAW=y             # game controllers through Steam, FIDO keys, fwupd
 
 # --- Sensor drivers ----------------------------------------------------------
 # SENSORS_ASUS_WMI (board sensors on ASUS X370/X470/B450/X399) depends on
-# ACPI_WMI. Nothing sets it: x86_64_defconfig happens to provide it as a module,
-# which is why asus-wmi.ko exists today. Pin it so a kernel bump cannot take the
-# ASUS WMI sensor path away silently (2026-11-08).
-CONFIG_ACPI_WMI=m            # asus-wmi, asus_wmi_sensors, dell-smm-hwmon
+# ACPI_WMI. Nothing sets it: the base config happens to provide it (built in on
+# 7.3.3, where another driver selects it). Pin it so a kernel bump cannot take
+# the ASUS WMI sensor path away silently (2026-11-08). Either y or m will do. It
+# was first pinned `=m` (a module only), which failed the 26.11.9 build on 7.3.3.
+CONFIG_ACPI_WMI              # asus-wmi, asus_wmi_sensors, dell-smm-hwmon
