@@ -153,6 +153,9 @@ pub struct AppModel {
     run: Run,
     /// Set up at start, while the stick (and so `systemctl`) is still there.
     restart: Restart,
+    /// The body's scrollable, so a step change can put it back at the top
+    /// (one scrollable serves every step, and kept the last step's offset).
+    body_scroll: widget::Id,
 }
 
 fn valid_hostname(h: &str) -> bool {
@@ -231,16 +234,24 @@ impl AppModel {
             }
         }
         if self.step() == Step::Progress {
-            return self.start_install();
+            return Task::batch([self.scroll_to_top(), self.start_install()]);
         }
-        Task::none()
+        self.scroll_to_top()
     }
 
-    fn go_back(&mut self) {
+    fn go_back(&mut self) -> Task<cosmic::Action<Message>> {
         self.model.route(WizardMessage::Back);
         while matches!(self.step(), Step::Layout | Step::Network) {
             self.model.route(WizardMessage::Back);
         }
+        self.scroll_to_top()
+    }
+
+    /// Each step starts at its top: without this the Pengy screen opened
+    /// scrolled down, wherever the account screen had been left.
+    fn scroll_to_top(&self) -> Task<cosmic::Action<Message>> {
+        use cosmic::iced::widget::scrollable::{snap_to, RelativeOffset};
+        snap_to(self.body_scroll.clone(), RelativeOffset::START.into())
     }
 
     /// Run `pengyos-install image` and stream its JSON progress lines back.
@@ -376,6 +387,7 @@ impl cosmic::Application for AppModel {
             status: String::new(),
             run: Run::NotStarted,
             restart: Restart::live(),
+            body_scroll: widget::Id::unique(),
         };
         let task = match app.core.main_window_id() {
             Some(id) => app.set_window_title("Install PengyOS".to_string(), id),
@@ -391,7 +403,7 @@ impl cosmic::Application for AppModel {
     fn update(&mut self, msg: Self::Message) -> Task<cosmic::Action<Self::Message>> {
         match msg {
             Message::Wizard(WizardMessage::Continue) => return self.advance(),
-            Message::Wizard(WizardMessage::Back) => self.go_back(),
+            Message::Wizard(WizardMessage::Back) => return self.go_back(),
             Message::Wizard(WizardMessage::SelectDisk(disk)) => {
                 self.model.route(WizardMessage::SelectDisk(disk));
                 // The engine's only layout: erase the whole disk.
@@ -441,7 +453,16 @@ impl cosmic::Application for AppModel {
                 // The erase is confirmed on the Summary screen ("Erase disk and
                 // install"); choosing Install here is the Welcome step's answer.
                 self.model.route(WizardMessage::AcceptTerms(true));
-                return self.advance();
+                // The wizard fills the screen once Install is chosen. At the
+                // fixed 760x620 a 1280x800 laptop showed only part of the
+                // account screen: its two switches, the SSH one included, sat
+                // below the fold while Continue was already enabled. Asked here,
+                // not in init: the compositor ignores it before the window maps.
+                let maximize = match self.core.main_window_id() {
+                    Some(id) => cosmic::iced::window::maximize(id, true),
+                    None => Task::none(),
+                };
+                return Task::batch([maximize, self.advance()]);
             }
         }
         Task::none()
@@ -476,7 +497,7 @@ impl cosmic::Application for AppModel {
         let content = column::with_children([
             text::caption(format!("Step {index} of {}", screens.len())).into(),
             text::title3(title).into(),
-            widget::scrollable(body).height(Length::Fill).into(),
+            widget::scrollable(body).id(self.body_scroll.clone()).height(Length::Fill).into(),
             self.view_footer(),
         ])
         .spacing(spacing.space_s)
@@ -654,7 +675,8 @@ impl AppModel {
         column::with_children([
             section()
                 .add(item::builder("Base URL").description(
-                    "Any OpenAI-compatible endpoint: Ollama (http://127.0.0.1:11434/v1),                      llama.cpp, LM Studio, OpenRouter, OpenAI.",
+                    "Any OpenAI-compatible endpoint: Ollama (http://127.0.0.1:11434/v1), \
+                     llama.cpp, LM Studio, OpenRouter, OpenAI.",
                 ).control(
                     widget::text_input("http://127.0.0.1:11434/v1", self.pengy_base_url.as_str())
                         .on_input(Message::SetPengyBaseUrl),
@@ -666,14 +688,17 @@ impl AppModel {
                         .on_input(Message::SetPengyApiKey),
                 ))
                 .add(item::builder("Model").description(
-                    "The name the endpoint knows, e.g. qwen3:8b. Leave it empty to                      choose later.",
+                    "The name the endpoint knows, e.g. qwen3:8b. Leave it empty to \
+                     choose later.",
                 ).control(
                     widget::text_input("qwen3:8b", self.pengy_model.as_str())
                         .on_input(Message::SetPengyModel),
                 ))
                 .into(),
             text::caption(
-                "Skip this screen and Pengy keeps its own defaults: the local                  endpoint, no key, no model. You can set all of it later in Pengy's                  Settings, and your skills live in ~/skills.",
+                "Skip this screen and Pengy keeps its own defaults: the local \
+                 endpoint, no key, no model. You can set all of it later in Pengy's \
+                 Settings, and your skills live in ~/skills.",
             )
             .into(),
         ])
@@ -687,6 +712,13 @@ impl AppModel {
             .map(|d| d.label.clone())
             .unwrap_or_else(|| self.model.selected_disk().unwrap_or("").to_string());
         column::with_children([
+            // First, not under the list: it must be on screen whatever the
+            // window size.
+            text::body(
+                "Everything on the chosen disk will be erased and replaced with \
+                 PengyOS. This cannot be undone.",
+            )
+            .into(),
             section()
                 .add(item::builder("Disk").control(text::body(disk)))
                 .add(item::builder("Computer name").control(text::body(
@@ -715,11 +747,6 @@ impl AppModel {
                     line
                 })))
                 .into(),
-            text::body(
-                "Everything on this disk will be erased and replaced with PengyOS. \
-                 This cannot be undone.",
-            )
-            .into(),
         ])
         .spacing(cosmic::theme::spacing().space_m)
         .into()

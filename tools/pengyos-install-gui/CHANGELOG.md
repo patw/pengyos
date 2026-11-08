@@ -7,6 +7,23 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed — layout papercuts a new-user install run in QEMU hit (2026-11-08)
+- **The wizard fills the screen once "Install PengyOS" is chosen.** At the
+  fixed 760x620, a 1280x800 laptop showed only the first four rows of the
+  account screen. "Log in automatically" and "Allow SSH logins with a password"
+  sat below the fold while Continue was already enabled. Maximized, the whole
+  screen fits. The Welcome step stays a small window. The maximize is asked on
+  the Install click, because the compositor ignores it before the window maps.
+- **Each step opens at its top.** One scrollable serves every step and kept its
+  offset, so the assistant screen opened scrolled to the bottom when the
+  account screen had been scrolled.
+- **No more gaps between words on the assistant screen.** Three descriptions
+  had lost their `\` line continuations, which left runs of spaces in the text
+  ("Leave it empty to ⎵⎵⎵⎵ choose later"). A test now reads the shell's source
+  for that.
+- **The erase warning comes first on "Ready to install"**, above the summary,
+  instead of under it where a small window hid it.
+
 ### Added
 - **"Allow SSH logins with a password"** on the account screen (off by default),
   with a warning that a password can be guessed by anyone who can reach the
