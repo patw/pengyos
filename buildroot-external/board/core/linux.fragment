@@ -143,6 +143,28 @@ CONFIG_USB_HIDDEV=y
 # (fan RPM / voltages / fan control on most desktop boards, e.g. behoserver).
 CONFIG_SENSORS_K10TEMP=m
 CONFIG_SENSORS_NCT6775=m
+# The rest of the Super-I/O family. NCT6775 covers Nuvoton only; every other
+# desktop board carries an ITE, Fintek or Winbond chip, and without these the
+# image shows CPU/GPU/NVMe sensors but no fans, board temperatures or rails.
+# Each driver probes one fixed I/O port pair at module load and returns -ENODEV
+# where no chip answers, so they can all ship together. Loaded explicitly by
+# /etc/modules-load.d/60-pengyos-sensors.conf (none of them can auto-load: they
+# have no MODULE_DEVICE_TABLE and probe inside module_init).
+CONFIG_SENSORS_IT87=m
+CONFIG_SENSORS_F71882FG=m
+CONFIG_SENSORS_W83627EHF=m
+# ASUS's own paths: the ACPI EC interface (B550/X570 and others) and the older
+# WMI one (X370/X470/B450/X399). These are ACPI devices, so udev does auto-load
+# them where they exist. SENSORS_ASUS_WMI depends on ACPI_WMI, which no fragment
+# sets - see kernel-required.txt.
+CONFIG_SENSORS_ASUS_EC=m
+CONFIG_SENSORS_ASUS_WMI=m
+# DIMM temperatures over SMBus (i2c-piix4 is already on): SPD5118 for the DDR5
+# hub, jc42 for DDR3/DDR4 modules. No fans or rails depend on these, so they are
+# the only ones here that are pure extra.
+CONFIG_SENSORS_SPD5118=m
+CONFIG_SENSORS_SPD5118_DETECT=y
+CONFIG_SENSORS_JC42=m
 # AMD SMBus (SPD, RGB over SMBus).
 CONFIG_I2C_PIIX4=m
 # AMD Secure Processor: CCP crypto offload + the PSP interface.

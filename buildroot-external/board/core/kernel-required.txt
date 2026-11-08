@@ -82,3 +82,10 @@ CONFIG_MOUSE_PS2=y          # PS/2 touchpads
 CONFIG_USB_HID=y            # USB keyboards and mice
 CONFIG_HID_GENERIC=y
 CONFIG_HIDRAW=y             # game controllers through Steam, FIDO keys, fwupd
+
+# --- Sensor drivers ----------------------------------------------------------
+# SENSORS_ASUS_WMI (board sensors on ASUS X370/X470/B450/X399) depends on
+# ACPI_WMI. Nothing sets it: x86_64_defconfig happens to provide it as a module,
+# which is why asus-wmi.ko exists today. Pin it so a kernel bump cannot take the
+# ASUS WMI sensor path away silently (2026-11-08).
+CONFIG_ACPI_WMI=m            # asus-wmi, asus_wmi_sensors, dell-smm-hwmon
