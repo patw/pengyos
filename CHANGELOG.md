@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: USB fan hub and AIO cooler drivers (2026-11-08)
+- The kernel now carries the in-tree drivers for USB fan controllers, AIO
+  coolers and PSUs: Corsair Commander Pro and HXi/RMi/AXi PSUs, NZXT Kraken
+  (X42-X72, X53-Z73, 2023) and the RGB & Fan Controller, Aquacomputer D5 Next,
+  Octo, Quadro and friends, ASUS ROG Ryujin II/III and Gigabyte Waterforce. Their
+  fans, pumps and coolant temperatures show up in the Hardware Monitor. Each
+  loads only when its device is plugged in.
+
 ### Added: Hardware Monitor and board sensors (2026-11-08)
 - The Desktop image ships `pengyos-hwmon`, a COSMIC hardware monitor:
   temperatures, fans, voltages, clocks, power and disk health in one table, with
