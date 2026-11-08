@@ -160,3 +160,8 @@ def ask_plain(session: Session, *, inp: Callable[[str], str], secret: Callable[[
             _choice_page(session, page, inp, out)
         else:
             _form_page(session, page, inp, secret, out)
+        # Go on from where this page now sits: skipping Wi-Fi at its password
+        # drops the password page, and a plain i += 1 then jumped over the page
+        # after it (the SSH page, so a key was never asked for).
+        pages = session.pages()
+        i = pages.index(page) + 1 if page in pages else i - 1

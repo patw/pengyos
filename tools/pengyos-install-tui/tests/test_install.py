@@ -176,13 +176,15 @@ def test_wifi_password_enter_skips_wifi(payload):
     from conftest import FakeWifi
 
     w = FakeWifi()
-    lines = iter(["1", "box", "pat", "1", KEY, "", "erase"])
+    lines = iter(["1", "box", "pat", "1", "", KEY, "", "erase"])
     secrets = iter(["hunter22", "hunter22", ""])
     out = io.StringIO()
     rc = run_install(inp=lambda p: next(lines), secret=lambda p: next(secrets), out=out,
                      payload=payload, disks=DISKS, plain=True, wifi=w, fetch_keys=FakeFetch(),
                      install=lambda *a, **k: None)
     assert rc == 0 and w.joined == [] and "none yet" in out.getvalue()
+    # Skipping Wi-Fi at its password used to jump over the SSH page.
+    assert "== SSH access ==" in out.getvalue() and "1 key (1 pasted)" in out.getvalue()
 
 
 def test_restart_comes_from_the_kernel(tmp_path):
