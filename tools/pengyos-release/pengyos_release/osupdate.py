@@ -31,6 +31,7 @@ from xml.sax.saxutils import escape, quoteattr
 
 from .errors import PengyOsError
 from .manifest import parse_version
+from .notes import GUIDE, plain, problems, to_html
 
 MANIFEST_FORMAT = "pengyos-update-1"
 NS = "https://pengyos.catbee.ca/ns/update/1"
@@ -108,6 +109,8 @@ def publish_update(build: Path, site: Path, key: Path, channel: str = "testing",
     """Turn a Buildroot output dir (``target/`` + ``images/payload``) into a release."""
     if channel not in CHANNELS:
         raise UpdatePublishError(f"unknown channel {channel!r}")
+    if notes.strip() and (bad := problems(notes)):
+        raise UpdatePublishError("the release notes need work:\n  " + "\n  ".join(bad) + "\n" + GUIDE)
     osr = _os_release(build / "target" / "usr" / "lib" / "os-release")
     image, version = osr.get("IMAGE_ID", ""), osr.get("IMAGE_VERSION", "")
     if not image or not version:
@@ -203,7 +206,7 @@ def render_feed(site: Path, base_url: str = DEFAULT_BASE_URL) -> str:
         chans = ", ".join(r["channels"])
         body = f"<p><strong>{html.escape(r.get('name', r['image']))}</strong> — channels: {html.escape(chans)}</p>"
         if r.get("notes"):
-            body += "".join(f"<p>{html.escape(p.strip())}</p>" for p in r["notes"].split("\n\n") if p.strip())
+            body += to_html(r["notes"])
         out += [
             "  <entry>",
             f"    <title>{escape(r.get('name', r['image']))} {escape(r['version'])}</title>",
@@ -217,7 +220,7 @@ def render_feed(site: Path, base_url: str = DEFAULT_BASE_URL) -> str:
             f"    <pengyos:version>{escape(r['version'])}</pengyos:version>",
             *[f"    <pengyos:channel>{escape(c)}</pengyos:channel>" for c in r["channels"]],
             f"    <pengyos:manifest>{escape(rel_dir + 'manifest.json')}</pengyos:manifest>",
-            *([f"    <pengyos:notes>{escape(r['notes'].strip())}</pengyos:notes>"] if r.get("notes") else []),
+            *([f"    <pengyos:notes>{escape(plain(r['notes']))}</pengyos:notes>"] if r.get("notes") else []),
             f'    <content type="html">{escape(body)}</content>',
             "  </entry>",
         ]
@@ -230,7 +233,7 @@ def render_index(site: Path, base_url: str = DEFAULT_BASE_URL) -> str:
     for r in _releases(site):
         d = f"{r['image']}/{r['version']}/"
         badges = " ".join(f'<span class="b {c}">{c}</span>' for c in r["channels"])
-        notes = "".join(f"<p>{html.escape(p.strip())}</p>" for p in r.get("notes", "").split("\n\n") if p.strip())
+        notes = to_html(r.get("notes", ""))
         rows.append(
             f'<article id="{_anchor(r)}"><h2>{html.escape(r.get("name", r["image"]))} {html.escape(r["version"])} {badges}</h2>'
             f'<p class="m"><code>{html.escape(r["image"])}</code> · published {html.escape(r["published"][:10])} · '
@@ -250,6 +253,7 @@ header img {{ width: 56px; height: 56px; }} h1 {{ font-size: 1.6rem; margin: 0; 
 h2 {{ font-size: 1.1rem; margin: 0 0 4px; }} .m {{ color: #656d76; font-size: .85rem; margin: 0 0 6px; }}
 .b {{ font-size: .7rem; font-weight: 700; border-radius: 10px; padding: 2px 8px; vertical-align: middle; }}
 .stable {{ background: #dafbe1; color: #116329; }} .testing {{ background: #fff8c5; color: #7d4e00; }}
+article p {{ margin: 6px 0; }} article ul {{ margin: 4px 0 8px; padding-left: 22px; }}
 code {{ font-size: .85em; }} pre {{ background: #f0f2f4; padding: 10px 14px; border-radius: 6px; overflow-x: auto; }}
 </style></head><body>
 <header><a href="/"><img src="/pengy.png" alt="PengyOS"></a><h1>PengyOS updates</h1></header>

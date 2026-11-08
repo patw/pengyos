@@ -342,6 +342,62 @@ def batch_notes(actions: list[dict], version: str, version_note: str = "",
     return "\n".join(lines) + "\n"
 
 
+#: The public notes' limits, the same as `pengyos-release notes-check` enforces
+#: (release.sh runs it before building, so notes over them would stop the night).
+NOTES_MAX_CHARS = 600
+NOTES_MAX_LINE = 160
+
+
+def _plain(text: str) -> str:
+    """One line of plain text: no Markdown marks, no line breaks."""
+    import re
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = text.replace("`", "").replace("**", "").replace("__", "")
+    return " ".join(text.split())
+
+
+def _fit(line: str) -> str:
+    return line if len(line) <= NOTES_MAX_LINE else line[:NOTES_MAX_LINE - 3].rstrip() + "..."
+
+
+def release_notes(actions: list[dict], by_hand=()) -> str:
+    """The short notes people see: the Updates app, the update page, the feed.
+
+    Plain text, a one-line summary and one line per change, under
+    NOTES_MAX_CHARS. The evidence (CVSS, upstream commits, what stayed open and
+    why) is in batch_notes()/notes_for(), the file the operator reviews; people
+    deciding whether to update need what changed and which issues it fixes.
+    """
+    cves = sorted({c for a in actions for c in (a.get("closes") or [])})
+    comps = [a["component"] for a in actions]
+    named = ", ".join(comps) if len(comps) <= 3 else f"{len(comps)} packages"
+    if cves:
+        head = f"Security fixes: {len(cves)} issue(s) closed in {named}."
+    else:
+        head = f"Routine updates to {named}."
+    items = []
+    for a in actions:
+        version = a.get("target") or a.get("current") or ""
+        line = f"- {a['component']} {version}".rstrip()
+        closes = sorted(a.get("closes") or [])
+        if closes:
+            shown = ", ".join(closes[:3]) + (f" and {len(closes) - 3} more" if len(closes) > 3 else "")
+            line += f": fixes {shown}"
+        items.append(_fit(_plain(line)))
+    items += [_fit("- also: " + _plain(s)) for s in by_hand]
+    out = [_fit(_plain(head)), ""]
+    size = len(out[0]) + 1
+    for n, item in enumerate(items):
+        rest = len(items) - n
+        reserve = len(f"\n- and {rest} more changes") if rest > 1 else 0
+        if size + 1 + len(item) + reserve > NOTES_MAX_CHARS:
+            out.append(f"- and {rest} more changes")
+            break
+        out.append(item)
+        size += 1 + len(item)
+    return "\n".join(out) + "\n"
+
+
 def batch_commit_message(action: dict, version: str, index: int, total: int) -> str:
     """One commit per change, so each keeps its own *why* inside one shared branch."""
     return commit_message(action, version).replace(
@@ -686,9 +742,12 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
 
     # --- build, boot-check, sign, publish -------------------------------------
     state_dir.mkdir(parents=True, exist_ok=True)
-    notes = state_dir / f"notes-{action['id']}.md"
-    notes.write_text(notes_for(action, version,
-                               by_hand=merged_by_hand(run, repo, base)))
+    by_hand = merged_by_hand(run, repo, base)
+    # The evidence for the operator, and the short notes people see (--notes).
+    (state_dir / f"notes-{action['id']}.md").write_text(
+        notes_for(action, version, by_hand=by_hand))
+    notes = state_dir / f"release-notes-{action['id']}.txt"
+    notes.write_text(release_notes([action], by_hand))
     argv = ["scripts/release.sh", "--publish", "--channel", G.CHANNEL,
             "--notes", str(notes)]
     if cfg["skip_cosmic"]:
@@ -1108,9 +1167,12 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
     # --- build, boot-check, sign, publish: once -------------------------------
     editions = sorted({e for a in live for e in a["editions"]})
     state_dir.mkdir(parents=True, exist_ok=True)
-    notes = state_dir / f"notes-batch-{today.isoformat()}.md"
-    notes.write_text(batch_notes(live, version,
-                                 by_hand=merged_by_hand(run, repo, base)))
+    by_hand = merged_by_hand(run, repo, base)
+    # The evidence for the operator, and the short notes people see (--notes).
+    (state_dir / f"notes-batch-{today.isoformat()}.md").write_text(
+        batch_notes(live, version, by_hand=by_hand))
+    notes = state_dir / f"release-notes-batch-{today.isoformat()}.txt"
+    notes.write_text(release_notes(live, by_hand))
     argv = ["scripts/release.sh", "--publish", "--channel", G.CHANNEL,
             "--notes", str(notes)]
     if cfg["skip_cosmic"]:

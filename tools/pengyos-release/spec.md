@@ -15,11 +15,13 @@ A Python package `pengyos_release`: `publish` (build-output dir + edition/versio
 - pengyos-release verify --feed DIR [--json]
 - pengyos-release retain --feed DIR --keep N [--dry-run]
 - pengyos-release prune --site DIR [--apply] [--keep-stable N] [--json]   (the public site: update/ + download/)
+- pengyos-release notes-check FILE [--json]   (release notes: short plain text; release.sh runs it before building)
 
 ## Verification (tests are first-class)
 - publish is deterministic (golden feed tree) and self-verifies.
 - verify rejects an unsigned entry, a hash mismatch, and a dangling channel pointer.
 - retain keeps exactly N and never removes the pointed-at version.
+- Release notes are plain text for people. `notes-check` and `update-publish` refuse Markdown (backticks, `**`/`__`, `#` headings, `[text](url)`, `*`/`+` bullets), indented lines, a first paragraph longer than one line, lines over 160 characters and notes over 600 characters. The feed's `pengyos:notes` and the page carry `plain()` text, with Markdown stripped from notes published before the rule; the page and the feed's HTML render `- ` lines as a list.
 - prune keeps every stable release (or the newest N with --keep-stable) and each edition's newest release; removes a download/<version>/ only when none of its editions (Core: any edition of that version) is kept and it isn't the newest; a dry run changes nothing; --apply rewrites the feed and both index pages; a release without release.json is an error, not a deletion.
 
 **GitHub-ready contract** (assert with a `test_github_ready`):

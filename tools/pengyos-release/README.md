@@ -48,11 +48,31 @@ pengyos-release update-publish --build OUT --site SITE --key KEY [--channel test
 pengyos-release update-promote --site SITE --image pengyos-desktop --release 26.10.29 --channel stable
 pengyos-release download-publish --build OUT [--build OUT ...] --site SITE --key KEY
 pengyos-release update-feed --site SITE      # regenerate update/feed.xml + index.html
+pengyos-release notes-check NOTES            # release.sh runs it before building
 
 # Delete superseded testing releases (dry run by default)
 pengyos-release prune --site SITE
 pengyos-release prune --site SITE --apply [--keep-stable N]
 ```
+
+### Release notes
+
+The notes (`update-publish --notes @FILE`) are what people read before they
+update: the Updates app, `pengyos-update check`, the feed and the update page
+show them as plain text. Nothing renders Markdown, so write none. The notes are
+not a changelog; the details go in `CHANGELOG.md`.
+
+```
+SSH key setup works again while password logins are on.
+
+- ssh-copy-id no longer gets refused halfway through
+- if you turned passwords on in 26.11.6, run: sudo pengyos-ssh-password on
+```
+
+That is a one-line summary, a blank line, then a few `- ` lines, under 600
+characters. `notes-check` and `update-publish` refuse anything else. The page and
+the feed show `- ` lines as a list, and they strip the Markdown out of notes
+published before this rule.
 
 `prune` keeps, per edition, every stable release (or the newest `N`) and the
 newest release of any channel, and deletes the rest of `update/<image>/`.
