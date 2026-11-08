@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed — Desktop installer layout papercuts (2026-11-08)
+- Found by operating the Desktop installer in QEMU as a new user, on a
+  1280x800 screen:
+  - the wizard now fills the screen once Install is chosen, so the account
+    screen's two switches (the new SSH one included) are no longer below the
+    fold;
+  - each step opens scrolled to its top;
+  - the assistant screen's descriptions lost their gaps between words;
+  - the erase warning is the first line of "Ready to install".
+
+  See `tools/pengyos-install-gui/CHANGELOG.md`.
+
 ### Fixed — `ssh-copy-id` works while SSH passwords are on (2026-11-08)
 - 26.11.6's password drop-in set `PerSourcePenalties authfail:15s`.
   `ssh-copy-id` opens two probe connections before the one that copies the key,
