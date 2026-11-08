@@ -54,8 +54,9 @@ serde_json = "1"
 # pinned commit; no default features, so no extra backends are compiled in.
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm_0_29", "layout-cache"], optional = true }
 
-# Same pinned libcosmic as the other in-tree apps, so all of them share one
-# libcosmic build in CARGO_TARGET_DIR=~/cosmic-build/install-gui.
+# Same pinned libcosmic rev as the other in-tree apps. With the `applet` feature
+# and the [patch] below it is a separate build of that rev in
+# CARGO_TARGET_DIR=~/cosmic-build/install-gui, not the one the other apps share.
 [dependencies.libcosmic]
 optional = true
 git = "https://github.com/pop-os/libcosmic.git"
@@ -63,6 +64,7 @@ rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
 features = [
     "dbus-config",     # theme/config subscription, so it follows the COSMIC theme
     "single-instance",
+    "applet",          # the Fans panel applet (--applet)
     "tokio",
     "wgpu",            # GPU rendering: software raster was ~57% of a core while scrolling
     "wayland",
@@ -71,3 +73,35 @@ features = [
 [profile.release]
 lto = true
 strip = true
+
+# The `applet` feature makes libcosmic depend on cosmic-panel-config, which asks
+# for cosmic-config from libcosmic's default branch: a second, unpinned copy of
+# libcosmic's crates next to the pinned ones. Every libcosmic crate is pointed at
+# the pinned rev here, as PengyOS does for COSMIC's own applets (the "//" makes
+# the URL differ from the one patched, which cargo requires), so there is one
+# copy of each. Keep the rev equal to [dependencies.libcosmic]'s.
+[patch."https://github.com/pop-os/libcosmic"]
+build_helpers = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+cosmic-config-derive = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_accessibility = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_core = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_debug = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_futures = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_graphics = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_program = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_renderer = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_runtime = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_tiny_skia = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_wgpu = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_widget = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+iced_winit = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+libcosmic = { git = "https://github.com/pop-os/libcosmic//", rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0" }
+
+# cosmic-panel-config (for the applet) at the commit of the cosmic-panel the
+# image ships (scripts/cosmic-components.tsv), so the applet reads the panel's
+# config the way that panel writes it.
+[patch."https://github.com/pop-os/cosmic-panel"]
+cosmic-panel-config = { git = "https://github.com/pop-os/cosmic-panel//", rev = "ca20ce3185b3b4404f429d59d429c40b58a2ddef" }

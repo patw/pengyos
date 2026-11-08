@@ -63,6 +63,254 @@ enum View {
 /// How often the Fans pane asks pengyos-fans again (it starts a process).
 const FANS_EVERY: Duration = Duration::from_secs(2);
 
+const ROLES: [&str; 3] = ["fan", "pump", "none"];
+const ROLE_LABELS: [&str; 3] = [
+    "A fan: follows the profile",
+    "A pump: left alone",
+    "Nothing: left alone",
+];
+/// Index i here is fans::FOLLOWS[i]; a fan without a chip curve skips "chip".
+const FOLLOW_LABELS: [&str; 4] = [
+    "The chip's own sensor",
+    "The CPU",
+    "The GPU",
+    "CPU or GPU, whichever is hotter",
+];
+/// When a fan has no curve to start from (the firmware profile): balanced's.
+const START_CURVE: [(i64, i64); 4] = [(35, 30), (55, 45), (70, 70), (80, 100)];
+
+/// The editor for one fan channel: what the user has typed, and what it was.
+struct FanEdit {
+    id: String,
+    name: String,
+    role: usize,
+    /// index into follow_options()
+    follow: usize,
+    chip_curve: bool,
+    /// (temperature, duty) as typed
+    points: Vec<(String, String)>,
+    /// the curve is the fan's own (false: follow the profile's)
+    own: bool,
+    curve_dirty: bool,
+    max_points: usize,
+    min_duty: i64,
+    was_name: String,
+    was_role: usize,
+    was_follow: usize,
+    was_own: bool,
+}
+
+impl FanEdit {
+    fn new(c: &fans::Channel) -> Self {
+        let role = ROLES.iter().position(|r| *r == c.role).unwrap_or(2);
+        let options = follow_options(c.chip_curve);
+        let follow = options
+            .iter()
+            .position(|&i| fans::FOLLOWS[i] == c.follow)
+            .unwrap_or(0);
+        let max_points = c.max_points.clamp(2, 8);
+        let mut start: Vec<(i64, i64)> = c.curve.clone().unwrap_or_else(|| START_CURVE.to_vec());
+        if start.len() > max_points {
+            // keep the first points and the last (full speed)
+            let last = *start.last().unwrap();
+            start.truncate(max_points - 1);
+            start.push(last);
+        }
+        FanEdit {
+            id: c.id.clone(),
+            name: c.name.clone(),
+            role,
+            follow,
+            chip_curve: c.chip_curve,
+            points: start
+                .iter()
+                .map(|(t, d)| (t.to_string(), d.to_string()))
+                .collect(),
+            own: c.own_curve,
+            curve_dirty: false,
+            max_points,
+            min_duty: c.min_duty,
+            was_name: c.name.clone(),
+            was_role: role,
+            was_follow: follow,
+            was_own: c.own_curve,
+        }
+    }
+
+    fn parsed(&self) -> Result<Vec<(i64, i64)>, String> {
+        self.points
+            .iter()
+            .map(|(t, d)| match (t.parse(), d.parse()) {
+                (Ok(t), Ok(d)) => Ok((t, d)),
+                _ => Err("Every point needs a temperature and a speed.".to_owned()),
+            })
+            .collect()
+    }
+
+    /// The pengyos-fans commands that make it so, in order (role first: a fan
+    /// that becomes a pump needs no curve).
+    fn commands(&self) -> Result<Vec<Vec<String>>, String> {
+        let mut out = Vec::new();
+        let name = self.name.trim();
+        if name != self.was_name {
+            out.push(fans::name_argv(&self.id, name));
+        }
+        if self.role != self.was_role {
+            out.push(fans::role_argv(&self.id, ROLES[self.role]));
+        }
+        if ROLES[self.role] != "fan" {
+            return Ok(out);
+        }
+        if self.follow != self.was_follow {
+            let i = follow_options(self.chip_curve)[self.follow];
+            out.push(fans::follow_argv(&self.id, fans::FOLLOWS[i]));
+        }
+        if self.curve_dirty {
+            if self.own {
+                let points = self.parsed()?;
+                fans::check_curve(&points, self.max_points)?;
+                out.push(fans::curve_argv(&self.id, &points));
+            } else if self.was_own {
+                out.push(fans::curve_argv(&self.id, &[]));
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// The editor under a fan's row: name, role, what it follows, its curve.
+fn fan_editor<'a>(edit: &'a FanEdit, profile: &str, busy: bool) -> Element<'a, Message> {
+    let label = |text: &'static str| {
+        widget::text::body(text)
+            .width(Length::Fixed(150.0))
+            .class(theme::Text::Color(dimmed()))
+    };
+    let mut col = widget::column::with_capacity(10)
+        .spacing(8)
+        .padding([8, 24]);
+    col = col.push(
+        widget::row::with_capacity(2)
+            .push(label("Name"))
+            .push(
+                widget::text_input("e.g. Front intake", edit.name.as_str())
+                    .on_input(Message::EditName)
+                    .width(Length::Fixed(260.0)),
+            )
+            .align_y(Alignment::Center),
+    );
+    col = col.push(
+        widget::row::with_capacity(2)
+            .push(label("This control drives"))
+            .push(widget::dropdown(
+                &ROLE_LABELS[..],
+                Some(edit.role),
+                Message::EditRole,
+            ))
+            .align_y(Alignment::Center),
+    );
+    if ROLES[edit.role] == "fan" {
+        let options: Vec<&'static str> = follow_options(edit.chip_curve)
+            .into_iter()
+            .map(|i| FOLLOW_LABELS[i])
+            .collect();
+        col = col.push(
+            widget::row::with_capacity(2)
+                .push(label("Speed follows"))
+                .push(widget::dropdown(
+                    options,
+                    Some(edit.follow),
+                    Message::EditFollow,
+                ))
+                .align_y(Alignment::Center),
+        );
+        let heading = if edit.own {
+            "Its own curve (°C → speed)".to_owned()
+        } else {
+            format!("The {profile} profile's curve (°C → speed); change a point to make it this fan's own")
+        };
+        col = col.push(widget::text::caption_heading(heading));
+        for (i, (t, d)) in edit.points.iter().enumerate() {
+            let mut row = widget::row::with_capacity(6)
+                .spacing(6)
+                .align_y(Alignment::Center)
+                .push(
+                    widget::text_input("°C", t.as_str())
+                        .on_input(move |s| Message::EditPoint(i, true, s))
+                        .width(Length::Fixed(64.0)),
+                )
+                .push(widget::text::body("°C →"))
+                .push(
+                    widget::text_input("%", d.as_str())
+                        .on_input(move |s| Message::EditPoint(i, false, s))
+                        .width(Length::Fixed(64.0)),
+                )
+                .push(widget::text::body("%"));
+            if edit.points.len() > 2 && i + 1 < edit.points.len() {
+                row = row.push(widget::button::text("Remove").on_press(Message::RemovePoint(i)));
+            }
+            col = col.push(row);
+        }
+        let mut curve_buttons = widget::row::with_capacity(2).spacing(8);
+        if edit.points.len() < edit.max_points.min(8) {
+            curve_buttons =
+                curve_buttons.push(widget::button::text("Add a point").on_press(Message::AddPoint));
+        }
+        if edit.own {
+            curve_buttons = curve_buttons.push(
+                widget::button::text("Use the profile's curve").on_press(Message::ProfileCurve),
+            );
+        }
+        col = col.push(curve_buttons);
+        let mut notes = vec![if edit.chip_curve {
+            format!(
+                "The last point must be 100 %. This fan's chip holds {} points.",
+                edit.max_points
+            )
+        } else {
+            "The last point must be 100 %. Up to 8 points.".to_owned()
+        }];
+        if profile == "firmware" {
+            notes.push("Curves apply under Quiet and Balanced; the profile is \"as the firmware set it\" now.".into());
+        }
+        if edit.min_duty > 20 {
+            notes.push(format!(
+                "This fan stops below {}%, so it never runs slower than {}%.",
+                edit.min_duty - 5,
+                edit.min_duty
+            ));
+        }
+        if !edit.chip_curve {
+            notes.push(
+                "A service runs this fan's curve; if it stops, the fan goes to full speed.".into(),
+            );
+        }
+        for note in notes {
+            col = col.push(widget::text::caption(note).class(theme::Text::Color(dimmed())));
+        }
+    }
+    let save = widget::button::suggested("Save");
+    col = col.push(
+        widget::row::with_capacity(2)
+            .spacing(8)
+            .push(if busy {
+                save
+            } else {
+                save.on_press(Message::SaveFan)
+            })
+            .push(widget::button::standard("Cancel").on_press(Message::EditFan(None))),
+    );
+    col.into()
+}
+
+/// Indices into fans::FOLLOWS a channel may choose from.
+fn follow_options(chip_curve: bool) -> Vec<usize> {
+    if chip_curve {
+        vec![0, 1, 2, 3]
+    } else {
+        vec![1, 2, 3]
+    }
+}
+
 #[derive(Debug, Clone)]
 enum Message {
     Tick,
@@ -82,6 +330,18 @@ enum Message {
     FansLoaded(Result<FanStatus, String>),
     SetFanProfile(&'static str),
     DetectFans,
+    /// Open (or close, with None) the editor for one fan channel.
+    EditFan(Option<String>),
+    EditName(String),
+    EditRole(usize),
+    EditFollow(usize),
+    /// (point, is the temperature, the text typed)
+    EditPoint(usize, bool, String),
+    AddPoint,
+    RemovePoint(usize),
+    /// Drop the fan's own curve: it follows the profile's again.
+    ProfileCurve,
+    SaveFan,
     /// A pkexec pengyos-fans command finished; Err is what to show.
     FansDone(Result<(), String>),
 }
@@ -125,6 +385,7 @@ struct HWall {
     /// what a running pkexec command is doing ("Detecting fans...")
     fans_busy: Option<&'static str>,
     fans_error: Option<String>,
+    fan_edit: Option<FanEdit>,
     view: View,
     interval: Duration,
     last_update: Option<Instant>,
@@ -653,15 +914,20 @@ impl HWall {
         })
     }
 
-    /// Run `pkexec pengyos-fans ...` off the UI thread (it asks for a password).
+    /// Run `pkexec pengyos-fans ...` off the UI thread.
     fn fan_command(&mut self, argv: Vec<String>, doing: &'static str) -> Task<Message> {
+        self.fan_commands(vec![argv], doing)
+    }
+
+    /// Several, in order, stopping at the first that fails.
+    fn fan_commands(&mut self, commands: Vec<Vec<String>>, doing: &'static str) -> Task<Message> {
         if self.fans_busy.is_some() {
             return Task::none();
         }
         self.fans_busy = Some(doing);
         self.fans_error = None;
         cosmic::task::future(async move {
-            let result = thread::spawn(move || fans::run(&argv))
+            let result = thread::spawn(move || fans::run_all(&commands))
                 .join()
                 .unwrap_or_else(|_| Err("pengyos-fans crashed".into()));
             Message::FansDone(result)
@@ -755,8 +1021,17 @@ impl HWall {
                     format!("{} · {}", c.name, c.id)
                 };
                 let left_alone = c.control == "left alone";
+                let editing = self.fan_edit.as_ref().is_some_and(|e| e.id == c.id);
+                let edit_button = widget::button::text(if editing { "Close" } else { "Edit" });
+                let edit_button = if busy {
+                    edit_button
+                } else if editing {
+                    edit_button.on_press(Message::EditFan(None))
+                } else {
+                    edit_button.on_press(Message::EditFan(Some(c.id.clone())))
+                };
                 table = table.push(
-                    widget::row::with_capacity(4)
+                    widget::row::with_capacity(5)
                         .push(widget::text::body(title).width(Length::Fill))
                         .push(num_cell(fans::rpm_text(c), None, left_alone))
                         .push(num_cell(fans::duty_text(c), None, left_alone))
@@ -765,9 +1040,16 @@ impl HWall {
                                 .class(theme::Text::Color(dimmed()))
                                 .width(Length::Fixed(220.0)),
                         )
+                        .push(edit_button)
                         .spacing(8)
-                        .padding([2, 6]),
+                        .padding([2, 6])
+                        .align_y(Alignment::Center),
                 );
+                if editing {
+                    if let Some(edit) = &self.fan_edit {
+                        table = table.push(fan_editor(edit, &status.profile, busy));
+                    }
+                }
             }
             page = page.push(table);
         }
@@ -779,7 +1061,7 @@ impl HWall {
         }
         page = page.push(
             widget::text::caption(
-                "Changes ask for an administrator's password. In a terminal: sudo pengyos-fans --help",
+                "Changes need an administrator. In a terminal: sudo pengyos-fans --help",
             )
             .class(theme::Text::Color(dimmed())),
         );
@@ -831,6 +1113,7 @@ impl cosmic::Application for HWall {
             fans_at: None,
             fans_busy: None,
             fans_error: None,
+            fan_edit: None,
             view: start_view,
             interval,
             last_update: None,
@@ -907,6 +1190,82 @@ impl cosmic::Application for HWall {
                     fans::detect_argv(),
                     "Detecting fans: each spins up for a few seconds...",
                 )
+            }
+            Message::EditFan(id) => {
+                self.fans_error = None;
+                self.fan_edit = id.and_then(|id| {
+                    let status = self.fans.as_ref()?.as_ref().ok()?;
+                    let channel = status.channels.iter().find(|c| c.id == id)?;
+                    Some(FanEdit::new(channel))
+                });
+            }
+            Message::EditName(text) => {
+                if let Some(edit) = &mut self.fan_edit {
+                    edit.name = text;
+                }
+            }
+            Message::EditRole(i) => {
+                if let Some(edit) = &mut self.fan_edit {
+                    edit.role = i;
+                }
+            }
+            Message::EditFollow(i) => {
+                if let Some(edit) = &mut self.fan_edit {
+                    edit.follow = i;
+                }
+            }
+            Message::EditPoint(i, temp, text) => {
+                if let Some(edit) = &mut self.fan_edit {
+                    let text: String = text.chars().filter(char::is_ascii_digit).take(3).collect();
+                    if let Some(point) = edit.points.get_mut(i) {
+                        if temp {
+                            point.0 = text;
+                        } else {
+                            point.1 = text;
+                        }
+                        edit.own = true;
+                        edit.curve_dirty = true;
+                    }
+                }
+            }
+            Message::AddPoint => {
+                if let Some(edit) = &mut self.fan_edit {
+                    if edit.points.len() < edit.max_points.min(8) {
+                        // a point halfway along the last segment, or before the end
+                        let at = edit.points.len().saturating_sub(1);
+                        edit.points.insert(at, (String::new(), String::new()));
+                        edit.own = true;
+                        edit.curve_dirty = true;
+                    }
+                }
+            }
+            Message::RemovePoint(i) => {
+                if let Some(edit) = &mut self.fan_edit {
+                    if edit.points.len() > 2 {
+                        edit.points.remove(i);
+                        edit.own = true;
+                        edit.curve_dirty = true;
+                    }
+                }
+            }
+            Message::ProfileCurve => {
+                if let Some(edit) = &mut self.fan_edit {
+                    edit.own = false;
+                    edit.curve_dirty = true;
+                }
+            }
+            Message::SaveFan => {
+                let Some(edit) = &self.fan_edit else {
+                    return Task::none();
+                };
+                match edit.commands() {
+                    Ok(commands) if commands.is_empty() => self.fan_edit = None,
+                    Ok(commands) => {
+                        self.fan_edit = None;
+                        return self.fan_commands(commands, "Saving...");
+                    }
+                    Err(why) => self.fans_error = Some(why),
+                }
             }
             Message::FansDone(result) => {
                 self.fans_busy = None;

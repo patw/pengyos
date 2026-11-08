@@ -5,10 +5,16 @@
 - A **Fans** view in the window and the terminal view, over `pengyos-fans status
   --json`: each fan with its speed, duty and who runs it (the chip's curve, the
   service's software curve, or left alone). In the window, profile buttons and
-  Detect run `pkexec /usr/bin/pengyos-fans ...` (an administrator's password; no
-  polkit rule grants it). The terminal view shows the `sudo` commands instead and
+  Detect run `pkexec /usr/bin/pengyos-fans ...`. The terminal view shows the `sudo` commands instead and
   never changes a fan. `--view fans` starts the window there. `PENGYOS_FANS`
   names a stand-in for `pengyos-fans status` (tests).
+- A per-fan editor in the window's Fans view: name, role, what the speed follows,
+  and the fan's own curve, checked before anything runs.
+- The Fans panel applet, `--applet` (libcosmic's `applet` feature): one-click
+  profiles and each fan's speed. It draws nothing where there is nothing to
+  control.
+- Changes need no password for an administrator at the computer: the Desktop
+  ships `60-pengyos-fans.rules` (operator's decision, 2026-11-08).
 - `serde_json` is now a direct dependency (it was already in the tree through
   hwall-app).
 

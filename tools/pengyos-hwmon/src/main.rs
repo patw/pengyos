@@ -1,7 +1,8 @@
 //! PengyOS Hardware Monitor.
 //!
-//! Three entry points, one data path:
+//! Four entry points, one data path:
 //!   * the libcosmic window (`--features cosmic`, the Desktop image);
+//!   * the Fans panel applet (`--applet`, same build, started by cosmic-panel);
 //!   * the terminal view (`--features tui`, the Server image; `--tui` anywhere);
 //!   * `--check`, one collection pass as text, which needs neither.
 //!
@@ -13,6 +14,8 @@ mod check;
 
 #[cfg(feature = "cosmic")]
 mod app;
+#[cfg(feature = "cosmic")]
+mod applet;
 // tjmax is plain data + policy over hwall-core types, so it stays testable
 // without a display (and without libcosmic) - `cargo test` covers it. A build
 // with neither front-end uses only part of it (`--check`).
@@ -24,18 +27,20 @@ mod tjmax;
 mod tui;
 
 const USAGE: &str =
-    "usage: pengyos-hwmon [--tui [--hardware] | --check | --view sensors|hardware|limits]
+    "usage: pengyos-hwmon [--tui [--hardware] | --check | --view sensors|hardware|limits|fans | --applet]
 
   (no flag)   the window on a desktop session, the terminal view otherwise
   --tui       the terminal view, even on a desktop session
   --hardware  start the terminal view on the hardware inventory
-  --check     one collection pass printed as text, then exit";
+  --check     one collection pass printed as text, then exit
+  --applet    the Fans panel applet (cosmic-panel starts it)";
 
 #[derive(Debug, PartialEq, Eq)]
 enum Mode {
     Check,
     Terminal { hardware: bool },
     Window,
+    Applet,
     Usage,
 }
 
@@ -49,6 +54,9 @@ fn mode(args: &[String], has_display: bool, cosmic: bool, tui: bool) -> Mode {
     }
     if has("--check") {
         return Mode::Check;
+    }
+    if cosmic && has("--applet") {
+        return Mode::Applet;
     }
     let hardware = has("--hardware");
     if tui && (has("--tui") || hardware || !cosmic || !has_display) {
@@ -86,6 +94,13 @@ fn main() {
         #[cfg(feature = "cosmic")]
         Mode::Window => {
             if let Err(error) = app::run(&args) {
+                eprintln!("pengyos-hwmon: {error}");
+                std::process::exit(1);
+            }
+        }
+        #[cfg(feature = "cosmic")]
+        Mode::Applet => {
+            if let Err(error) = applet::run() {
                 eprintln!("pengyos-hwmon: {error}");
                 std::process::exit(1);
             }
@@ -154,6 +169,15 @@ mod tests {
         for (cosmic, tui) in [(false, false), (true, false), (false, true), (true, true)] {
             assert_eq!(mode(&args(&["--check"]), false, cosmic, tui), Mode::Check);
         }
+    }
+
+    #[test]
+    fn applet_only_in_the_window_build() {
+        assert_eq!(mode(&args(&["--applet"]), true, true, true), Mode::Applet);
+        assert_eq!(
+            mode(&args(&["--applet"]), false, false, true),
+            Mode::Terminal { hardware: false }
+        );
     }
 
     #[test]

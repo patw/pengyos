@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Fans
+Comment=Fan profile: quiet, balanced, full speed, or as the firmware set it
+Exec=pengyos-hwmon --applet
+Icon=io.catbee.pengyos.FansApplet-symbolic
+Terminal=false
+NoDisplay=true
+Categories=COSMIC;
+Keywords=COSMIC;Applet;Fan;Fans;Noise;Quiet;Cooling;
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

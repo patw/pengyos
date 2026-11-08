@@ -2,8 +2,9 @@
 //!
 //! The Hardware Monitor never writes a fan setting itself. Reading is done by
 //! running `pengyos-fans` as the user (it only reads sysfs and its map); a change
-//! from the window runs `pkexec /usr/bin/pengyos-fans ...`, which asks for an
-//! administrator's password (pkexec's default: no polkit rule grants it). The
+//! from the window or the panel applet runs `pkexec /usr/bin/pengyos-fans ...`.
+//! The Desktop's polkit rule (60-pengyos-fans.rules) lets an administrator at the
+//! computer do that without a password; anyone else is asked for one. The
 //! terminal view only shows the commands to type.
 
 use serde_json::Value;
@@ -12,6 +13,9 @@ use std::process::Command;
 pub const FANS: &str = "/usr/bin/pengyos-fans";
 #[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
 pub const PROFILES: [&str; 4] = ["quiet", "balanced", "full", "firmware"];
+/// What a fan's speed can follow, as `pengyos-fans follow` spells it.
+#[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
+pub const FOLLOWS: [&str; 4] = ["chip", "cpu", "gpu", "cpu+gpu"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
@@ -31,6 +35,16 @@ pub struct Channel {
     pub rpm: Option<i64>,
     pub duty: Option<i64>,
     pub control: String,
+    /// "fan", "pump" or "none"
+    pub role: String,
+    pub follow: String,
+    /// The curve it follows now (°C, %), None under firmware or when left alone.
+    pub curve: Option<Vec<(i64, i64)>>,
+    pub own_curve: bool,
+    /// The chip runs its curve itself (and so can follow "chip").
+    pub chip_curve: bool,
+    pub max_points: usize,
+    pub min_duty: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +80,20 @@ pub fn parse(json: &str) -> Result<FanStatus, String> {
                     rpm: r.get("rpm").and_then(Value::as_i64),
                     duty: r.get("duty").and_then(Value::as_i64),
                     control: text(r, "control"),
+                    role: text(r, "role"),
+                    follow: text(r, "follow"),
+                    curve: r.get("curve").and_then(Value::as_array).map(|pts| {
+                        pts.iter()
+                            .filter_map(|p| Some((p.get(0)?.as_i64()?, p.get(1)?.as_i64()?)))
+                            .collect()
+                    }),
+                    own_curve: r.get("own_curve").and_then(Value::as_bool).unwrap_or(false),
+                    chip_curve: r
+                        .get("chip_curve")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                    max_points: r.get("max_points").and_then(Value::as_u64).unwrap_or(8) as usize,
+                    min_duty: r.get("min_duty").and_then(Value::as_i64).unwrap_or(20),
                 })
                 .collect()
         })
@@ -224,6 +252,86 @@ pub fn detect_argv() -> Vec<String> {
 }
 
 #[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
+pub fn name_argv(id: &str, name: &str) -> Vec<String> {
+    vec![
+        "pkexec".into(),
+        FANS.into(),
+        "name".into(),
+        id.into(),
+        name.into(),
+    ]
+}
+
+#[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
+pub fn role_argv(id: &str, role: &str) -> Vec<String> {
+    vec![
+        "pkexec".into(),
+        FANS.into(),
+        "role".into(),
+        id.into(),
+        role.into(),
+    ]
+}
+
+#[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
+pub fn follow_argv(id: &str, follow: &str) -> Vec<String> {
+    vec![
+        "pkexec".into(),
+        FANS.into(),
+        "follow".into(),
+        id.into(),
+        follow.into(),
+    ]
+}
+
+/// `curve ID 30:25 60:45 ...`, or `curve ID default` for an empty list.
+#[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
+pub fn curve_argv(id: &str, points: &[(i64, i64)]) -> Vec<String> {
+    let mut v: Vec<String> = vec!["pkexec".into(), FANS.into(), "curve".into(), id.into()];
+    if points.is_empty() {
+        v.push("default".into());
+    } else {
+        v.extend(points.iter().map(|(t, d)| format!("{t}:{d}")));
+    }
+    v
+}
+
+/// Check a curve the way `pengyos-fans curve` will, so the window can say what is
+/// wrong before asking for anything. `max` is the chip's point count.
+#[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
+pub fn check_curve(points: &[(i64, i64)], max: usize) -> Result<(), String> {
+    if points.len() < 2 || points.len() > max.min(8) {
+        return Err(format!("A curve has 2 to {} points.", max.min(8)));
+    }
+    if points
+        .windows(2)
+        .any(|w| w[1].0 <= w[0].0 || w[1].1 < w[0].1)
+    {
+        return Err(
+            "Temperatures must rise, and speeds must not fall, from point to point.".into(),
+        );
+    }
+    if points
+        .iter()
+        .any(|&(t, d)| !(0..=100).contains(&t) || !(0..=100).contains(&d))
+    {
+        return Err("Temperatures 0-100 °C, speeds 0-100 %.".into());
+    }
+    if points.last().map(|p| p.1) != Some(100) {
+        return Err(
+            "The last point must be 100 %, so a hot machine always gets full speed.".into(),
+        );
+    }
+    Ok(())
+}
+
+/// Run several commands in order, stopping at the first that fails.
+#[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
+pub fn run_all(commands: &[Vec<String>]) -> Result<(), String> {
+    commands.iter().try_for_each(|argv| run(argv))
+}
+
+#[cfg_attr(not(feature = "cosmic"), allow(dead_code))]
 /// Run one of the argv above; Err carries what the user should see.
 pub fn run(argv: &[String]) -> Result<(), String> {
     let out = Command::new(&argv[0])
@@ -234,7 +342,7 @@ pub fn run(argv: &[String]) -> Result<(), String> {
         Some(0) => Ok(()),
         // pkexec: 126 = the password dialog was dismissed, 127 = not authorized
         Some(126) | Some(127) if argv[0] == "pkexec" => {
-            Err("Not changed: no administrator password given.".into())
+            Err("Not changed: this needs an administrator.".into())
         }
         _ => {
             let err = String::from_utf8_lossy(&out.stderr).trim().to_owned();
@@ -311,6 +419,56 @@ mod tests {
             ["pkexec", "/usr/bin/pengyos-fans", "profile", "quiet"]
         );
         assert_eq!(detect_argv(), ["pkexec", "/usr/bin/pengyos-fans", "detect"]);
+    }
+
+    #[test]
+    fn reads_curves_and_limits() {
+        let s = parse(
+            r#"{"profile":"quiet","kind":"channels","undetected":[],"platform_profile":null,"channels":[
+              {"id":"nct6797:pwm4","name":"Rear","role":"fan","fan":"fan4","follow":"chip","rpm":700,"duty":45,
+               "control":"chip curve, own curve","min_duty":45,"own_curve":true,"chip_curve":true,"max_points":4,
+               "curve":[[30,45],[60,60],[80,100]]}]}"#,
+        )
+        .unwrap();
+        let c = &s.channels[0];
+        assert_eq!(
+            c.curve.as_deref(),
+            Some(&[(30, 45), (60, 60), (80, 100)][..])
+        );
+        assert!(c.own_curve && c.chip_curve);
+        assert_eq!(
+            (c.max_points, c.min_duty, c.follow.as_str()),
+            (4, 45, "chip")
+        );
+    }
+
+    #[test]
+    fn edit_commands() {
+        assert_eq!(
+            curve_argv("nct6798:pwm1", &[(30, 25), (80, 100)]),
+            [
+                "pkexec",
+                "/usr/bin/pengyos-fans",
+                "curve",
+                "nct6798:pwm1",
+                "30:25",
+                "80:100"
+            ]
+        );
+        assert_eq!(curve_argv("a:pwm1", &[])[4], "default");
+        assert_eq!(name_argv("a:pwm1", "Front intake")[4], "Front intake");
+        assert_eq!(follow_argv("a:pwm1", "cpu+gpu")[3..], ["a:pwm1", "cpu+gpu"]);
+    }
+
+    #[test]
+    fn curves_are_checked_like_the_tool_does() {
+        assert!(check_curve(&[(30, 25), (60, 45), (80, 100)], 4).is_ok());
+        assert!(check_curve(&[(30, 25)], 4).is_err());
+        assert!(check_curve(&[(60, 25), (40, 50), (80, 100)], 4).is_err());
+        assert!(check_curve(&[(30, 50), (60, 40), (80, 100)], 4).is_err());
+        assert!(check_curve(&[(30, 25), (80, 90)], 4).is_err());
+        assert!(check_curve(&[(10, 20), (20, 30), (30, 40), (40, 50), (80, 100)], 4).is_err());
+        assert!(check_curve(&[(10, 20), (20, 30), (30, 40), (40, 50), (80, 100)], 8).is_ok());
     }
 
     #[test]
