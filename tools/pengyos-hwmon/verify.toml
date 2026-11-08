@@ -1,0 +1,17 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# Rust tool: the TJ Max policy and the collection path are testable/run with no
+# display and no libcosmic checkout; the GUI itself is built by the image.
+
+[[check]]
+name = "unit tests"
+run = ["cargo", "test", "-q"]
+cwd = "tools/pengyos-hwmon"
+expect = "exit0"
+timeout = 900
+
+[[check]]
+name = "headless collection (--check)"
+run = ["cargo", "run", "-q", "--", "--check"]
+cwd = "tools/pengyos-hwmon"
+expect = "exit0"
+timeout = 900

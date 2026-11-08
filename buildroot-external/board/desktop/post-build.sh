@@ -111,6 +111,19 @@ else
     echo "post-build: ${UPDATES_GUI} not built — no update app or notifications"
 fi
 
+# --- Hardware Monitor (sensors, fans, voltages, clocks, power, SMART) ---------
+# tools/pengyos-hwmon, host-built the same way. The .desktop file is in the
+# overlay; the kernel drivers it needs are in core (the Server TUI will want
+# them too) and /etc/modules-load.d/60-pengyos-sensors.conf loads them, because
+# none of the Super-I/O drivers can auto-load.
+HWMON_GUI="${GUI_BUILD}/install-gui/release/pengyos-hwmon"
+if [ -x "${HWMON_GUI}" ]; then
+    install -Dm0755 "${HWMON_GUI}" "${TARGET_DIR}/usr/bin/pengyos-hwmon"
+    echo "post-build: installed pengyos-hwmon"
+else
+    echo "post-build: ${HWMON_GUI} not built - no Hardware Monitor app"
+fi
+
 # --- Disks (partition and format drives, write images, eject) ----------------
 # tools/pengyos-disks, host-built the same way. It only talks to UDisks2 (in the
 # desktop layer); the .desktop file is in the overlay.

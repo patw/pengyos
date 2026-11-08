@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: Hardware Monitor and board sensors (2026-11-08)
+- The Desktop image ships `pengyos-hwmon`, a COSMIC hardware monitor:
+  temperatures, fans, voltages, clocks, power and disk health in one table, with
+  per-sensor warning limits. It is built on HWall's collectors (MIT, pinned).
+- Every edition now ships the ITE, Fintek and Winbond Super-I/O drivers plus the
+  ASUS EC/WMI and DIMM sensor drivers, and loads the Super-I/O ones at boot,
+  because they cannot auto-load. Desktop boards gain 34 to 43 sensors each.
+- `kernel.perf_event_paranoid` is 0 on every edition, so the monitor can read CPU
+  power and effective clocks. This was an operator decision: it opens a side
+  channel between local processes.
+
 ### Changed: release notes are short plain text (2026-11-08)
 - Release notes were written in Markdown at changelog length. The Updates app,
   `pengyos-update check`, the update page and the feed all show them as plain

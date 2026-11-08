@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hardware Monitor
+GenericName=Hardware Monitor
+Comment=Temperatures, fans, voltages, clocks, power and storage health
+Exec=pengyos-hwmon
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;Utility;
+Keywords=temperature;temp;sensor;sensors;fan;voltage;clock;power;watt;thermal;hwmon;hardware;monitor;benchmark;throttle;smart;nvme;

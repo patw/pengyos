@@ -1,0 +1,60 @@
+# PengyOS Hardware Monitor (pengyos-hwmon)
+#
+# A libcosmic front-end to the HWall collectors: temperatures, fans, voltages,
+# clocks, utilization, power and storage health, in one dense table with
+# current/min/max columns and a per-sensor warning/critical threshold editor.
+#
+# Layout follows the other in-tree apps (pengyos-updates, pengyos-install-gui):
+#   * the collection and formatting live in hwall-core / hwall-app (upstream
+#     HWall, MIT, pinned by commit below) - untouched, not forked;
+#   * libcosmic is behind the `cosmic` feature, so a plain `cargo test`/`cargo
+#     build` needs no display and no libcosmic checkout;
+#   * `--check` prints one collection pass as text and works without the
+#     feature, which is what a future Server TUI will build on.
+#
+# Built by scripts/build-cosmic.sh into $PENGYOS_COSMIC_BUILD/install-gui, the
+# same target dir as the other COSMIC apps, so it shares their libcosmic build.
+
+[package]
+name = "pengyos-hwmon"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+description = "PengyOS Hardware Monitor: sensors, fans, power and clocks (COSMIC)."
+repository = "https://github.com/patw/pengyos"
+homepage = "https://github.com/patw/pengyos/tree/main/tools/pengyos-hwmon"
+
+[features]
+default = []
+# The libcosmic GUI. Off by default so the crate builds and tests anywhere.
+cosmic = ["dep:libcosmic"]
+
+[[bin]]
+name = "pengyos-hwmon"
+path = "src/main.rs"
+
+[dependencies]
+# Upstream HWall's collection library and application policy: read-only sysfs +
+# the standard helper tools (sensors, smartctl, nvme, ethtool, dmidecode).
+# Pinned by commit; HWall is MIT, see LICENSE and THIRD-PARTY.md.
+hwall-core = { git = "https://github.com/pulpul-s/HWall", rev = "500cc4599254061bab93d116f9b30e0e6529fd4e" }
+hwall-app = { git = "https://github.com/pulpul-s/HWall", rev = "500cc4599254061bab93d116f9b30e0e6529fd4e" }
+
+# Same pinned libcosmic as the other in-tree apps, so all of them share one
+# libcosmic build in CARGO_TARGET_DIR=~/cosmic-build/install-gui.
+[dependencies.libcosmic]
+optional = true
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "03d7dcb832bc6d15bc1bb07327a1aa426b2d5bc0"
+features = [
+    "dbus-config",     # theme/config subscription, so it follows the COSMIC theme
+    "single-instance",
+    "tokio",
+    "wgpu",            # GPU rendering: software raster was ~57% of a core while scrolling
+    "wayland",
+]
+
+[profile.release]
+lto = true
+strip = true
