@@ -50,6 +50,18 @@ until 26.11.9. Verified on three fleet desktops: NCT6798D (ASUS Z790, ASUS
 X570) and NCT6797D (MSI B450) each add 34–43 sensors (fans, rails, board temps,
 PWM) once the module is loaded.
 
+## CPU power and effective clocks
+
+Those two rows need unprivileged perf counters: the kernel default
+(`perf_event_paranoid=2`) only allows a process to profile itself, while these
+read system-wide (`perf_event_open` with `pid=-1`). The image ships
+`/usr/lib/sysctl.d/60-pengyos-perf-events.conf` in **core** (every edition) that
+sets it to `0`, alongside the sensor drivers, because the Server TUI wants the
+same rows. Without it the app still runs - those rows are simply absent.
+
+`energy_uj` is a separate dead end: it is mode `0400 root`, so RAPL is only
+readable through the perf counters.
+
 ## Build
 
 ```sh
