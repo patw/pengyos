@@ -6,6 +6,19 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed — the published notes are short; the evidence stays with the operator
+The notes the act lane handed `release.sh --notes` were its full evidence report:
+CVSS, upstream commits, still-open CVEs and patch-layout remarks, often well over
+1,500 characters of Markdown-style lists. They went straight to the Updates app and
+the update page, which show plain text to people deciding whether to update.
+`pengyos-release notes-check` (0.12.0) now refuses that before release.sh builds,
+so the lane would have stopped the night. The lane now writes two files:
+- `release-notes-batch-<date>.txt` (or `release-notes-<id>.txt`) is what
+  `--notes` gets: a one-line summary and one line per change with the CVEs it
+  fixes, kept under the check's limits whatever the night brings;
+- `notes-batch-<date>.md` (or `notes-<id>.md`) keeps the evidence, unchanged, for
+  the operator's review.
+
 ### Fixed — a new month starts a new release line
 `next_version` only ever added 1 to N, so the first November release would have been
 26.10.58. It now dates the version by the day it is published: the first release of a

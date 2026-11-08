@@ -1223,3 +1223,49 @@ def test_the_batch_notes_name_what_main_took_by_hand(tmp_path):
 def test_notes_without_hand_merges_have_no_empty_section():
     notes = A.batch_notes([_bump_action()], "26.10.9")
     assert "by hand" not in notes
+
+
+# --- the short notes people see (release.sh --notes) -------------------------
+
+def _notes_ok(text: str) -> None:
+    """The rules `pengyos-release notes-check` enforces before release.sh builds."""
+    body = text.strip()
+    lines = body.splitlines()
+    assert len(body) <= A.NOTES_MAX_CHARS, len(body)
+    assert len(lines) == 1 or not lines[1].strip(), "a one-line summary, then a blank line"
+    assert not lines[0].startswith("- ")
+    for line in lines:
+        assert "`" not in line and "**" not in line and "__" not in line, line
+        assert not line.startswith((" ", "\t", "#", "* ", "+ ")), line
+        assert len(line) <= A.NOTES_MAX_LINE, line
+
+
+def test_release_gets_the_short_notes_and_the_operator_keeps_the_evidence(tmp_path):
+    result, fake, *_ = _run(tmp_path, [_patch_action(), _bump_action()])
+    state = tmp_path / "state"
+    short = state / "release-notes-batch-2026-10-06.txt"
+    (argv,) = [c for c in fake.calls if "release.sh" in " ".join(map(str, c))]
+    assert argv[argv.index("--notes") + 1] == str(short)
+    text = short.read_text()
+    _notes_ok(text)
+    assert text.startswith("Security fixes: 1 issue(s) closed in libxml2, libmtp.")
+    assert "- libxml2 2.15.3: fixes CVE-2026-86137" in text
+    assert "- libmtp 1.1.23" in text
+    assert "upstream 76fe08d97de8" in (state / "notes-batch-2026-10-06.md").read_text()
+
+
+def test_short_notes_stay_short_whatever_the_night_brings():
+    many = [_patch_action(component=f"pkg{i}", id=f"s{i}",
+                          closes=[f"CVE-2026-{1000 + i * 10 + j}" for j in range(6)])
+            for i in range(20)]
+    hand = ["`pengyos-release`: **notes** are [plain](https://x) " + "x" * 300]
+    text = A.release_notes(many, by_hand=hand)
+    _notes_ok(text)
+    assert "120 issue(s) closed in 20 packages" in text
+    assert "and 3 more" in text and text.rstrip().endswith("more changes")
+
+
+def test_routine_night_says_so():
+    text = A.release_notes([_bump_action()])
+    _notes_ok(text)
+    assert text == "Routine updates to libmtp.\n\n- libmtp 1.1.23\n"
