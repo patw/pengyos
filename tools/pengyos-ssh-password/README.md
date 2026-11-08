@@ -20,8 +20,10 @@ the PowerShell line that `status` prints). Then turn passwords off.
 ## What it changes
 
 - `on` writes `/etc/ssh/sshd_config.d/50-pengyos-ssh-password.conf`:
-  `PasswordAuthentication yes`, plus `PerSourcePenalties authfail:15s`, so an
-  address that keeps failing waits longer between tries (OpenSSH's default is 5 s).
+  `PasswordAuthentication yes`. An address that keeps failing is slowed by
+  OpenSSH's default `PerSourcePenalties`; the tool does not raise them, because
+  `ssh-copy-id` opens two probe connections that count as failures and a
+  stricter penalty drops the one that copies the key.
   It runs `sshd -t` and removes the file again if sshd refuses it (exit 6), then
   `systemctl reload sshd`. It also writes `/etc/motd.d/50-pengyos-ssh-password`,
   a two-line reminder that pam_motd prints at every login.
