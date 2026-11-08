@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: release notes are short plain text (2026-11-08)
+- Release notes were written in Markdown at changelog length. The Updates app,
+  `pengyos-update check`, the update page and the feed all show them as plain
+  text, so `**` and backticks showed up literally and the lists ran together.
+- `pengyos-release notes-check` (0.12.0) now requires a one-line summary, a
+  blank line, then a few `- ` lines, with no Markdown and under 600 characters.
+  `release.sh` runs it before building. The page and the feed show `- ` lines
+  as a list and strip Markdown from older notes.
+
 ### Fixed — Desktop installer layout papercuts (2026-11-08)
 - Found by operating the Desktop installer in QEMU as a new user, on a
   1280x800 screen:

@@ -157,6 +157,13 @@ promoted to **stable** once they have been upgraded on real hardware.
    rsync -a ~/build/pengyos/site/ "$PENGYOS_SITE_REMOTE"
    ```
 
+   **Release notes are for people deciding whether to update, not a
+   changelog.** The Updates app, `pengyos-update check`, the update page and
+   the feed show them as plain text. Write a one-line summary, a blank line,
+   and a few `- ` lines about what people will notice. Use no Markdown and stay
+   under 600 characters; details go in `CHANGELOG.md`. `release.sh` checks this
+   with `pengyos-release notes-check` before it builds anything.
+
    `scripts/release.sh --publish` (sign into the site dir) or `--push` (and
    rsync it) does the same after its checks. The download images are staged,
    not offered: `download/index.html` lists only releases on stable. Images built with

@@ -1,0 +1,30 @@
+PengyOS 26.11.6 - SSH can accept a password, if you choose it. Keys only stays the default.
+
+Server and Desktop (all four editions):
+- **SSH password logins, opt-in.** PengyOS's SSH accepts keys only, and that stays
+  the default. Someone who has never made an SSH key could not get into a new
+  machine at all. Now the installers ask:
+  - the console installer has an **SSH login** page: *Keys only* (recommended) or
+    *Keys or password*;
+  - the Desktop installer has an **Allow SSH logins with a password** switch on
+    its account screen.
+
+  Both warn that a password can be guessed by anyone who can reach the machine.
+  root never logs in with a password over SSH, either way.
+- **`pengyos-ssh-password`** changes it on an installed machine:
+  - `sudo pengyos-ssh-password on` lets SSH accept passwords;
+  - `sudo pengyos-ssh-password off` goes back to keys only (it refuses until some
+    account has a key, so nobody is locked out);
+  - `pengyos-ssh-password` shows which is on and how to set up a key: `ssh-keygen`,
+    then `ssh-copy-id` (or one PowerShell line on Windows).
+
+  While passwords are on, every login shows a reminder, and an address that keeps
+  getting the password wrong waits longer between tries.
+
+Installer fix:
+- The line-by-line console installer skipped the SSH page after "Enter to skip
+  Wi-Fi", so no key was asked for. It asks again now.
+
+Editions rebuilt: all five, incrementally (the Server and Desktop overlays, the
+installers and the install sticks).
+Verified: every image boot-checked under QEMU before signing.

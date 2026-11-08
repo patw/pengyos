@@ -14,7 +14,10 @@
 #                    Implies --publish.
 #   --channel C      update channel for --publish (default: testing)
 #   --notes FILE     release notes for update-publish (required with --publish:
-#                    the update page, the feed and the Updates app show them)
+#                    the update page, the feed and the Updates app show them).
+#                    Short plain text, no Markdown: a one-line summary, a blank
+#                    line, then a few "- " lines; under 600 characters. Checked
+#                    before anything builds (pengyos-release notes-check).
 #   --skip-cosmic    don't rebuild COSMIC before a Desktop target
 #   --no-boot-check  skip the QEMU checks (automatic, with a warning, on a host
 #                    without KVM: software emulation is too slow for them)
@@ -83,6 +86,9 @@ if [ "${PUBLISH}" = 1 ]; then
     # The notes are the release's description on the update page, in the feed and in
     # the Updates app; without them a release says nothing about what changed.
     [ -s "${NOTES}" ] || die "--publish needs --notes FILE (non-empty): the update page, the feed and the Updates app show it"
+    # Checked now, not at update-publish: a failure there comes after hours of building.
+    (cd "${REPO}/tools/pengyos-release" && python3 -m pengyos_release notes-check "$(realpath "${NOTES}")") \
+        || die "fix the release notes first"
 fi
 [ "${PUSH}" = 0 ] || [ -n "${PENGYOS_SITE_REMOTE:-}" ] || die "--push needs PENGYOS_SITE_REMOTE (host:path/)"
 if [ "${BOOT_CHECK}" = 1 ] && [ ! -w /dev/kvm ]; then

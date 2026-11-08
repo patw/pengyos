@@ -87,6 +87,10 @@ def _add_update(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--force", action="store_true", help="overwrite an already published version")
     p.add_argument("--json", action="store_true", help="emit machine-readable JSON")
 
+    p = subparsers.add_parser("notes-check", help="check release notes are short plain text (release.sh runs it first)")
+    p.add_argument("file", help="the notes file")
+    p.add_argument("--json", action="store_true")
+
     p = subparsers.add_parser("update-promote", help="add a published release to another channel")
     p.add_argument("--site", required=True)
     p.add_argument("--image", required=True, help="IMAGE_ID, e.g. pengyos-desktop")
@@ -207,6 +211,18 @@ def _update_publish(args: argparse.Namespace) -> dict[str, Any]:
     if not args.json:
         print(f"published {pub.image} {pub.version} ({args.channel}) -> {pub.path}")
     return {"image": pub.image, "version": pub.version, "path": str(pub.path), "channel": args.channel}
+
+
+@register("notes-check")
+def _notes_check(args: argparse.Namespace) -> dict[str, Any]:
+    from .notes import GUIDE, problems
+
+    bad = problems(Path(args.file).read_text(encoding="utf-8"))
+    if bad:
+        raise PengyOsError("the release notes need work:\n  " + "\n  ".join(bad) + "\n" + GUIDE)
+    if not args.json:
+        print(f"{args.file}: release notes OK")
+    return {"file": args.file, "ok": True}
 
 
 @register("update-promote")
