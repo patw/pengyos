@@ -6,7 +6,11 @@
   so a fan that was already fast is found (behoserver's case fans under load were
   missed). A fan that stops at 20 % gets its own minimum: the lowest duty that
   restarts it, plus 5 % (behotv's fan4 stopped on `quiet`). Pumps are only sped
-  up.
+  up. Between controls it waits for the fans to settle, and if two controls
+  claim one fan the one that moves it most keeps it (behotv's pwm5 had claimed
+  fan4 while it was still recovering from pwm4's test).
+- `status --json` adds `chip_curve` and `max_points` for the Hardware Monitor's
+  curve editor.
 - `curve CHANNEL TEMP:DUTY ... | default`: a fan's own curve. `status --json`
   reports each fan's curve, whether it is its own, and its minimum.
 

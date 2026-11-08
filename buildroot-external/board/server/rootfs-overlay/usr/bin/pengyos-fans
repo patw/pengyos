@@ -443,6 +443,43 @@ def say(line: str = "") -> None:
     print(line, flush=True)
 
 
+def one_fan_each(found: dict) -> list[str]:
+    """If two controls claimed the same fan, the one that moved it most keeps it;
+    the other is left alone. Drops the `_swing` bookkeeping. Returns what it said."""
+    said = []
+    by_fan: dict[str, list[str]] = {}
+    for cid, e in found.items():
+        if e.get("fan"):
+            key = e["fan"] if ":" in e["fan"] else f"{cid.split(':')[0]}:{e['fan']}"
+            by_fan.setdefault(key, []).append(cid)
+    for fan, cids in sorted(by_fan.items()):
+        if len(cids) > 1:
+            keep = max(cids, key=lambda c: found[c].get("_swing", 0))
+            for c in cids:
+                if c != keep:
+                    found[c]["fan"] = None
+                    if not found[c].get("role_set"):
+                        found[c]["role"] = "none"
+                    said.append(f"  {c}: moves {fan} less than {keep} does; left alone")
+    for e in found.values():
+        e.pop("_swing", None)
+    return said
+
+
+def settle(chips: list[dict]) -> None:
+    """Wait for the fans to stop changing speed (a fan back on its chip curve, or
+    restarting after the stall test, takes seconds), up to four SETTLEs."""
+    time.sleep(SETTLE)
+    prev = fan_rpms(chips)
+    for _ in range(3):
+        time.sleep(SETTLE / 2)
+        now = fan_rpms(chips)
+        if all(abs(v - prev.get(k, v)) <= max(60, v * 0.05) for k, v in now.items()):
+            return
+        prev = now
+        time.sleep(SETTLE / 2)
+
+
 def cmd_detect(args) -> int:
     need_root()
     chips = [c for c in hwmons() if controllable(c)]
@@ -474,7 +511,7 @@ def cmd_detect(args) -> int:
     signal.signal(signal.SIGINT, on_signal)
     signal.signal(signal.SIGTERM, on_signal)
     say(f"Testing {len(targets)} fan control(s), one at a time: full speed, then slow, "
-        f"about {int(SPIN * 2.5 + SETTLE)} seconds each, then back as it was.")
+        f"about {int(SPIN * 2.5 + SETTLE * 2)} seconds each, then back as it was.")
     found = {}
     try:
         for chip, n in targets:
@@ -505,10 +542,11 @@ def cmd_detect(args) -> int:
                     write(base, duty_raw(low))
                     time.sleep(SPIN * 1.5)  # time to coast down, or stall
                     lo = fan_rpms(chips)
-                    fell = [k for k, v in hi.items() if v - lo.get(k, 0) >= max(150, v * 0.25)]
-                    own_fell = [k for k in fell if k.startswith(chip["key"] + ":")]
-                    if own_fell or fell:
-                        own, rose = own_fell, fell
+                    # Only a fan that is clearly faster at full than at 20 % is
+                    # driven by this control; one still settling from the last
+                    # test can rise against "before" without that (behotv, pwm5).
+                    rose = [k for k, v in hi.items() if v - lo.get(k, 0) >= max(150, v * 0.25)]
+                    own = [k for k in rose if k.startswith(chip["key"] + ":")]
                 fan = max(own or rose, key=lambda k: hi[k] - lo.get(k, before.get(k, 0)), default=None)
                 min_duty = FLOOR
                 if fan and lo and lo.get(fan, 0) == 0:
@@ -528,7 +566,7 @@ def cmd_detect(args) -> int:
                 say(f"  {cid}: could not take control ({e}); left as it was")
                 continue
             restore()
-            time.sleep(SETTLE)
+            settle(chips)
             fan_n = fan.split(":fan")[1] if fan and fan.startswith(chip["key"] + ":") else None
             label = (read(os.path.join(chip["path"], f"fan{fan_n}_label")) or "") if fan_n else ""
             prev = old.get(cid, {})
@@ -540,6 +578,8 @@ def cmd_detect(args) -> int:
                      "min_duty": min_duty}
             if prev.get("curve"):
                 entry["curve"] = prev["curve"]
+            if fan:
+                entry["_swing"] = hi[fan] - lo.get(fan, before.get(fan, 0))
             if prev.get("role_set"):
                 entry["role_set"] = True
             if not entry["follow"]:
@@ -557,6 +597,8 @@ def cmd_detect(args) -> int:
     finally:
         restore()
         os.close(fd)
+    for line in one_fan_each(found):
+        say(line)
     cfg["channels"] = found
     save(cfg)
     say(f"Saved to {CONF}.")
@@ -805,6 +847,8 @@ def describe(cfg: dict) -> dict:
         row = {"id": cid, "name": ch.get("name", ""), "role": ch.get("role"), "fan": ch.get("fan"),
                "follow": ch.get("follow"), "present": chip is not None, "rpm": None, "duty": None,
                "control": "absent", "min_duty": floor_of(ch), "own_curve": bool(ch.get("curve")),
+               "chip_curve": chip_curve_capable(ch["chip"], ch),
+               "max_points": (len(ch["baseline"]["curve"]) - 1) if chip_curve_capable(ch["chip"], ch) else 8,
                "curve": None if cfg["profile"] == "firmware" or ch.get("role") != "fan"
                else [list(p) for p in points_for(cfg["profile"], ch)]}
         if chip is not None:

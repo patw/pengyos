@@ -14,6 +14,11 @@ sudo pengyos-fans curve nct6798:pwm1 30:25 60:45 75:70 85:100   # its own curve 
 sudo pengyos-fans curve nct6798:pwm1 default    # back to the profile's
 ```
 
+On the Desktop the same things are in the **Fans panel applet** (one-click
+profiles) and the **Hardware Monitor's Fans view** (names, roles, curves). An
+administrator at the computer needs no password for them
+(`/etc/polkit-1/rules.d/60-pengyos-fans.rules`); in a terminal, `sudo` as usual.
+
 ## What can be controlled
 
 It depends on the hardware, and the tool says which case you are in:
@@ -87,7 +92,9 @@ whose speed differs most between the two (at least 150 RPM and 25 %) is the one 
 drives. Comparing full against slow, rather than against how it was found, also
 finds a fan that was already fast, like a busy server's case fans. A fan that
 stopped at 20 % is tried again at 30, 40, 50 and 60 % to find where it restarts.
-A pump (its fan's label says so) is only ever sped up. Each control's settings
+A pump (its fan's label says so) is only ever sped up. Between controls it waits
+for the fans to settle, and if two controls seem to move one fan, the one that
+moves it most keeps it. Each control's settings
 are then written back and read again; Ctrl-C mid-test restores it first. A control with no fan answering
 may be an empty header, or a pump or fan without a speed wire: it is left alone
 (`role ... fan` to include it). Run `detect` again after moving fans around; names

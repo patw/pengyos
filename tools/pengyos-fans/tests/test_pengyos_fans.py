@@ -214,6 +214,20 @@ def test_a_fan_already_near_full_speed_is_still_found(m):
     assert m.conf()["channels"]["nct6798:pwm1"]["role"] == "fan"
 
 
+def test_one_fan_belongs_to_one_control():
+    # behotv 2026-11-08: pwm5 seemed to drive fan4, which pwm4 drives
+    tool = load_tool()
+    found = {
+        "nct6797:pwm4": {"fan": "fan4", "role": "fan", "_swing": 1203},
+        "nct6797:pwm5": {"fan": "fan4", "role": "fan", "_swing": 195},
+        "nct6797:pwm2": {"fan": "fan2", "role": "fan", "_swing": 1206},
+    }
+    said = tool.one_fan_each(found)
+    assert said == ["  nct6797:pwm5: moves nct6797:fan4 less than nct6797:pwm4 does; left alone"]
+    assert found["nct6797:pwm5"] == {"fan": None, "role": "none"}
+    assert found["nct6797:pwm4"] == {"fan": "fan4", "role": "fan"}
+
+
 def test_detect_keeps_names_and_roles(m):
     behopc(m)
     run(m, "detect")
@@ -450,6 +464,7 @@ def test_a_fan_gets_its_own_curve_on_the_chip(m):
     row = next(r for r in st["channels"] if r["id"] == "nct6798:pwm2")
     assert row["own_curve"] and row["curve"] == [[30, 25], [60, 40], [75, 70], [85, 100]]
     assert row["control"].endswith(", own curve")
+    assert row["chip_curve"] and row["max_points"] == 4 and row["min_duty"] == 20
     run(m, "profile", "full")
     assert [d for _, d in points(m, 2)] == [255] * 5  # full is full, own curve or not
     run(m, "profile", "quiet")
