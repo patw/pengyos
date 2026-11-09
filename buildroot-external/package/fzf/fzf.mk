@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-FZF_VERSION = 0.74.5
+FZF_VERSION = 0.75.0
 FZF_SITE = $(call github,junegunn,fzf,v$(FZF_VERSION))
 FZF_GOMOD = github.com/junegunn/fzf
 FZF_LICENSE = MIT
