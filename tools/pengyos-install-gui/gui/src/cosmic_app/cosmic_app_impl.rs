@@ -53,6 +53,8 @@ pub struct DiskChoice {
     pub label: String,
     pub installable: bool,
     pub note: String,
+    /// An installed PengyOS: it can be repaired, keeping its data.
+    pub pengyos: bool,
 }
 
 /// Ask the engine which disks exist.
@@ -80,10 +82,12 @@ pub fn load_disks(engine: &str) -> Result<Vec<DiskChoice>, String> {
             (false, "this is the USB stick or disc PengyOS is running from".to_string())
         } else if mounted > 0 {
             (false, "in use (has mounted filesystems)".to_string())
+        } else if b("pengyos") {
+            (true, "has PengyOS: it can be repaired, keeping your files".to_string())
         } else {
             (true, if b("removable") { "removable".to_string() } else { String::new() })
         };
-        disks.push(DiskChoice { path: s("path"), label, installable, note });
+        disks.push(DiskChoice { path: s("path"), label, installable, note, pengyos: b("pengyos") });
     }
     Ok(disks)
 }
@@ -126,6 +130,8 @@ pub enum Message {
     TryLive,
     /// "Install PengyOS": start the wizard.
     StartInstall,
+    /// On a disk that has PengyOS: repair it (true) or erase it and install fresh.
+    SetRepair(bool),
 }
 
 /// The COSMIC application model.
@@ -156,6 +162,12 @@ pub struct AppModel {
     /// The body's scrollable, so a step change can put it back at the top
     /// (one scrollable serves every step, and kept the last step's offset).
     body_scroll: widget::Id,
+    /// On a PengyOS disk: repair it (the default: nothing of the person's is
+    /// lost) rather than erase it.
+    repair_choice: bool,
+    /// On the repair screens (its summary, then its progress) instead of the
+    /// install wizard's steps, which ask for an account a repair keeps.
+    repairing: bool,
 }
 
 fn valid_hostname(h: &str) -> bool {
@@ -223,8 +235,25 @@ impl AppModel {
         self.disks.as_ref().ok()?.iter().find(|d| d.path == path)
     }
 
+    /// The chosen disk has PengyOS and "Repair" is selected.
+    fn repair_chosen(&self) -> bool {
+        self.repair_choice && self.selected_disk().is_some_and(|d| d.pengyos)
+    }
+
     /// Advance, passing through the screen-less Layout and Network steps.
     fn advance(&mut self) -> Task<cosmic::Action<Message>> {
+        if self.repairing {
+            // The repair summary's button: run it (again, after a failure).
+            if matches!(self.run, Run::NotStarted | Run::Failed(_)) {
+                return Task::batch([self.scroll_to_top(), self.start_repair()]);
+            }
+            return Task::none();
+        }
+        if self.step() == Step::Disk && self.blocker().is_none() && self.repair_chosen() {
+            self.repairing = true;
+            self.run = Run::NotStarted;
+            return self.scroll_to_top();
+        }
         if self.blocker().is_some() || !self.model.route(WizardMessage::Continue) {
             return Task::none();
         }
@@ -240,6 +269,13 @@ impl AppModel {
     }
 
     fn go_back(&mut self) -> Task<cosmic::Action<Message>> {
+        if self.repairing {
+            if self.run != Run::Running {
+                self.repairing = false;
+                self.run = Run::NotStarted;
+            }
+            return self.scroll_to_top();
+        }
         self.model.route(WizardMessage::Back);
         while matches!(self.step(), Step::Layout | Step::Network) {
             self.model.route(WizardMessage::Back);
@@ -275,8 +311,25 @@ impl AppModel {
             pengy_api_key: !api_key.is_empty(),
             pengy_model: self.pengy_model.clone(),
         });
+        let mut stdin = vec![self.password.clone()];
+        // Line 2 is the Pengy API key, only when one was typed.
+        if !api_key.is_empty() {
+            stdin.push(api_key);
+        }
+        self.run_engine(args, stdin)
+    }
+
+    /// Run `pengyos-install repair` on the chosen disk.
+    fn start_repair(&mut self) -> Task<cosmic::Action<Message>> {
+        let Some(disk) = self.model.selected_disk() else { return Task::none() };
+        let args = crate::engine_args::repair_args(disk);
+        self.run_engine(args, Vec::new())
+    }
+
+    /// Run the engine with *args*, write *stdin* lines to it, and stream its
+    /// JSON progress lines back as messages.
+    fn run_engine(&mut self, args: Vec<String>, stdin_lines: Vec<String>) -> Task<cosmic::Action<Message>> {
         let engine = self.flags.engine.clone();
-        let password = self.password.clone();
         self.run = Run::Running;
         self.progress = 0.0;
         self.status = "Starting…".into();
@@ -297,10 +350,8 @@ impl AppModel {
                 Err(e) => return send(Message::Finished(Err(format!("cannot run {engine}: {e}")))),
             };
             if let Some(mut stdin) = child.stdin.take() {
-                let _ = writeln!(stdin, "{password}");
-                // Line 2 is the Pengy API key, only when one was typed.
-                if !api_key.is_empty() {
-                    let _ = writeln!(stdin, "{api_key}");
+                for line in &stdin_lines {
+                    let _ = writeln!(stdin, "{line}");
                 }
             }
             let mut last_error = None;
@@ -337,6 +388,7 @@ impl AppModel {
 fn overall(phase: &str, fraction: f32) -> f32 {
     // Same split as pengyos_install.image.PHASE_SPAN.
     let (start, span) = match phase {
+        "check" => (0.0, 0.0),
         "verify" => (0.0, 0.10),
         "partition" => (0.10, 0.02),
         "write" => (0.12, 0.73),
@@ -388,6 +440,8 @@ impl cosmic::Application for AppModel {
             run: Run::NotStarted,
             restart: Restart::live(),
             body_scroll: widget::Id::unique(),
+            repair_choice: true,
+            repairing: false,
         };
         let task = match app.core.main_window_id() {
             Some(id) => app.set_window_title("Install PengyOS".to_string(), id),
@@ -406,6 +460,7 @@ impl cosmic::Application for AppModel {
             Message::Wizard(WizardMessage::Back) => return self.go_back(),
             Message::Wizard(WizardMessage::SelectDisk(disk)) => {
                 self.model.route(WizardMessage::SelectDisk(disk));
+                self.repair_choice = true;
                 // The engine's only layout: erase the whole disk.
                 self.model.route(WizardMessage::SelectLayout(Layout::Wipe));
             }
@@ -417,6 +472,7 @@ impl cosmic::Application for AppModel {
                 self.model.route(other);
             }
             Message::SetConfirm(c) => self.confirm = c,
+            Message::SetRepair(on) => self.repair_choice = on,
             Message::SetAutologin(on) => self.autologin = on,
             Message::SetSshPassword(on) => self.ssh_password = on,
             // The Pengy screen: keep the text locally (the key is a secret and
@@ -470,6 +526,28 @@ impl cosmic::Application for AppModel {
 
     fn view(&self) -> Element<'_, Self::Message> {
         let spacing = cosmic::theme::spacing();
+        if self.repairing {
+            let (title, body): (&str, Element<'_, Message>) = match self.run {
+                Run::NotStarted => ("Ready to repair", self.view_repair_summary()),
+                Run::Running => ("Repairing PengyOS", self.view_progress()),
+                Run::Done => ("PengyOS is repaired", self.view_progress()),
+                Run::Failed(_) => ("The repair failed", self.view_progress()),
+            };
+            let content = column::with_children([
+                text::caption("Repair").into(),
+                text::title3(title).into(),
+                widget::scrollable(body).id(self.body_scroll.clone()).height(Length::Fill).into(),
+                self.view_footer(),
+            ])
+            .spacing(spacing.space_s)
+            .max_width(640);
+            return container(content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(spacing.space_m)
+                .align_x(cosmic::iced::alignment::Horizontal::Center)
+                .into();
+        }
         let (title, body): (&str, Element<'_, Message>) = match self.step() {
             Step::Welcome => ("Welcome to PengyOS", self.view_welcome()),
             Step::Disk => ("Choose a disk", self.view_disk()),
@@ -519,12 +597,39 @@ impl AppModel {
     fn view_footer(&self) -> Element<'_, Message> {
         let spacing = cosmic::theme::spacing();
         let mut buttons: Vec<Element<'_, Message>> = Vec::new();
-        let hint = if matches!(self.step(), Step::Progress) { None } else { self.blocker() };
+        let hint = if matches!(self.step(), Step::Progress) || self.repairing {
+            None
+        } else {
+            self.blocker()
+        };
         buttons.push(
             text::caption(hint.unwrap_or_default())
                 .width(Length::Fill)
                 .into(),
         );
+        if self.repairing {
+            match &self.run {
+                Run::Done => {
+                    buttons.push(button::suggested("Restart now").on_press(Message::Reboot).into());
+                }
+                Run::Running => {}
+                Run::NotStarted | Run::Failed(_) => {
+                    buttons.push(
+                        button::standard("Back").on_press(Message::Wizard(WizardMessage::Back)).into(),
+                    );
+                    let label = if self.run == Run::NotStarted { "Repair PengyOS" } else { "Try again" };
+                    buttons.push(
+                        button::suggested(label)
+                            .on_press(Message::Wizard(WizardMessage::Continue))
+                            .into(),
+                    );
+                }
+            }
+            return row::with_children(buttons)
+                .spacing(spacing.space_s)
+                .align_y(Alignment::Center)
+                .into();
+        }
         match (self.step(), &self.run) {
             (Step::Progress, Run::Done) => {
                 buttons.push(button::suggested("Restart now").on_press(Message::Reboot).into());
@@ -616,11 +721,66 @@ impl AppModel {
                 }
             }
         }
-        column::with_children([
+        let mut children: Vec<Element<'_, Message>> = vec![
             sec.into(),
             button::text("Refresh").on_press(Message::RefreshDisks).into(),
+        ];
+        if self.selected_disk().is_some_and(|d| d.pengyos) {
+            let chosen = Some(if self.repair_choice { 0 } else { 1 });
+            children.push(text::heading("PengyOS is already on this disk").into());
+            children.push(
+                section()
+                    .add(radio(
+                        column::with_children([
+                            text::body("Repair PengyOS").into(),
+                            text::caption(
+                                "For a computer that no longer starts: the system is written \
+                                 again; your files, accounts and settings are kept.",
+                            )
+                            .into(),
+                        ]),
+                        0,
+                        chosen,
+                        |_| Message::SetRepair(true),
+                    ))
+                    .add(radio(
+                        column::with_children([
+                            text::body("Erase the disk and install fresh").into(),
+                            text::caption("Everything on the disk is lost.").into(),
+                        ]),
+                        1,
+                        chosen,
+                        |_| Message::SetRepair(false),
+                    ))
+                    .into(),
+            );
+        }
+        column::with_children(children).spacing(spacing.space_s).into()
+    }
+
+    fn view_repair_summary(&self) -> Element<'_, Message> {
+        let disk = self
+            .selected_disk()
+            .map(|d| d.label.clone())
+            .unwrap_or_default();
+        column::with_children([
+            text::body(
+                "PengyOS on this disk is written again from this installer. Your files, \
+                 accounts, passwords, settings and network connections are kept; the \
+                 partition that holds them is checked first and is never erased.",
+            )
+            .into(),
+            section()
+                .add(item::builder("Disk").control(text::body(disk)))
+                .add(item::builder("Kept").control(text::body(
+                    "Files, accounts, passwords, settings, SSH keys",
+                )))
+                .add(item::builder("Rewritten").control(text::body(
+                    "The system and its boot partition",
+                )))
+                .into(),
         ])
-        .spacing(spacing.space_s)
+        .spacing(cosmic::theme::spacing().space_m)
         .into()
     }
 
@@ -755,9 +915,20 @@ impl AppModel {
     fn view_progress(&self) -> Element<'_, Message> {
         let spacing = cosmic::theme::spacing();
         let (message, bar_visible) = match &self.run {
+            Run::Done if self.repairing => (
+                "Your files and settings were kept. Remove the USB stick or disc, then \
+                 restart."
+                    .to_string(),
+                true,
+            ),
             Run::Done => (
                 "Remove the USB stick or disc, then restart to start PengyOS.".to_string(),
                 true,
+            ),
+            Run::Failed(e) if self.repairing => (
+                format!("{e}\n\nYour files were not erased. The computer may not start \
+                         until a repair succeeds."),
+                false,
             ),
             Run::Failed(e) => (
                 format!("{e}\n\nThe chosen disk may no longer be usable until PengyOS is installed on it."),

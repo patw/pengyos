@@ -222,3 +222,33 @@ def test_plain_install_restarts_through_restart(payload):
                      install=lambda *a, **k: None, fetch_keys=FakeFetch(),
                      reboot=True, restart=lambda: seen.append("restart"))
     assert rc == 0 and seen == ["restart"]
+
+
+def test_plain_repair_keeps_the_data(payload):
+    from pengyos_install.image import Disk
+
+    disks = [DISKS[0], Disk("vda", "/dev/vda", 20_000_000_000, "QEMU", pengyos=True)]
+    repaired, installed = [], []
+    lines = iter(["", "", "repair"])   # disk (preselected), action: Repair, confirm
+    out = io.StringIO()
+    rc = run_install(inp=lambda p: next(lines), secret=lambda p: "", out=out,
+                     payload=payload, disks=disks, plain=True,
+                     install=lambda *a, **k: installed.append(a),
+                     repair=lambda target, **kw: repaired.append((target, kw["confirm"])),
+                     fetch_keys=FakeFetch())
+    text = out.getvalue()
+    assert rc == 0, text
+    assert repaired == [("/dev/vda", True)] and installed == []
+    assert "your files and settings are kept" in text
+    assert "PengyOS is repaired. Your files" in text
+    assert "EVERYTHING on /dev/vda will be erased" not in text
+
+
+def test_plain_reinstall_on_a_pengyos_disk_erases_it(payload):
+    from pengyos_install.image import Disk
+
+    disks = [DISKS[0], Disk("vda", "/dev/vda", 20_000_000_000, "QEMU", pengyos=True)]
+    rc, out, calls = _drive(payload, ["", "n", "", "pat", "", KEY, "", "", "erase"],
+                            ["hunter22", "hunter22"], disks=disks)
+    assert rc == 0, out
+    assert [c[0] for c in calls] == ["/dev/vda"] and "will be erased" in out

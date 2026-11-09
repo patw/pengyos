@@ -82,7 +82,8 @@ def _progress(out: TextIO) -> Callable[[str, float, str], None]:
     return report
 
 
-def _run_plain(session, *, inp, secret, out, payload, install, reboot, restart) -> int:
+def _run_plain(session, *, inp, secret, out, payload, install, reboot, restart,
+               repair=None) -> int:
     from pengyos_install_tui.plain import Aborted, ask_plain
 
     if not session.selectable():
@@ -100,17 +101,18 @@ def _run_plain(session, *, inp, secret, out, payload, install, reboot, restart) 
         out.write("Nothing was changed.\n")
         return 1
     try:
-        install(session.disk.path, session.answers(), payload_dir=payload, confirm=True,
-                report=_progress(out))
+        session.run(install=install, repair=repair or engine.repair_image, payload=payload,
+                    report=_progress(out))
     except engine.ImageInstallError as exc:
-        out.write(f"\nThe install failed: {exc}\n")
+        out.write(f"\nThe {'repair' if session.repair else 'install'} failed: {exc}\n")
         return 1
+    done = session.done + (". Your files and settings were kept." if session.repair else ".")
     if not reboot:
-        out.write("\nPengyOS is installed. Remove the USB stick or disc and reboot.\n")
+        out.write(f"\n{done} Remove the USB stick or disc and reboot.\n")
         return 0
     restart = restart or Restart()
     try:
-        inp("\nPengyOS is installed. Remove the USB stick or disc, then press Enter to restart. ")
+        inp(f"\n{done} Remove the USB stick or disc, then press Enter to restart. ")
     except (EOFError, KeyboardInterrupt):
         pass
     restart()
@@ -125,6 +127,7 @@ def run_install(
     payload: str | None = None,
     disks: list | None = None,
     install: Callable | None = None,
+    repair: Callable | None = None,
     fetch_keys: Callable[[str], str] | None = None,
     plain: bool | None = None,
     reboot: bool = False,
@@ -166,13 +169,13 @@ def run_install(
         plain = not can_run_screen(sys.stdin, out, os.environ.get("TERM"))
     if plain:
         return _run_plain(session, inp=inp, secret=secret, out=out, payload=payload,
-                          install=install, reboot=reboot, restart=restart)
+                          install=install, reboot=reboot, restart=restart, repair=repair)
 
     from pengyos_install_tui.screen import App, run_screen
 
     if reboot:
         restart = restart or Restart()
-    app = App(session, install=install, payload=payload, reboot=reboot)
+    app = App(session, install=install, payload=payload, reboot=reboot, repair=repair)
     rc = run_screen(app)
     if rc == 0:
         if reboot:

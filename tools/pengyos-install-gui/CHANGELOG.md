@@ -7,6 +7,15 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Repair: a disk that already has PengyOS is marked on the Disk screen, which
+  then offers "Repair PengyOS" (the default: the system is written again, files,
+  accounts and settings are kept) or "Erase the disk and install fresh". Repair
+  goes to its own summary and progress screens (no account questions) and runs
+  `pengyos-install repair --target DISK --yes --progress json`. Checked in QEMU:
+  a Desktop install repaired from the live Desktop, then booted with its files.
+- "USB stick or disc" wherever the install medium is named (the installer ISO).
+
 ### Fixed — layout papercuts a new-user install run in QEMU hit (2026-11-08)
 - **The wizard fills the screen once "Install PengyOS" is chosen.** At the
   fixed 760x620, a 1280x800 laptop showed only the first four rows of the

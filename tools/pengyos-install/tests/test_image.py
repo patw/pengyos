@@ -663,7 +663,8 @@ def _repair_setup(tmp_path, monkeypatch, current="26.11.9", manifest_version="26
     (data / "lib" / "pengyos-update").mkdir(parents=True)
     state = data / "lib" / "pengyos-update" / "state.json"
     state.write_text(json.dumps({"current": current, "trial": {"slot": "b", "version": "26.11.10"},
-                                 "staged": "26.11.10", "failed": {"26.11.8": {}}}))
+                                 "staged": "26.11.10", "failed": {"26.11.8": {}},
+                                 "slots": [{"slot": "a", "system": f"pengyos-desktop-nvidia {current}"}]}))
     monkeypatch.setattr(im, "TARGET_ESP", str(esp_dir))
     monkeypatch.setattr(im, "TARGET_DATA", str(data))
     (tmp_path / "efivars").mkdir()
@@ -731,3 +732,31 @@ def test_efi_entries():
                "Boot0003* PengyOS\tHD(1,GPT,x)\nBoot000A  PengyOS\tHD(1,GPT,y)\n"
                "Boot0004* PengyOS Old\tHD(1)\n")
     assert im._efi_entries(listing, "PengyOS") == ["0003", "000A"]
+
+
+def test_list_disks_marks_an_installed_pengyos(tmp_path):
+    sys_root, mounts, mountinfo = _fake_sys(tmp_path)
+    vda = sys_root / "devices" / "vda"
+    for n, name in im.PART_NAMES.items():
+        p = vda / f"vda{n}"
+        p.mkdir()
+        (p / "partition").write_text(str(n))
+        (p / "uevent").write_text(f"MAJOR=253\nDEVTYPE=partition\nPARTN={n}\nPARTNAME={name}\n")
+    disks = {d.name: d for d in list_disks(sys_root=sys_root, mounts=mounts, mountinfo=mountinfo)}
+    assert disks["vda"].pengyos and not disks["sda"].pengyos
+    assert disks["vda"].to_dict()["pengyos"] is True
+    (vda / "vda4" / "uevent").write_text("PARTN=4\nPARTNAME=Basic data partition\n")
+    disks = {d.name: d for d in list_disks(sys_root=sys_root, mounts=mounts, mountinfo=mountinfo)}
+    assert not disks["vda"].pengyos
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_repair_refuses_another_edition(tmp_path, monkeypatch):
+    payload, target, esp_dir, state, rootfs, esp = _repair_setup(tmp_path, monkeypatch)
+    s = json.loads(state.read_text())
+    s["slots"] = [{"slot": "a", "system": "pengyos-server 26.11.9"}]
+    state.write_text(json.dumps(s))
+    with pytest.raises(im.ImageInstallError, match="has PengyOS Server, and this installer is the Desktop"):
+        im.repair_image(str(target), payload_dir=str(payload), confirm=True,
+                        run=RepairRun(tmp_path), disks=[Disk("vda", str(target), BIG)])
+    assert (tmp_path / "vda2").read_bytes() == b""

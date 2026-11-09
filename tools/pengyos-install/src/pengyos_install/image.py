@@ -260,6 +260,8 @@ class Disk:
     removable: bool = False
     is_boot: bool = False
     mounted: list[str] = field(default_factory=list)
+    #: An installed PengyOS (its four partition names): ``repair`` can fix it.
+    pengyos: bool = False
 
     @property
     def size_label(self) -> str:
@@ -364,6 +366,12 @@ def list_disks(
         mounted = sorted(
             point for src, point in mount_list if src == path or part_re.fullmatch(src)
         )
+        names = {}
+        for part in entry.iterdir():
+            if part.name.startswith(name) and (part / "partition").exists():
+                m = re.search(r"^PARTNAME=(.*)$", _read(part / "uevent"), re.MULTILINE)
+                if m:
+                    names[_read(part / "partition")] = m.group(1)
         disks.append(
             Disk(
                 name=name,
@@ -378,6 +386,7 @@ def list_disks(
                 removable=_read(entry / "removable") == "1",
                 is_boot=name in boot,
                 mounted=mounted,
+                pengyos=all(names.get(str(n)) == want for n, want in PART_NAMES.items()),
             )
         )
     return disks
@@ -472,6 +481,8 @@ def render_pengy_settings(answers: ProvisionAnswers) -> str:
 #: Share of the whole install each phase takes (for one overall progress bar;
 #: the GUI uses the same split).
 PHASE_SPAN = {
+    # repair's read-only look at the disk; an install never reports it
+    "check": (0.0, 0.0),
     "verify": (0.0, 0.10), "partition": (0.10, 0.02), "write": (0.12, 0.73),
     "root": (0.85, 0.05), "boot": (0.90, 0.03), "provision": (0.93, 0.07),
     "done": (1.0, 0.0),
@@ -879,14 +890,30 @@ def repair_image(
     had = ""
     _run(run, ["mount", "-t", "btrfs", "-o", "ro,subvol=var", part[4], TARGET_DATA],
          "reading the data partition")
+    had_image = ""
     try:
         state_file = Path(TARGET_DATA) / UPDATE_STATE_REL
         try:
-            had = str(json.loads(state_file.read_text()).get("current") or "")
-        except (OSError, ValueError, AttributeError):
+            state = json.loads(state_file.read_text())
+            had = str(state.get("current") or "")
+            # "pengyos-server 26.11.9": the edition the slots last held.
+            for row in state.get("slots") or []:
+                name = str(row.get("system") or "").split(" ")[0]
+                if name.startswith("pengyos-"):
+                    had_image = name
+                    break
+        except (OSError, ValueError, AttributeError, TypeError):
             had = ""
     finally:
         run(["umount", TARGET_DATA], check=False)
+    # A Desktop installer must not turn a Server into a Desktop under its data
+    # (or the reverse); NVIDIA or not, within one family, is fine.
+    family = "desktop" if "desktop" in had_image else "server" if had_image else ""
+    if family and family != manifest.edition:
+        raise ImageInstallError(
+            f"this disk has PengyOS {family.capitalize()}, and this installer is the "
+            f"{manifest.edition.capitalize()}: repair it with a {family.capitalize()} "
+            "installer, or erase the disk and install")
     new_key, had_key = _version_key(manifest.version), _version_key(had)
     if new_key and had_key and new_key < had_key and not allow_older:
         raise ImageInstallError(

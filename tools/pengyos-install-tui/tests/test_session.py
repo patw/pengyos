@@ -307,3 +307,39 @@ def test_scan_problems(manifest):
     assert [o.label for o in s.options(WIFI)] == ["No Wi-Fi", "Scan again"]
     s, _ = wifi_session(manifest, networks=[])
     assert "no Wi-Fi networks found" in s.scan()
+
+
+# --- a disk that has PengyOS: repair or reinstall ------------------------------
+
+PENGYOS_DISKS = [DISKS[0], Disk("vda", "/dev/vda", 20_000_000_000, "QEMU", pengyos=True)]
+
+
+def test_a_pengyos_disk_offers_repair_first(manifest):
+    s = make(manifest, disks=PENGYOS_DISKS)
+    assert "has PengyOS" in s.options(DISK)[1].note
+    assert [p.key for p in s.pages()] == ["disk", "action", "review"]
+    assert s.repair and s.confirm_word == "repair" and s.chosen(page(s, "action")) == 0
+    assert s.check("confirm", "erase") == "type 'repair' to repair, or go back"
+    assert s.check("confirm", "Repair ") is None
+    rows = dict(s.review())
+    assert rows["Kept"].startswith("your files") and "26.10.50" in rows["Repair"]
+
+
+def test_choosing_reinstall_on_a_pengyos_disk_asks_everything(manifest):
+    s = make(manifest, disks=PENGYOS_DISKS)
+    assert s.choose(page(s, "action"), 1) is None
+    assert not s.repair and s.confirm_word == "erase"
+    assert [p.key for p in s.pages()] == \
+        ["disk", "action", "name", "account", "ssh", "ssh_login", "pengy", "review"]
+
+
+def test_run_repairs_or_installs_as_chosen(manifest):
+    calls = []
+    s = make(manifest, disks=PENGYOS_DISKS)
+    kw = dict(install=lambda *a, **k: calls.append(("install", a[0])),
+              repair=lambda *a, **k: calls.append(("repair", a[0], k["confirm"])),
+              payload="/p", report=None)
+    s.run(**kw)
+    s.choose(page(s, "action"), 1)
+    s.run(**kw)
+    assert calls == [("repair", "/dev/vda", True), ("install", "/dev/vda")]

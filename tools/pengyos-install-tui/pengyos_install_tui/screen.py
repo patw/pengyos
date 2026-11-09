@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from pengyos_install import image as engine
-from pengyos_install_tui.session import CONFIRM_WORD, Page, Session
+from pengyos_install_tui.session import Page, Session
 
 __all__ = ["App", "Frame", "MIN_W", "MIN_H", "run_screen"]
 
@@ -94,9 +94,10 @@ class App:
     """The installer as a key-driven state machine over a :class:`Session`."""
 
     def __init__(self, session: Session, *, install: Callable, payload: str | None = None,
-                 reboot: bool = False) -> None:
+                 reboot: bool = False, repair: Callable | None = None) -> None:
         self.s = session
         self.install = install
+        self.repair = repair or (engine.repair_image if engine else None)
         self.payload = payload
         self.reboot = reboot
         self.mode = "page" if session.selectable() else "nodisk"
@@ -299,8 +300,8 @@ class App:
 
     def _install(self) -> None:
         try:
-            self.install(self.s.disk.path, self.s.answers(), payload_dir=self.payload,
-                         confirm=True, report=self._report)
+            self.s.run(install=self.install, repair=self.repair, payload=self.payload,
+                       report=self._report)
         except Exception as exc:  # shown on the failure page, never a traceback
             self.failure = str(exc) if isinstance(exc, engine.ImageInstallError) \
                 else f"{type(exc).__name__}: {exc}"
@@ -433,7 +434,7 @@ class App:
         return "Enter Quit"
 
     def _draw_installing(self, fr: Frame, x: int, width: int, h: int) -> str:
-        row = self._heading(fr, x, width, f"Installing on {self.s.disk.path}",
+        row = self._heading(fr, x, width, self.s.working,
                             "This takes a few minutes. Do not remove the installer (USB "
                             "stick or disc) or turn the computer off.")
         frac, msg = self.progress
@@ -443,10 +444,11 @@ class App:
         fr.put(row + 1, x + filled, " " * (bar - filled), "bar-empty")
         fr.put(row + 1, x + bar + 2, f"{frac * 100:3.0f}%", "title")
         fr.put(row + 3, x, msg[:width])
-        return "Installing ..."
+        return "Repairing ..." if self.s.repair else "Installing ..."
 
     def _draw_failed(self, fr: Frame, x: int, width: int, h: int) -> str:
-        row = self._heading(fr, x, width, "The install failed",
+        row = self._heading(fr, x, width,
+                            "The repair failed" if self.s.repair else "The install failed",
                             "Your answers are kept. Check the cable or disk and try again.")
         for line in textwrap.wrap(self.failure, width)[:h - row - 3]:
             fr.put(row, x, line, "error")
@@ -454,6 +456,20 @@ class App:
         return "Enter Back to the summary   Ctrl-C Quit"
 
     def _draw_done(self, fr: Frame, x: int, width: int, h: int) -> str:
+        if self.s.repair:
+            lines = ["Your files, accounts and settings were kept. Log in as before "
+                     "once it restarts.", "",
+                     "The second system slot was cleared; the next update fills it."]
+            row = self._heading(fr, x, width, self.s.done, "")
+            row -= 1
+            for para in lines:
+                for line in textwrap.wrap(para, width) or [""]:
+                    fr.put(row, x, line, "normal")
+                    row += 1
+            last = ("Remove the USB stick or disc, then press Enter to restart."
+                    if self.reboot else "Press Enter to finish.")
+            fr.put(h - 3, x, last, "ok")
+            return "Enter " + ("Restart" if self.reboot else "Finish")
         a = self.s.answers()
         lines = [f"Log in as {a.username} at this keyboard once it restarts."]
         if a.authorized_keys or a.ssh_password:
