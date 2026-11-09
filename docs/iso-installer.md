@@ -1,6 +1,6 @@
 # The installer as an ISO
 
-Status: plan, 2026-11-09. Branch `feat/iso`.
+Status: prototype works in QEMU, 2026-11-09. Branch `feat/iso`.
 
 ## Why
 
@@ -85,3 +85,36 @@ written to about 3 GB, and the ISO is published uncompressed (no `.xz`).
 Open questions: keep `.img.xz` for Raspberry Pi Imager users (it takes ISOs too);
 whether the Server's console installer should offer "copy to RAM" so the stick
 can be pulled; Secure Boot stays out of scope.
+
+## Prototype results (2026-11-09)
+
+`scripts/iso/make-iso.sh EDITION KERNEL OUT.iso` builds an ISO from a finished
+edition build (`images/rootfs.tar`, `images/payload/`, the edition's GRUB build)
+and a kernel with `CONFIG_EROFS_FS=y`; `scripts/iso/init` is the initramfs. Tools
+for now from the box's Ubuntu (erofs-utils 1.9, xorriso 1.5.6, busybox-static,
+dosfstools, mtools); the real build takes Buildroot's host packages.
+
+Built from 26.11.10, in QEMU/KVM with OVMF:
+
+| | Server | Desktop |
+|---|---|---|
+| ISO size | 851 MiB (installer stick: 1.9 GB) | 2.9 GiB (installer stick: 5.0 GiB) |
+| CD (ide-cd) | boots, console installer starts | boots, live desktop, installer opens |
+| USB stick | boots | not tried yet |
+| plain disk (virtio-blk) | boots | not tried yet |
+| install from the ISO | `pengyos-install image` onto a blank 40 GB disk, then the disk boots alone | not tried yet |
+
+- The installer already refuses the medium: it is mounted, so `pengyos-install
+  disks` lists it as "running system — not installable".
+- podman cannot keep its storage on overlayfs: the initramfs mounts a tmpfs on
+  `/var/lib/containers` for the live session.
+- The Desktop runs on virtio-gpu without 3D (llvmpipe).
+- The prototype edits the payload-label checks in the RAM overlay at boot; the
+  real change edits pengyos-live-installer.service and console-installer.
+- The live installer's welcome text says "running from the USB stick": wrong
+  for a CD or a VM.
+
+Still to do before it can ship: the build integration (kernel option, Buildroot
+host packages, initramfs from Buildroot's busybox, post-image), the NVIDIA
+editions (their modules), the release changes and boot check, and real hardware:
+a stick `dd`'d from the ISO on behoweather (strict N100 firmware) and beholaptop.
