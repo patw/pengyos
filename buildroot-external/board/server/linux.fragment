@@ -104,10 +104,26 @@ CONFIG_VIRT_DRIVERS=y
 CONFIG_VMGENID=y
 CONFIG_HYPERV=y
 CONFIG_HYPERV_UTILS=m
-CONFIG_HYPERV_STORAGE=m
+# Built in: there is no initramfs, so the controller that holds the root must be
+# in the kernel. As =m the Gen 2 VM booted and then waited forever for its root
+# (26.11.9: a VM-farm admin could not run PengyOS on Hyper-V or VMware at all).
+CONFIG_HYPERV_STORAGE=y
 CONFIG_HYPERV_NET=m
 CONFIG_HYPERV_KEYBOARD=m
 CONFIG_DRM_HYPERV=m
+# VMware (ESXi, Workstation, Fusion): the disk sits on PVSCSI or an LSI Logic
+# controller (SPI on Workstation, SAS on ESXi), all built in for the same reason.
+# VMXNET3 is ESXi's network card; e1000/e1000e were already here.
+CONFIG_VMWARE_PVSCSI=y
+CONFIG_FUSION=y
+CONFIG_FUSION_SPI=y
+CONFIG_FUSION_SAS=y
+CONFIG_VMXNET3=m
+# QEMU's and Proxmox's default display (std VGA). Without it only simpledrm
+# drives it, at a mode QEMU does not show, and the Desktop came out garbled.
+CONFIG_DRM_BOCHS=m
+# Older Proxmox VMs default to the LSI 53C895A SCSI controller.
+CONFIG_SCSI_SYM53C8XX_2=y
 # GPU: Lunar Lake / Panther Lake iGPUs and Arc B-series (Battlemage) are driven
 # by xe only (i915 does not bind them). US-SRV-9 transcodes on /dev/dri, and the
 # Arc cards are the usual transcoding card. Firmware: server.config.

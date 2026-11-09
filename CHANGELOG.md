@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: PengyOS could not boot in Hyper-V or VMware VMs (2026-11-09)
+- The disk controllers of Hyper-V (storvsc), VMware (PVSCSI, LSI Logic SPI and
+  SAS) and older Proxmox VMs (LSI 53C895A) are now built into the kernel. With
+  no initramfs, a controller that was a module (Hyper-V) or missing (VMware)
+  left the VM waiting forever for its root disk. VMware's VMXNET3 network card
+  and QEMU/Proxmox's default display (bochs) are added as modules. Tested in
+  QEMU on PVSCSI and LSI 53C895A; LSI SAS loads but QEMU's emulation of it shows
+  no disk, and Hyper-V can't be emulated here.
+
 ### Changed: room in the NVIDIA Desktop, and a build check for a full rootfs (2026-11-09)
 - The NVIDIA Desktop's root filesystem grows from 4600 MiB to 5400 MiB; it had
   383 MiB (8%) free at 26.11.9. It already needed an 8 GiB root slot, and
