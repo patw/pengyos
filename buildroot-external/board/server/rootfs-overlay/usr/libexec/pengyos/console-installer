@@ -1,7 +1,8 @@
 #!/bin/sh
 # The console installer on the install stick (Server; the Desktop runs its GUI).
 # Started by /etc/profile.d/pengyos-installer.sh for root's autologin on tty1.
-# Mounts the stick's payload partition and runs `pengyos-install-tui install`;
+# Finds the install payload (the ISO's, bind-mounted by its initramfs, or the
+# legacy stick's PENGYOS-PAYLOAD partition) and runs `pengyos-install-tui install`;
 # quitting drops to the root shell, a finished install restarts the machine
 # (--reboot: the installer's last page says to pull the stick, then reboots).
 PAYLOAD=/run/pengyos/payload
@@ -9,8 +10,8 @@ LABEL=/dev/disk/by-label/PENGYOS-PAYLOAD
 
 # USB sticks can enumerate after the console is up: give it a moment.
 i=0
-while [ ! -e "$LABEL" ] && [ $i -lt 15 ]; do sleep 1; i=$((i + 1)); done
-[ -e "$LABEL" ] || exit 0
+while [ ! -e "$PAYLOAD/manifest.json" ] && [ ! -e "$LABEL" ] && [ $i -lt 15 ]; do sleep 1; i=$((i + 1)); done
+[ -e "$PAYLOAD/manifest.json" ] || [ -e "$LABEL" ] || exit 0
 
 # Keep kernel messages (btrfs, ext4 mounts during the install) off the screen.
 dmesg -n 1 2>/dev/null || true

@@ -22,6 +22,7 @@ menu "PengyOS (external tree)"
 	# COSMIC native (non-Rust) dependencies Buildroot 2026.08 does not ship.
 	# Emitted by pengyos-cosmic-native-deps (committed under that tool) and
 	# installed here so the Desktop target's `BR2_PACKAGE_*` symbols resolve.
+	source "$BR2_EXTERNAL_PENGYOS_PATH/package/pengyos-initramfs-busybox/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/greetd/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/xdg-desktop-portal/Config.in"
 	source "$BR2_EXTERNAL_PENGYOS_PATH/package/cosmic/Config.in"

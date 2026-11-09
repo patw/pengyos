@@ -106,11 +106,11 @@ def _run_plain(session, *, inp, secret, out, payload, install, reboot, restart) 
         out.write(f"\nThe install failed: {exc}\n")
         return 1
     if not reboot:
-        out.write("\nPengyOS is installed. Remove the USB stick and reboot.\n")
+        out.write("\nPengyOS is installed. Remove the USB stick or disc and reboot.\n")
         return 0
     restart = restart or Restart()
     try:
-        inp("\nPengyOS is installed. Remove the USB stick, then press Enter to restart. ")
+        inp("\nPengyOS is installed. Remove the USB stick or disc, then press Enter to restart. ")
     except (EOFError, KeyboardInterrupt):
         pass
     restart()

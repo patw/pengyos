@@ -77,7 +77,7 @@ pub fn load_disks(engine: &str) -> Result<Vec<DiskChoice>, String> {
             label = format!("{model}  ·  {label}");
         }
         let (installable, note) = if b("is_boot") {
-            (false, "this is the USB stick PengyOS is running from".to_string())
+            (false, "this is the USB stick or disc PengyOS is running from".to_string())
         } else if mounted > 0 {
             (false, "in use (has mounted filesystems)".to_string())
         } else {
@@ -568,7 +568,7 @@ impl AppModel {
         .spacing(spacing.space_s);
         column::with_children([
             text::body(
-                "PengyOS is running from the USB stick. Try it first — nothing on this \
+                "PengyOS is running from the USB stick or disc it started from. Try it first — nothing on this \
                  computer changes, and Settings (display scaling, accessibility) works as \
                  usual — or install it onto a disk in this computer.",
             )
@@ -756,7 +756,7 @@ impl AppModel {
         let spacing = cosmic::theme::spacing();
         let (message, bar_visible) = match &self.run {
             Run::Done => (
-                "Remove the USB stick, then restart to start PengyOS.".to_string(),
+                "Remove the USB stick or disc, then restart to start PengyOS.".to_string(),
                 true,
             ),
             Run::Failed(e) => (

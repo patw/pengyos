@@ -1,6 +1,8 @@
 #!/bin/busybox sh
 # PengyOS live ISO initramfs: find the medium, mount the compressed live root
-# under a RAM overlay, hand over to systemd. Prototype (docs/iso-installer.md).
+# under a RAM overlay, hand over to systemd (docs/iso-installer.md). Packed by
+# board/common/iso-image.sh with the static busybox of
+# package/pengyos-initramfs-busybox.
 /bin/busybox --install -s /bin
 export PATH=/bin
 mount -t proc proc /proc
@@ -56,14 +58,6 @@ mount -t tmpfs -o mode=0700 tmpfs /newroot/var/lib/containers
 if [ -f /newroot/run/pengyos/medium/payload/manifest.json ]; then
     mount --bind /newroot/run/pengyos/medium/payload /newroot/run/pengyos/payload
 fi
-
-# PROTOTYPE ONLY: the image still looks for the payload *partition*. Point its
-# checks at the bind mount, in the RAM overlay (the real change edits the files).
-R=/newroot
-sed -i 's#ConditionPathExists=/dev/disk/by-label/PENGYOS-PAYLOAD#ConditionPathExists=/run/pengyos/payload/manifest.json#' \
-    $R/etc/systemd/system/pengyos-live-installer.service 2>/dev/null
-sed -i 's#^LABEL=/dev/disk/by-label/PENGYOS-PAYLOAD#LABEL=/run/pengyos/payload/manifest.json#' \
-    $R/usr/libexec/pengyos/console-installer 2>/dev/null
 
 umount /proc /sys
 mount --move /dev /newroot/dev 2>/dev/null || umount /dev

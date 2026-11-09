@@ -144,7 +144,7 @@ def test_reboot_wording(manifest):
     app = make_app(manifest, reboot=True)
     fill_to_review(app)
     type_(app, "erase"); press(app, "enter")
-    assert "Remove the USB stick, then press Enter to restart." in screen(app)
+    assert "Remove the USB stick or disc, then press Enter to restart." in screen(app)
 
 
 def test_progress_page_while_installing(manifest):

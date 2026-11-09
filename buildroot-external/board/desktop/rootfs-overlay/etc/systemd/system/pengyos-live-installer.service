@@ -1,15 +1,18 @@
-# PengyOS live USB — start the graphical installer in the COSMIC session.
+# PengyOS live medium — start the graphical installer in the COSMIC session.
 #
-# The installer stick is the Desktop image plus a PENGYOS-PAYLOAD partition that
-# carries the image to install (see post-image.sh). The partition says "an
+# The installer carries the image to install as a payload: files on the ISO,
+# which its initramfs bind-mounts at /run/pengyos/payload, or (the legacy
+# .img.xz stick) a PENGYOS-PAYLOAD partition. Either one is enough (the `|`
+# conditions are OR'ed; docs/iso-installer.md). The payload says "an
 # installer is plugged in", not "this boot is live": an installed machine with
 # the stick in a USB port has it too, and this opened the installer, as root, in
 # behopc's installed desktop (2026-10-31). A boot is live when the kernel line
 # has no pengyos.data= (installed systems always have it; see greetd-config).
 [Unit]
-Description=PengyOS installer (live USB)
+Description=PengyOS installer (live medium)
 ConditionKernelCommandLine=!pengyos.data
-ConditionPathExists=/dev/disk/by-label/PENGYOS-PAYLOAD
+ConditionPathExists=|/run/pengyos/payload/manifest.json
+ConditionPathExists=|/dev/disk/by-label/PENGYOS-PAYLOAD
 Wants=systemd-udev-settle.service
 After=systemd-udev-settle.service greetd.service
 
