@@ -1,5 +1,18 @@
 # Changelog — pengyos-update
 
+## [0.4.0] — 2026-11-09
+
+### Added
+- `apply --from DIR`: update from local media, for machines without internet.
+  DIR is a copy of a release's update directory (`manifest.json`,
+  `manifest.json.sig`, `bzImage`, `rootfs.ext4.zst`, as the update site serves
+  them under `update/<image>/<version>/`), or any directory above several; the
+  newest for this machine's image is taken, or exactly `--version`. No feed and
+  no network: the same signature, image, version and file checks as a download,
+  and the files are used in place. Tested in QEMU with no network device:
+  26.11.10 -> the signed 26.11.9 Server release from a USB stick, then the trial
+  boot of it.
+
 ## [0.3.1] — 2026-11-09
 
 ### Fixed

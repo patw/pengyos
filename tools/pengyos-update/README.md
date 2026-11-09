@@ -19,6 +19,21 @@ $ sudo pengyos-update auto on --at 04:00 --soak 3
 on a trial boot it runs the health checks and makes the slot the default only
 if they pass. `spec.md` is the contract.
 
+## Without internet
+
+Copy a release's update directory to a USB stick, from
+`https://pengyos.catbee.ca/update/<image>/<version>/` (`manifest.json`,
+`manifest.json.sig`, `bzImage`, `rootfs.ext4.zst`), or copy several, then on the
+machine:
+
+```
+$ sudo mount /dev/sdX1 /mnt
+$ sudo pengyos-update apply --from /mnt --reboot
+```
+
+It takes the newest release on the stick for this machine's edition (or exactly
+`--version`) and checks it against the release key like a download.
+
 ## How it works
 
 The disk layout is `docs/state-layout.md`'s: ESP (GRUB + one kernel per slot),
