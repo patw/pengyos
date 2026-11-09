@@ -21,8 +21,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 - The NVIDIA Desktop's root filesystem grows from 4600 MiB to 5400 MiB; it had
   383 MiB (8%) free at 26.11.9. It already needed an 8 GiB root slot, and
   updates grow the filesystem to fill the slot, so installed machines see no
-  change. The Desktop stays at 4000 MiB (475 MiB free) so installs with the
-  older 4 GiB slots can still update.
+  change. The Desktop stays at 4000 MiB (475 MiB free) for now.
 - Every image now fails at the image step when its root filesystem has under
   150 MiB free (PENGYOS_ROOTFS_MIN_FREE_MB) or would not fit an 8 GiB slot,
   instead of failing the boot check later, as the 26.11.9 Server did.
