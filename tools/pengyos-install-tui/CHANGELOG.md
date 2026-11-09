@@ -7,6 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Repair: when the chosen disk already has PengyOS (`pengyos-install disks`
+  marks it), a "PengyOS is already on this disk" page offers "Repair PengyOS"
+  (the default: the system is written again, files, accounts and settings are
+  kept) or "Erase the disk and install fresh". A repair skips the name, account,
+  SSH and Pengy pages, has its own summary and confirm word (`repair`), and runs
+  `pengyos-install repair`. Both front-ends (full screen and line by line).
+- The install medium's wording says "USB stick or disc" (the installer ISO).
 - **An "SSH login" page** after the SSH keys page: *Keys only* (recommended, the
   default) or *Keys or password*, with a warning that passwords can be guessed.
   root always needs a key. The engine's `ssh_password` answer runs the image's

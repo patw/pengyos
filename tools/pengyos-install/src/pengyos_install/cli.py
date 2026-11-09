@@ -245,6 +245,45 @@ def cmd_image(args, *, out=None, err=None) -> int:
     return 0
 
 
+def _reporter(progress: str, out, err):
+    """Progress as JSON lines on *out*, or a line on *err* each time it changes."""
+    if progress == "json":
+        def report(phase, fraction, message):
+            print(json.dumps({"phase": phase, "fraction": round(fraction, 4),
+                              "message": message}), file=out, flush=True)
+        return report
+    last = {"key": None}
+
+    def report(phase, fraction, message):
+        key = (phase, message, int(fraction * 20))
+        if key != last["key"]:
+            last["key"] = key
+            print(f"[{phase:>9}] {fraction * 100:5.1f}%  {message}", file=err, flush=True)
+    return report
+
+
+def cmd_repair(args, *, out=None, err=None) -> int:
+    """Reinstall the system on an installed PengyOS disk, keeping its data."""
+    out = out if out is not None else sys.stdout
+    err = err if err is not None else sys.stderr
+    report = _reporter(args.progress, out, err)
+    try:
+        had = image_install.repair_image(
+            args.target, payload_dir=args.payload, confirm=args.yes,
+            allow_older=args.allow_older, report=report)
+    except image_install.ImageInstallError as exc:
+        if args.progress == "json":
+            print(json.dumps({"phase": "error", "fraction": 0, "message": str(exc)}),
+                  file=out, flush=True)
+        print(f"error: {exc}", file=err)
+        return 1
+    if args.progress != "json":
+        print(f"PengyOS on {args.target} is repaired"
+              f"{f' (it had {had})' if had else ''}; your files and settings were kept. "
+              "Remove the installer and restart.", file=err)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pengyos-install",
@@ -366,6 +405,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_image.add_argument("--progress", choices=("text", "json"), default="text",
                          help="progress format: text on stderr, or JSON lines on stdout")
 
+    p_repair = sub.add_parser(
+        "repair",
+        help="reinstall the system on an installed PengyOS disk, keeping the "
+             "data partition (accounts, settings, files)",
+    )
+    p_repair.add_argument("--target", required=True, help="the installed disk, e.g. /dev/nvme0n1")
+    p_repair.add_argument("--payload", default=None,
+                          help=f"payload directory (default: {image_install.PAYLOAD_MOUNT})")
+    p_repair.add_argument("--allow-older", action="store_true",
+                          help="repair with a release older than the one the machine last ran")
+    p_repair.add_argument("--yes", action="store_true",
+                          help="acknowledge that the system partitions are rewritten")
+    p_repair.add_argument("--progress", choices=("text", "json"), default="text",
+                          help="progress format: text on stderr, or JSON lines on stdout")
+
     return parser
 
 
@@ -394,6 +448,7 @@ def main(
         "provision-plan": lambda a: cmd_provision(a, out=out),
         "disks": lambda a: cmd_disks(a, out=out),
         "image": lambda a: cmd_image(a, out=out, err=err),
+        "repair": lambda a: cmd_repair(a, out=out, err=err),
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse enforces the choices

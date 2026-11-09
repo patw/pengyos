@@ -57,6 +57,7 @@ pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
                       [--pengy-base-url URL [--pengy-api-key KEY | --pengy-api-key-stdin]
                        [--pengy-model NAME]]
                       [--progress text|json]
+pengyos-install repair --target DEV --yes [--payload DIR] [--allow-older] [--progress text|json]
 ```
 
 > **Status — PARKED.** `plan` / `install` / `provision-plan` target the parked A/B + UKI release
@@ -104,6 +105,23 @@ pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
   "message"}` object per line on stdout (phases `verify`, `partition`, `write`,
   `root`, `boot`, `provision`, `done`, or `error`). Refuses without `--yes`, and
   refuses the boot disk, a disk with mounted filesystems, or one under 18.25 GiB.
+
+- **`repair`** — reinstall the system on an installed PengyOS disk and keep its
+  data: for a machine whose system will not start (both slots broken by a bad
+  update or failing storage, or the disk copied to a new drive). It knows a
+  PengyOS disk by its four GPT partition names, checks the data partition with
+  `btrfs check --readonly` first (on errors it stops and says how to copy the
+  files off), and refuses a medium older than the release the machine last ran
+  (pengyos-update's `state.json` on the data partition) unless `--allow-older`.
+  Then, as `image` does without partitioning or formatting: the ESP and the
+  rootfs into slot a, root-a grown and relabelled, slot b cleared, a fresh
+  `grub.cfg` + `grubenv`, and the firmware entry replaced (old "PengyOS" entries
+  removed). On the data partition it only drops pengyos-update's trial, staged
+  and slot records (they describe the slots it just rewrote) and notes
+  `"repaired"`; accounts, hostname, SSH host keys, network profiles, `/etc`
+  changes, `/var`, `/home` and `/root` are untouched. Phases `check`, `verify`,
+  `write`, `root`, `boot`, `done`. Refuses without `--yes`, and refuses the boot
+  disk and a disk with mounted filesystems.
 
 - **`plan`** — render the ordered install plan (one argv per step). `--json`
   emits JSON instead of a shell script. The trailing first-boot step points at

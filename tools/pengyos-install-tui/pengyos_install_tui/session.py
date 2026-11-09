@@ -29,10 +29,12 @@ from pengyos_install_tui.keys import (
     Imported, KeyFetchError, KeySource, PasswordRefused, fetch_keys, parse_source,
 )
 
-__all__ = ["Field", "Page", "Option", "Session", "CONFIRM_WORD", "DEFAULTS"]
+__all__ = ["Field", "Page", "Option", "Session", "CONFIRM_WORD", "REPAIR_WORD", "DEFAULTS"]
 
 #: What the user types on the review page to erase the disk and install.
 CONFIRM_WORD = "erase"
+#: ...and the word that confirms a repair (nothing is erased but the system).
+REPAIR_WORD = "repair"
 
 #: Answers filled in before the user types anything.
 DEFAULTS = {"hostname": "pengyos"}
@@ -68,9 +70,9 @@ class Page:
 
 DISK = Page(
     "disk", "Choose a disk",
-    "PengyOS will be installed on the disk you choose. Everything on that disk "
-    "will be erased. The USB stick or disc this installer runs from is listed "
-    "but cannot be chosen.",
+    "PengyOS will be installed on the disk you choose, erasing everything on it. "
+    "A disk that already has PengyOS can be repaired instead, keeping its files. "
+    "The USB stick or disc this installer runs from is listed but cannot be chosen.",
     choice=True,
 )
 NAME = Page(
@@ -136,10 +138,30 @@ LOGIN = Page(
     "in, which is handy on a machine nobody else uses.",
     choice=True,
 )
+ACTION = Page(
+    "action", "PengyOS is already on this disk",
+    "Repair it if it does not start any more: the system is written again and "
+    "your files, accounts and settings are kept. Or erase the whole disk and "
+    "install PengyOS fresh.",
+    choice=True,
+)
+# key "review" like REVIEW: front-ends draw session.review() and ask for
+# session.confirm_word on it.
+REPAIR_REVIEW = Page(
+    "review", "Ready to repair",
+    "Check the summary. The system on the disk is written again; your files, "
+    "accounts and settings are kept.",
+    (Field("confirm", f"Type '{REPAIR_WORD}' to repair"),),
+)
 REVIEW = Page(
     "review", "Ready to install",
     "Check the summary. Installing ERASES EVERYTHING on the chosen disk.",
     (Field("confirm", f"Type '{CONFIRM_WORD}' to install"),),
+)
+
+ACTION_OPTIONS = (
+    Option("Repair PengyOS", "keeps your files and settings"),
+    Option("Erase the disk and install fresh", "everything on it is lost"),
 )
 
 SSH_LOGIN_OPTIONS = (
@@ -181,6 +203,9 @@ class Session:
         self.fetch_keys = fetch_keys
         self.values: dict[str, str] = dict(DEFAULTS)
         self.disk: engine.Disk | None = None
+        #: On a disk that has PengyOS: repair it (the default: nothing of the
+        #: person's is lost) instead of erasing it.
+        self.repair_chosen = True
         self.autologin = False
         #: "Keys or password" on the ssh_login page (default: keys only).
         self.ssh_password = False
@@ -212,8 +237,39 @@ class Session:
     def title(self) -> str:
         return f"PengyOS {self.edition.capitalize()} {self.version}"
 
+    @property
+    def repair(self) -> bool:
+        """This run repairs the chosen disk instead of installing on it."""
+        return bool(self.disk and getattr(self.disk, "pengyos", False) and self.repair_chosen)
+
+    @property
+    def confirm_word(self) -> str:
+        return REPAIR_WORD if self.repair else CONFIRM_WORD
+
+    @property
+    def working(self) -> str:
+        """The heading while it runs, and when it is done."""
+        return f"Repairing {self.disk.path}" if self.repair else f"Installing on {self.disk.path}"
+
+    @property
+    def done(self) -> str:
+        return "PengyOS is repaired" if self.repair else "PengyOS is installed"
+
+    def run(self, *, install, repair, payload, report) -> None:
+        """Install or repair, as chosen (raises engine.ImageInstallError)."""
+        if self.repair:
+            repair(self.disk.path, payload_dir=payload, confirm=True, report=report)
+        else:
+            install(self.disk.path, self.answers(), payload_dir=payload, confirm=True,
+                    report=report)
+
     def pages(self) -> list[Page]:
-        pages = [DISK, NAME, ACCOUNT]
+        if self.disk is not None and getattr(self.disk, "pengyos", False):
+            if self.repair_chosen:
+                return [DISK, ACTION, REPAIR_REVIEW]
+            pages = [DISK, ACTION, NAME, ACCOUNT]
+        else:
+            pages = [DISK, NAME, ACCOUNT]
         if self.wifi_iface:
             pages.append(WIFI)
             if self.network and self.network.secured:
@@ -232,6 +288,8 @@ class Session:
             return "in use"
         if d.size_bytes < engine.MIN_DISK:
             return f"too small, needs {engine.Disk('', '', engine.MIN_DISK).size_label}"
+        if getattr(d, "pengyos", False):
+            return "has PengyOS: repair or reinstall"
         return "removable" if d.removable else ""
 
     def _disk_ok(self, d: engine.Disk) -> bool:
@@ -244,6 +302,8 @@ class Session:
         if page.key == "disk":
             return [Option(f"{d.path:<14} {d.size_label:>9}  {d.model or '-'}",
                            self.disk_note(d), self._disk_ok(d)) for d in self.disks]
+        if page.key == "action":
+            return list(ACTION_OPTIONS)
         if page.key == "login":
             return list(LOGIN_OPTIONS)
         if page.key == "ssh_login":
@@ -282,6 +342,8 @@ class Session:
             return nets.index(self.network) + 1 if self.network in nets else 0
         if page.key == "ssh_login":
             return 1 if self.ssh_password else 0
+        if page.key == "action":
+            return 0 if self.repair_chosen else 1
         return 1 if self.autologin else 0
 
     def choose(self, page: Page, index: int) -> str | None:
@@ -293,6 +355,8 @@ class Session:
             return f"that disk cannot be used ({opts[index].note})"
         if page.key == "disk":
             self.disk = self.disks[index]
+        elif page.key == "action":
+            self.repair_chosen = index == 0
         elif page.key == "wifi":
             if self.is_rescan(page, index):
                 return "scan again"
@@ -353,8 +417,9 @@ class Session:
 
             return password_problem(value)
         if key == "confirm":
-            return None if value.strip().lower() == CONFIRM_WORD else \
-                f"type '{CONFIRM_WORD}' to install, or go back"
+            word, verb = (REPAIR_WORD, "repair") if self.repair else (CONFIRM_WORD, "install")
+            return None if value.strip().lower() == word else \
+                f"type '{word}' to {verb}, or go back"
         return None
 
     def set(self, key: str, value: str) -> str | None:
@@ -479,6 +544,14 @@ class Session:
 
     def review(self) -> list[tuple[str, str]]:
         """The review page's summary, as (label, value) rows."""
+        if self.repair:
+            d = self.disk
+            return [
+                ("Disk", f"{d.path}  {d.size_label}  {d.model}".rstrip()),
+                ("Repair", f"write PengyOS {self.version} as its system again"),
+                ("Kept", "your files, accounts, passwords, settings, SSH keys"),
+                ("Checked", "your files' partition first, read-only"),
+            ]
         a, d = self.answers(), self.disk
         keys = [k for k in a.authorized_keys.splitlines() if k.strip()]
         if not keys:

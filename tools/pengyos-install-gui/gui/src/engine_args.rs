@@ -24,6 +24,15 @@ pub struct InstallOptions {
     pub pengy_model: String,
 }
 
+/// `pengyos-install repair` for an installed PengyOS disk: the system is
+/// rewritten, the data partition kept (no answers, no secrets).
+pub fn repair_args(disk: &str) -> Vec<String> {
+    ["repair", "--target", disk, "--yes", "--progress", "json"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
 /// The engine's argv after the program name.
 pub fn engine_args(o: &InstallOptions) -> Vec<String> {
     let mut args: Vec<String> = [
@@ -68,6 +77,14 @@ mod tests {
             username: "alex".into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn repair_needs_only_the_disk() {
+        assert_eq!(
+            repair_args("/dev/nvme0n1"),
+            ["repair", "--target", "/dev/nvme0n1", "--yes", "--progress", "json"]
+        );
     }
 
     #[test]

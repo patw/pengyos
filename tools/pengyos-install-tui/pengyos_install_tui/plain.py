@@ -12,7 +12,7 @@ import shutil
 import textwrap
 from typing import Callable, TextIO
 
-from pengyos_install_tui.session import CONFIRM_WORD, DEFAULTS, WIFI, Session
+from pengyos_install_tui.session import DEFAULTS, WIFI, Session
 
 __all__ = ["Aborted", "ask_plain"]
 
@@ -32,6 +32,11 @@ def _choice_page(session: Session, page, inp, out: TextIO) -> None:
     if page.key == "login":
         yes = _read(inp, "Log in automatically, skipping the login screen? [y/N]: ")
         session.choose(page, 1 if yes.strip().lower() in ("y", "yes") else 0)
+        return
+    if page.key == "action":
+        no = _read(inp, f"Repair PengyOS on {session.disk.path}, keeping your files and "
+                        "settings? [Y/n] (n: erase it and install fresh): ")
+        session.choose(page, 1 if no.strip().lower() in ("n", "no") else 0)
         return
     if page.key == "ssh_login":
         yes = _read(inp, "Also let SSH accept your password? Less secure; root still "
@@ -156,9 +161,15 @@ def ask_plain(session: Session, *, inp: Callable[[str], str], secret: Callable[[
         if page.key == "review":
             for label, value in session.review():
                 out.write(f"  {label + ':':<10} {value}\n")
-            out.write(f"\nEVERYTHING on {session.disk.path} will be erased.\n")
-            answer = _read(inp, f"Type '{CONFIRM_WORD}' to install, anything else to quit: ")
-            return answer.strip().lower() == CONFIRM_WORD
+            word = session.confirm_word
+            if session.repair:
+                out.write(f"\nThe system on {session.disk.path} will be written again; "
+                          "your files and settings are kept.\n")
+                answer = _read(inp, f"Type '{word}' to repair, anything else to quit: ")
+            else:
+                out.write(f"\nEVERYTHING on {session.disk.path} will be erased.\n")
+                answer = _read(inp, f"Type '{word}' to install, anything else to quit: ")
+            return answer.strip().lower() == word
         if page.key == "wifi":
             _wifi_page(session, page, inp, out)
         elif page.choice:
