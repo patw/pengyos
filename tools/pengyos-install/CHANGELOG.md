@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `repair` (`repair_image`): reinstall the system on an installed PengyOS disk
+  and keep its data partition, for a machine whose system will not start (both
+  slots broken, or the disk copied to a new drive). Recognises the disk by its
+  partition names, checks the data partition read-only first, refuses a medium
+  older than the release the machine last ran unless `--allow-older`, writes the
+  ESP and slot a as an install does, clears slot b, replaces the firmware entry,
+  and drops only pengyos-update's trial/staged/slot records on the data
+  partition. QEMU (2026-11-09): a 26.11.9 install with both slots zeroed
+  (kernel panic: no root) repaired from the 26.11.10 Server ISO, then booted
+  26.11.10 with its user, password, files, /etc edit and SSH host key intact.
 - `ProvisionAnswers.ssh_password` / `image --ssh-password`: SSH also accepts the
   user's password, not only keys (opt-in; root stays key-only). It runs the image's
   `pengyos-ssh-password on --offline` in the target, so the installed machine can

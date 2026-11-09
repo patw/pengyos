@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: repair an installed system and keep its data (2026-11-09)
+- `pengyos-install repair --target DISK --yes`, from the installer ISO or stick:
+  rewrites the system (ESP + slot a, slot b cleared, firmware entry replaced)
+  on a PengyOS disk whose system will not start, and keeps the data partition
+  (accounts, hostname, SSH host keys, network profiles, /etc changes, /home).
+  Checks the data partition read-only first and refuses an older medium than
+  the machine last ran. Proven in QEMU on a disk with both slots destroyed.
+  Command line only so far; the installers' "Repair" button comes next.
+
 ### Added: the installer as an ISO (2026-11-09)
 - Every Server and Desktop build makes `pengyos-<edition>-x86_64.iso`, a hybrid
   ISO: write it with plain `dd` or any tool, or attach it to a VM's CD drive.

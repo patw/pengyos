@@ -617,3 +617,117 @@ def test_install_image_skips_pengy_when_not_configured(tmp_path, monkeypatch):
                   wifi_configs=str(tmp_path / "none"))
     assert not (root / "home/pat/.config").exists()
     assert not any(".config/pengy" in " ".join(c) for c in run.calls)
+
+
+# --- repair ---------------------------------------------------------------------
+
+class RepairRun(FakeRun):
+    """A disk that install_image made: partition names, a data check, efibootmgr."""
+
+    def __init__(self, root, names=None, data_ok=True, entries=("0003", "0007")):
+        super().__init__(root)
+        self.names = names or im.PART_NAMES
+        self.data_ok = data_ok
+        self.entries = entries
+
+    def __call__(self, argv, *, input=None, check=True):
+        if argv[:2] == ["sgdisk", "-i"]:
+            self.calls.append(list(argv))
+            n = int(argv[2])
+            return subprocess.CompletedProcess(argv, 0, (
+                f"Partition GUID code: {self.guid}\nPartition unique GUID: GUID-{n}\n"
+                f"Partition name: '{self.names[n]}'\n"), "")
+        if argv[:2] == ["btrfs", "check"]:
+            self.calls.append(list(argv))
+            return subprocess.CompletedProcess(argv, 0 if self.data_ok else 1, "", "errors")
+        if argv == ["efibootmgr"]:
+            self.calls.append(list(argv))
+            lines = "BootCurrent: 0001\n" + "".join(
+                f"Boot{n}* PengyOS\tHD(1,GPT,...)/File(\\EFI\\BOOT\\BOOTX64.EFI)\n" for n in self.entries)
+            return subprocess.CompletedProcess(argv, 0, lines + "Boot0001* UEFI Shell\n", "")
+        return super().__call__(argv, input=input, check=check)
+
+
+def _repair_setup(tmp_path, monkeypatch, current="26.11.9", manifest_version="26.11.11"):
+    rootfs, esp = bytes(range(256)) * 4096, b"FAT" * 5000
+    payload = _payload(tmp_path, rootfs, esp)
+    m = json.loads((payload / "manifest.json").read_text())
+    m["version"] = manifest_version
+    (payload / "manifest.json").write_text(json.dumps(m))
+    target = tmp_path / "vda"
+    target.touch()
+    for n in (1, 2, 3, 4):
+        (tmp_path / f"vda{n}").touch()
+    esp_dir, data = tmp_path / "esp", tmp_path / "data-var"
+    (esp_dir / "EFI" / "BOOT").mkdir(parents=True)
+    (data / "lib" / "pengyos-update").mkdir(parents=True)
+    state = data / "lib" / "pengyos-update" / "state.json"
+    state.write_text(json.dumps({"current": current, "trial": {"slot": "b", "version": "26.11.10"},
+                                 "staged": "26.11.10", "failed": {"26.11.8": {}}}))
+    monkeypatch.setattr(im, "TARGET_ESP", str(esp_dir))
+    monkeypatch.setattr(im, "TARGET_DATA", str(data))
+    (tmp_path / "efivars").mkdir()
+    monkeypatch.setattr(im, "EFIVARS", str(tmp_path / "efivars"))
+    return payload, target, esp_dir, state, rootfs, esp
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_repair_rewrites_the_system_and_keeps_the_data(tmp_path, monkeypatch):
+    payload, target, esp_dir, state, rootfs, esp = _repair_setup(tmp_path, monkeypatch)
+    run = RepairRun(tmp_path)
+    had = im.repair_image(str(target), payload_dir=str(payload), confirm=True, run=run,
+                          disks=[Disk("vda", str(target), BIG)])
+    assert had == "26.11.9"
+    assert (tmp_path / "vda2").read_bytes() == rootfs and (tmp_path / "vda1").read_bytes() == esp
+    flat = [" ".join(c) for c in run.calls]
+    assert any(c.startswith("btrfs check --readonly") for c in flat)
+    assert not any("mkfs" in c or "sgdisk -o" in c or "--zap-all" in c for c in flat), \
+        "repair must not partition or format anything"
+    assert f"wipefs -a {tmp_path}/vda3" in flat
+    # the old PengyOS entries go, one new one is made
+    assert "efibootmgr -q -b 0003 -B" in flat and "efibootmgr -q -b 0007 -B" in flat
+    assert sum(c.startswith("efibootmgr --create") for c in flat) == 1
+    assert "root=PARTUUID=guid-2" in (esp_dir / "EFI" / "BOOT" / "grub.cfg").read_text()
+    s = json.loads(state.read_text())
+    assert "trial" not in s and "staged" not in s
+    assert s["failed"] == {"26.11.8": {}} and s["repaired"] == {"version": "26.11.11", "from": "26.11.9"}
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_repair_refusals(tmp_path, monkeypatch):
+    payload, target, esp_dir, state, rootfs, esp = _repair_setup(tmp_path, monkeypatch)
+    disks = [Disk("vda", str(target), BIG)]
+
+    def attempt(run, **kw):
+        with pytest.raises(im.ImageInstallError) as e:
+            im.repair_image(str(target), payload_dir=str(payload), run=run, disks=disks,
+                            **{"confirm": True, **kw})
+        assert (tmp_path / "vda2").read_bytes() == b"", "nothing may be written"
+        return str(e.value)
+
+    assert "confirmation" in attempt(RepairRun(tmp_path), confirm=False)
+    other = {**im.PART_NAMES, 4: "Microsoft basic data"}
+    assert "not a PengyOS disk" in attempt(RepairRun(tmp_path, names=other))
+    assert "has errors" in attempt(RepairRun(tmp_path, data_ok=False))
+    with pytest.raises(im.ImageInstallError, match="is the disk PengyOS is running from"):
+        im.repair_image(str(target), payload_dir=str(payload), confirm=True,
+                        run=RepairRun(tmp_path), disks=[Disk("vda", str(target), BIG, is_boot=True)])
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_repair_refuses_an_older_medium_unless_asked(tmp_path, monkeypatch):
+    payload, target, esp_dir, state, rootfs, esp = _repair_setup(
+        tmp_path, monkeypatch, current="26.11.12", manifest_version="26.11.11")
+    disks = [Disk("vda", str(target), BIG)]
+    with pytest.raises(im.ImageInstallError, match="last ran PengyOS 26.11.12"):
+        im.repair_image(str(target), payload_dir=str(payload), confirm=True,
+                        run=RepairRun(tmp_path), disks=disks)
+    assert im.repair_image(str(target), payload_dir=str(payload), confirm=True, allow_older=True,
+                           run=RepairRun(tmp_path), disks=disks) == "26.11.12"
+
+
+def test_efi_entries():
+    listing = ("BootCurrent: 0002\nBootOrder: 0003,0002\nBoot0002* UEFI QEMU HARDDISK\tPciRoot(0)\n"
+               "Boot0003* PengyOS\tHD(1,GPT,x)\nBoot000A  PengyOS\tHD(1,GPT,y)\n"
+               "Boot0004* PengyOS Old\tHD(1)\n")
+    assert im._efi_entries(listing, "PengyOS") == ["0003", "000A"]

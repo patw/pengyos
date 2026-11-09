@@ -56,6 +56,7 @@ __all__ = [
     "boot_disks",
     "find_payload",
     "install_image",
+    "repair_image",
     "list_disks",
     "partition_path",
     "render_grub_cfg",
@@ -70,6 +71,13 @@ PAYLOAD_DEVICE = "/dev/disk/by-label/" + PAYLOAD_LABEL
 #: Scratch mount points for the target during provisioning.
 TARGET_ROOT = "/run/pengyos/target-root"
 TARGET_ESP = "/run/pengyos/target-esp"
+#: ...and for reading (then fixing up) the data partition during a repair.
+TARGET_DATA = "/run/pengyos/target-data"
+#: The GPT partition names install_image gives a disk: repair knows a PengyOS
+#: disk by them.
+PART_NAMES = {1: "PENGYOS-ESP", 2: "pengyos-root-a", 3: "pengyos-root-b", 4: "pengyos-data"}
+#: pengyos-update's state, inside the data partition's var subvolume.
+UPDATE_STATE_REL = "lib/pengyos-update/state.json"
 #: UEFI variables (mounted by sys-firmware-efi-efivars.mount); absent on BIOS boots.
 EFIVARS = "/sys/firmware/efi/efivars"
 #: Where the live session's NetworkManager keeps the profiles people created
@@ -784,6 +792,180 @@ def install_image(
             run(["umount", point], check=False)
         run(["sync"], check=False)
     report("done", 1.0, "PengyOS is installed")
+
+
+
+def _version_key(version: str) -> tuple[int, ...] | None:
+    """``YY.MM.N`` as a tuple to compare; None for anything else (a dev build)."""
+    parts = version.split(".")
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        return None
+    return tuple(int(p) for p in parts)
+
+
+def _efi_entries(listing: str, label: str) -> list[str]:
+    """Boot numbers of firmware entries called *label* in ``efibootmgr`` output."""
+    out = []
+    for line in listing.splitlines():
+        m = re.match(r"^Boot([0-9A-Fa-f]{4})\*?\s+(.*?)(\t|\s{2,}|$)", line)
+        if m and m.group(2).strip() == label:
+            out.append(m.group(1))
+    return out
+
+
+def repair_image(
+    target: str,
+    *,
+    payload_dir: str | None = None,
+    confirm: bool = False,
+    allow_older: bool = False,
+    report: Report | None = None,
+    run: Runner = _default_run,
+    disks: list[Disk] | None = None,
+) -> str:
+    """Reinstall the system on an installed PengyOS disk and keep its data.
+
+    For a machine whose system will not start: both slots broken by a failed
+    update or bad storage, or the disk copied to a new drive. The data partition
+    (accounts, hostname, SSH host keys, network profiles, /etc changes, /var,
+    /home, /root: docs/state-layout.md) is checked read-only first and never
+    reformatted. Slot a and the ESP are written from the medium exactly as an
+    install writes them, slot b is cleared (the next update fills it), and the
+    firmware boot entry is replaced. The partition table is left alone.
+
+    Refuses without *confirm*; a disk that is not a PengyOS disk (its four
+    partition names), the disk the live system runs from, one in use, a data
+    partition with errors, and a medium older than the release the machine last
+    ran (unless *allow_older*: the newer release may have changed the data's
+    format). Returns the release the machine had, or "" when unknown.
+    """
+    report = report or (lambda phase, frac, msg: None)
+    if not confirm:
+        raise ImageInstallError("refusing to rewrite the system without confirmation (pass --yes)")
+    payload = find_payload(payload_dir)
+    manifest = Manifest.load(payload)
+
+    by_path = {d.path: d for d in (disks if disks is not None else list_disks())}
+    disk = by_path.get(target)
+    if disk is None:
+        raise ImageInstallError(f"{target} is not a disk this installer can use")
+    if disk.is_boot:
+        raise ImageInstallError(f"{target} is the disk PengyOS is running from")
+    if disk.mounted:
+        raise ImageInstallError(f"{target} has mounted filesystems: {', '.join(disk.mounted)}")
+
+    report("check", 0.0, "Checking the disk")
+    part = {n: partition_path(target, n) for n in (1, 2, 3, 4)}
+    guids = {}
+    for n, want in PART_NAMES.items():
+        info = run(["sgdisk", "-i", str(n), target], check=False)
+        name = re.search(r"^Partition name:\s*'(.*)'", info.stdout or "", re.MULTILINE)
+        if info.returncode != 0 or not name or name.group(1) != want:
+            raise ImageInstallError(
+                f"{target} is not a PengyOS disk (partition {n} should be {want}); "
+                "only an installed PengyOS can be repaired")
+        guids[n] = _sgdisk_field(info.stdout, "Partition unique GUID").lower()
+
+    # The data partition first, read-only: if it is damaged, writing the system
+    # does not help and the person needs to copy their files off instead.
+    report("check", 0.3, "Checking your files (read-only)")
+    chk = run(["btrfs", "check", "--readonly", part[4]], check=False)
+    if chk.returncode != 0:
+        raise ImageInstallError(
+            "the data partition (your files and settings) has errors, so it was not "
+            "touched. Copy your files off it first: mount it read-only "
+            f"(mount -o ro,subvol=home {part[4]} /mnt), then reinstall")
+    os.makedirs(TARGET_DATA, exist_ok=True)
+    had = ""
+    _run(run, ["mount", "-t", "btrfs", "-o", "ro,subvol=var", part[4], TARGET_DATA],
+         "reading the data partition")
+    try:
+        state_file = Path(TARGET_DATA) / UPDATE_STATE_REL
+        try:
+            had = str(json.loads(state_file.read_text()).get("current") or "")
+        except (OSError, ValueError, AttributeError):
+            had = ""
+    finally:
+        run(["umount", TARGET_DATA], check=False)
+    new_key, had_key = _version_key(manifest.version), _version_key(had)
+    if new_key and had_key and new_key < had_key and not allow_older:
+        raise ImageInstallError(
+            f"this machine last ran PengyOS {had}, newer than {manifest.version} on this "
+            "medium; a newer release may have changed how it keeps its data. Use a "
+            f"{had} or newer medium (or --allow-older to repair with {manifest.version} anyway)")
+
+    _verify_payload(payload, manifest, report)
+
+    total = manifest.esp.raw_size + manifest.rootfs.raw_size
+    written = [0, 0.0]
+
+    def progress(n: int) -> None:
+        written[0] += n
+        now = time.monotonic()
+        if now - written[1] > 0.25:
+            written[1] = now
+            report("write", min(written[0] / total, 1.0), "Writing PengyOS to the disk")
+
+    _stream_write(payload / manifest.esp.file, part[1], manifest.esp, progress)
+    _stream_write(payload / manifest.rootfs.file, part[2], manifest.rootfs, progress)
+    report("write", 1.0, "Writing PengyOS to the disk")
+
+    report("root", 0.1, "Preparing the system partition")
+    _run(run, ["e2fsck", "-fy", part[2]], "checking the system filesystem", ok=(0, 1))
+    _run(run, ["resize2fs", part[2]], "resizing the system filesystem")
+    _run(run, ["tune2fs", "-U", "random", "-L", "pengyos-root-a", part[2]],
+         "labelling the system filesystem")
+    # Whatever is in slot b is not trusted any more; the next update writes it.
+    _run(run, ["wipefs", "-a", part[3]], "clearing the second system partition")
+
+    os.makedirs(TARGET_ESP, exist_ok=True)
+    mounted: list[str] = []
+    try:
+        report("boot", 0.2, "Configuring the boot loader")
+        _run(run, ["mount", "-t", "vfat", part[1], TARGET_ESP], "mounting the boot partition")
+        mounted.append(TARGET_ESP)
+        boot_dir = Path(TARGET_ESP) / "EFI" / "BOOT"
+        (boot_dir / "grub.cfg").write_text(render_grub_cfg({"a": guids[2]}))
+        grubenv = str(boot_dir / "grubenv")
+        _run(run, ["grub-editenv", grubenv, "create"], "creating the boot environment")
+        _run(run, ["grub-editenv", grubenv, "set", "pengyos_slot=a"], "selecting root slot a")
+        if os.path.isdir(EFIVARS):
+            # Replace, not add: a repaired (or cloned) machine may already have one.
+            listing = run(["efibootmgr"], check=False).stdout or ""
+            for num in _efi_entries(listing, "PengyOS"):
+                run(["efibootmgr", "-q", "-b", num, "-B"], check=False)
+            _run(run, ["efibootmgr", "--create", "--disk", target, "--part", "1",
+                       "--label", "PengyOS", "--loader", "\\EFI\\BOOT\\BOOTX64.EFI"],
+                 "adding the PengyOS firmware boot entry")
+    finally:
+        for point in reversed(mounted):
+            run(["umount", point], check=False)
+
+    # pengyos-update's record of a trial or a staged update refers to slots
+    # that were just rewritten: drop it, or the first boot would call a release
+    # "failed" that never got the chance. Only this file on the data partition
+    # is written.
+    report("boot", 0.8, "Updating the update history")
+    _run(run, ["mount", "-t", "btrfs", "-o", "subvol=var", part[4], TARGET_DATA],
+         "mounting the data partition")
+    try:
+        state_file = Path(TARGET_DATA) / UPDATE_STATE_REL
+        try:
+            state = json.loads(state_file.read_text())
+        except (OSError, ValueError):
+            state = None
+        if isinstance(state, dict):
+            for key in ("trial", "staged", "other", "slots", "slots_at"):
+                state.pop(key, None)
+            state["repaired"] = {"version": manifest.version, "from": had}
+            tmp = state_file.with_name(state_file.name + ".new")
+            tmp.write_text(json.dumps(state, indent=2) + "\n")
+            os.replace(tmp, state_file)
+    finally:
+        run(["umount", TARGET_DATA], check=False)
+        run(["sync"], check=False)
+    report("done", 1.0, "PengyOS is repaired")
+    return had
 
 
 def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
