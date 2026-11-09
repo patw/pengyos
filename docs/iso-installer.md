@@ -114,7 +114,15 @@ Built from 26.11.10, in QEMU/KVM with OVMF:
 - The live installer's welcome text says "running from the USB stick": wrong
   for a CD or a VM.
 
+Real hardware (2026-11-09): the Desktop ISO `dd`'d to a SanDisk USB 3.2 stick
+(plain `dd`, no wipefs or sgdisk) was listed and booted by behoweather, the
+Intel N100 whose strict AMI firmware needed the hybrid MBR and the GPT fixes for
+the raw image. Live desktop and installer came up. xorriso's MBR with the 0xEF
+appended partition is enough for it. `dd ... conv=fsync status=progress` looked
+hung (the progress line races ahead, then fsync waits silently); the download
+instructions should use `oflag=direct` instead.
+
 Still to do before it can ship: the build integration (kernel option, Buildroot
 host packages, initramfs from Buildroot's busybox, post-image), the NVIDIA
 editions (their modules), the release changes and boot check, and real hardware:
-a stick `dd`'d from the ISO on behoweather (strict N100 firmware) and beholaptop.
+beholaptop (behoweather done).
