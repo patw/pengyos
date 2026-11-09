@@ -156,6 +156,46 @@ def find_update(cfg: dict[str, str], image: str, current: str, channel: str,
     return pick_update(entries, image, channel, current)
 
 
+def local_release(source: Path, image: str, version: str | None) -> tuple[bytes, bytes, Path] | None:
+    """A release on local media (``apply --from``): the manifest, its signature
+    and the directory holding its files, or None when *source* has none for
+    *image*.
+
+    *source* is one release's directory as the update site serves it
+    (``manifest.json``, ``manifest.json.sig``, ``bzImage``, ``rootfs.ext4.zst``:
+    https://pengyos.catbee.ca/update/<image>/<version>/), or any directory above
+    such copies (a stick with several editions or versions on it); the newest
+    for this machine's image is taken, or exactly *version*. Nothing here is
+    trusted yet: the caller verifies the signature before using a byte of it."""
+    if not source.is_dir():
+        raise UpdateError(f"{source} is not a directory")
+    found: list[tuple[tuple, bytes, Path]] = []
+    for mf in sorted(source.rglob("manifest.json")):
+        sig = mf.with_name("manifest.json.sig")
+        if not sig.is_file():
+            continue
+        data = mf.read_bytes()
+        try:
+            man = parse_manifest(data)
+        except UpdateError:
+            continue
+        if man.image != image or (version and man.version != version):
+            continue
+        found.append((parse_version(man.version), data, mf.parent))
+    if not found:
+        return None
+    _, data, base = max(found, key=lambda f: f[0])
+    return data, (base / "manifest.json.sig").read_bytes(), base
+
+
+def check_local(path: Path, size: int, sha256: str) -> None:
+    """A release file on local media must be exactly what the signed manifest says."""
+    if not path.is_file():
+        raise UpdateError(f"{path} is missing — copy the whole release directory")
+    if path.stat().st_size != size or sha256_file(path) != sha256:
+        raise UpdateError(f"{path} does not match the signed manifest (damaged or incomplete copy)")
+
+
 # --------------------------------------------------------------------------
 # Commands
 # --------------------------------------------------------------------------
@@ -344,24 +384,43 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
         raise UpdateError(f"this boot (slot {layout.booted}) is still on trial — slot {committed} "
                           "is the fallback. Run `sudo pengyos-update confirm` first to keep this one.")
 
-    entry = find_update(cfg, image, current, channel, args.version)
-    if entry is None:
-        say(f"Up to date: {image} {current} is the newest on the {channel} channel.")
-        progress.update("done", 1.0, "Already up to date", version=None)
-        return 0
-    f = failure(load_state(args.state), entry.version)
+    local = None
+    if args.source:
+        # Offline: a release copied to local media. No feed, no network; the
+        # same signature, image, version and file checks as a download.
+        local = local_release(Path(args.source), image, args.version)
+        if local is None:
+            raise UpdateError(f"no PengyOS release for {image}"
+                              f"{' ' + args.version if args.version else ''} in {args.source}")
+        wanted = parse_manifest(local[0]).version
+        if parse_version(wanted) <= parse_version(current) and not args.version:
+            say(f"Up to date: {image} {current} is as new as {wanted} on {args.source}.")
+            progress.update("done", 1.0, "Already up to date", version=None)
+            return 0
+    else:
+        entry = find_update(cfg, image, current, channel, args.version)
+        if entry is None:
+            say(f"Up to date: {image} {current} is the newest on the {channel} channel.")
+            progress.update("done", 1.0, "Already up to date", version=None)
+            return 0
+        wanted = entry.version
+    f = failure(load_state(args.state), wanted)
     if f and not args.version:
-        raise UpdateError(f"PengyOS {entry.version} did not start on this machine before "
+        raise UpdateError(f"PengyOS {wanted} did not start on this machine before "
                           f"({f.get('at', '?')}: {f.get('reason', '?')}). To try it again: "
-                          f"sudo pengyos-update apply --version {entry.version}")
+                          f"sudo pengyos-update apply --version {wanted}")
     target = layout.other
-    say(f"Updating {image} {current} -> {entry.version} (into slot {target}, {layout.slots[target]})")
+    say(f"Updating {image} {current} -> {wanted} (into slot {target}, {layout.slots[target]})")
 
-    manifest_url = urljoin(cfg["feed"], entry.manifest_url)
-    work = Path(CACHE) / image / entry.version
-    work.mkdir(parents=True, exist_ok=True)
-    data = fetch(manifest_url)
-    sig = fetch(manifest_url + ".sig")
+    work = Path(CACHE) / image / wanted
+    if local is not None:
+        data, sig, base = local
+        say(f"  from {base}")
+    else:
+        manifest_url = urljoin(cfg["feed"], entry.manifest_url)
+        work.mkdir(parents=True, exist_ok=True)
+        data = fetch(manifest_url)
+        sig = fetch(manifest_url + ".sig")
     keys = load_keys(args.keys)
     if not keys:
         raise UpdateError(f"no release keys in {args.keys} — cannot check anything")
@@ -370,26 +429,34 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
     say(f"  signed by key {key.keyid[:16]}… ({os.path.basename(key.path)}) — OK")
     if man.image != image:
         raise UpdateError(f"that release is for {man.image}, this machine runs {image}")
-    if man.version != entry.version:
-        raise UpdateError("the feed and the signed manifest disagree on the version — refusing")
+    if man.version != wanted:
+        raise UpdateError("the release and its signed manifest disagree on the version — refusing")
     if parse_version(man.version) <= parse_version(current) and not args.version:
         raise UpdateError(f"{man.version} is not newer than {current} — refusing a downgrade")
 
-    total = man.kernel.size + man.rootfs.size
-    before = 0
-    for ref in (man.kernel, man.rootfs):
-        say(f"  downloading {ref.file} ({ref.size >> 20} MiB)")
-        msg = f"Downloading PengyOS {man.version}"
-        download(urljoin(manifest_url, ref.file), work / ref.file, ref.size, ref.sha256,
-                 lambda n, b=before: progress.update("download", (b + n) / total, msg))
-        before += ref.size
-    say("  downloads match the signed manifest")
+    if local is not None:
+        files = local[2]
+        progress.update("download", 0.0, f"Checking PengyOS {man.version} on {args.source}")
+        for ref in (man.kernel, man.rootfs):
+            check_local(files / ref.file, ref.size, ref.sha256)
+        say("  files match the signed manifest")
+    else:
+        files = work
+        total = man.kernel.size + man.rootfs.size
+        before = 0
+        for ref in (man.kernel, man.rootfs):
+            say(f"  downloading {ref.file} ({ref.size >> 20} MiB)")
+            msg = f"Downloading PengyOS {man.version}"
+            download(urljoin(manifest_url, ref.file), work / ref.file, ref.size, ref.sha256,
+                     lambda n, b=before: progress.update("download", (b + n) / total, msg))
+            before += ref.size
+        say("  downloads match the signed manifest")
     progress.update("download", 1.0, "Checking the download")
 
     with Esp(layout.esp) as esp:
         # Nothing may boot the slot while it is half written.
         esp.set_env(pengyos_try="")
-        write_slot(work / man.rootfs.file, layout.slots[target], man.rootfs.raw_size,
+        write_slot(files / man.rootfs.file, layout.slots[target], man.rootfs.raw_size,
                    man.rootfs.raw_sha256, progress)
         dev = layout.slots[target]
         progress.update("finish", 0.1, "Finishing the new system")
@@ -401,7 +468,7 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
         kdir = esp.path / f"slot-{target}"
         kdir.mkdir(exist_ok=True)
         tmp = kdir / "bzImage.new"
-        shutil.copyfile(work / man.kernel.file, tmp)
+        shutil.copyfile(files / man.kernel.file, tmp)
         if sha256_file(tmp) != man.kernel.sha256:
             tmp.unlink()
             raise UpdateError("the kernel copy on the boot partition is damaged")
@@ -417,7 +484,8 @@ def _apply(args: argparse.Namespace, progress: Progress) -> int:
         write_boot_menu(esp.boot_dir, layout.partuuids, keep_unparsed=False)
         esp.set_env(pengyos_slot=layout.booted, pengyos_try=target)
 
-    shutil.rmtree(work, ignore_errors=True)
+    if local is None:
+        shutil.rmtree(work, ignore_errors=True)
     state = load_state(args.state)
     avail = state.get("available") or {}
     save_state(args.state, staged=man.version, other=man.version,
@@ -836,6 +904,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--version", dest="version", metavar="YY.MM.N",
                    help="install exactly this release (also allows going back to an older one)")
     s.add_argument("--reboot", action="store_true", help="restart into it when done")
+    s.add_argument("--from", dest="source", metavar="DIR",
+                   help="install from local media instead of the internet: a copy of the "
+                        "release's update directory (manifest.json, manifest.json.sig, bzImage, "
+                        "rootfs.ext4.zst), or a directory above several; checked against the "
+                        "release key like a download")
     s.add_argument("--keys", default=KEYS_DIR, help=argparse.SUPPRESS)
     s.add_argument("--openssl", default="openssl", help=argparse.SUPPRESS)
     s.add_argument("--progress", metavar="FILE", nargs="?", const=PROGRESS,

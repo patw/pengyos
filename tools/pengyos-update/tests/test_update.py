@@ -428,3 +428,97 @@ def test_status_json_as_root_reads_live(monkeypatch, tmp_path, capsys):
     out, _ = _status(monkeypatch, tmp_path, capsys, {}, euid=0, extra=["--json"])
     d = json.loads(out)
     assert d["slots_source"] == "live" and d["slots_age_s"] == 0
+
+
+# --- apply --from: a release on local media -----------------------------------
+
+from pengyos_update import cli  # noqa: E402
+
+def _stick(root, image, version, k=None, keyid=None, files=True):
+    d = root / image / version
+    d.mkdir(parents=True)
+    kernel, rootfs = b"kernel-" + version.encode(), b"rootfs-" + version.encode()
+    m = {"format": "pengyos-update-1", "image": image, "version": version, "build": "x",
+         "files": {"rootfs": {"file": "rootfs.ext4.zst", "size": len(rootfs),
+                              "sha256": hashlib.sha256(rootfs).hexdigest(),
+                              "raw_size": 1, "raw_sha256": "bb" * 32},
+                   "kernel": {"file": "bzImage", "size": len(kernel),
+                              "sha256": hashlib.sha256(kernel).hexdigest()}}}
+    data = json.dumps(m).encode()
+    (d / "manifest.json").write_bytes(data)
+    if k is not None:
+        (d / "manifest.json.sig").write_bytes(sign(k, keyid, data))
+    if files:
+        (d / "bzImage").write_bytes(kernel)
+        (d / "rootfs.ext4.zst").write_bytes(rootfs)
+    return d
+
+
+def test_local_release_takes_the_newest_for_this_image(tmp_path):
+    k, _, keyid = keypair(5)
+    _stick(tmp_path, "pengyos-server", "26.11.9", k, keyid)
+    newest = _stick(tmp_path, "pengyos-server", "26.11.11", k, keyid)
+    _stick(tmp_path, "pengyos-desktop", "26.11.12", k, keyid)       # another edition
+    _stick(tmp_path / "x", "pengyos-server", "26.11.13")             # no signature: ignored
+    data, sig, base = cli.local_release(tmp_path, "pengyos-server", None)
+    assert base == newest and parse_manifest(data).version == "26.11.11"
+    assert cli.local_release(tmp_path, "pengyos-server", "26.11.9")[2].name == "26.11.9"
+    assert cli.local_release(tmp_path, "pengyos-server-nvidia", None) is None
+    # pointed straight at one release directory
+    assert cli.local_release(newest, "pengyos-server", None)[2] == newest
+
+
+def _offline(monkeypatch, tmp_path, current="26.11.10"):
+    keys = tmp_path / "keys"
+    keys.mkdir()
+    k, pub, keyid = keypair(7)
+    (keys / "release.pub").write_text(f"pengyos-key-v1 ed25519 {keyid} {pub.hex()}\n")
+    monkeypatch.setattr(cli, "require_root", lambda: None)
+    monkeypatch.setattr(cli, "lock", lambda: None)
+    monkeypatch.setattr(cli, "identity", lambda: ("pengyos-server", current, {}))
+    monkeypatch.setattr(cli, "read_config", lambda *a: {"feed": "f", "channel": "stable"})
+
+    class L:
+        booted, other, slots, esp = "a", "b", {"a": "/dev/a", "b": "/dev/b"}, "/dev/esp"
+    monkeypatch.setattr(cli, "detect_layout", lambda: L())
+    monkeypatch.setattr(cli, "read_env", lambda esp: {"pengyos_slot": "a"})
+    monkeypatch.setattr(cli, "fetch", lambda url: pytest.fail("offline apply touched the network"))
+
+    def no_esp(*a, **kw):
+        raise AssertionError("wrote to the boot partition")
+    monkeypatch.setattr(cli, "Esp", no_esp)
+    return k, keyid, str(keys)
+
+
+def _run(tmp_path, *argv):
+    args = cli.build_parser().parse_args(["apply", "--state", str(tmp_path / "s.json"), *argv])
+    return cli._apply(args, cli.Progress(None))
+
+
+@needs_openssl
+def test_apply_from_refuses_a_bad_signature_or_file_before_writing(tmp_path, monkeypatch):
+    k, keyid, keys = _offline(monkeypatch, tmp_path)
+    stick = tmp_path / "stick"
+    k2, _, keyid2 = keypair(9)
+    _stick(stick, "pengyos-server", "26.11.11", k2, keyid2)       # signed by a stranger
+    with pytest.raises(UpdateError, match="unknown key"):
+        _run(tmp_path, "--from", str(stick), "--keys", keys)
+    stick2 = tmp_path / "stick2"
+    d = _stick(stick2, "pengyos-server", "26.11.11", k, keyid)
+    (d / "rootfs.ext4.zst").write_bytes(b"truncated")
+    with pytest.raises(UpdateError, match="does not match the signed manifest"):
+        _run(tmp_path, "--from", str(stick2), "--keys", keys)
+    (d / "rootfs.ext4.zst").unlink()
+    with pytest.raises(UpdateError, match="missing"):
+        _run(tmp_path, "--from", str(stick2), "--keys", keys)
+
+
+@needs_openssl
+def test_apply_from_says_up_to_date_and_names_a_missing_release(tmp_path, monkeypatch, capsys):
+    k, keyid, keys = _offline(monkeypatch, tmp_path, current="26.11.11")
+    stick = tmp_path / "stick"
+    _stick(stick, "pengyos-server", "26.11.11", k, keyid)
+    assert _run(tmp_path, "--from", str(stick), "--keys", keys) == 0
+    assert "Up to date" in capsys.readouterr().out
+    with pytest.raises(UpdateError, match="no PengyOS release for pengyos-server 26.11.20"):
+        _run(tmp_path, "--from", str(stick), "--keys", keys, "--version", "26.11.20")
