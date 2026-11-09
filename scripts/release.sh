@@ -136,7 +136,10 @@ for t in "${TARGETS[@]}"; do
         # Server NVIDIA: the Server matrix (a VM has no NVIDIA GPU, so the driver
         # stays unloaded; CUDA is checked on hardware).
         pengyos-server|pengyos-server-nvidia)
-           verify smoke --matrix smoke/server.toml --image "$(out "${t}")/images/pengyos-server-x86_64.img" ;;
+           verify smoke --matrix smoke/server.toml --image "$(out "${t}")/images/pengyos-server-x86_64.img"
+           # The installer ISO, the main download, from a CD drive as a VM boots it:
+           # the initramfs has to find the medium and start the live system.
+           verify boot "$(out "${t}")/images/pengyos-server-x86_64.iso" --uefi --ram 2048 --timeout 240 ;;
         *) verify boot "$(out "${t}")/images/pengyos-desktop-x86_64.img" --uefi --ram 2048 --timeout 240
            # A login prompt is not a desktop: check the COSMIC session on BOTH desktop
            # images. Only the installer stick was ever session-checked, so 26.10.15's
@@ -146,7 +149,10 @@ for t in "${TARGETS[@]}"; do
            verify desktop "$(out "${t}")/images/pengyos-desktop-x86_64.img" \
                --no-installer --out "$(out "${t}")/images/qemu-live-check"
            verify desktop "$(out "${t}")/images/pengyos-desktop-x86_64-installer.img" \
-               --out "$(out "${t}")/images/qemu-desktop-check" ;;
+               --out "$(out "${t}")/images/qemu-desktop-check"
+           # The installer ISO from a CD drive: live session up and the installer open.
+           verify desktop "$(out "${t}")/images/pengyos-desktop-x86_64.iso" \
+               --out "$(out "${t}")/images/qemu-iso-check" ;;
     esac
 done
 

@@ -375,6 +375,22 @@ def _disk_drive(image: str, snapshot: bool) -> str:
     return spec
 
 
+def _boot_media_args(image: str, snapshot: bool) -> "list[str]":
+    """The boot medium for a firmware (UEFI) boot.
+
+    A ``.iso`` (the installer ISO, docs/iso-installer.md) goes in as a CD-ROM,
+    the way every hypervisor attaches it: that is the path a VM user takes, and
+    the one that needs the initramfs to find the medium on ``/dev/sr0``. A CD is
+    read-only, so ``snapshot`` does not apply. Anything else is the virtio disk.
+    """
+    if image.endswith(".iso"):
+        return [
+            "-drive", f"file={image},if=none,id=cd0,media=cdrom,readonly=on,format=raw",
+            "-device", "ide-cd,drive=cd0,bootindex=1",
+        ]
+    return ["-drive", _disk_drive(image, snapshot)]
+
+
 def _net_args(hostfwd: "tuple[str, ...] | list[str] | None") -> "list[str]":
     """Render the ``-nic`` user-networking section for host port forwards.
 
@@ -519,8 +535,9 @@ def build_argv(
         firmware = _as_firmware(ovmf, ovmf_vars)
         argv += _uefi_firmware_args(firmware)
         # Firmware/disk boot: the image is the boot disk (a GPT image
-        # whose ESP carries GRUB2 + bzImage, read by OVMF).
-        argv += ["-drive", _disk_drive(image, snapshot)]
+        # whose ESP carries GRUB2 + bzImage, read by OVMF), or the installer
+        # ISO in a CD drive.
+        argv += _boot_media_args(image, snapshot)
     else:
         # SeaBIOS disk boot: the image is the only disk.
         argv += ["-drive", _disk_drive(image, snapshot)]

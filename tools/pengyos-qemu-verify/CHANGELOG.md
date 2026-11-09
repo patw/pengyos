@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-09
+
+### Added
+- An image ending in `.iso` (the installer ISO) boots from a CD drive, under
+  `boot --uefi` and `desktop`, the way a VM attaches it. Other images keep the
+  virtio disk (`boot`) and the USB stick (`desktop`).
+
 ### Fixed
 - **`distro-welcome` no longer fails a good image when a kernel message splits
   systemd's greeting.** systemd writes "Welcome to <name>!" in pieces, and on the

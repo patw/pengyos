@@ -1,0 +1,10 @@
+config BR2_PACKAGE_PENGYOS_INITRAMFS_BUSYBOX
+	bool "pengyos-initramfs-busybox"
+	help
+	  A static busybox with only the applets the installer ISO's
+	  initramfs needs (sh, mount with loop support, switch_root and a
+	  few tools). Installed into BINARIES_DIR for
+	  board/common/iso-image.sh, never into the target: the images
+	  ship GNU coreutils, not busybox.
+
+	  https://busybox.net

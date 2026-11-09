@@ -23,6 +23,16 @@ CONFIG_TMPFS_XATTR=y
 CONFIG_SERIAL_8250=y
 CONFIG_SERIAL_8250_CONSOLE=y
 
+# --- The live ISO (docs/iso-installer.md) ------------------------------------
+# The ISO's live root is an EROFS image on the medium, loop-mounted by its
+# initramfs before any module can load. Installed systems boot ext4 slots and
+# never touch it.
+CONFIG_EROFS_FS=y
+CONFIG_EROFS_FS_ZIP=y
+CONFIG_EROFS_FS_XATTR=y
+CONFIG_EROFS_FS_POSIX_ACL=y
+CONFIG_EROFS_FS_SECURITY=y
+
 # --- virtio block/net for QEMU ----------------------------------------------
 CONFIG_VIRTIO=y
 CONFIG_VIRTIO_BLK=y

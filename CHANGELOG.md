@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: the installer as an ISO (2026-11-09)
+- Every Server and Desktop build makes `pengyos-<edition>-x86_64.iso`, a hybrid
+  ISO: write it with plain `dd` or any tool, or attach it to a VM's CD drive.
+  Its live system is an lz4hc EROFS image under a RAM overlay (busybox
+  initramfs), so it is about half the size of the installer stick image (Desktop
+  2.9 GiB vs 5.0 GiB). behoweather's strict N100 firmware boots it. The
+  download page leads with it; the `.img.xz` stays for one release as legacy.
+  docs/iso-installer.md.
+
 ### Fixed: PengyOS could not boot in Hyper-V or VMware VMs (2026-11-09)
 - The disk controllers of Hyper-V (storvsc), VMware (PVSCSI, LSI Logic SPI and
   SAS) and older Proxmox VMs (LSI 53C895A) are now built into the kernel. With

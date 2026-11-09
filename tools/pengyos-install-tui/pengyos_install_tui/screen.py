@@ -429,13 +429,13 @@ class App:
                       "No disk was found that PengyOS can be installed on. It needs "
                       f"an internal disk of at least "
                       f"{engine.Disk('', '', engine.MIN_DISK).size_label}; the USB "
-                      "stick the installer runs from cannot be used.")
+                      "stick or disc the installer runs from cannot be used.")
         return "Enter Quit"
 
     def _draw_installing(self, fr: Frame, x: int, width: int, h: int) -> str:
         row = self._heading(fr, x, width, f"Installing on {self.s.disk.path}",
-                            "This takes a few minutes. Do not remove the USB stick or "
-                            "turn the computer off.")
+                            "This takes a few minutes. Do not remove the installer (USB "
+                            "stick or disc) or turn the computer off.")
         frac, msg = self.progress
         bar = width - 8
         filled = int(round(frac * bar))
@@ -475,7 +475,7 @@ class App:
             for line in textwrap.wrap(para, width) or [""]:
                 fr.put(row, x, line, "title" if para.startswith("    ") else "normal")
                 row += 1
-        last = ("Remove the USB stick, then press Enter to restart."
+        last = ("Remove the USB stick or disc, then press Enter to restart."
                 if self.reboot else "Press Enter to finish.")
         fr.put(h - 3, x, last, "ok")
         return "Enter " + ("Restart" if self.reboot else "Finish")

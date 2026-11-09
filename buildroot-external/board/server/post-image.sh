@@ -26,3 +26,6 @@ support/scripts/genimage.sh -c "$BINARIES_DIR/genimage.cfg"
 # --- The installer USB stick (shared with the Desktop: board/common/) ----------
 "$BOARD_DIR/../common/installer-image.sh" server \
     pengyos-server-x86_64-installer.img 0x50454e49 "$UUID"
+
+# --- The installer ISO: the main download (docs/iso-installer.md) --------------
+"$BOARD_DIR/../common/iso-image.sh" server pengyos-server-x86_64.iso "$UUID"

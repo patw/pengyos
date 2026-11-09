@@ -232,7 +232,8 @@ def find_payload(explicit: str | None = None, run: Runner | None = None) -> Path
     if not (path / "manifest.json").is_file():
         raise ImageInstallError(
             f"no install payload found at {path} — this does not look like a PengyOS "
-            "install medium (expected a partition labelled " + PAYLOAD_LABEL + ")"
+            "install medium (expected the ISO's payload there, or a partition labelled "
+            + PAYLOAD_LABEL + ")"
         )
     return path
 

@@ -1,0 +1,64 @@
+#!/bin/busybox sh
+# PengyOS live ISO initramfs: find the medium, mount the compressed live root
+# under a RAM overlay, hand over to systemd (docs/iso-installer.md). Packed by
+# board/common/iso-image.sh with the static busybox of
+# package/pengyos-initramfs-busybox.
+/bin/busybox --install -s /bin
+export PATH=/bin
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+fail() { echo "pengyos-live: $*"; echo "pengyos-live: dropping to a shell"; exec sh; }
+
+id=""
+for w in $(cat /proc/cmdline); do
+    case "$w" in pengyos.live=*) id="${w#pengyos.live=}" ;; esac
+done
+[ -n "$id" ] || fail "no pengyos.live= on the kernel line"
+
+mkdir -p /medium /lower /rw /newroot
+# USB sticks and CD drives can take a few seconds to appear.
+tries=0
+found=""
+while [ -z "$found" ]; do
+    for d in /dev/sr* /dev/sd* /dev/vd* /dev/nvme*n* /dev/mmcblk* /dev/xvd*; do
+        [ -b "$d" ] || continue
+        mount -t iso9660 -o ro "$d" /medium 2>/dev/null || continue
+        if [ "$(cat /medium/pengyos/medium-id 2>/dev/null)" = "$id" ]; then
+            found="$d"
+            break
+        fi
+        umount /medium
+    done
+    [ -n "$found" ] && break
+    tries=$((tries + 1))
+    [ $tries -gt 150 ] && fail "no PengyOS medium with id $id after 30 s"
+    sleep 0.2
+done
+echo "pengyos-live: medium $found"
+
+mount -t erofs -o ro,loop /medium/live/rootfs.erofs /lower || fail "could not mount the live root"
+mount -t tmpfs -o mode=0755,size=75% tmpfs /rw || fail "no tmpfs"
+mkdir -p /rw/upper /rw/work
+mount -t overlay overlay -o lowerdir=/lower,upperdir=/rw/upper,workdir=/rw/work /newroot ||
+    fail "could not mount the overlay"
+
+# /run is mounted here so systemd keeps it (it skips API filesystems that are
+# already mounted) and the medium stays reachable at /run/pengyos/medium.
+mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /newroot/run
+mkdir -p /newroot/run/pengyos/medium /newroot/run/pengyos/payload /newroot/run/pengyos/live-lower /newroot/run/pengyos/live-rw
+mount --move /medium /newroot/run/pengyos/medium
+mount --move /lower /newroot/run/pengyos/live-lower
+mount --move /rw /newroot/run/pengyos/live-rw
+# Container storage cannot sit on overlayfs (podman: "'overlay' is not
+# supported over overlayfs"): give the live session a tmpfs there.
+mkdir -p /newroot/var/lib/containers
+mount -t tmpfs -o mode=0700 tmpfs /newroot/var/lib/containers
+if [ -f /newroot/run/pengyos/medium/payload/manifest.json ]; then
+    mount --bind /newroot/run/pengyos/medium/payload /newroot/run/pengyos/payload
+fi
+
+umount /proc /sys
+mount --move /dev /newroot/dev 2>/dev/null || umount /dev
+exec switch_root /newroot /sbin/init

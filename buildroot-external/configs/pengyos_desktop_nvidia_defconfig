@@ -631,6 +631,15 @@ BR2_PENGYOS_MANYLINUX_LIBS=y
 #           sudo-rs, our recipe (package/sudo-rs), not Buildroot's C sudo.
 BR2_PACKAGE_ZSTD=y
 BR2_PACKAGE_GPTFDISK=y
+# The installer ISO (board/common/iso-image.sh, docs/iso-installer.md): the
+# live root as compressed EROFS (lz4hc: ~2.3x smaller, fast to read), xorriso
+# to assemble the hybrid ISO, and a static busybox for its initramfs. The ext4
+# rootfs stays: it is what installs and updates write into the slots.
+BR2_TARGET_ROOTFS_EROFS=y
+BR2_TARGET_ROOTFS_EROFS_LZ4HC=y
+BR2_TARGET_ROOTFS_EROFS_LZ4HC_LEVEL=12
+BR2_PACKAGE_HOST_XORRISO=y
+BR2_PACKAGE_PENGYOS_INITRAMFS_BUSYBOX=y
 BR2_PACKAGE_GPTFDISK_SGDISK=y
 BR2_PACKAGE_SUDO_RS=y
 # Login sessions: PAM + systemd-logind, so an SSH (or console) login is a real

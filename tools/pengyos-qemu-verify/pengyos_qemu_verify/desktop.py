@@ -146,6 +146,16 @@ class SessionOutcome:
 # --- pure: how the guest is launched ----------------------------------------
 
 
+def _medium(image: str) -> "list[str]":
+    """The installer stick as removable USB storage, or the installer ISO in a
+    CD drive (how a VM attaches it; docs/iso-installer.md). Both boot first."""
+    if image.endswith(".iso"):
+        return ["-drive", f"if=none,id=cd0,file={image},format=raw,media=cdrom,readonly=on",
+                "-device", "ide-cd,drive=cd0,bootindex=1"]
+    return ["-drive", f"if=none,id=stick,file={image},format=raw,snapshot=on",
+            "-device", "usb-storage,bus=xhci.0,drive=stick,removable=on,bootindex=1"]
+
+
 def session_argv(
     image: str,
     *,
@@ -187,8 +197,7 @@ def session_argv(
         "-device", "qemu-xhci,id=xhci",
         "-device", "usb-tablet",
         "-device", "usb-kbd",
-        "-drive", f"if=none,id=stick,file={image},format=raw,snapshot=on",
-        "-device", "usb-storage,bus=xhci.0,drive=stick,removable=on,bootindex=1",
+        *_medium(image),
         "-vga", "none",
         "-device", "virtio-gpu-gl-pci",
         "-display", "sdl,gl=on",

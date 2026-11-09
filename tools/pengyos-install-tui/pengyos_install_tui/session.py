@@ -69,8 +69,8 @@ class Page:
 DISK = Page(
     "disk", "Choose a disk",
     "PengyOS will be installed on the disk you choose. Everything on that disk "
-    "will be erased. The USB stick this installer runs from is listed but cannot "
-    "be chosen.",
+    "will be erased. The USB stick or disc this installer runs from is listed "
+    "but cannot be chosen.",
     choice=True,
 )
 NAME = Page(
