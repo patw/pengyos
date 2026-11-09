@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-NVTOP_VERSION = 3.3.2
+NVTOP_VERSION = 3.4.0
 NVTOP_SITE = $(call github,Syllo,nvtop,$(NVTOP_VERSION))
 NVTOP_LICENSE = GPL-3.0+
 NVTOP_LICENSE_FILES = COPYING
