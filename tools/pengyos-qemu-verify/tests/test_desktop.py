@@ -321,3 +321,11 @@ def test_the_required_set_drops_the_installer_and_nothing_else():
     assert full == D.REQUIRED_PROCESSES
     assert live == tuple(p for p in full if p != "pengyos-install")
     assert "cosmic-comp" in live and "cosmic-panel" in live, live
+
+
+def test_the_desktop_check_puts_an_iso_in_a_cd_drive():
+    from pengyos_qemu_verify.desktop import _medium
+    iso = _medium("/x/pengyos-desktop.iso")
+    assert "media=cdrom" in iso[1] and iso[3] == "ide-cd,drive=cd0,bootindex=1"
+    stick = _medium("/x/pengyos-desktop-x86_64-installer.img")
+    assert "usb-storage" in stick[3] and "snapshot=on" in stick[1]

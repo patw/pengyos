@@ -61,6 +61,25 @@ def _image_file(build: Path) -> Path:
     return plain[0]
 
 
+def _iso_file(build: Path) -> Path | None:
+    """The installer ISO (board/common/iso-image.sh), if the build made one."""
+    isos = sorted((build / "images").glob("pengyos-*-x86_64.iso"))
+    return isos[0] if isos else None
+
+
+def _place(src: Path, out: Path) -> None:
+    """Put *src* at *out*: a hard link when they share a filesystem (an ISO is
+    published uncompressed, so there is nothing to transform), else a copy."""
+    tmp = out.with_name(out.name + ".part")
+    tmp.unlink(missing_ok=True)
+    try:
+        os.link(src, tmp)
+    except OSError:
+        import shutil
+        shutil.copyfile(src, tmp)
+    os.replace(tmp, out)
+
+
 def public_key_line(key: Path) -> str:
     from cryptography.hazmat.primitives import serialization
 
@@ -97,12 +116,20 @@ def publish_downloads(builds: list[Path], site: Path, key: Path, *, force: bool 
             with open(tmp, "wb") as fh:
                 subprocess.run(["xz", "-T0", "-6", "-c", str(src)], stdout=fh, check=True)
             os.replace(tmp, out)
-        listing.append({
+        entry = {
             "image": image, "name": EDITIONS[image][0], "file": name, "size": out.stat().st_size,
             "raw_size": src.stat().st_size, "sha256": _sha256(out),
             "kind": "installer" if src.name.endswith("-installer.img") else "disk",
             "build": osr.get("BUILD_ID", ""),
-        })
+        }
+        iso = _iso_file(build)
+        if iso is not None:
+            iso_name = f"{image}-{version}-x86_64.iso"
+            iso_out = dest / iso_name
+            if force or not iso_out.exists():
+                _place(iso, iso_out)
+            entry["iso"] = {"file": iso_name, "size": iso_out.stat().st_size, "sha256": _sha256(iso_out)}
+        listing.append(entry)
     old = dest / "downloads.json"
     if old.exists():  # keep editions published earlier for this version
         have = {e["image"] for e in listing}
@@ -110,7 +137,9 @@ def publish_downloads(builds: list[Path], site: Path, key: Path, *, force: bool 
                     if e["image"] not in have and e["image"] in EDITIONS]
     listing.sort(key=lambda e: ORDER.index(e["image"]))
 
-    sums = "".join(f"{e['sha256']}  {e['file']}\n" for e in listing).encode()
+    sums = "".join(
+        (f"{e['iso']['sha256']}  {e['iso']['file']}\n" if "iso" in e else "")
+        + f"{e['sha256']}  {e['file']}\n" for e in listing).encode()
     (dest / "SHA256SUMS").write_bytes(sums)
     (dest / "SHA256SUMS.sig").write_bytes(sign_bytes(sums, key))
     published = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -164,6 +193,133 @@ def _mib(n: int) -> str:
     return f"{n / (1 << 30):.1f} GB" if n >= 1 << 30 else f"{n >> 20} MB"
 
 
+def _an(n: int) -> str:
+    return "an" if n == 8 else "a"
+
+
+def _download(e: dict) -> str:
+    """A card's download links: the ISO first when there is one, the .img.xz
+    as the legacy alternative (offered beside the ISO for one release)."""
+    sums = f'<a href="{e["version"]}/SHA256SUMS">SHA256SUMS</a>'
+    if "iso" in e:
+        iso = e["iso"]
+        stick = _stick(iso["size"])
+        return f'''<p><a class="btn" href="{e["version"]}/{iso["file"]}">Download {html.escape(e["name"])} (ISO)</a>
+<span class="m">{_mib(iso["size"])} · needs {_an(stick)} {stick} GB+ stick, or a VM's CD drive</span></p>
+<p class="m">Legacy: <a href="{e["version"]}/{e["file"]}">disk image (.img.xz)</a>, {_mib(e["size"])}
+(<a href="#legacy">how to write it</a>)</p>
+<p class="m mono">build {e["version"]} · sha256 {iso["sha256"]} · {sums}</p>'''
+    stick = _stick(e["raw_size"])
+    return f'''<p><a class="btn" href="{e["version"]}/{e["file"]}">Download {html.escape(e["name"])}</a>
+<span class="m">{_mib(e["size"])} download · {_mib(e["raw_size"])} written · needs {_an(stick)} {stick} GB+ stick</span></p>
+<p class="m mono">build {e["version"]} · sha256 {e["sha256"]} · {sums}</p>'''
+
+
+LEGACY_VM = """<h2 id="vm">Or: install in a virtual machine</h2>
+<p>There is no ISO yet. Attach the unpacked image to the VM as a <strong>second disk</strong> (not a CD),
+start from it, install to the VM's own disk, then remove the image disk. Unpack it first: <code>xz -d
+pengyos-…img.xz</code>, or 7-Zip on Windows.</p>
+<ul>
+<li><strong>Every hypervisor:</strong> <strong>UEFI</strong> firmware (not BIOS), Secure Boot off, a blank disk
+of 20 GB or more, 2 GB of memory for the Server, 4 GB for the Desktop. The Desktop needs no 3D: it draws in
+software when the VM has none.</li>
+<li><strong>Proxmox VE:</strong> BIOS <em>OVMF (UEFI)</em>, an EFI disk with <em>Pre-Enroll keys</em> unticked,
+SCSI controller <em>VirtIO SCSI</em>, and for the Desktop, Display <em>VirtIO-GPU</em> (the default display
+garbles it for now). Import the image as a disk:
+<code>qm disk import &lt;vmid&gt; pengyos-…img &lt;storage&gt;</code>, attach it and put it first in the boot order.</li>
+<li><strong>QEMU/KVM, libvirt:</strong> OVMF firmware, virtio disk, network and graphics.
+<a href="/docs/vm.html">Step by step</a>.</li>
+<li><strong>VirtualBox:</strong> System → <em>Enable EFI</em>. Convert the image:
+<code>VBoxManage convertfromraw pengyos-…img pengyos.vdi --format VDI</code>, then attach the
+<code>.vdi</code> to the SATA controller.</li>
+<li><strong>VMware (ESXi, Workstation) and Hyper-V:</strong> from 26.11.10 on, as Generation 2 (Hyper-V) or
+EFI (VMware) VMs with Secure Boot off. Convert the image to <code>.vmdk</code> or <code>.vhdx</code> with
+<code>qemu-img convert</code>. Not yet tried on a real VMware or Hyper-V host: tell us how it goes.</li>
+</ul>
+
+"""
+
+
+IMG_WRITE = """<p><strong>From a Linux terminal</strong>, plain <code>dd</code> is not enough: the image has to be unpacked,
+and a stick that was used before keeps an old partition table at its far end that some computers refuse to
+boot. Run it as <strong>one line</strong>, which does all three steps (clear the stick, write, fix the
+partition table). Set <code>DEV</code> to the stick first; check with <code>lsblk</code>, because the
+wrong name erases the wrong disk.</p>
+<pre>DEV=/dev/sdX
+sudo wipefs -a $DEV &amp;&amp; xz -dc pengyos-desktop-{v}-x86_64.img.xz | sudo dd of=$DEV bs=4M conv=fsync status=progress &amp;&amp; sudo sgdisk -e $DEV</pre>"""
+
+
+def _write_section(v: str, has_iso: bool) -> str:
+    """Step 3. With an ISO: write it as it is (any tool, or plain dd), the
+    .img.xz kept below as legacy. Without (older releases): the .img.xz steps."""
+    if not has_iso:
+        return f"""<h2>3. Write it to a USB stick</h2>
+<p>The download is a compressed <strong>disk image</strong> (<code>.img.xz</code>), not an ISO. The tools
+below write it as it is: no need to unpack it first.</p>
+<ul>
+<li><strong>Windows, macOS or Linux:</strong> <a href="https://etcher.balena.io/">balenaEtcher</a> or
+<a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> (“Use custom”): choose the
+downloaded <code>.img.xz</code>, choose the stick, write.</li>
+<li><strong>Windows:</strong> <a href="https://rufus.ie/">Rufus</a> works too (write in DD image mode).</li>
+<li><strong>Linux:</strong> GNOME Disks → the stick → ⋮ → <em>Restore Disk Image…</em></li>
+</ul>
+{IMG_WRITE.format(v=v)}
+<p class="m">To check the download first: <code>sha256sum -c SHA256SUMS --ignore-missing</code> in the folder
+you saved it to.</p>
+<p class="warn">If the computer does not list the stick in its boot menu, the stick still carries an old
+partition table from earlier use. Delete all its partitions in your disk tool (or run the line above) and
+write it again.</p>
+"""
+    return f"""<h2>3. Write it to a USB stick</h2>
+<p>The download is an <strong>ISO</strong>. Write it to the stick as it is: no unpacking, no extra steps.</p>
+<ul>
+<li><strong>Windows, macOS or Linux:</strong> <a href="https://etcher.balena.io/">balenaEtcher</a> or
+<a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> (“Use custom”): choose the ISO,
+choose the stick, write.</li>
+<li><strong>Windows:</strong> <a href="https://rufus.ie/">Rufus</a> (ISO or DD mode).</li>
+<li><strong>Linux:</strong> GNOME Disks → the stick → ⋮ → <em>Restore Disk Image…</em>, or <code>dd</code>
+from a terminal:</li>
+</ul>
+<pre>sudo dd if=pengyos-desktop-{v}-x86_64.iso of=/dev/sdX bs=4M oflag=direct status=progress</pre>
+<p>Replace <code>/dev/sdX</code> with the stick (check with <code>lsblk</code>: the wrong name erases the
+wrong disk). <code>oflag=direct</code> makes the progress line follow what really reaches the stick, so
+when <code>dd</code> finishes the stick is ready to pull.</p>
+<p class="m">To check the download first: <code>sha256sum -c SHA256SUMS --ignore-missing</code> in the folder
+you saved it to.</p>
+<p class="warn">If the computer does not list the stick in its boot menu, delete all the stick's partitions
+in your disk tool and write it again.</p>
+<details id="legacy"><summary>Legacy: the disk image (<code>.img.xz</code>)</summary>
+<p>The <code>.img.xz</code> is the older download, offered beside the ISO for this release only. The
+graphical tools above write it as it is (Rufus in DD image mode).</p>
+{IMG_WRITE.format(v=v)}
+</details>
+"""
+
+
+def _vm_section(has_iso: bool) -> str:
+    """The virtual-machine section: the ISO in the VM's CD drive, or (older
+    releases) the unpacked image as a second disk."""
+    if not has_iso:
+        return LEGACY_VM
+    return """<h2 id="vm">Or: install in a virtual machine</h2>
+<p>Attach the ISO to the VM's <strong>CD/DVD drive</strong>, start the VM from it, install to the VM's own
+disk, then remove the ISO.</p>
+<ul>
+<li><strong>Every hypervisor:</strong> <strong>UEFI</strong> firmware (not BIOS), Secure Boot off, a blank disk
+of 20 GB or more, 2 GB of memory for the Server, 4 GB for the Desktop. The Desktop needs no 3D: it draws in
+software when the VM has none.</li>
+<li><strong>Proxmox VE:</strong> upload the ISO to an ISO storage; BIOS <em>OVMF (UEFI)</em>, an EFI disk with
+<em>Pre-Enroll keys</em> unticked, and for the Desktop, Display <em>VirtIO-GPU</em>.</li>
+<li><strong>VMware (ESXi, Workstation):</strong> firmware <em>EFI</em>, Secure Boot off.</li>
+<li><strong>Hyper-V:</strong> a <em>Generation 2</em> VM, Secure Boot off.</li>
+<li><strong>VirtualBox:</strong> System → <em>Enable EFI</em>.</li>
+<li><strong>QEMU/KVM, libvirt:</strong> OVMF firmware, virtio disk, network and graphics.
+<a href="/docs/vm.html">Step by step</a>.</li>
+</ul>
+
+"""
+
+
 def render_index(site: Path, key_file: str) -> str:
     current, past = listed(site)
     if not current:
@@ -172,12 +328,12 @@ def render_index(site: Path, key_file: str) -> str:
         cards = "\n".join(
             f'''<div class="card"><h3>{html.escape(e["name"])} <span class="v">{_line(e["version"])}</span></h3>
 <p>{EDITIONS[e["image"]][1]}</p>
-<p><a class="btn" href="{e["version"]}/{e["file"]}">Download {html.escape(e["name"])}</a>
-<span class="m">{_mib(e["size"])} download · {_mib(e["raw_size"])} written · needs {"an" if _stick(e["raw_size"]) == 8 else "a"} {_stick(e["raw_size"])} GB+ stick</span></p>
-<p class="m mono">build {e["version"]} · sha256 {e["sha256"]} · <a href="{e["version"]}/SHA256SUMS">SHA256SUMS</a></p></div>''' for e in current)
+{_download(e)}</div>''' for e in current)
     older = "".join(
         f'<li><a href="{r["version"]}/">{r["version"]}</a> ({r["published"][:10]})</li>' for r in past)
     v = current[0]["version"] if current else "YY.MM.N"
+    has_iso = bool(current) and all("iso" in e for e in current)
+    write_html, vm_html = _write_section(v, has_iso), _vm_section(has_iso)
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Download PengyOS</title>
@@ -217,29 +373,7 @@ updates from <a href="/update/">the update feed</a>.</p>
 <li>For installing: a disk of 20 GB or more that may be erased.</li>
 </ul>
 
-<h2>3. Write it to a USB stick</h2>
-<p>The download is a compressed <strong>disk image</strong> (<code>.img.xz</code>), not an ISO. The tools
-below write it as it is: no need to unpack it first.</p>
-<ul>
-<li><strong>Windows, macOS or Linux:</strong> <a href="https://etcher.balena.io/">balenaEtcher</a> or
-<a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> (“Use custom”): choose the
-downloaded <code>.img.xz</code>, choose the stick, write.</li>
-<li><strong>Windows:</strong> <a href="https://rufus.ie/">Rufus</a> works too (write in DD image mode).</li>
-<li><strong>Linux:</strong> GNOME Disks → the stick → ⋮ → <em>Restore Disk Image…</em></li>
-</ul>
-<p><strong>From a Linux terminal</strong>, plain <code>dd</code> is not enough: the image has to be unpacked,
-and a stick that was used before keeps an old partition table at its far end that some computers refuse to
-boot. Run it as <strong>one line</strong>, which does all three steps (clear the stick, write, fix the
-partition table). Set <code>DEV</code> to the stick first; check with <code>lsblk</code>, because the
-wrong name erases the wrong disk.</p>
-<pre>DEV=/dev/sdX
-sudo wipefs -a $DEV &amp;&amp; xz -dc pengyos-desktop-{v}-x86_64.img.xz | sudo dd of=$DEV bs=4M conv=fsync status=progress &amp;&amp; sudo sgdisk -e $DEV</pre>
-<p class="m">To check the download first: <code>sha256sum -c SHA256SUMS --ignore-missing</code> in the folder
-you saved it to.</p>
-<p class="warn">If the computer does not list the stick in its boot menu, the stick still carries an old
-partition table from earlier use. Delete all its partitions in your disk tool (or run the line above) and
-write it again.</p>
-
+{write_html}
 <h2>4. Start from the stick</h2>
 <ol>
 <li>Plug the stick in and switch the computer on.</li>
@@ -251,29 +385,7 @@ pick the disk, choose a computer name, user name and password, and restart when 
 out). <strong>Server</strong> shows its installer on screen and asks the same questions.</li>
 </ol>
 
-<h2 id="vm">Or: install in a virtual machine</h2>
-<p>There is no ISO yet. Attach the unpacked image to the VM as a <strong>second disk</strong> (not a CD),
-start from it, install to the VM's own disk, then remove the image disk. Unpack it first: <code>xz -d
-pengyos-…img.xz</code>, or 7-Zip on Windows.</p>
-<ul>
-<li><strong>Every hypervisor:</strong> <strong>UEFI</strong> firmware (not BIOS), Secure Boot off, a blank disk
-of 20 GB or more, 2 GB of memory for the Server, 4 GB for the Desktop. The Desktop needs no 3D: it draws in
-software when the VM has none.</li>
-<li><strong>Proxmox VE:</strong> BIOS <em>OVMF (UEFI)</em>, an EFI disk with <em>Pre-Enroll keys</em> unticked,
-SCSI controller <em>VirtIO SCSI</em>, and for the Desktop, Display <em>VirtIO-GPU</em> (the default display
-garbles it for now). Import the image as a disk:
-<code>qm disk import &lt;vmid&gt; pengyos-…img &lt;storage&gt;</code>, attach it and put it first in the boot order.</li>
-<li><strong>QEMU/KVM, libvirt:</strong> OVMF firmware, virtio disk, network and graphics.
-<a href="/docs/vm.html">Step by step</a>.</li>
-<li><strong>VirtualBox:</strong> System → <em>Enable EFI</em>. Convert the image:
-<code>VBoxManage convertfromraw pengyos-…img pengyos.vdi --format VDI</code>, then attach the
-<code>.vdi</code> to the SATA controller.</li>
-<li><strong>VMware (ESXi, Workstation) and Hyper-V:</strong> from 26.11.10 on, as Generation 2 (Hyper-V) or
-EFI (VMware) VMs with Secure Boot off. Convert the image to <code>.vmdk</code> or <code>.vhdx</code> with
-<code>qemu-img convert</code>. Not yet tried on a real VMware or Hyper-V host: tell us how it goes.</li>
-</ul>
-
-<h2>5. After installing</h2>
+{vm_html}<h2>5. After installing</h2>
 <p>PengyOS checks for updates every day. On the Desktop, <strong>PengyOS Updates</strong> tells you when one
 is ready (you choose whether and when); on a Server, <code>sudo pengyos-update apply</code> installs it.
 An update goes into a second system slot and only becomes the default once it has started cleanly —

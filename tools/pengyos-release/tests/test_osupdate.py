@@ -231,3 +231,21 @@ def test_core_published_earlier_is_no_longer_listed(tmp_path, key):
     (b / "images/pengyos-desktop-x86_64-installer.img").write_bytes(b"x" * 10)
     dest = publish_downloads([b], site, key[0], force=True)
     assert "pengyos-core" not in (dest / "SHA256SUMS").read_text()
+
+
+def test_iso_page_puts_the_iso_first_and_the_img_as_legacy():
+    from pengyos_release.downloads import _download, _write_section, _vm_section
+    e = {"image": "pengyos-server", "name": "Server", "version": "26.11.11",
+         "file": "pengyos-server-26.11.11-x86_64.img.xz", "size": 500 << 20, "raw_size": 2 << 30,
+         "sha256": "a" * 64, "iso": {"file": "pengyos-server-26.11.11-x86_64.iso",
+                                     "size": 900 << 20, "sha256": "b" * 64}}
+    card = _download(e)
+    assert card.index("x86_64.iso") < card.index(".img.xz")
+    assert "Legacy" in card and "b" * 64 in card
+    write = _write_section("26.11.11", True)
+    assert "of=/dev/sdX bs=4M oflag=direct status=progress" in write
+    assert write.index(".iso") < write.index('id="legacy"') < write.index("sgdisk -e")
+    assert "CD/DVD drive" in _vm_section(True)
+    old = {k: v for k, v in e.items() if k != "iso"}
+    assert "Legacy" not in _download(old)
+    assert "sgdisk -e" in _write_section("26.11.11", False) and "second disk" in _vm_section(False)

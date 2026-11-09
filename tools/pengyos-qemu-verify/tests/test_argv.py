@@ -276,3 +276,12 @@ def test_hostfwd_multiple_specs_combine():
 def test_hostfwd_empty_spec_rejected():
     with pytest.raises(ValueError):
         build_argv("img", kvm=False, hostfwd=[""])
+
+
+def test_an_iso_boots_from_a_cd_drive_under_uefi():
+    from pengyos_qemu_verify.argv import _boot_media_args
+    cd = _boot_media_args("/x/p.iso", True)
+    assert "media=cdrom" in cd[1] and "readonly=on" in cd[1] and "snapshot" not in cd[1]
+    assert cd[2:] == ["-device", "ide-cd,drive=cd0,bootindex=1"]
+    disk = _boot_media_args("/x/p.img", True)
+    assert disk == ["-drive", "file=/x/p.img,if=virtio,format=raw,snapshot=on"]

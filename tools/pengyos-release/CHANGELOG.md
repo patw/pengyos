@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] — 2026-11-09
+
+### Added
+- `download-publish` publishes each edition's installer ISO (uncompressed, a
+  hard link when the site shares the build's filesystem) beside its `.img.xz`,
+  both in the signed SHA256SUMS; `downloads.json` entries carry an `iso` object.
+- Download page: when every current edition has an ISO, the ISO is the download
+  button, step 3 is "write it as it is" (any tool, or one plain `dd` with
+  `oflag=direct`), the `.img.xz` and its steps move to a "Legacy" section, and
+  the VM section attaches the ISO as a CD. Releases without ISOs keep the
+  previous page.
+
 ## [0.12.2] — 2026-11-09
 
 ### Changed
