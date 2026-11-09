@@ -1,5 +1,18 @@
 # Changelog — pengyos-update
 
+## [0.3.1] — 2026-11-09
+
+### Fixed
+- An update applied soon after boot was silently dropped: `confirm --boot`
+  (after multi-user.target, two minutes after boot on a machine whose
+  network-online times out, as an offline one does) reset grubenv to
+  "this slot, nothing to try", deleting the `pengyos_try` that `apply` had just
+  set. The restart then booted the old system with no trial. GRUB clears
+  `pengyos_try` on every boot, so on the committed slot a try for the other
+  slot can only be an update staged during this boot: confirm now leaves it.
+  Found in QEMU (4 of 4 restarts 90 s after an apply missed the trial; 11 of 11
+  immediate restarts, before confirm ran, were fine).
+
 ## [0.3.0] — 2026-11-06
 
 ### Added

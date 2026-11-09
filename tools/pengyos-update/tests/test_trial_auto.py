@@ -509,3 +509,18 @@ def test_the_shipped_health_check_and_trial_helper_parse():
     for f in (base / "update-health.d/10-critical-units", base / "update-trial-reboot"):
         assert os.access(f, os.X_OK), f
         assert os.system(f"sh -n {f}") == 0, f
+
+
+def test_an_update_staged_during_this_boot_survives_confirm(machine):
+    # apply ran before confirm --boot did (it waits for multi-user.target, two
+    # minutes behind a network-online timeout): grubenv says "try b once".
+    machine.update(booted="a", env={"pengyos_slot": "a", "pengyos_try": "b"})
+    record_trial(machine["state"], "26.11.5", "26.11.4", "b")
+    assert machine["confirm"]("--boot") == 0
+    assert _Esp.sets == [], "the staged update must not be cleared"
+    s = read(machine["state"])
+    assert s["trial"]["slot"] == "b" and not s.get("failed")
+    assert machine.get("confirmed")
+    # and by hand
+    assert machine["confirm"]() == 0
+    assert _Esp.sets == []

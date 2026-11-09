@@ -474,7 +474,13 @@ def cmd_confirm(args: argparse.Namespace) -> int:
     layout = detect_layout()
     env = read_env(layout.esp)
     committed = env.get("pengyos_slot", "a")
-    already = committed == layout.booted and not env.get("pengyos_try")
+    pending = env.get("pengyos_try", "")
+    # GRUB clears pengyos_try on every boot, so on the committed slot a try for
+    # the OTHER slot was set during this boot: an update applied before this
+    # ran (confirm --boot waits for multi-user.target, two minutes on a machine
+    # whose network-online times out). That boot is kept already; resetting the
+    # environment here would delete the staged update (2026-11-09).
+    already = committed == layout.booted and pending != layout.booted
     image, version, _ = identity()
     if already:
         write_confirmed()
@@ -482,7 +488,7 @@ def cmd_confirm(args: argparse.Namespace) -> int:
             # A recorded trial that is not this slot, with pengyos_try consumed,
             # booted and never kept itself (panic, hang, emergency mode, failed
             # checks): remember it, so nothing installs it again by itself.
-            bad = settle_trial(args.state, layout.booted, committed, env.get("pengyos_try", ""))
+            bad = settle_trial(args.state, layout.booted, committed, pending)
             if bad:
                 say(f"PengyOS {bad} was tried and did not start; this is {version} again")
     elif args.boot and committed != layout.booted:
