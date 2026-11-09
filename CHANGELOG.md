@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: with remote desktop on, the desktop had no portal after login (2026-11-09)
+- session-target now gives WAYLAND_DISPLAY to dbus-daemon's activation
+  environment as well as to systemd. The COSMIC portal backend is started by
+  dbus-daemon, so systemd's copy never reached it. When pengyos-rdp-server asked
+  for the portal first, the backend panicked, and that session had no remote
+  desktop, screen sharing, screenshots or file chooser. The RDP server also
+  retried every 5 seconds until logout. Seen on behotv on every boot since
+  2026-11-01.
+
 ### Fixed: Server root filesystem was full (2026-11-08)
 - The Server image's root filesystem grows from 1 GiB to 1.5 GiB, and the NVIDIA
   Server's from 1.6 GiB to 2.2 GiB. The first 26.11.9 Server build no longer

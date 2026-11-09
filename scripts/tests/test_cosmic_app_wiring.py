@@ -289,6 +289,17 @@ def test_remote_desktop_is_wired():
     assert "ExecStart=/usr/libexec/pengyos-rdp-server" in unit.read_text()
 
 
+
+def test_session_target_gives_the_display_to_dbus_activation_too():
+    """xdg-desktop-portal-cosmic is exec'd by dbus-daemon, not systemd, so the
+    display must reach dbus-daemon's activation environment before the session
+    target starts, or the backend panics and the session has no portal (26.11.9:
+    remote desktop asked for it first, on every login, on behotv)."""
+    script = (ROOT / "buildroot-external/board/desktop/rootfs-overlay/usr/libexec/pengyos/session-target").read_text()
+    update = script.index("dbus-update-activation-environment --systemd WAYLAND_DISPLAY")
+    assert update < script.index("systemctl --user start cosmic-session.target")
+    assert "import-environment" not in script.split("set -u", 1)[1]
+
 def test_the_games_are_one_binary_and_eight_symlinks():
     """tools/pengy-games carries every game: it alone is built and installed,
     and each game's launcher runs a /usr/bin/pengy-<game> symlink to it."""
