@@ -17,6 +17,13 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: Pengy 1.15.1 (2026-11-09)
+- PengyR 1.15.0 -> 1.15.1: context recovery can now compact a tool-heavy chat
+  (it measures the whole request, tool-call arguments included, elides old
+  tool-call arguments for free, and re-derives the answer allowance after each
+  reduction); an endpoint that refuses `max_tokens` no longer loses the turn.
+  Rust sources only; the Qt GUI's build inputs are unchanged.
+
 ### Added: repair an installed system and keep its data (2026-11-09)
 - `pengyos-install repair --target DISK --yes`, from the installer ISO or stick:
   rewrites the system (ESP + slot a, slot b cleared, firmware entry replaced)
