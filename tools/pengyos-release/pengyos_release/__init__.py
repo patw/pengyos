@@ -43,7 +43,7 @@ from .manifest import (
 from .publish import ARTIFACTS, publish
 from .signing import HmacSigner, Signer, StubSigner
 
-__version__ = "0.12.0"
+__version__ = "0.12.1"
 
 __all__ = [
     "__version__",

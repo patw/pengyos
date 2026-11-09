@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] — 2026-11-09
+
+### Changed
+- Download page: the Linux terminal instructions are one line that cannot be
+  half-run (clear the stick, write, fix the partition table), and say up front
+  that the download is a disk image, not an ISO. A new "install in a virtual
+  machine" section covers Proxmox, QEMU/libvirt and VirtualBox, and says VMware
+  and Hyper-V do not work yet. The stale line about Core (no longer a download)
+  is gone.
+
 ## [0.12.0] — 2026-11-08
 
 ### Added

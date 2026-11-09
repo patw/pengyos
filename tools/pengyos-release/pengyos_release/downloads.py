@@ -218,21 +218,27 @@ updates from <a href="/update/">the update feed</a>.</p>
 </ul>
 
 <h2>3. Write it to a USB stick</h2>
-<p><strong>Windows, macOS or Linux:</strong> <a href="https://etcher.balena.io/">balenaEtcher</a> or
-<a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> (“Use custom”) — choose the
-downloaded <code>.img.xz</code> as it is (no need to unpack it), choose the stick, write.
-<strong>Windows:</strong> <a href="https://rufus.ie/">Rufus</a> works too (write in DD image mode).
-<strong>Linux:</strong> GNOME Disks → the stick → ⋮ → <em>Restore Disk Image…</em>.</p>
-<p>From a Linux terminal (replace <code>/dev/sdX</code> with the stick — check with <code>lsblk</code>; the wrong
-letter erases the wrong disk):</p>
-<pre>sha256sum -c SHA256SUMS --ignore-missing          # check the download
-sudo wipefs -a /dev/sdX                            # clear what was on the stick
-xz -dc pengyos-desktop-{v}-x86_64.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
-sudo sgdisk -e /dev/sdX                            # move the backup partition table to the stick's end</pre>
-<p class="warn">If the computer does not list the stick in its boot menu, the stick probably still carries
-an old partition table from earlier use, which some firmware refuses. Clear it first (the
-<code>wipefs</code> and <code>sgdisk -e</code> lines above, or delete all its partitions in your
-disk tool) and write it again.</p>
+<p>The download is a compressed <strong>disk image</strong> (<code>.img.xz</code>), not an ISO. The tools
+below write it as it is: no need to unpack it first.</p>
+<ul>
+<li><strong>Windows, macOS or Linux:</strong> <a href="https://etcher.balena.io/">balenaEtcher</a> or
+<a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> (“Use custom”): choose the
+downloaded <code>.img.xz</code>, choose the stick, write.</li>
+<li><strong>Windows:</strong> <a href="https://rufus.ie/">Rufus</a> works too (write in DD image mode).</li>
+<li><strong>Linux:</strong> GNOME Disks → the stick → ⋮ → <em>Restore Disk Image…</em></li>
+</ul>
+<p><strong>From a Linux terminal</strong>, plain <code>dd</code> is not enough: the image has to be unpacked,
+and a stick that was used before keeps an old partition table at its far end that some computers refuse to
+boot. Run it as <strong>one line</strong>, which does all three steps (clear the stick, write, fix the
+partition table). Set <code>DEV</code> to the stick first; check with <code>lsblk</code>, because the
+wrong name erases the wrong disk.</p>
+<pre>DEV=/dev/sdX
+sudo wipefs -a $DEV &amp;&amp; xz -dc pengyos-desktop-{v}-x86_64.img.xz | sudo dd of=$DEV bs=4M conv=fsync status=progress &amp;&amp; sudo sgdisk -e $DEV</pre>
+<p class="m">To check the download first: <code>sha256sum -c SHA256SUMS --ignore-missing</code> in the folder
+you saved it to.</p>
+<p class="warn">If the computer does not list the stick in its boot menu, the stick still carries an old
+partition table from earlier use. Delete all its partitions in your disk tool (or run the line above) and
+write it again.</p>
 
 <h2>4. Start from the stick</h2>
 <ol>
@@ -242,9 +248,29 @@ disk tool) and write it again.</p>
 on others — and pick the entry that starts with <strong>UEFI</strong> and names the stick.</li>
 <li><strong>Desktop</strong> starts a live desktop: try it, then click <strong>Install PengyOS</strong>,
 pick the disk, choose a computer name, user name and password, and restart when it says so (take the stick
-out). <strong>Server</strong> shows its installer on screen and asks the same questions.
-<strong>Core</strong> simply runs from the stick — write it to an internal disk the same way to keep it.</li>
+out). <strong>Server</strong> shows its installer on screen and asks the same questions.</li>
 </ol>
+
+<h2 id="vm">Or: install in a virtual machine</h2>
+<p>There is no ISO yet. Attach the unpacked image to the VM as a <strong>second disk</strong> (not a CD),
+start from it, install to the VM's own disk, then remove the image disk. Unpack it first: <code>xz -d
+pengyos-…img.xz</code>, or 7-Zip on Windows.</p>
+<ul>
+<li><strong>Every hypervisor:</strong> <strong>UEFI</strong> firmware (not BIOS), Secure Boot off, a blank disk
+of 20 GB or more, 2 GB of memory for the Server, 4 GB for the Desktop. The Desktop needs no 3D: it draws in
+software when the VM has none.</li>
+<li><strong>Proxmox VE:</strong> BIOS <em>OVMF (UEFI)</em>, an EFI disk with <em>Pre-Enroll keys</em> unticked,
+SCSI controller <em>VirtIO SCSI</em>, and for the Desktop, Display <em>VirtIO-GPU</em> (the default display
+garbles it for now). Import the image as a disk:
+<code>qm disk import &lt;vmid&gt; pengyos-…img &lt;storage&gt;</code>, attach it and put it first in the boot order.</li>
+<li><strong>QEMU/KVM, libvirt:</strong> OVMF firmware, virtio disk, network and graphics.
+<a href="/docs/vm.html">Step by step</a>.</li>
+<li><strong>VirtualBox:</strong> System → <em>Enable EFI</em>. Convert the image:
+<code>VBoxManage convertfromraw pengyos-…img pengyos.vdi --format VDI</code>, then attach the
+<code>.vdi</code> to the SATA controller.</li>
+<li><strong>VMware and Hyper-V:</strong> not working yet. Their disk controllers need drivers that are
+coming in the next release.</li>
+</ul>
 
 <h2>5. After installing</h2>
 <p>PengyOS checks for updates every day. On the Desktop, <strong>PengyOS Updates</strong> tells you when one
