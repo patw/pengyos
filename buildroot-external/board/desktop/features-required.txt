@@ -67,6 +67,7 @@ exec      usr/bin/pengyos-appimage                 # inspect/integrate/check —
 exec      usr/libexec/pengyos-rdp-server           # remote desktop (RDP) server — scripts/build-cosmic.sh + desktop post-build.sh
 exec      usr/bin/pengyos-remote                   # turns it on and off — desktop overlay
 exists    usr/lib/systemd/user/pengyos-rdp-server.service   # runs it in the session — desktop overlay
+exec      usr/bin/dbus-update-activation-environment   # session-target gives the portal backend WAYLAND_DISPLAY — BR2_PACKAGE_DBUS
 exec      usr/bin/pengyos-remote-desktop           # the Remote Desktop window — scripts/build-cosmic.sh + desktop post-build.sh
 exec      usr/bin/openssl                          # pengyos-remote makes the TLS certificate — BR2_PACKAGE_LIBOPENSSL_BIN
 exec      usr/bin/pengyos-sharing                  # the File Sharing window — scripts/build-cosmic.sh + desktop post-build.sh

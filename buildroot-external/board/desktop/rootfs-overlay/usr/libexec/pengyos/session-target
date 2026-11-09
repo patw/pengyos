@@ -11,10 +11,19 @@
 # the session bus, and on the systemd user bus it failed outright
 # ("Dependency failed for Portal service").
 #
-# Order matters. Importing WAYLAND_DISPLAY before the target starts is what puts
-# it in the D-Bus activation environment, and the COSMIC portal backend panics
-# (exit 101) when it is activated without one. So: wait for the compositor's
-# socket, import the display, then start the target.
+# Order matters. The COSMIC portal backend panics (exit 101) when it is activated
+# without WAYLAND_DISPLAY, and xdg-desktop-portal then keeps that failure for the
+# whole session: no screen sharing, remote desktop, screenshots or file chooser.
+# So: wait for the compositor's socket, give the display to both environments,
+# then start the target.
+#
+# Both, because the backend is not a systemd unit: its D-Bus service file has no
+# SystemdService=, so dbus-daemon execs it with dbus-daemon's own activation
+# environment, which `systemctl --user import-environment` never touches. Only
+# importing into systemd left the backend without a display whenever something
+# in the target (pengyos-rdp-server, when remote desktop is on) asked for the
+# portal before cosmic-comp updated the activation environment itself, about
+# half a second later. dbus-update-activation-environment --systemd sets both.
 #
 # start-cosmic runs this in the background; it must not race the compositor.
 set -u
@@ -43,8 +52,8 @@ fi
 WAYLAND_DISPLAY="${sock##*/}"
 export WAYLAND_DISPLAY
 
-systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP ||
-    echo "session-target: could not import WAYLAND_DISPLAY into the user manager" >&2
+dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP ||
+    echo "session-target: could not give WAYLAND_DISPLAY to D-Bus activation and the user manager" >&2
 
 if ! systemctl --user start cosmic-session.target; then
     echo "session-target: cosmic-session.target failed to start" >&2
