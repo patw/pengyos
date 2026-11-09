@@ -55,6 +55,8 @@ def test_initramfs_busybox_has_every_applet_init_uses():
         if re.search(rf"\b{cmd}\b", init):
             assert f"CONFIG_{sym}=y" in cfg, cmd
     assert "CONFIG_STATIC=y" in cfg
+    assert "CONFIG_BUSYBOX=y" in cfg and "CONFIG_FEATURE_INSTALLER=y" in cfg  # busybox --install
+    assert "CONFIG_USE_BB_CRYPT=y" in cfg  # no static -lcrypt here
     assert "CONFIG_FEATURE_MOUNT_LOOP=y" in cfg
     assert "CONFIG_FEATURE_FLOAT_SLEEP=y" in cfg  # sleep 0.2
 

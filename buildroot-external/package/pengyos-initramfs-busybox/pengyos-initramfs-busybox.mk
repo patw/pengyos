@@ -25,8 +25,14 @@ PENGYOS_INITRAMFS_BUSYBOX_MAKE_OPTS = \
 	ARCH=$(NORMALIZED_ARCH) \
 	EXTRA_LDFLAGS="-static"
 
+# busybox's kconfig keeps the FIRST setting of a symbol, so allnoconfig's
+# "# CONFIG_X is not set" line for each symbol busybox.config sets is deleted
+# (a sed script made from busybox.config) before busybox.config is appended.
 define PENGYOS_INITRAMFS_BUSYBOX_CONFIGURE_CMDS
 	$(MAKE) -C $(@D) $(PENGYOS_INITRAMFS_BUSYBOX_MAKE_OPTS) allnoconfig
+	sed -n 's/^\(CONFIG_[A-Z0-9_]*\)=.*/\/^# \1 is not set$$\/d/p' \
+		$(PENGYOS_INITRAMFS_BUSYBOX_PKGDIR)/busybox.config > $(@D)/.pengyos-drop.sed
+	sed -i -f $(@D)/.pengyos-drop.sed $(@D)/.config
 	cat $(PENGYOS_INITRAMFS_BUSYBOX_PKGDIR)/busybox.config >> $(@D)/.config
 	yes "" | $(MAKE) -C $(@D) $(PENGYOS_INITRAMFS_BUSYBOX_MAKE_OPTS) oldconfig >/dev/null
 endef
