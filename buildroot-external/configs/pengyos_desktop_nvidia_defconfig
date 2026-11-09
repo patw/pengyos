@@ -753,6 +753,10 @@ BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/
 # 8 GiB root slot (docs/state-layout.md), so it must stay under 8G.
 # 2.5G used at 3000M (92%) once Xwayland/X11 landed; 3500M then 4000M (the
 # distro-parity additions, 2026-09-30). Slots are 8 GiB.
+# Keep it at or under 4096M while it can: installs from before 2026-09-30 have
+# 4 GiB slots, and pengyos-update refuses a bigger image there (reinstall).
+# 475 MiB (12%) free at 26.11.9; board/common/rootfs-headroom.sh fails the
+# build under 150 MiB.
 # BR2_TARGET_ROOTFS_EXT2_SIZE: set by the nvidia layer
 
 # --- Graphics: Mesa (EGL/GBM/GLES) -------------------------------------------
@@ -1515,5 +1519,7 @@ BR2_PACKAGE_NVIDIA_OPEN_VULKAN=y
 # laptop's dGPU from powering down.
 # BR2_PACKAGE_NVIDIA_OPEN_PERSISTENCED is not set
 
-# The driver's userspace + GSP firmware add ~600 MB to the Desktop.
-BR2_TARGET_ROOTFS_EXT2_SIZE="4600M"
+# The driver's userspace + GSP firmware add ~600 MB to the Desktop. 4600M had
+# 383 MiB (8%) free at 26.11.9; 5400M from 26.11.10. This image already needs an
+# 8 GiB root slot (installs from 2026-09-30 on), so raising it costs nothing more.
+BR2_TARGET_ROOTFS_EXT2_SIZE="5400M"

@@ -10,6 +10,9 @@ BOARD_DIR=$(dirname "$0")
 UUID=$(dumpe2fs "$BINARIES_DIR/rootfs.ext2" 2>/dev/null | sed -n 's/^Filesystem UUID: *\(.*\)/\1/p')
 [ -n "$UUID" ] || { echo "post-image: could not read rootfs UUID" >&2; exit 1; }
 
+# A nearly full rootfs fails here, not at the boot check.
+"$BOARD_DIR/../common/rootfs-headroom.sh" "$BINARIES_DIR/rootfs.ext2"
+
 . "$BOARD_DIR/../common/image-ids.sh"
 sed -e "s/DISK_UUID_TMP/$(image_uuid "$UUID" disk)/" \
     -e "s/BOOT_UUID_TMP/$(image_uuid "$UUID" boot)/" \
