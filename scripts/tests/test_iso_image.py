@@ -59,6 +59,8 @@ def test_initramfs_busybox_has_every_applet_init_uses():
     assert "CONFIG_USE_BB_CRYPT=y" in cfg  # no static -lcrypt here
     assert "CONFIG_FEATURE_MOUNT_LOOP=y" in cfg
     assert "CONFIG_FEATURE_FLOAT_SLEEP=y" in cfg  # sleep 0.2
+    if "$((" in init:
+        assert "CONFIG_FEATURE_SH_MATH=y" in cfg  # ash arithmetic, or /init dies at boot
 
 
 def test_the_medium_id_ties_grub_initramfs_and_iso_together():
