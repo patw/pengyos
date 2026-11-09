@@ -268,8 +268,9 @@ garbles it for now). Import the image as a disk:
 <li><strong>VirtualBox:</strong> System → <em>Enable EFI</em>. Convert the image:
 <code>VBoxManage convertfromraw pengyos-…img pengyos.vdi --format VDI</code>, then attach the
 <code>.vdi</code> to the SATA controller.</li>
-<li><strong>VMware and Hyper-V:</strong> not working yet. Their disk controllers need drivers that are
-coming in the next release.</li>
+<li><strong>VMware (ESXi, Workstation) and Hyper-V:</strong> from 26.11.10 on, as Generation 2 (Hyper-V) or
+EFI (VMware) VMs with Secure Boot off. Convert the image to <code>.vmdk</code> or <code>.vhdx</code> with
+<code>qemu-img convert</code>. Not yet tried on a real VMware or Hyper-V host: tell us how it goes.</li>
 </ul>
 
 <h2>5. After installing</h2>
