@@ -1,6 +1,6 @@
 # The installer as an ISO
 
-Status: prototype works in QEMU, 2026-11-09. Branch `feat/iso`.
+Status: built by every Server and Desktop image, 2026-11-09 (branch `feat/iso`).
 
 ## Why
 
@@ -88,8 +88,8 @@ can be pulled; Secure Boot stays out of scope.
 
 ## Prototype results (2026-11-09)
 
-`scripts/iso/make-iso.sh EDITION KERNEL OUT.iso` builds an ISO from a finished
-edition build (`images/rootfs.tar`, `images/payload/`, the edition's GRUB build)
+The prototype (`scripts/iso/make-iso.sh`, since replaced by
+`board/common/iso-image.sh`) built an ISO from a finished edition build (`images/rootfs.tar`, `images/payload/`, the edition's GRUB build)
 and a kernel with `CONFIG_EROFS_FS=y`; `scripts/iso/init` is the initramfs. Tools
 for now from the box's Ubuntu (erofs-utils 1.9, xorriso 1.5.6, busybox-static,
 dosfstools, mtools); the real build takes Buildroot's host packages.
@@ -126,3 +126,22 @@ Still to do before it can ship: the build integration (kernel option, Buildroot
 host packages, initramfs from Buildroot's busybox, post-image), the NVIDIA
 editions (their modules), the release changes and boot check, and real hardware:
 beholaptop (behoweather done).
+
+## In the build (2026-11-09)
+
+- `board/core/linux.fragment`: `CONFIG_EROFS_FS=y` (+ ZIP, xattrs, ACLs).
+- `configs/layers/server.config` (so all four editions):
+  `BR2_TARGET_ROOTFS_EROFS` (lz4hc 12) makes `images/rootfs.erofs` from the same
+  target tree as the ext4; `BR2_PACKAGE_HOST_XORRISO`;
+  `BR2_PACKAGE_PENGYOS_INITRAMFS_BUSYBOX` (`package/pengyos-initramfs-busybox`:
+  static, allnoconfig + `busybox.config`, installed to `images/` only).
+- `board/common/iso-image.sh EDITION ISO ROOT_PARTUUID`, run by each edition's
+  post-image after `installer-image.sh`: `images/pengyos-<edition>-x86_64.iso`.
+  `board/common/iso/init` is the initramfs.
+- Installers: `pengyos-live-installer.service` starts on either payload (`|`
+  conditions), `live-installer` and `console-installer` accept either, the
+  installers' text says "USB stick or disc".
+- Release: `release.sh` also boots each ISO from a CD drive (`pengyos-qemu-verify`
+  puts a `.iso` in a CD drive); `download-publish` publishes the ISO beside the
+  `.img.xz`, and the page leads with the ISO and shows the `.img.xz` as legacy
+  (one release; then drop the `.img.xz` and `installer-image.sh`'s stick).
