@@ -119,7 +119,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-sharing` | Desktop: the File Sharing window over pengyos-shares (`--list` prints the same as text) |
 | `pengyos-fans` | Server/Desktop: which fans can be controlled and how they are set. `sudo pengyos-fans detect` maps each fan control to its fan (spins each up for a few seconds), then `sudo pengyos-fans profile quiet\|balanced\|full\|firmware`; `name`, `role`, `follow CHANNEL cpu+gpu` per fan. Laptops: firmware profiles only. Mini PCs: nothing to control |
 | `pengyos-hwmon --check` | Server/Desktop: every temperature, fan, voltage, clock and power reading as text, with each device's limit and where it came from (`pengyos-hwmon` alone is the live view for a person) |
-| `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers |
+| `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers, `cuda` (NVIDIA editions) the one with a GPU. `list` shows declared guests that are not created yet; `dx --list` is the same |
 | `distrobox create\|enter` | a full distro userspace sharing `$HOME` |
 | `flatpak install flathub <app>` | third-party GUI apps (Desktop) |
 
@@ -209,7 +209,14 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
   idle minutes (`pengyos-console-blank.service`); a key brings it back. None of
   this runs on the Desktop.
 - **GPU compute runs in containers; the toolkits are not on the host.** NVIDIA
-  (Server/Desktop NVIDIA): `podman run --device nvidia.com/gpu=all IMAGE` (CDI).
+  (Server/Desktop NVIDIA): to build or run GPU code (CUDA, PyTorch,
+  `torch.compile`, llama.cpp) use the **`cuda` guest**: `pengyos-guest apply cuda`
+  once, then `dx -g cuda CMD`. It shares the host driver; **`dev` has no GPU** —
+  don't wire libcuda into it by hand. To run a ready-made image:
+  `podman run --device nvidia.com/gpu=all IMAGE` (CDI). Driver libraries live in
+  `/usr/lib` (`libcuda.so.1`), on the host and in the guest, never
+  `/usr/lib/x86_64-linux-gnu`: an `ls` of the Debian path finding nothing is not
+  evidence of a missing driver. Find a library with `ldconfig -p | grep NAME`.
   AMD (ROCm: gufo, halogen, llama.cpp-rocm, PyTorch): `podman run --device /dev/kfd
   --device /dev/dri --group-add keep-groups --ulimit memlock=-1:-1 IMAGE`; ROCm is in
   the image. An APU (Strix Halo, Ryzen iGPU) only gets about half of RAM for the GPU

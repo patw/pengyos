@@ -212,6 +212,7 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
     ab = has(target, "usr/bin/pengyos-update")
     guest = real(target, "pengyos-guest")
     dx = real(target, "dx")
+    cuda = guest and has(target, "usr/share/pengyos/guests.d/cuda.toml")
     podman = real(target, "podman")
     quadlet_readme = has(target, "etc/containers/systemd/README")
     flatpak = real(target, "flatpak")
@@ -292,6 +293,17 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
         else:
             L += ["    pengyos-guest enter dev       a shell in the guest"]
         L += ["", "  What you build there runs on the host: the guest's glibc is older.", ""]
+        if cuda:
+            # The dev guest has no GPU; on 2026-11-10 an agent spent hours wiring
+            # libcuda into dev by hand because nothing named this guest.
+            L += ["  GPU code (CUDA, PyTorch, torch.compile, llama.cpp) goes in the cuda guest:",
+                  "  the CUDA toolkit on Ubuntu, with this machine's NVIDIA driver shared in.",
+                  "  The dev guest has no GPU.", "",
+                  "    pengyos-guest apply cuda      once",
+                  ("    dx -g cuda nvidia-smi         one command in it" if dx
+                   else "    pengyos-guest enter cuda      a shell in it"), "",
+                  "  NVIDIA's libraries are in /usr/lib (libcuda.so.1), on the host and in",
+                  "  the guest, not /usr/lib/x86_64-linux-gnu.", ""]
         if pyver and uv and dx:
             # Proven on behothinkpad (26.11.1, 2026-11-05): netifaces from its sdist
             # and a local C extension, built in the guest, imported on the host.
@@ -333,7 +345,10 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
                   "        --ulimit memlock=-1:-1 IMAGE",
                   "  An APU (Strix Halo) maps system RAM: pengyos-gpu-memory set max, reboot.", ""]
         if real(target, "nvidia-ctk") or has(target, "etc/cdi/nvidia.yaml"):
-            L += ["  An NVIDIA GPU in a container: podman run --device nvidia.com/gpu=all IMAGE", ""]
+            L += ["  An NVIDIA GPU in a container: podman run --device nvidia.com/gpu=all IMAGE"]
+            if cuda:
+                L += ["  (to build or develop GPU code, the cuda guest does this for you: BUILDING CODE)"]
+            L += [""]
         if services:
             L += ["  pengyos-services status shows what this machine serves: every unit,",
                   "  container" + (" and VM" if vm else "") + ", whether it starts after a reboot, its ports, whether",

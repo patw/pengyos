@@ -201,3 +201,18 @@ def test_ssh_cmd_users_get_the_pointer():
     assert 'PENGYOS_README="/usr/share/pengyos.txt"' in osr
     for skill in ("skill_index.md", "pengyos/pengyos_skill.md"):
         assert "/usr/share/pengyos.txt" in (EXT / "board/core/rootfs-overlay/etc/skel/skills" / skill).read_text()
+
+
+def test_nvidia_names_the_cuda_guest(tmp_path):
+    # The dev guest has no GPU; an NVIDIA image must route GPU work to cuda.
+    t = tree(tmp_path, "Desktop NVIDIA", "desktop-nvidia", DESKTOP_TOOLS + ["nvidia-ctk"],
+             extra=["usr/share/pengyos/guests.d/cuda.toml"])
+    txt = run(t)
+    assert "pengyos-guest apply cuda" in txt and "dx -g cuda" in txt
+    assert "The dev guest has no GPU." in txt
+    assert "/usr/lib (libcuda.so.1)" in txt
+
+
+def test_no_cuda_guest_no_cuda_claim(tmp_path):
+    t = tree(tmp_path, "Desktop", "desktop", DESKTOP_TOOLS)
+    assert "cuda" not in run(t).lower()
