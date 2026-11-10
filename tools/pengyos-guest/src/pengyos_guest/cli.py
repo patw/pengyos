@@ -43,7 +43,12 @@ def _guest(book: Guestbook, name: str) -> Guest | None:
 
 
 def cmd_list(config: str | None, *, out=None, manager=None) -> int:
-    """One line per declared guest: name, image, whether it exists, description."""
+    """One line per declared guest: name, image, whether it exists, description.
+
+    A guest that shares the host's NVIDIA driver ends its description with
+    ``[GPU]``: dx's card and pengyos.txt route GPU work by it, and ``dev`` (the
+    default) has no GPU.
+    """
     out = out if out is not None else sys.stdout
     book = _book(config)
     if manager is None:
@@ -51,8 +56,9 @@ def cmd_list(config: str | None, *, out=None, manager=None) -> int:
     for guest in book.guests:
         state = "created" if manager.container_exists(guest.name) else "not created"
         line = f"{guest.name}\t{guest.image}\t{state}"
-        if guest.description:
-            line += f"\t{guest.description}"
+        about = " ".join(x for x in (guest.description, "[GPU]" if guest.nvidia else "") if x)
+        if about:
+            line += f"\t{about}"
         print(line, file=out, flush=True)
     return 0
 

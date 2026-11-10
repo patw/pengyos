@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — `list` marks GPU guests (2026-11-10)
+- A guest with `nvidia = true` ends its `list` description with `[GPU]`. The
+  image's `dx` card prints `pengyos-guest list`, so the cuda box is named where
+  GPU work starts; an agent had wired libcuda into `dev` (no GPU) by hand.
+
 ### Changed — dev box: sudo is verified; the wheel recipe (2026-11-05)
 - **`dev.toml`** verifies `sudo -n true`: sudo in the rootless box needs no
   password (distrobox's `NOPASSWD` rule), the setup steps rely on it, and an agent

@@ -66,6 +66,22 @@ def test_list_defaults_to_image_and_user_guests(guests_dirs):
     ]
 
 
+def test_list_marks_gpu_guests(guests_dirs):
+    # dx and pengyos.txt route GPU work by this marker; dev has no GPU.
+    system, user = guests_dirs
+    (system / "dev.toml").write_text(DEV, encoding="utf-8")
+    (system / "cuda.toml").write_text(
+        '[guests.cuda]\nimage = "nvidia/cuda:13"\ndescription = "CUDA box"\nnvidia = true\n',
+        encoding="utf-8")
+    user.write_text('[guests.bare]\nimage = "x:1"\nnvidia = true\n', encoding="utf-8")
+    code, out, _ = run(["list"], fake=FakeRunner())
+    assert code == 0
+    lines = {line.split("\t")[0]: line for line in out.splitlines()}
+    assert lines["cuda"].endswith("\tCUDA box [GPU]")
+    assert lines["bare"].endswith("\t[GPU]")
+    assert "[GPU]" not in lines["dev"]
+
+
 def test_list_missing_config_errors(tmp_path):
     code, _, err = run(["--config", str(tmp_path / "missing.toml"), "list"], fake=FakeRunner())
     assert code == 2

@@ -36,17 +36,19 @@ dx: run build commands in a guest, because the host image has no toolchain.
   The directory is kept and the exit code is the command's. What you build runs
   on the host (the guest's glibc is older than the host's).
 CARD
-    # NVIDIA images ship a second guest; dev has no GPU, and nothing else on the
-    # card says another guest exists.
-    if [ -e /usr/share/pengyos/guests.d/cuda.toml ]; then
-        cat <<CARD
-
-  GPU work (CUDA, PyTorch, torch.compile) goes in the cuda guest, which shares
-  this machine's NVIDIA driver; dev has no GPU:
-  pengyos-guest apply cuda    once (CUDA toolkit on Ubuntu)
-  dx -g cuda <command>        e.g. dx -g cuda nvidia-smi
-CARD
-    fi
+    # The guests this machine declares, created or not, from pengyos-guest
+    # itself, so a guest added to the image or to ~/.config shows up here with no
+    # change to dx. [GPU] marks one that shares the host's NVIDIA driver.
+    local list
+    list=$(pengyos-guest list 2>/dev/null) || return 0
+    [ -n "$list" ] || return 0
+    echo
+    echo "  Guests (pengyos-guest apply NAME once, then dx -g NAME <command>):"
+    printf '%s\n' "$list" | awk -F'\t' '{printf "    %-8s %-12s %s\n", $1, $3, $4}'
+    case "$list" in *"[GPU]"*)
+        echo "  GPU work (CUDA, PyTorch, torch.compile) goes in a [GPU] guest; the"
+        echo "  others have no GPU. NVIDIA's libraries are in /usr/lib, host and guest." ;;
+    esac
 }
 
 case "${1-}" in

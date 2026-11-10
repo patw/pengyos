@@ -119,7 +119,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-sharing` | Desktop: the File Sharing window over pengyos-shares (`--list` prints the same as text) |
 | `pengyos-fans` | Server/Desktop: which fans can be controlled and how they are set. `sudo pengyos-fans detect` maps each fan control to its fan (spins each up for a few seconds), then `sudo pengyos-fans profile quiet\|balanced\|full\|firmware`; `name`, `role`, `follow CHANNEL cpu+gpu` per fan. Laptops: firmware profiles only. Mini PCs: nothing to control |
 | `pengyos-hwmon --check` | Server/Desktop: every temperature, fan, voltage, clock and power reading as text, with each device's limit and where it came from (`pengyos-hwmon` alone is the live view for a person) |
-| `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers, `cuda` (NVIDIA editions) the one with a GPU. `list` shows declared guests that are not created yet; `dx --list` is the same |
+| `pengyos-guest list\|enter <name>` | declarative distrobox guests; `dev` is the box with compilers, `cuda` (NVIDIA editions) the one with a GPU. `list` shows declared guests that are not created yet and marks a GPU guest `[GPU]`; `dx --list` is the same |
 | `distrobox create\|enter` | a full distro userspace sharing `$HOME` |
 | `flatpak install flathub <app>` | third-party GUI apps (Desktop) |
 
