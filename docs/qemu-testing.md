@@ -179,6 +179,22 @@ freshly at build time.
 
 ---
 
+### 4b. Conformance probes — what "normal Linux" software checks for
+
+`scripts/conformance-probes.toml` lists the conventions installers, libraries
+and agents probe for (`ldconfig -p`, `ctypes.util.find_library`, `getconf`,
+OpenSSL's default CA file, the `ld-linux` path, ...) and the ones PengyOS leaves
+out on purpose, each with its reason. Run them in a booted image (built with
+`PENGYOS_AUTHORIZED_KEYS_FILE`); every probe is one pass/fail in the report:
+
+```sh
+python3 scripts/conformance-probes.py boot ~/build/pengyos/output/<target>/images/<img> --timeout 180
+python3 scripts/conformance-probes.py local     # the machine you are on
+```
+
+Before dropping something the OS does not itself need, add a probe for it: an
+`absent = "reason"` entry makes the omission a decision, not a field report.
+
 ## 5. Validating the Desktop — screenshot it, don't just trust it
 
 A graphical session can be "up" (systemd says the units are active) while the screen

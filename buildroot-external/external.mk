@@ -100,6 +100,15 @@ define PENGYOS_GLIBC_INSTALL_LDCONFIG_EVERYWHERE
 	$(INSTALL) -D -m 0755 $(@D)/build/elf/ldconfig $(TARGET_DIR)/usr/bin/ldconfig
 endef
 GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_LDCONFIG_EVERYWHERE
+# getconf and iconv likewise: build scripts ask `getconf _NPROCESSORS_ONLN` and
+# `getconf LONG_BIT`, and text pipelines call iconv. getent, ldd, locale and
+# ldconfig above were each added after something failed in the field; these two
+# were found by the conformance probes (scripts/conformance-probes.toml) instead.
+define PENGYOS_GLIBC_INSTALL_GETCONF_ICONV
+	$(INSTALL) -D -m 0755 $(@D)/build/posix/getconf $(TARGET_DIR)/usr/bin/getconf
+	$(INSTALL) -D -m 0755 $(@D)/build/iconv/iconv_prog $(TARGET_DIR)/usr/bin/iconv
+endef
+GLIBC_POST_INSTALL_TARGET_HOOKS += PENGYOS_GLIBC_INSTALL_GETCONF_ICONV
 
 # podman: Buildroot builds only cmd/podman. Rootless containers on a
 # user-defined network (podman network create, every podman-compose project)
