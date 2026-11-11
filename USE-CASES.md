@@ -636,7 +636,8 @@ password; TLS with a certificate made for the machine; the first session asks on
 logs in with the user name and that password and shows and drives the live screen; a wrong
 password is refused before anything is shown; `off` closes the port; a desktop that booted
 with no monitor (headless, or the monitor asleep) shows its virtual 1920x1080 display
-(`pengyos-virtual-display`). Not covered: a second,
+(`pengyos-virtual-display`), and `pengyos-remote approve` over SSH allows sharing when nobody
+is at the screen to answer the question. Not covered: a second,
 separate session, audio, clipboard, multiple monitors.
 
 **US-DSK-18 — Share a folder with the house, without a terminal.**

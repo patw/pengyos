@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Stand-ins for systemctl --user, openssl and ip, picked by the name they are
+"""Stand-ins for systemctl --user, openssl, ip and busctl, picked by the name they are
 installed as (DIR/usr/bin/NAME). Unit state in DIR/units/; calls in DIR/calls.log.
 DIR/no-session makes `start`/`restart` fail as Requisite=graphical-session.target does.
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -33,6 +34,17 @@ if NAME == "systemctl":
             print("Job failed: dependency", file=sys.stderr)
             sys.exit(1)
         state.write_text("active")
+        # DIR/listens: the server comes up (the portal restored the permission);
+        # DIR/asks: it waits on the on-screen question.
+        log = Path(os.environ["HOME"]) / ".local" / "state" / "pengyos-remote" / "server.log"
+        for flag, lines in (("asks", ["portal: starting (approve the dialog on the machine if it appears)"]),
+                            ("listens", ["portal: starting (approve the dialog on the machine if it appears)",
+                                         "portal: stream node 62 size 1920x1080",
+                                         "rdp: listening on 0.0.0.0:3389"])):
+            if (ROOT / flag).exists():
+                log.parent.mkdir(parents=True, exist_ok=True)
+                with open(log, "a") as f:
+                    f.write("\n".join(lines) + "\n")
     elif verb == "enable":
         (units / (unit + ".enabled")).touch()
     elif verb == "disable":
@@ -48,6 +60,10 @@ if NAME == "openssl":
     elif ARGS[0] == "x509":
         print("sha256 Fingerprint=AB:CD:EF")
     sys.exit(0)
+
+if NAME == "busctl":
+    # the user's permission store: record the call (calls.log), answer like busctl
+    sys.exit(1 if (ROOT / "store-fails").exists() else 0)
 
 if NAME == "ip":
     print(json.dumps([
