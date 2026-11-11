@@ -101,14 +101,14 @@ def test_classify_text(capsys):
     assert "greetd" in out
     assert "libdisplay-info" in out
     # The provenance tag is printed.
-    assert "2026.08" in out
+    assert "2026.08.1" in out
 
 
 def test_classify_json_matches_the_committed_data(capsys):
     rc = cli.main(["classify", "--json"])
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["buildroot_tag"] == "2026.08"
+    assert payload["buildroot_tag"] == "2026.08.1"
     by_name = {e["name"]: e for e in payload["classification"]}
     assert by_name["greetd"]["status"] == "recipe_needed"
     assert by_name["libdisplay-info"]["status"] == "shipped"

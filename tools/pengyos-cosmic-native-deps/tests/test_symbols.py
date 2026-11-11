@@ -15,7 +15,7 @@ import pytest
 import pengyos_cosmic_native_deps.symbols as symbols
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SYMBOLS_PATH = ROOT.parents[1] / "scripts" / "tests" / "fixtures" / "buildroot-2026.08-symbols.txt"
+SYMBOLS_PATH = ROOT.parents[1] / "scripts" / "tests" / "fixtures" / "buildroot-2026.08.1-symbols.txt"
 
 
 def test_default_symbol_list_path_points_at_the_committed_snapshot():
@@ -40,12 +40,12 @@ def test_load_is_case_sensitive_to_the_symbol_name():
 
 def test_tag_is_parsed_from_the_provenance_header():
     loaded = symbols.SymbolList.load(SYMBOLS_PATH)
-    assert loaded.tag == "2026.08"
+    assert loaded.tag == "2026.08.1"
 
 
 def test_source_records_the_provenance_label():
     loaded = symbols.SymbolList.load(SYMBOLS_PATH)
-    assert loaded.source == "buildroot-2026.08-symbols.txt (tag 2026.08)"
+    assert loaded.source == "buildroot-2026.08.1-symbols.txt (tag 2026.08.1)"
 
 
 def test_load_rejects_a_missing_file():

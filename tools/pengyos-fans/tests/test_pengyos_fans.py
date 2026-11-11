@@ -73,13 +73,22 @@ class Machine:
     def physics(self):
         """In manual mode a fan turns at 300 + 1250 * duty RPM (1550 at full) and
         stops below its stall duty (percent); otherwise at its idle speed, which is
-        whatever the chip's own curve gives it."""
+        whatever the chip's own curve gives it.
+
+        Plain files are not sysfs: a write truncates first, so a reader can land on
+        an empty file. The tool's writes may be caught half-done, so an empty pwm or
+        enable file waits for the next pass instead of reading as 0 or "not manual";
+        the fan reading is replaced atomically, so the tool never reads it empty.
+        Without this, `detect` lost fans on the 2-vCPU CI runner (11-11)."""
         def loop():
             while not self.stop.is_set():
                 for pwm, (fan, en, idle, stall) in self.links.items():
                     try:
-                        v = int((pwm.read_text().strip() or "0"))
+                        raw = pwm.read_text().strip()
                         e = en.read_text().strip() if en.exists() else "1"
+                        if not raw or not e:
+                            continue
+                        v = int(raw)
                     except (OSError, ValueError):
                         continue
                     if e != "1":
@@ -88,7 +97,9 @@ class Machine:
                         rpm = 0
                     else:
                         rpm = 300 + int(1250 * v / 255)
-                    fan.write_text(f"{rpm}\n")
+                    tmp = fan.with_name(f".{fan.name}.tmp")
+                    tmp.write_text(f"{rpm}\n")
+                    os.replace(tmp, fan)
                 time.sleep(0.01)
         self.thread = threading.Thread(target=loop, daemon=True)
         self.thread.start()
@@ -330,6 +341,21 @@ def cp(m, n):
     return int(m.r(f"sys/class/hwmon/hwmon1/pwm{n}"))
 
 
+def wait_duty(m, n, ok, timeout=10.0):
+    """The channel's duty once `ok` holds (or the last one read at the deadline),
+    skipping a read that lands inside the service's truncate-then-write."""
+    end = time.monotonic() + timeout
+    d = None
+    while True:
+        try:
+            d = cp(m, n)
+        except ValueError:
+            pass  # caught mid-write; keep the last good reading
+        if (d is not None and ok(d)) or time.monotonic() >= end:
+            return d
+        time.sleep(0.02)
+
+
 def test_a_usb_controller_gets_a_software_curve(m):
     commander(m)
     out = run(m, "detect").stdout
@@ -378,11 +404,12 @@ def test_the_service_holds_its_duty_while_running(m):
     set_cpu(m, 35)
     p = subprocess.Popen([sys.executable, str(SCRIPT), "--root", str(m.root), "--tick", "0.05", "run"],
                          stdout=subprocess.PIPE, text=True)
-    time.sleep(1.5)
-    mid = cp(m, 1)
+    # Wait on the duty, not a fixed sleep: a slow runner starts Python late.
+    mid = wait_duty(m, 1, lambda d: d >= round(30 * 255 / 100))
+    time.sleep(0.5)  # a few more ticks at 35 °C must not creep to full
+    mid = wait_duty(m, 1, lambda d: True)
     set_cpu(m, 85)
-    time.sleep(0.5)
-    hot = cp(m, 1)
+    hot = wait_duty(m, 1, lambda d: d == 255)
     p.send_signal(signal.SIGTERM)
     p.wait(timeout=10)
     assert round(30 * 255 / 100) <= mid < 240

@@ -36,10 +36,21 @@ jobs:
       # cannot parse breaks every Server login shell. The runner image has no
       # zsh, so it must be installed here (it was missing 2026-10-12→14: the
       # suite failed with FileNotFoundError: 'zsh' on every push).
+      #
+      # nftables + the userns sysctl: pengyos-firewall checks the shipped ruleset
+      # with the real `nft -c` inside `unshare -rn`. Ubuntu 24.04's AppArmor blocks
+      # unprivileged user namespaces by default, so unshare failed and the suite
+      # was red on every push from 11-08 (it skips only when nft/unshare are absent).
+      #
+      # libpipewire-0.3-dev, libclang-dev, pkg-config: pengyos-rdp-server's
+      # `pipewire` crate binds libspa/libpipewire through bindgen + pkg-config, and
+      # the runner image has neither the headers nor the .pc files.
       - name: Host tools for the image tests
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gdisk dosfstools mtools zstd zsh
+          sudo apt-get install -y --no-install-recommends gdisk dosfstools mtools zstd zsh \
+            nftables libpipewire-0.3-dev libclang-dev pkg-config
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       # The Rust tools' default `cargo test` is std-only (libcosmic is behind an
       # off-by-default feature), so the runner's stable toolchain is enough.

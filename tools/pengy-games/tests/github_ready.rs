@@ -49,7 +49,12 @@ fn every_game_is_linked_with_its_window_and_wired_into_the_desktop() {
         assert!(entry.is_some(), "a launcher runs {}", g.binary);
     }
     let build = read(repo().join("scripts/build-cosmic.sh"));
-    assert!(build.contains(" pengy-games;"), "build-cosmic.sh builds pengy-games");
+    // Match the app loop's words, not a literal: the list grows after pengy-games.
+    let app_loop = build
+        .lines()
+        .find(|l| l.trim_start().starts_with("for app in "))
+        .expect("build-cosmic.sh has an app loop");
+    assert!(app_loop.split_whitespace().any(|w| w.trim_end_matches(';') == "pengy-games"), "build-cosmic.sh builds pengy-games");
     assert!(post.contains("install -Dm0755 \"${GAMES_GUI}\" \"${TARGET_DIR}/usr/bin/pengy-games\""));
     // Only the shared binary ships: no game is built or installed on its own.
     for g in pengy_games::GAMES.iter() {
