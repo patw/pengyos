@@ -1,0 +1,22 @@
+# PengyOS Desktop: a virtual 1920x1080 display when the machine boots with no
+# monitor, so the desktop starts and remote desktop works headless. Without a
+# connected output cosmic-comp exits at startup and nothing draws for the whole
+# boot (behobasement, 2026-11-11). See /usr/libexec/pengyos/pengyos-virtual-display;
+# VIRTUAL_DISPLAY=off in /etc/pengyos/display.conf turns it off.
+#
+# Before greetd, so greetd's wait for a connected output (wait-for-seat.conf)
+# finds the virtual one. It waits up to 15 s for a GPU driver and 3 s for a
+# monitor; with a monitor awake it is done as soon as the driver probes it.
+[Unit]
+Description=Virtual display when no monitor is connected
+After=systemd-udev-trigger.service systemd-modules-load.service sys-kernel-debug.mount
+Wants=sys-kernel-debug.mount
+Before=greetd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/pengyos/pengyos-virtual-display boot
+
+[Install]
+WantedBy=multi-user.target

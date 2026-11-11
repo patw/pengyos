@@ -1,0 +1,5 @@
+# PengyOS Desktop: when a monitor is plugged in while the virtual display (made
+# at boot because no monitor was connected) is up, let the virtual one go, so
+# the desktop does not extend onto a screen nobody sees. It does nothing unless
+# pengyos-virtual-display.service forced a port this boot (/run/pengyos/virtual-display).
+ACTION=="change", SUBSYSTEM=="drm", KERNEL=="card[0-9]*", ENV{HOTPLUG}=="1", RUN+="/usr/libexec/pengyos/pengyos-virtual-display hotplug"
