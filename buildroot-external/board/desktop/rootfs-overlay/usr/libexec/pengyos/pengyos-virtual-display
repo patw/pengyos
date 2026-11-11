@@ -1,0 +1,134 @@
+#!/bin/sh
+# pengyos-virtual-display boot|hotplug: give a Desktop that boots with no monitor
+# one virtual 1920x1080 display, so the desktop starts and remote desktop works.
+#
+# cosmic-comp exits at startup when no output is connected ("Backend initialized
+# without output"). On a box run headless, or whose monitor drops off HDMI while
+# asleep, nothing then draws, the portal panics "NoCompositor" every ~40 s as
+# pengyos-rdp-server asks for it, and remote desktop is dead until a reboot with
+# a monitor awake (behobasement: 3288 panics in 37 h on 26.11.11, 2026-11-11).
+#
+# boot (pengyos-virtual-display.service, before greetd): once the GPU driver has
+# made its connectors, give a monitor 3 s to show up. If none does, force one
+# port on with a 1080p EDID (/usr/share/pengyos/virtual-display.edid, through
+# DRM debugfs edid_override), exactly what a "dummy plug" does in hardware.
+# Ports: the last HDMI, else DVI, else VGA, so a monitor that sleeps through the
+# boot on HDMI-1 keeps its own port. Never DisplayPort or a laptop panel: DP
+# trains a link with a real sink, and a forced eDP lights nothing.
+#
+# hotplug (60-pengyos-virtual-display.rules, on a DRM change): when a real
+# monitor appears on another port, let the virtual one go so the desktop does
+# not extend onto a screen nobody sees. It never forces a port after boot: a
+# monitor that drops off when it sleeps would get a virtual output that the
+# compositor lights, and could be woken again and again.
+#
+# A monitor later plugged into the forced port itself shows at 1080p (the
+# virtual EDID stands) until the next boot. VIRTUAL_DISPLAY=off in
+# /etc/pengyos/display.conf turns it off.
+#
+# PENGYOS_DRM, PENGYOS_DRI_DEBUG, PENGYOS_VIRTUAL_EDID, PENGYOS_VIRTUAL_STATE and
+# PENGYOS_DISPLAY_CONF replace the paths, PENGYOS_VIRTUAL_WAIT the 3 s and
+# PENGYOS_GPU_WAIT the 15 s for a GPU driver, both in tenths (tests).
+DRM=${PENGYOS_DRM:-/sys/class/drm}
+DEBUG=${PENGYOS_DRI_DEBUG:-/sys/kernel/debug/dri}
+EDID=${PENGYOS_VIRTUAL_EDID:-/usr/share/pengyos/virtual-display.edid}
+STATE=${PENGYOS_VIRTUAL_STATE:-/run/pengyos/virtual-display}
+CONF=${PENGYOS_DISPLAY_CONF:-/etc/pengyos/display.conf}
+WAIT=${PENGYOS_VIRTUAL_WAIT:-30}
+GPU_WAIT=${PENGYOS_GPU_WAIT:-150}
+VIRTUAL_DISPLAY=auto
+case "$CONF" in /*) ;; *) CONF=./$CONF ;; esac
+[ -r "$CONF" ] && . "$CONF"
+
+say() {
+    echo "$*"
+    # udev runs hotplug with no journal on stdout
+    [ "${MODE:-}" = hotplug ] && command -v logger >/dev/null && logger -t pengyos-virtual-display -- "$*"
+    return 0
+}
+
+connectors() {
+    for c in "$DRM"/card[0-9]*-*; do
+        [ -e "$c/status" ] && echo "$c"
+    done
+}
+
+# card0-HDMI-A-1 -> HDMI-A-1
+port() { n=${1##*/}; echo "${n#card*-}"; }
+
+# DRM debugfs file for connector $1: /sys/kernel/debug/dri/<card number>/<port>/$2
+dbg() { n=${1##*/}; n=${n%%-*}; echo "$DEBUG/${n#card}/$(port "$1")/$2"; }
+
+connected() { [ "$(cat "$1/status" 2>/dev/null)" = connected ]; }
+
+any_connected() {
+    for c in $(connectors); do connected "$c" && return 0; done
+    return 1
+}
+
+pick() {
+    for kind in HDMI-A DVI-D DVI-I DVI-A VGA; do
+        last=
+        for c in $(connectors); do
+            case "$(port "$c")" in "$kind"-[0-9]*) last=$c ;; esac
+        done
+        [ -n "$last" ] && { echo "$last"; return 0; }
+    done
+    return 1
+}
+
+release() {
+    echo reset > "$(dbg "$1" edid_override)" 2>/dev/null
+    echo detect > "$1/status" 2>/dev/null
+    rm -f "$STATE"
+}
+
+boot() {
+    case "$VIRTUAL_DISPLAY" in
+        off) echo "VIRTUAL_DISPLAY=off in $CONF: no virtual display"; exit 0 ;;
+        auto) ;;
+        *) echo "VIRTUAL_DISPLAY=$VIRTUAL_DISPLAY in $CONF is not auto or off; using auto" ;;
+    esac
+    n=0
+    while [ -z "$(connectors)" ] && [ "$n" -lt "$GPU_WAIT" ]; do sleep 0.1; n=$((n + 1)); done
+    [ -n "$(connectors)" ] || { echo "no display connectors (no GPU driver): nothing to do"; exit 0; }
+    n=0
+    while ! any_connected && [ "$n" -lt "$WAIT" ]; do sleep 0.1; n=$((n + 1)); done
+    any_connected && { echo "a monitor is connected: no virtual display"; exit 0; }
+
+    c=$(pick) || { echo "no monitor, and no HDMI, DVI or VGA port to put a virtual display on"; exit 0; }
+    p=$(port "$c")
+    if ! cat "$EDID" > "$(dbg "$c" edid_override)" 2>/dev/null; then
+        echo "no monitor, but $(dbg "$c" edid_override) cannot be written (debugfs?): no virtual display"
+        exit 0
+    fi
+    echo on > "$c/status"
+    if [ -z "$(head -n 1 "$c/modes" 2>/dev/null)" ]; then
+        release "$c"
+        echo "no monitor, and the GPU driver gave forced $p no modes: no virtual display"
+        exit 0
+    fi
+    mkdir -p "${STATE%/*}"
+    echo "$c" > "$STATE"
+    echo "no monitor: $p is a virtual $(head -n 1 "$c/modes") display, so the desktop and remote desktop run headless. A monitor on another port replaces it; VIRTUAL_DISPLAY=off in $CONF turns it off."
+}
+
+hotplug() {
+    [ -r "$STATE" ] || exit 0
+    forced=$(cat "$STATE")
+    for c in $(connectors); do
+        [ "$c" = "$forced" ] && continue
+        if connected "$c"; then
+            release "$forced"
+            say "$(port "$c") has a monitor: virtual display on $(port "$forced") removed"
+            exit 0
+        fi
+    done
+}
+
+MODE=${1:-}
+case "$MODE" in
+    boot) boot ;;
+    hotplug) hotplug ;;
+    *) echo "usage: pengyos-virtual-display boot|hotplug" >&2; exit 2 ;;
+esac

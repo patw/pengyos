@@ -212,6 +212,14 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
   mid-write. The console screen switches off after 5
   idle minutes (`pengyos-console-blank.service`); a key brings it back. None of
   this runs on the Desktop.
+- **A Desktop with no monitor gets a virtual 1920x1080 display.** Booted
+  headless, or with the monitor asleep and off HDMI, it makes the last HDMI port
+  (else DVI or VGA; never DisplayPort) a virtual display before the login screen,
+  so the desktop starts and `pengyos-remote` has a screen to show; without one,
+  cosmic-comp exits and nothing draws all boot. A monitor plugged into another
+  port replaces it; one in that same port shows at 1920x1080 until a restart.
+  `journalctl -b -u pengyos-virtual-display` says what it did;
+  `VIRTUAL_DISPLAY=off` in `/etc/pengyos/display.conf` turns it off.
 - **GPU compute runs in containers; the toolkits are not on the host.** NVIDIA
   (Server/Desktop NVIDIA): to build or run GPU code (CUDA, PyTorch,
   `torch.compile`, llama.cpp) use the **`cuda` guest**: `pengyos-guest apply cuda`

@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: a Desktop booted with no monitor starts, and remote desktop works (2026-11-11)
+- With no monitor connected at boot (a headless box, or a monitor asleep and off
+  HDMI) cosmic-comp exited ("Backend initialized without output"), nothing drew
+  for the whole boot, and the portal panicked `NoCompositor` every ~40 s as the
+  RDP server asked for it (behobasement: 3288 times in 37 h, 26.11.11 and
+  26.11.12). `pengyos-virtual-display.service` now runs before greetd: if no
+  monitor shows up within 3 s of the GPU driver, it forces the last HDMI port (else
+  DVI or VGA; never DisplayPort or a laptop panel) on with a 1920x1080 EDID
+  (`/usr/share/pengyos/virtual-display.edid`, from `scripts/virtual-display-edid.py`,
+  via DRM debugfs `edid_override`), a software dummy plug. A udev rule lets it go
+  when a monitor appears on another port. It never forces a port after boot, so a
+  monitor that drops off while asleep is not woken by a new output.
+  `VIRTUAL_DISPLAY=off` in `/etc/pengyos/display.conf` turns it off.
+- Proven on behobasement (Alder Lake-N, both HDMI empty): virtual HDMI-A-2 at
+  6.4 s, the session, panel and portal up, RDP streaming 1920x1080, 0 panics after
+  3 min; a forced HDMI-A-1 released the virtual port through the udev rule.
+
 ### Added: a laptop server powers off cleanly on low battery (2026-11-10)
 - `pengyos-battery-shutdown` (Server): on battery alone, at 5% across all system
   batteries (`SHUTDOWN_AT=` in `/etc/pengyos/battery.conf`, `off` to disable), it

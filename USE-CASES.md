@@ -634,7 +634,9 @@ password; TLS with a certificate made for the machine; the first session asks on
 `--local` keeps it to SSH tunnels.
 **Acceptance:** after `pengyos-remote password` and `on`, FreeRDP / Remmina / Windows' client
 logs in with the user name and that password and shows and drives the live screen; a wrong
-password is refused before anything is shown; `off` closes the port. Not covered: a second,
+password is refused before anything is shown; `off` closes the port; a desktop that booted
+with no monitor (headless, or the monitor asleep) shows its virtual 1920x1080 display
+(`pengyos-virtual-display`). Not covered: a second,
 separate session, audio, clipboard, multiple monitors.
 
 **US-DSK-18 — Share a folder with the house, without a terminal.**
