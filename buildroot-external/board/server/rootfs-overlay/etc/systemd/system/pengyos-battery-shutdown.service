@@ -1,0 +1,21 @@
+# PengyOS Server: power off cleanly when the machine runs on battery and the
+# charge falls to SHUTDOWN_AT percent (5 by default, /etc/pengyos/battery.conf).
+# Without it a laptop server whose AC goes away runs until the battery dies and
+# loses power mid-write (behothinkpad, a drain test, 2026-11-09). A machine
+# without a battery logs that and the service ends.
+#
+# Server only: the Desktop's UPower has its own critical-battery action.
+[Unit]
+Description=Power off cleanly on low battery
+ConditionOSRelease=|VARIANT_ID=server
+ConditionOSRelease=|VARIANT_ID=server-nvidia
+After=systemd-udev-trigger.service systemd-modules-load.service
+
+[Service]
+Type=exec
+ExecStart=/usr/libexec/pengyos/pengyos-battery-shutdown /etc/pengyos/battery.conf
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
