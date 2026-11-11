@@ -175,6 +175,20 @@ def packages(build_dir: Path | None) -> list[tuple[str, str]]:
     return out
 
 
+def guests(target: Path) -> list[tuple[str, str, bool]]:
+    """(name, description, shares the NVIDIA driver) per guest in guests.d, dev first."""
+    import tomllib
+    out = []
+    for f in sorted((target / "usr/share/pengyos/guests.d").glob("*.toml")):
+        try:
+            book = tomllib.loads(f.read_text(encoding="utf-8")).get("guests", {})
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        for name, body in book.items():
+            out.append((name, str(body.get("description", "")), bool(body.get("nvidia", False))))
+    return sorted(out, key=lambda g: (g[0] != "dev", g[0]))
+
+
 def python_version(target: Path) -> str | None:
     """``3.14`` for an image with usr/lib/python3.14/os.py[c], else None."""
     found = []
@@ -212,6 +226,8 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
     ab = has(target, "usr/bin/pengyos-update")
     guest = real(target, "pengyos-guest")
     dx = real(target, "dx")
+    declared = guests(target) if guest else []
+    gpu_guest = any(g[2] for g in declared)
     podman = real(target, "podman")
     quadlet_readme = has(target, "etc/containers/systemd/README")
     flatpak = real(target, "flatpak")
@@ -292,6 +308,21 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
         else:
             L += ["    pengyos-guest enter dev       a shell in the guest"]
         L += ["", "  What you build there runs on the host: the guest's glibc is older.", ""]
+        if len(declared) > 1 or gpu_guest:
+            # Every guest the image declares, read from guests.d, so a new profile is
+            # named here with no change to this script. On 2026-11-10 an agent wired
+            # libcuda into dev (no GPU) by hand: nothing it read named the cuda guest.
+            L += ["  The guests this image declares (pengyos-guest list also shows yours):", ""]
+            for name, about, gpu in declared:
+                L += [f"    {name:<8} {about}" + (" [GPU]" if gpu else "")]
+            how = "dx -g NAME CMD" if dx else "pengyos-guest enter NAME"
+            L += ["", f"  pengyos-guest apply NAME once, then {how}."]
+            if gpu_guest:
+                L += ["  GPU code (CUDA, PyTorch, torch.compile, llama.cpp) goes in a [GPU] guest,",
+                      "  which shares this machine's NVIDIA driver; the others have no GPU.",
+                      "  NVIDIA's libraries are in /usr/lib (libcuda.so.1), on the host and in",
+                      "  the guest, not /usr/lib/x86_64-linux-gnu."]
+            L += [""]
         if pyver and uv and dx:
             # Proven on behothinkpad (26.11.1, 2026-11-05): netifaces from its sdist
             # and a local C extension, built in the guest, imported on the host.
@@ -333,7 +364,10 @@ def render(target: Path, pkgs: list[tuple[str, str]]) -> str:
                   "        --ulimit memlock=-1:-1 IMAGE",
                   "  An APU (Strix Halo) maps system RAM: pengyos-gpu-memory set max, reboot.", ""]
         if real(target, "nvidia-ctk") or has(target, "etc/cdi/nvidia.yaml"):
-            L += ["  An NVIDIA GPU in a container: podman run --device nvidia.com/gpu=all IMAGE", ""]
+            L += ["  An NVIDIA GPU in a container: podman run --device nvidia.com/gpu=all IMAGE"]
+            if gpu_guest:
+                L += ["  (to build or develop GPU code, a [GPU] guest does this for you: BUILDING CODE)"]
+            L += [""]
         if services:
             L += ["  pengyos-services status shows what this machine serves: every unit,",
                   "  container" + (" and VM" if vm else "") + ", whether it starts after a reboot, its ports, whether",

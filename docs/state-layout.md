@@ -43,7 +43,7 @@ An installed machine is one ext4 root holding everything. Replacing the system
 | Wi-Fi / network profiles | `/etc/NetworkManager/system-connections/` | NetworkManager |
 | local admin edits | anything else in `/etc` (firewall, timers, …) | the operator |
 | the machine's own programs, libraries, firmware | `/usr/local` -> `/var/usrlocal` (`bin` on `PATH`, `lib` in `ld.so.conf`, `lib/firmware` on the kernel's firmware path, set by preinit) | the operator, Pengy |
-| extra library directories | `/etc/ld.so.conf.d/*.conf`; `/etc/ld.so.cache` exists only while one is listed, rebuilt at every boot so it matches the slot that booted | the operator; `pengyos-ldconfig.service` |
+| extra library directories | `/etc/ld.so.conf.d/*.conf`; `/etc/ld.so.cache` is rebuilt at every boot so it matches the slot that booted | the operator; `pengyos-ldconfig.service` |
 | the desktop user's settings | `/home/<user>/.config/cosmic`, … (the installed user's session; the live stick runs as root) | COSMIC |
 | apps, containers, logs, caches | `/var/lib/flatpak`, `/var/lib/containers`, `/var/log`, … | flatpak, podman, journald |
 | user files | `/home/*` | people |

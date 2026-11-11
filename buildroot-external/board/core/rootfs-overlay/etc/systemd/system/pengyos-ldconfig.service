@@ -4,13 +4,16 @@
 # ldconfig.service (off in Buildroot) runs only when /usr is newer than /etc,
 # which misses a rollback to an older slot, so this runs at every boot.
 #
-# The image needs no cache: without one the loader searches /usr/lib directly,
-# which is right for any slot. So the cache exists only while a directory is
-# listed in /etc/ld.so.conf.d/*.conf or a library is in /usr/local/lib; with
-# neither, a leftover cache is removed.
+# The loader alone would manage without a cache (it searches /usr/lib), but
+# software that looks libraries up does not: `ldconfig -p` exits 1 with no cache,
+# so Python's ctypes.util.find_library returns None for every library (there is
+# no gcc or ld to fall back on), and Triton (torch.compile), numba and CuPy die
+# looking for libcuda. So the cache is always built; it takes ~40 ms. A cache
+# left by the other slot is harmless before this runs: its paths are the same
+# /usr/lib names, and a path that has gone makes the loader search instead.
 # -X: never create soname links (/usr is read-only).
 [Unit]
-Description=Rebuild the dynamic loader cache for /usr/local/lib and /etc/ld.so.conf.d
+Description=Rebuild the dynamic loader cache for the slot that booted
 DefaultDependencies=no
 Conflicts=shutdown.target
 After=local-fs.target systemd-tmpfiles-setup.service
@@ -18,7 +21,7 @@ Before=sysinit.target shutdown.target systemd-update-done.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'for f in /etc/ld.so.conf.d/*.conf /usr/local/lib/*.so*; do [ -e "$f" ] && exec /usr/bin/ldconfig -X; done; rm -f /etc/ld.so.cache'
+ExecStart=/usr/bin/ldconfig -X
 
 [Install]
 WantedBy=sysinit.target

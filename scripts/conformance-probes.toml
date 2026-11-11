@@ -1,0 +1,133 @@
+# Conformance probes: what software written for "a normal Linux" checks for.
+#
+# PengyOS leaves out things the OS itself does not need: a loader cache, a
+# compiler, multiarch paths, lsb_release. Each omission is sound on its own
+# terms, and each breaks some installer, library or agent that probes for the
+# convention. Until 26.11.11 these turned up one at a time in the field: getent
+# (COSMIC Settings), ldd (uv's installer), locale (Region & Language),
+# ldconfig -p (torch.compile, ctypes.util.find_library). This file makes the
+# list explicit and runs it inside a booted image (scripts/conformance-probes.py),
+# so leaving a convention out is a decision written down here, with its reason,
+# and not something a user finds.
+#
+# [[probe]]
+#   id      short name, shown in the report
+#   run     sh command; exit 0 = the convention holds
+#   why     who relies on it (and where it was found, if it was)
+#   when    optional sh command; the probe is skipped unless it exits 0
+#   absent  set for a convention PengyOS leaves out on purpose: the reason. The
+#           probe must then FAIL; if it starts passing, this entry is stale.
+
+# --- the dynamic loader and libraries ----------------------------------------
+
+[[probe]]
+id = "loader-cache"
+run = "ldconfig -p | grep -q 'libc.so.6 '"
+why = "Triton (torch.compile), numba, CuPy and CMake modules read `ldconfig -p`; it exited 1 with no cache (26.11.11, behopc)"
+
+[[probe]]
+id = "find-library"
+run = "python3 -I -c 'import ctypes.util, sys; sys.exit(not ctypes.util.find_library(\"c\"))'"
+why = "ctypes.util.find_library (pyusb, sounddevice, cairocffi, python-magic...) has only ldconfig -p to go on: no gcc or ld on the host"
+
+[[probe]]
+id = "find-libcuda"
+when = "test -e /usr/lib/libcuda.so.1"
+run = "python3 -I -c 'import ctypes.util, sys; sys.exit(not ctypes.util.find_library(\"cuda\"))'"
+why = "CUDA libraries and Triton locate the driver by name"
+
+[[probe]]
+id = "ld-linux"
+run = "test -e /lib64/ld-linux-x86-64.so.2"
+why = "the x86-64 ABI interpreter path: every prebuilt binary (wheels, AppImages, vendor tools) names it"
+
+[[probe]]
+id = "ldd"
+run = "ldd --version"
+why = "installers detect glibc vs musl with `ldd --version` (uv's install.sh, 26.10)"
+
+[[probe]]
+id = "getconf"
+run = "getconf _NPROCESSORS_ONLN && getconf LONG_BIT"
+why = "build and install scripts size jobs and pick binaries with getconf"
+
+[[probe]]
+id = "getent"
+run = "getent passwd root"
+why = "account and host lookups through NSS (COSMIC Settings' Users page, 26.10)"
+
+# --- locale, text, time -------------------------------------------------------
+
+[[probe]]
+id = "locale-c-utf8"
+run = "locale -a | grep -qix 'c.utf-\\?8'"
+why = "Python, Click and most CLIs want a UTF-8 locale to exist"
+
+[[probe]]
+id = "iconv"
+run = "printf x | iconv -f UTF-8 -t ASCII"
+why = "text pipelines and some build scripts convert encodings with iconv(1)"
+
+[[probe]]
+id = "zoneinfo"
+run = "test -e /usr/share/zoneinfo/UTC && test -e /etc/localtime"
+why = "zoneinfo / tzdata lookups (Python zoneinfo, Go, Java)"
+
+# --- TLS ----------------------------------------------------------------------
+
+[[probe]]
+id = "ca-bundle"
+run = "test -s /etc/ssl/certs/ca-certificates.crt"
+why = "the Debian-path bundle: curl, Go, Rust (rustls-native-certs), Node read it"
+
+[[probe]]
+id = "openssl-default-cafile"
+run = "python3 -I -c 'import ssl, sys; sys.exit(not ssl.get_default_verify_paths().cafile)'"
+why = "OpenSSL's compiled-in default file (/etc/ssl/cert.pem); code that checks the cafile alone found None (26.11.11)"
+
+# --- identity and basics ------------------------------------------------------
+
+[[probe]]
+id = "os-release"
+run = ". /etc/os-release && test -n \"$ID\" && test -n \"$VERSION_ID\""
+why = "how every tool identifies the distribution"
+
+[[probe]]
+id = "machine-id"
+run = "test -s /etc/machine-id"
+why = "systemd, D-Bus and telemetry-free per-machine IDs"
+
+[[probe]]
+id = "env-python3"
+run = "/usr/bin/env python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))'"
+why = "the shebang every Python script uses"
+
+[[probe]]
+id = "file"
+run = "file -bL /usr/bin/env | grep -q ELF"
+why = "identifying an unknown download (26.11.11: an agent fell back to od/xxd)"
+
+[[probe]]
+id = "tmp-shm"
+run = "t=$(mktemp) && rm \"$t\" && test -w /dev/shm"
+why = "temp files and POSIX shared memory (PyTorch DataLoader, browsers)"
+
+# --- left out on purpose ------------------------------------------------------
+
+[[probe]]
+id = "host-compiler"
+run = "cc --version"
+absent = "no toolchain on the host by design: the stubs say to use the dev guest (`dx`)"
+why = "pip/uv sdists, Triton's launcher stub, node-gyp"
+
+[[probe]]
+id = "multiarch-dir"
+run = "test -d /usr/lib/x86_64-linux-gnu"
+absent = "a single-arch image: libraries live in /usr/lib (pengyos.txt and the skill say so)"
+why = "Debian-trained people and agents look here first and read 'nothing' as 'no driver'"
+
+[[probe]]
+id = "lsb-release"
+run = "lsb_release -a"
+absent = "/etc/os-release is the standard; lsb_release is an LSB-era script no PengyOS tool needs"
+why = "older vendor installers and support scripts"

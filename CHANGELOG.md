@@ -17,6 +17,24 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: GPU and library lookups on the host, and the cuda guest named (2026-11-10)
+- `/etc/ld.so.cache` is now built at every boot, not only when a stopgap library
+  is listed. Without it `ldconfig -p` exited 1, so Python's
+  `ctypes.util.find_library` returned None for every library (even libc) and
+  Triton (`torch.compile`), numba and CuPy died probing for libcuda. Found
+  deploying a Hugging Face model on Desktop NVIDIA 26.11.11.
+- The guests are named where work starts: the `dx` card prints
+  `pengyos-guest list` (declared guests, created or not; `[GPU]` marks one that
+  shares the NVIDIA driver) and `pengyos.txt` lists every `guests.d` profile, so a
+  new guest needs no code. The skill says NVIDIA's libraries are in `/usr/lib`,
+  not `/usr/lib/x86_64-linux-gnu`. An agent had wired libcuda into dev (no GPU)
+  by hand because nothing it read named the cuda guest.
+- Conformance probes (`scripts/conformance-probes.toml`, run in a booted image
+  by `scripts/conformance-probes.py`): the conventions software probes for, and
+  the ones left out on purpose with a reason. They found `getconf`, `iconv` and
+  `/etc/ssl/cert.pem` (OpenSSL's default CA file) missing; all three now ship.
+- `file(1)` ships in every edition.
+
 ### Changed: Pengy 1.15.1 (2026-11-09)
 - PengyR 1.15.0 -> 1.15.1: context recovery can now compact a tool-heavy chat
   (it measures the whole request, tool-call arguments included, elides old
