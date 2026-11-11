@@ -30,7 +30,8 @@ CORE   = the base: systemd, key-only sshd, Python 3, a default-deny firewall
 SERVER = Core + tmux/mosh/zsh/git/ripgrep/fd/bat/eza/zoxide/jq (+ fzf, starship and the zsh plugins on the comfort profile), rootless podman,
          distrobox, backup + monitoring timers,
          the daily update check, pengy-web, Wi-Fi (wpa_supplicant), laptop-as-server
-         care (lid ignored, battery limit, screen off when idle)
+         care (lid ignored, battery limit, clean poweroff on low battery,
+         screen off when idle)
 DESKTOP= Server + every port above 1024 open, the COSMIC Wayland session, PipeWire, BlueZ, CUPS, Wi-Fi,
          Mesa/Vulkan, Flatpak + Flathub, Plymouth splash, the Pengy app
 ```
@@ -205,7 +206,10 @@ Core's Python. Installing a binary that runs with system access is a Tier-2 act
   limit is `LIMIT=` in `/etc/pengyos/battery.conf` (100 = charge to full), applied
   by `sudo systemctl restart pengyos-battery-limit` and only where the laptop's
   platform driver offers `charge_control_end_threshold` (`journalctl -u
-  pengyos-battery-limit` says which). The console screen switches off after 5
+  pengyos-battery-limit` says which). On battery alone it powers off cleanly at
+  5% (`SHUTDOWN_AT=` in the same file, `off` to disable; `sudo systemctl restart
+  pengyos-battery-shutdown`), so a power cut never ends in a dead battery
+  mid-write. The console screen switches off after 5
   idle minutes (`pengyos-console-blank.service`); a key brings it back. None of
   this runs on the Desktop.
 - **GPU compute runs in containers; the toolkits are not on the host.** NVIDIA

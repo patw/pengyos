@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: a laptop server powers off cleanly on low battery (2026-11-10)
+- `pengyos-battery-shutdown` (Server): on battery alone, at 5% across all system
+  batteries (`SHUTDOWN_AT=` in `/etc/pengyos/battery.conf`, `off` to disable), it
+  powers the machine off instead of letting the battery die mid-write. AC online,
+  or a battery held at the charge limit ("Not charging"), never counts; neither do
+  peripheral batteries (scope=Device). The Server has no UPower, so a drain test
+  on behothinkpad (2026-11-09) ended in a hard power loss. One long-running check
+  a minute, so the journal is not filled with unit starts.
+
 ### Fixed: GPU and library lookups on the host, and the cuda guest named (2026-11-10)
 - `/etc/ld.so.cache` is now built at every boot, not only when a stopgap library
   is listed. Without it `ldconfig -p` exited 1, so Python's

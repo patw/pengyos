@@ -308,11 +308,14 @@ the machine has a card (`wpa_supplicant` + networkd, carried over to the install
 system). Closing the lid does nothing (`60-pengyos-lid.conf`), the console switches the
 screen off after 5 idle minutes (`pengyos-console-blank`), and the battery stops
 charging at 80% (`pengyos-battery-limit`, `/etc/pengyos/battery.conf`) where the
-laptop's driver offers a limit.
+laptop's driver offers a limit. When the AC goes away it runs on battery and powers
+off cleanly at 5% (`pengyos-battery-shutdown`, `SHUTDOWN_AT=` in the same file)
+instead of dying mid-write.
 **Acceptance:** a Wi-Fi-only laptop installs over Wi-Fi (SSH keys imported over it) and
 is on the same network after the reboot; with the lid shut it stays up and reachable;
 the screen goes dark when idle; `cat /sys/class/power_supply/BAT0/charge_control_end_threshold`
-says 80 on a ThinkPad. Not covered: legacy-BIOS-only and 32-bit-UEFI machines (the
+says 80 on a ThinkPad; unplugged, it shuts down cleanly at 5% (the next boot's
+`journalctl -b -1 -u pengyos-battery-shutdown` says so). Not covered: legacy-BIOS-only and 32-bit-UEFI machines (the
 installer stick boots 64-bit UEFI only), hidden Wi-Fi networks and WPA-Enterprise in the
 installer (`wpa_cli` after).
 

@@ -1,0 +1,91 @@
+#!/bin/sh
+# pengyos-battery-shutdown CONF [--once]: power the machine off cleanly when it
+# runs on battery and the charge falls to SHUTDOWN_AT percent (CONF, default 5).
+# Run by pengyos-battery-shutdown.service; see /etc/pengyos/battery.conf.
+#
+# A laptop server whose AC goes away (a power cut, a pulled plug, a drain test)
+# otherwise runs until the battery dies and loses power mid-write. The Desktop
+# has UPower for this; the Server has no UPower, so this is its whole policy.
+#
+# It checks once a minute, in one long-running shell, so the journal gets one
+# line when it starts and one when it acts, not a unit start every minute.
+# Only system batteries count (a mouse or headset reports scope=Device), and
+# only while every one of them is discharging and no AC adapter is online.
+# PENGYOS_POWER_SUPPLY replaces /sys/class/power_supply, PENGYOS_POWEROFF the
+# poweroff command and PENGYOS_BATTERY_INTERVAL the 60 s between checks (tests).
+PS=${PENGYOS_POWER_SUPPLY:-/sys/class/power_supply}
+POWEROFF=${PENGYOS_POWEROFF:-systemctl poweroff}
+INTERVAL=${PENGYOS_BATTERY_INTERVAL:-60}
+SHUTDOWN_AT=5
+[ -r "${1:-}" ] && . "$1"
+case "$SHUTDOWN_AT" in
+    off|0) echo "SHUTDOWN_AT=$SHUTDOWN_AT: not powering off on low battery"; exit 0 ;;
+    *[!0-9]* | '') echo "SHUTDOWN_AT=$SHUTDOWN_AT in ${1:-} is not a number from 1 to 50, or off" >&2; exit 1 ;;
+esac
+if [ "$SHUTDOWN_AT" -gt 50 ]; then
+    echo "SHUTDOWN_AT=$SHUTDOWN_AT in ${1:-} is not a number from 1 to 50, or off" >&2
+    exit 1
+fi
+
+batteries() {
+    for b in "$PS"/*; do
+        [ "$(cat "$b/type" 2>/dev/null)" = Battery ] || continue
+        [ "$(cat "$b/scope" 2>/dev/null)" = Device ] && continue
+        echo "$b"
+    done
+}
+
+# 0 when the machine runs on battery alone: no AC/USB-PD supply online and
+# every system battery discharging. "Not charging" is AC holding the charge
+# limit, so it does not count.
+on_battery() {
+    for s in "$PS"/*; do
+        case "$(cat "$s/type" 2>/dev/null)" in
+            Mains|USB|USB_C|USB_PD|USB_PD_DRP)
+                [ "$(cat "$s/online" 2>/dev/null)" = 1 ] && return 1 ;;
+        esac
+    done
+    for b in $(batteries); do
+        [ "$(cat "$b/status" 2>/dev/null)" = Discharging ] || return 1
+    done
+    return 0
+}
+
+# The charge of all system batteries together, in percent: by energy or charge
+# when the driver reports them (a ThinkPad with two packs drains one first),
+# else the mean of their capacity.
+percent() {
+    now=0; full=0; cap=0; n=0
+    for b in $(batteries); do
+        if [ -r "$b/energy_now" ] && [ -r "$b/energy_full" ]; then
+            now=$((now + $(cat "$b/energy_now"))); full=$((full + $(cat "$b/energy_full")))
+        elif [ -r "$b/charge_now" ] && [ -r "$b/charge_full" ]; then
+            now=$((now + $(cat "$b/charge_now"))); full=$((full + $(cat "$b/charge_full")))
+        fi
+        if [ -r "$b/capacity" ]; then
+            cap=$((cap + $(cat "$b/capacity"))); n=$((n + 1))
+        fi
+    done
+    if [ "$full" -gt 0 ]; then echo $((now * 100 / full))
+    elif [ "$n" -gt 0 ]; then echo $((cap / n))
+    else echo 100
+    fi
+}
+
+list=$(batteries | sed 's#.*/##' | tr '\n' ' ')
+[ -n "$list" ] || { echo "no battery: nothing to watch"; exit 0; }
+echo "watching ${list% }: powers off at ${SHUTDOWN_AT}% on battery"
+
+while :; do
+    if on_battery; then
+        pct=$(percent)
+        if [ "$pct" -le "$SHUTDOWN_AT" ]; then
+            msg="battery at ${pct}% and discharging: powering off now (SHUTDOWN_AT=${SHUTDOWN_AT} in /etc/pengyos/battery.conf)"
+            echo "$msg"
+            wall "PengyOS: $msg" 2>/dev/null || true
+            exec $POWEROFF
+        fi
+    fi
+    [ "${2:-}" = --once ] && exit 0
+    sleep "$INTERVAL"
+done
