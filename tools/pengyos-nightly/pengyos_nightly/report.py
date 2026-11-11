@@ -104,7 +104,7 @@ def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: di
            all_cves: list[dict] | None = None, all_findings: list[dict] | None = None,
            digest: bool = False, carried: list[dict] | None = None,
            acted: list[dict] | None = None, web_url: str = "",
-           act_at: str = cfgmod.DEFAULTS["act_time"]) -> str:
+           act_at: str = cfgmod.DEFAULTS["act_time"], gate: dict | None = None) -> str:
     serious = [c for c in new_cves if c["priority"] in ("P0", "P1")]
     minor = [c for c in new_cves if c["priority"] == "P2"]
     parts = [f"<h2>PengyOS nightly — {_e(date)}</h2>"]
@@ -113,6 +113,12 @@ def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: di
         parts.append(f'<p><a href="{_e(web_url)}"><b>Approve or deny</b></a> what this '
                      f"report recommends. An approval is built by the {_e(act_at)} run "
                      "and published to testing.</p>")
+    if gate and not gate.get("ok", True):
+        # First, above the CVEs: a red gate means the next release cannot be cut
+        # (release.sh --publish runs the same gate) until it is fixed.
+        parts.append("<h3>Repo gate is red</h3><p>" + _e(gate.get("summary", ""))
+                     + ". release.sh will not publish until it is green.</p><ul>" + "".join(
+                         f"<li>{_e(f)}</li>" for f in gate.get("failed", [])) + "</ul>")
     if errors:
         parts.append("<h3>Source errors</h3><ul>" + "".join(
             f"<li><b>{_e(k)}</b>: {_e(v)}</li>" for k, v in sorted(errors.items())) + "</ul>")
@@ -156,12 +162,12 @@ def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: di
 
 def subject(date: str, new_cves: list[dict], new_findings: list[dict], errors: dict,
             digest: bool, open_cves: list[dict] | None = None,
-            all_findings: list[dict] | None = None) -> str:
+            all_findings: list[dict] | None = None, gate_red: bool = False) -> str:
     p0 = sum(c["priority"] == "P0" for c in new_cves)
     p1 = sum(c["priority"] == "P1" for c in new_cves)
     major = sum(f["lane"] == "major" for f in new_findings)
     routine = sum(f["lane"] == "routine" for f in new_findings)
-    bits = []
+    bits = ["gate red"] if gate_red else []
     if p0:
         bits.append(f"{p0} P0")
     if p1:

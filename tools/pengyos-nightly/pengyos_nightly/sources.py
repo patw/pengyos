@@ -12,6 +12,7 @@ A finding is a dict:
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import urllib.request
@@ -26,6 +27,32 @@ Run = Callable[[list], str]
 
 # See edits.py: the User-Agent names the version actually running.
 USER_AGENT = f"pengyos-nightly/{__version__} (+https://pengyos.catbee.ca)"
+
+
+def parse_gate(stdout: str, returncode: int) -> dict:
+    """The gate's summary line and its [FAIL] lines (pure, for the tests)."""
+    lines = stdout.splitlines()
+    summary = next((l.strip() for l in lines if "checks passed" in l), "")
+    failed = [l.strip()[len("[FAIL]"):].strip() for l in lines if l.strip().startswith("[FAIL]")]
+    return {"ok": returncode == 0 and not failed, "summary": summary, "failed": failed}
+
+
+def run_gate(repo: Path, timeout: float = 3600) -> dict:
+    """The whole-repo gate (`--base none`): every suite, not only the changed ones.
+
+    GitHub CI ran this on every push until 2026-11-11. The landing gate is scoped to
+    what changed, so a change in one place (a renamed fixture) could break a suite
+    nobody touched and only CI saw it; it stayed red 10-28 to 11-11 unnoticed. The
+    nightly runs it on the build box instead, where the images are built.
+    """
+    env = dict(os.environ)
+    cargo = Path.home() / ".cargo/bin"
+    if cargo.is_dir():  # the box's ~/.local/bin/cargo is a stub that refuses to run
+        env["PATH"] = f"{cargo}{os.pathsep}{env.get('PATH', '')}"
+    p = subprocess.run(["python3", "scripts/pengyos_gate.py", "run", "--repo", ".",
+                        "--mode", "full", "--base", "none"],
+                       cwd=str(repo), capture_output=True, text=True, timeout=timeout, env=env)
+    return parse_gate(p.stdout, p.returncode)
 
 
 def http_get(url: str, timeout: float = 60) -> str:

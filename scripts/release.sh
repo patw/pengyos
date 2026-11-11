@@ -18,6 +18,8 @@
 #                    Short plain text, no Markdown: a one-line summary, a blank
 #                    line, then a few "- " lines; under 600 characters. Checked
 #                    before anything builds (pengyos-release notes-check).
+#   --skip-gate      publish without the whole-repo gate (see below); for an
+#                    urgent security fix while an unrelated suite is red
 #   --skip-cosmic    don't rebuild COSMIC before a Desktop target
 #   --no-boot-check  skip the QEMU checks (automatic, with a warning, on a host
 #                    without KVM: software emulation is too slow for them)
@@ -31,6 +33,12 @@
 # desktop`, which proves the COSMIC session runs). Nothing is signed or pushed
 # unless asked: signing a release and putting it in front of machines is a
 # human decision (CLAUDE.md, "Security boundary").
+#
+# With --publish, the whole-repo gate (pengyos_gate.py --base none, every suite,
+# about 10 minutes) runs first and a red gate stops the release before anything
+# builds. It replaced GitHub CI on 2026-11-11: the landing gate only runs the
+# suites a change touches, and CI, the only whole-repo run, stayed red for two
+# weeks unnoticed. The nightly runs the same gate and reports it.
 #
 # Bump VERSION and commit before running: images take IMAGE_VERSION from it and
 # BUILD_ID from the commit.
@@ -47,7 +55,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TARGETS_FILE="${REPO}/targets.toml"
 BUILD_ROOT="${PENGYOS_BUILD_ROOT:-$HOME/build/pengyos}"
 SITE="${PENGYOS_SITE:-${BUILD_ROOT}/site}"
-CHANNEL=testing NOTES="" PUBLISH=0 PUSH=0 SKIP_COSMIC=0 ALLOW_DIRTY=0 BOOT_CHECK=1
+CHANNEL=testing NOTES="" PUBLISH=0 PUSH=0 SKIP_COSMIC=0 ALLOW_DIRTY=0 BOOT_CHECK=1 SKIP_GATE=0
 TARGETS=()
 
 while [ $# -gt 0 ]; do
@@ -56,6 +64,7 @@ while [ $# -gt 0 ]; do
         --push) PUBLISH=1; PUSH=1 ;;
         --channel) CHANNEL="$2"; shift ;;
         --notes) NOTES="$2"; shift ;;
+        --skip-gate) SKIP_GATE=1 ;;
         --skip-cosmic) SKIP_COSMIC=1 ;;
         --no-boot-check) BOOT_CHECK=0 ;;
         --allow-dirty) ALLOW_DIRTY=1 ;;
@@ -89,6 +98,15 @@ if [ "${PUBLISH}" = 1 ]; then
     # Checked now, not at update-publish: a failure there comes after hours of building.
     (cd "${REPO}/tools/pengyos-release" && python3 -m pengyos_release notes-check "$(realpath "${NOTES}")") \
         || die "fix the release notes first"
+    if [ "${SKIP_GATE}" = 1 ]; then
+        echo "[release] WARNING: --skip-gate: publishing without the whole-repo gate" >&2
+    else
+        say "whole-repo gate (every suite; about 10 minutes)"
+        # The box's ~/.local/bin/cargo is a stub; rustup's must come first.
+        (cd "${REPO}" && PATH="$HOME/.cargo/bin:$PATH" python3 scripts/pengyos_gate.py run \
+            --repo . --mode full --base none) \
+            || die "the whole-repo gate is red: fix it (or --skip-gate for an urgent fix)"
+    fi
 fi
 [ "${PUSH}" = 0 ] || [ -n "${PENGYOS_SITE_REMOTE:-}" ] || die "--push needs PENGYOS_SITE_REMOTE (host:path/)"
 if [ "${BOOT_CHECK}" = 1 ] && [ ! -w /dev/kvm ]; then

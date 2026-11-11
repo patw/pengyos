@@ -17,6 +17,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: the whole-repo gate runs on the build box, not on GitHub (2026-11-11)
+- GitHub CI ran the gate on every push and was red from 10-28 to 11-11 without
+  anyone noticing: a renamed Buildroot fixture broke two tools' suites, a test
+  matched a script line that had grown, and the runner lacked what the box has
+  (user namespaces, PipeWire headers, CPU for the fan simulator). All six suites
+  are fixed and the runner passed 173/173.
+- The workflow is now manual only. The same whole-repo gate runs in the nightly,
+  which mails while it is red, and before every `release.sh --publish`, which
+  refuses to build while it is red (`--skip-gate` for an urgent fix).
+
 ### Changed: Pengy 1.15.1 -> 1.15.3 (2026-11-11)
 - A broken tool call stored in an old chat no longer makes every later turn fail
   on strict local engines; a route that refuses images continues without them;

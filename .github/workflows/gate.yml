@@ -1,12 +1,15 @@
-# The repo gate on every push and pull request: every tool's own tests
-# (verify.toml: pytest / cargo test) plus the wiring lints and recipe source
-# checks that the unit suites cannot see (scripts/pengyos_gate.py). Image builds
-# and QEMU boots stay on the build host: they need hours and KVM.
+# The whole-repo gate: every tool's own tests (verify.toml: pytest / cargo test)
+# plus the wiring lints and recipe source checks (scripts/pengyos_gate.py).
+#
+# Manual only since 2026-11-11 (Actions tab -> gate -> Run workflow). The same
+# gate runs on the build box, where the images are built and verified: nightly
+# (pengyos-nightly reports a red gate in its email) and before every publish
+# (scripts/release.sh). Running it here on every push mostly tested GitHub's
+# runner (AppArmor, missing headers, 2 vCPUs) and sent failure emails.
 name: gate
 
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
