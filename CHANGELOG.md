@@ -17,6 +17,11 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: Pengy 1.15.1 -> 1.15.3 (2026-11-11)
+- A broken tool call stored in an old chat no longer makes every later turn fail
+  on strict local engines; a route that refuses images continues without them;
+  context recovery trims the active turn instead of failing it.
+
 ### Added: `pengyos-remote approve`, remote desktop on a machine nobody sits at (2026-11-11)
 - The desktop portal asks on screen before the first share and keeps the answer
   as a one-use token renewed at every start. A start that is interrupted (a display
