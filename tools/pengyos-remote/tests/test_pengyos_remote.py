@@ -1,7 +1,7 @@
 """Tests for the `pengyos-remote` shipped tool.
 
 Run as a program with HOME in a temp dir and `--root DIR` (fake systemctl,
-openssl, ip). Asserted: the files `password` and `on` write and their modes,
+openssl, ip, busctl, and DIR/sys/class/drm). Asserted: the files `password` and `on` write and their modes,
 the unit verbs sent to the user manager, what `status` reports, and every
 misuse refused with nothing written. The RDP server itself is tested by
 connecting a client to a Desktop (spec.md).
@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 import pytest
@@ -33,7 +34,7 @@ class Box:
         self.home.mkdir()
         bindir = self.root / "usr" / "bin"
         bindir.mkdir(parents=True)
-        for name in ("systemctl", "openssl", "ip"):
+        for name in ("systemctl", "openssl", "ip", "busctl"):
             shutil.copy(HERE / "fakes.py", bindir / name)
             (bindir / name).chmod(0o755)
         self.conf = self.home / ".config" / "pengyos-remote"
@@ -183,3 +184,109 @@ def test_the_unit_runs_in_the_session_only():
     assert "WantedBy=graphical-session.target" in text
     assert "EnvironmentFile=-%h/.config/pengyos-remote/env" in text
     assert "StandardOutput=append:%h/.local/state/pengyos-remote/server.log" in text
+
+
+# ---------------------------------------------------------------- approve
+STORE_CALL = ["--user", "call", "org.freedesktop.impl.portal.PermissionStore",
+              "/org/freedesktop/impl/portal/PermissionStore",
+              "org.freedesktop.impl.portal.PermissionStore"]
+
+
+def store_calls(box: Box) -> list[list[str]]:
+    log = box.root / "calls.log"
+    calls = [json.loads(l) for l in log.read_text().splitlines()] if log.exists() else []
+    out = []
+    for c in calls:
+        if c[0] == "busctl":
+            assert c[1:6] == STORE_CALL, c
+            out.append(c[6:])
+    return out
+
+
+def screens(box: Box, **ports: str) -> None:
+    for name, st in ports.items():
+        d = box.root / "sys" / "class" / "drm" / f"card0-{name.replace('_', '-')}"
+        d.mkdir(parents=True)
+        (d / "status").write_text(st + "\n")
+
+
+def turned_on(box: Box) -> None:
+    box.run("password", "--stdin", stdin="correct horse\n")
+    box.run("on")
+
+
+def test_approve_writes_the_portal_grant_and_restarts_into_sharing(box: Box):
+    turned_on(box)
+    screens(box, HDMI_A_1="disconnected", HDMI_A_2="connected")
+    (box.state / "restore-token").write_text("spentTokenFromBefore\n")
+    (box.root / "listens").touch()
+    out = box.run("approve").stdout
+    token = (box.state / "restore-token").read_text()
+    assert str(uuid.UUID(token)) == token          # the portal accepts a UUID token
+    assert mode(box.state / "restore-token") == 0o600
+    set_call, delete_call = store_calls(box)
+    # exactly what the portal stores for Allow (read back from behobasement)
+    assert set_call == ["Set", "sbsa{sas}v", "remote-desktop", "true", token, "1", "", "1", "yes",
+                        "(suv)", "COSMIC", "1", "(ubbasas)", "3", "false", "true", "1", "HDMI-A-2", "0"]
+    assert delete_call == ["Delete", "ss", "remote-desktop", "spentTokenFromBefore"]
+    assert ["--user", "restart", UNIT_NAME] in box.calls()
+    assert "shares HDMI-A-2" in out and "listening" in out
+
+
+def test_approve_names_one_of_several_displays(box: Box):
+    turned_on(box)
+    screens(box, HDMI_A_1="connected", DP_1="connected")
+    err = box.run("approve", ok=2).stderr
+    assert "--output" in err and "DP-1" in err and "HDMI-A-1" in err
+    assert store_calls(box) == []
+    assert "not a connected display" in box.run("approve", "--output", "HDMI-A-2", ok=2).stderr
+    (box.root / "listens").touch()
+    box.run("approve", "--output", "DP-1")
+    assert store_calls(box)[0][17] == "DP-1"
+
+
+def test_approve_refuses_while_off_and_with_no_display(box: Box):
+    screens(box, HDMI_A_1="connected")
+    assert "remote desktop is off" in box.run("approve", ok=2).stderr
+    turned_on(box)
+    (box.root / "sys" / "class" / "drm" / "card0-HDMI-A-1" / "status").write_text("disconnected\n")
+    assert "no display is connected" in box.run("approve", ok=1).stderr
+    assert store_calls(box) == [] and not (box.state / "restore-token").exists()
+
+
+def test_approve_outside_a_session_applies_at_login(box: Box):
+    turned_on(box)
+    screens(box, HDMI_A_1="connected")
+    (box.root / "units" / UNIT_NAME).write_text("inactive")
+    out = box.run("approve").stdout
+    assert "next desktop login" in out
+    assert (box.state / "restore-token").is_file()
+    assert box.calls().count(["--user", "restart", UNIT_NAME]) == 1   # only the one from `on`
+
+
+def test_approve_says_so_when_the_portal_still_asks(box: Box):
+    turned_on(box)
+    screens(box, HDMI_A_1="connected")
+    (box.root / "asks").touch()
+    assert "may still be asking on screen" in box.run("approve", ok=1).stderr
+
+
+def test_approve_stops_if_the_store_cannot_be_written(box: Box):
+    turned_on(box)
+    screens(box, HDMI_A_1="connected")
+    (box.root / "store-fails").touch()
+    box.run("approve", ok=1)
+    assert not (box.state / "restore-token").exists()
+
+
+def test_status_says_when_it_waits_for_the_on_screen_question(box: Box):
+    turned_on(box)
+    log = box.state / "server.log"
+    log.write_text("portal: starting (approve the dialog on the machine if it appears)\n"
+                   "portal: stream node 62 size 1920x1080\nrdp: listening on 0.0.0.0:3389\n")
+    assert box.status()["waiting_for_approval"] is False
+    with open(log, "a") as f:
+        f.write("portal: the displays changed; replacing the session\n"
+                "portal: starting (approve the dialog on the machine if it appears)\n")
+    assert box.status()["waiting_for_approval"] is True
+    assert "pengyos-remote approve" in box.run("status").stdout

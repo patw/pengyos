@@ -116,7 +116,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-shares status\|add\|remove\|passwd` | Server/Desktop: share folders over SMB (the kernel's ksmbd; no Samba server) — see Gotchas |
 | `pengyos-vm list\|create\|start\|ssh\|console\|stop` | Server/Desktop: VMs in `~/vms`, NAT or `sudo pengyos-vm bridge enable` (wired only); `loginctl enable-linger` (no sudo) or they stop at logout |
 | `pengy-vmm url` / `systemctl --user enable --now pengy-vmm` | the VMs in a browser on 127.0.0.1:5100 (token in the URL) |
-| `pengyos-remote status\|password\|on [--local]\|off` | Desktop: remote desktop (RDP) of the logged-in session; run as the user; the Remote Desktop app does the same |
+| `pengyos-remote status\|password\|on [--local]\|off\|approve` | Desktop: remote desktop (RDP) of the logged-in session; run as the user; the Remote Desktop app does the same. `approve` (over SSH) allows it when nobody is at the screen to answer the question |
 | `pengyos-sharing` | Desktop: the File Sharing window over pengyos-shares (`--list` prints the same as text) |
 | `pengyos-fans` | Server/Desktop: which fans can be controlled and how they are set. `sudo pengyos-fans detect` maps each fan control to its fan (spins each up for a few seconds), then `sudo pengyos-fans profile quiet\|balanced\|full\|firmware`; `name`, `role`, `follow CHANNEL cpu+gpu` per fan. Laptops: firmware profiles only. Mini PCs: nothing to control |
 | `pengyos-hwmon --check` | Server/Desktop: every temperature, fan, voltage, clock and power reading as text, with each device's limit and where it came from (`pengyos-hwmon` alone is the live view for a person) |

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-remote"
-version = "0.1.0"
+version = "0.2.0"
 description = "PengyOS tool (shipped in the Desktop overlay) that shares the logged-in COSMIC session over RDP: password, certificate and the user unit."
 readme = "README.md"
 requires-python = ">=3.9"

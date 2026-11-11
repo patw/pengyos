@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: `pengyos-remote approve`, remote desktop on a machine nobody sits at (2026-11-11)
+- The desktop portal asks on screen before the first share and keeps the answer
+  as a one-use token renewed at every start. A start that is interrupted (a display
+  change, a restart half-way) spends it, and the next start asks on a screen nobody
+  watches: behobasement, headless on its virtual display, came up on 26.11.13 with
+  the RDP server waiting and port 3389 closed. `pengyos-remote approve`, run as the
+  user over SSH, stores the permission the portal keeps for Allow for the connected
+  display, restarts the server and checks it listens; `status` says when the server
+  waits on the question. pengyos-remote 0.2.0.
+- Proven on behobasement: listening and streaming 0.4 s after `approve`, and after a
+  cold reboot with nobody at the machine.
+
 ### Fixed: a Desktop booted with no monitor starts, and remote desktop works (2026-11-11)
 - With no monitor connected at boot (a headless box, or a monitor asleep and off
   HDMI) cosmic-comp exited ("Backend initialized without output"), nothing drew
