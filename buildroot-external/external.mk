@@ -560,3 +560,37 @@ LIBSNDFILE_CONF_OPTS += --disable-mpeg
 PENGYOS_ROOTFS_UUID = $(shell sha256sum $(BASE_TARGET_DIR)/usr/lib/os-release | \
 	sed -E 's/^(.{8})(.{4}).(.{3}).(.{3})(.{12}).*/\1-\2-4\3-8\4-\5/')
 ROOTFS_EXT2_OPTS += -U $(PENGYOS_ROOTFS_UUID) -E hash_seed=$(PENGYOS_ROOTFS_UUID)
+
+################################################################################
+# CPE ids for stock recipes that ship without one (added 2026-11-12).
+#
+# 190 of the 404 packages in the images had no CPE, so pkg-stats could never
+# match a CVE to them. These are the ones NVD actually files CVEs under (checked
+# against the NVD mirror, vendor:product and version ranges). Buildroot decides
+# <PKG>_CPE_ID_VALID while reading the recipe, before this file is included, so
+# setting <PKG>_CPE_ID_VENDOR here would be ignored. show-info and pkg-stats
+# (printvars %_CPE_ID) only read the two variables below when they run.
+# Our own recipes carry theirs in their .mk.
+################################################################################
+DMIDECODE_CPE_ID_VALID = YES
+DMIDECODE_CPE_ID = cpe:2.3:a:nongnu:dmidecode:$(DMIDECODE_VERSION):-:*:*:*:*:*:*
+EZA_CPE_ID_VALID = YES
+EZA_CPE_ID = cpe:2.3:a:eza.rock:eza:$(EZA_VERSION):-:*:*:*:*:*:*
+INTEL_MICROCODE_CPE_ID_VALID = YES
+INTEL_MICROCODE_CPE_ID = cpe:2.3:a:intel:microcode:$(INTEL_MICROCODE_VERSION):-:*:*:*:*:*:*
+LIBOSTREE_CPE_ID_VALID = YES
+LIBOSTREE_CPE_ID = cpe:2.3:a:ostree_project:ostree:$(LIBOSTREE_VERSION):-:*:*:*:*:*:*
+LIBTHEORA_CPE_ID_VALID = YES
+LIBTHEORA_CPE_ID = cpe:2.3:a:xiph:theora:$(LIBTHEORA_VERSION):-:*:*:*:*:*:*
+LIBVA_CPE_ID_VALID = YES
+LIBVA_CPE_ID = cpe:2.3:a:intel:libva:$(LIBVA_VERSION):-:*:*:*:*:*:*
+LM_SENSORS_CPE_ID_VALID = YES
+LM_SENSORS_CPE_ID = cpe:2.3:a:lm_sensors:lm_sensors:$(subst -,.,$(LM_SENSORS_VERSION)):-:*:*:*:*:*:*
+MOSH_CPE_ID_VALID = YES
+MOSH_CPE_ID = cpe:2.3:a:keith_winstein:mosh:$(MOSH_VERSION):-:*:*:*:*:*:*
+NFTABLES_CPE_ID_VALID = YES
+NFTABLES_CPE_ID = cpe:2.3:a:netfilter:nftables:$(NFTABLES_VERSION):-:*:*:*:*:*:*
+XDG_DBUS_PROXY_CPE_ID_VALID = YES
+XDG_DBUS_PROXY_CPE_ID = cpe:2.3:a:flatpak:xdg-dbus-proxy:$(XDG_DBUS_PROXY_VERSION):-:*:*:*:*:*:*
+XFSPROGS_CPE_ID_VALID = YES
+XFSPROGS_CPE_ID = cpe:2.3:a:sgi:xfsprogs:$(XFSPROGS_VERSION):-:*:*:*:*:*:*

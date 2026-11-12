@@ -25,4 +25,7 @@ ACCOUNTSSERVICE_CONF_OPTS = \
 	-Dgtk_doc=false \
 	-Dtests=false
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+ACCOUNTSSERVICE_CPE_ID_VENDOR = freedesktop
+
 $(eval $(meson-package))

@@ -11,4 +11,7 @@ XDG_USER_DIRS_LICENSE = GPL-2.0+
 XDG_USER_DIRS_LICENSE_FILES = COPYING
 XDG_USER_DIRS_CONF_OPTS = -Ddocs=false -Dnls=false
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+XDG_USER_DIRS_CPE_ID_VENDOR = freedesktop
+
 $(eval $(meson-package))

@@ -20,4 +20,7 @@ UV_LICENSE_FILES = LICENSE-APACHE LICENSE-MIT
 # cargo does not read it, and uv's rust-version (1.97.0) is what must be met.
 UV_SUBDIR = crates/uv
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+UV_CPE_ID_VENDOR = astral
+
 $(eval $(cargo-package))

@@ -31,4 +31,7 @@ define XDG_UTILS_INSTALL_TARGET_CMDS
 		$(INSTALL) -D -m 0755 $(@D)/scripts/$(s) $(TARGET_DIR)/usr/bin/$(s)$(sep))
 endef
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+XDG_UTILS_CPE_ID_VENDOR = freedesktop
+
 $(eval $(generic-package))

@@ -18,4 +18,7 @@ LIBNOTIFY_CONF_OPTS = \
 	-Dgtk_doc=false \
 	-Ddocbook_docs=disabled
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+LIBNOTIFY_CPE_ID_VENDOR = libnotify_project
+
 $(eval $(meson-package))

@@ -19,5 +19,8 @@ LIBMTP_CONF_OPTS = --disable-doxygen --disable-mtpz --with-udev=/usr/lib/udev \
 HOST_LIBMTP_DEPENDENCIES = host-pkgconf host-libusb
 HOST_LIBMTP_CONF_OPTS = --disable-doxygen --disable-mtpz
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+LIBMTP_CPE_ID_VENDOR = libmtp_project
+
 $(eval $(autotools-package))
 $(eval $(host-autotools-package))

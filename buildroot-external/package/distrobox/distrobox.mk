@@ -15,4 +15,7 @@ define DISTROBOX_INSTALL_TARGET_CMDS
 	cd $(@D) && ./install --prefix $(TARGET_DIR)/usr
 endef
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+DISTROBOX_CPE_ID_VENDOR = 89luca89
+
 $(eval $(generic-package))
