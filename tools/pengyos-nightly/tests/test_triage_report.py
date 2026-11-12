@@ -509,3 +509,32 @@ def test_no_gate_skips_it(tmp_path):
     obs = cli.observe(_args(tmp_path, no_gate=True), get=get, run_cmd=run_cmd,
                       run_pkgstats=run_pkgstats, run_gate=lambda r: called.append(r))
     assert obs["gate"] is None and not called
+
+
+def test_failed_scan_does_not_resolve_cves(tmp_path):
+    """2026-11-10: uv went missing, pkg-stats failed for every edition, observe
+    returned no packages, and triage marked every tracked CVE resolved."""
+    _fake_repo(tmp_path)
+    get, run_cmd, run_pkgstats = _fakes(tmp_path)
+    args = _args(tmp_path, no_email=True)
+    cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats)
+    cli.do_triage(args, complete=model('{"priority":"P1","reachable":"file","rationale":"x"}'))
+
+    def broken(*a, **k):
+        import subprocess
+        raise subprocess.CalledProcessError(127, ["env", "uv", "run"] + ["x"] * 80,
+                                            stderr="env: 'uv': No such file or directory\n")
+    obs = cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=broken)
+    assert obs["packages"] == {}
+    why = next(v for k, v in obs["errors"].items() if k.startswith("pkg-stats "))
+    assert "No such file or directory" in why and why.startswith("exit 127")
+    cli.do_triage(args, complete=model("unused"))
+    st = state.load(Path(args.state_dir) / "state.json")
+    assert not st["cves"]["CVE-2026-38754|busybox"].get("resolved")
+
+
+def test_failed_scan_leads_the_subject():
+    subj = report.subject("2026-11-11", [], [], {"pkg-stats pengyos-core": "x"}, False,
+                          scan_failed=True)
+    assert "CVE scan failed" in subj
+    assert subj.index("CVE scan failed") < subj.index("source errors")

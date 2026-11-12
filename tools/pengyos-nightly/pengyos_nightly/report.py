@@ -162,12 +162,17 @@ def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: di
 
 def subject(date: str, new_cves: list[dict], new_findings: list[dict], errors: dict,
             digest: bool, open_cves: list[dict] | None = None,
-            all_findings: list[dict] | None = None, gate_red: bool = False) -> str:
+            all_findings: list[dict] | None = None, gate_red: bool = False,
+            scan_failed: bool = False) -> str:
     p0 = sum(c["priority"] == "P0" for c in new_cves)
     p1 = sum(c["priority"] == "P1" for c in new_cves)
     major = sum(f["lane"] == "major" for f in new_findings)
     routine = sum(f["lane"] == "routine" for f in new_findings)
-    bits = ["gate red"] if gate_red else []
+    # A failed CVE scan leads: "0 new P0/P1" on a night nothing was scanned is a
+    # false all-clear, and it read as one on 11-10 and 11-11.
+    bits = ["CVE scan failed"] if scan_failed else []
+    if gate_red:
+        bits.append("gate red")
     if p0:
         bits.append(f"{p0} P0")
     if p1:
