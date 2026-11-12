@@ -24,7 +24,8 @@ import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from pengyos_nightly import (__version__, act as actlane, config as cfgmod, decisions, edits,
+from pengyos_nightly import (__version__, act as actlane, bundled as bundledmod,
+                             config as cfgmod, decisions, edits,
                              guards, planner, report, sources, state, triage)
 
 HOME = Path.home()
@@ -44,7 +45,7 @@ def _buildroot_dir(build_root: Path, version: str) -> Path:
 
 
 def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=sources.run_pkgstats,
-            run_gate=None) -> dict:
+            run_gate=None, scan_bundled=None) -> dict:
     p = _paths(args)
     repo, build_root = Path(args.repo).expanduser(), Path(args.build_root).expanduser()
     p["state_dir"].mkdir(parents=True, exist_ok=True)
@@ -68,6 +69,17 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
             errors[f"pkg-stats {t['name']}"] = _why(e)
     packages = sources.merge_packages(per_edition)
     findings += sources.package_findings(packages)
+
+    # The Rust crates and Go modules compiled into the images, which no CPE names:
+    # read from each edition's SBOM and checked against OSV (bundled.py). None means
+    # the scan did not run, which is not the same as "no advisories".
+    found_bundled = None
+    try:
+        found_bundled, bundled_errors = (scan_bundled or bundledmod.observe)(
+            build_root, targets, p["state_dir"])
+        errors.update(bundled_errors)
+    except Exception as e:  # a failed OSV query is reported, not fatal
+        errors["osv"] = _why(e)
 
     def guard(name, fn):
         try:
@@ -197,7 +209,7 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
 
     obs = {"date": dt.date.today().isoformat(), "kernel": kver, "buildroot": br_version,
            "packages": packages, "findings": findings, "kev": kev, "epss": epss,
-           "errors": errors, "gate": gate}
+           "errors": errors, "gate": gate, "bundled": found_bundled}
     p["obs"].write_text(json.dumps(obs, indent=1, sort_keys=True))
     return obs
 
@@ -297,6 +309,13 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
     gate = obs.get("gate")
     gate_red = bool(gate) and not gate.get("ok", True)
     scan_red = bool(scan_failed(obs))
+    # Bundled-dependency advisories (OSV): new = not reported before. A dependency
+    # that moved past an advisory drops out of `seen`, so if it ever comes back it
+    # is new again - but only on a night the scan actually ran.
+    bundled_all = obs.get("bundled")
+    seen = st.setdefault("bundled", {})
+    new_bundled = [b for b in (bundled_all or []) if b["key"] not in seen]
+    new_bundled_serious = [b for b in new_bundled if b["severity"] in ("CRITICAL", "HIGH")]
     # "Open" means open in the image we ship. A CVE closed by a patch we carry is not
     # open, even though pkg-stats still flags it - counting it as open would put the
     # same 7 libxml2 CVEs in every report from now on.
@@ -323,18 +342,20 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
                          obs["findings"] if show_open else None, digest,
                          carried if show_open else None, acted if show_open else None,
                          web_url=cfgmod.load(p["policy"]).get("web_url", ""),
-                         act_at=cfgmod.act_time(cfgmod.load(p["policy"])), gate=gate)
+                         act_at=cfgmod.act_time(cfgmod.load(p["policy"])), gate=gate,
+                         bundled_new=new_bundled,
+                         bundled_all=bundled_all if show_open else None)
     subj = report.subject(today.isoformat(), new_cves, new_findings, errors, digest,
                           open_cves if show_open else None,
                           obs["findings"] if show_open else None, gate_red=gate_red,
-                          scan_failed=scan_red)
+                          scan_failed=scan_red, bundled_serious=len(new_bundled_serious))
     p["reports"].mkdir(parents=True, exist_ok=True)
     out = p["reports"] / f"{today.isoformat()}.html"
     out.write_text(body)
 
     # A red gate is sent every night it stays red: it is the one thing CI used to say.
     should_send = bool(new_cves or new_findings or errors or digest or gate_red
-                       or args.force_email)
+                       or new_bundled_serious or args.force_email)
     sent = False
     delivery_error = None
     if should_send and not args.no_email:
@@ -365,6 +386,12 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
             c["reported"] = True
         for f in new_findings:
             st["findings"][state.finding_key(f)] = today.isoformat()
+        for b in new_bundled:
+            seen[b["key"]] = today.isoformat()
+        if bundled_all is not None:
+            current = {b["key"] for b in bundled_all}
+            for k in [k for k in seen if k not in current]:
+                del seen[k]
         st["last_report"] = today.isoformat()
         st["last_delivery_error"] = ""
         if digest:

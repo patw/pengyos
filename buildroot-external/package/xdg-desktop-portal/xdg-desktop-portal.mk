@@ -48,4 +48,7 @@ define XDG_DESKTOP_PORTAL_VENDOR_SUBPROJECTS
 endef
 XDG_DESKTOP_PORTAL_POST_EXTRACT_HOOKS += XDG_DESKTOP_PORTAL_VENDOR_SUBPROJECTS
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+XDG_DESKTOP_PORTAL_CPE_ID_VENDOR = flatpak
+
 $(eval $(meson-package))

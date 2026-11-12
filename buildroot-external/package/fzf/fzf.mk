@@ -28,4 +28,7 @@ define FZF_INSTALL_TARGET_CMDS
 	$(INSTALL) -m 0644 $(@D)/shell/completion.zsh     $(TARGET_DIR)/usr/share/fzf/
 endef
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+FZF_CPE_ID_VENDOR = junegunn
+
 $(eval $(golang-package))

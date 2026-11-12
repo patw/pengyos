@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import sys
@@ -28,6 +29,7 @@ from . import keys
 from . import signing
 from .errors import SBOMError
 from .cyclonedx import build_cyclonedx_document
+from .bundled import scan_build_dir
 from .ingest import ingest
 from .spdx import build_spdx_document
 from .validate import validate_file
@@ -73,6 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         metavar="FILE",
         help="Path to write the SPDX 2.3 JSON SBOM.",
+    )
+    g.add_argument(
+        "--build-dir",
+        default=None,
+        metavar="DIR",
+        help="Buildroot <output>/build: also record the Rust crates and Go modules "
+        "each target package compiles in (from its own Cargo.lock / vendor/modules.txt).",
     )
     g.add_argument(
         "--cdx",
@@ -187,6 +196,14 @@ def cmd_generate(args: argparse.Namespace) -> int:
     except SBOMError as exc:
         print(f"{PROG}: error: {exc}", file=sys.stderr)
         return c.EXIT_ERROR
+    if args.build_dir:
+        found = scan_build_dir(Path(args.build_dir), result.components)
+        result = dataclasses.replace(result, components=tuple(
+            dataclasses.replace(comp, bundled=found[comp.name])
+            if comp.scope == "target" and comp.name in found else comp
+            for comp in result.components))
+        print(f"{PROG}: {sum(len(v) for v in found.values())} bundled crates/modules "
+              f"in {len(found)} packages")
 
     created = _created_timestamp()
     doc = build_spdx_document(result, created=created)

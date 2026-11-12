@@ -6,6 +6,18 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — bundled crates and Go modules (0.2.0, 2026-11-12)
+- `generate --build-dir <output>/build` records the Rust crates and Go modules each
+  target package compiles in, read from the package's own `Cargo.lock` files
+  (crates.io entries) and `vendor/modules.txt` (`pengyos_sbom.bundled`). Lockfiles
+  of vendored dependencies are skipped: they list what the dependency's authors
+  built, not what we did. CycloneDX nests them under their package as `library`
+  components with `pkg:cargo` / `pkg:golang` purls; SPDX adds a `LIBRARY` package
+  per dependency with a purl and a `<package> CONTAINS <dependency>` relationship.
+  Both feed the serial number / document namespace, so a dependency change is a
+  different document. Without this an SBOM listed `cosmic` and not the ~1,900
+  crates it is built from, and no scanner could see an advisory against one.
+
 ### Changed
 - `generate` takes the documents' `created` timestamp from
   `$SOURCE_DATE_EPOCH` when it is set (else the current time), so two builds

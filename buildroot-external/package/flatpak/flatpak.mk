@@ -66,4 +66,7 @@ else
 FLATPAK_CONF_OPTS += -Dwayland_security_context=disabled
 endif
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+FLATPAK_CPE_ID_VENDOR = flatpak
+
 $(eval $(meson-package))

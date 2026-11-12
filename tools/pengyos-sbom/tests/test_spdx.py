@@ -120,7 +120,7 @@ def test_document_top_level_fields():
     assert doc["SPDXID"] == "SPDXRef-DOCUMENT"
     assert doc["documentDescribes"] == ["SPDXRef-RootArtifact"]
     assert doc["creationInfo"]["created"] == CREATED
-    assert doc["creationInfo"]["creators"] == ["Tool:pengyos-sbom/0.1.0"]
+    assert doc["creationInfo"]["creators"] == ["Tool:pengyos-sbom/0.2.0"]
     assert doc["documentNamespace"].startswith(constants.SPDX_NAMESPACE_PREFIX + "/")
 
 

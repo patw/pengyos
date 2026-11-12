@@ -87,4 +87,8 @@ define UUTILS_COREUTILS_INSTALL_TARGET_CMDS
 	ln -sf coreutils '$(TARGET_DIR)/usr/bin/['
 endef
 
+# CPE (NVD vendor:product) so pkg-stats can match CVEs; verified against NVD 2026-11-12.
+UUTILS_COREUTILS_CPE_ID_VENDOR = uutils
+UUTILS_COREUTILS_CPE_ID_PRODUCT = coreutils
+
 $(eval $(cargo-package))
