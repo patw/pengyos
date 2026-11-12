@@ -1,0 +1,48 @@
+diff --git a/src/archive.rs b/src/archive.rs
+index d51b01b..8fb9729 100644
+--- a/src/archive.rs
++++ b/src/archive.rs
+@@ -169,6 +169,10 @@ fn zip_extract<R: io::Read + io::Seek, P: AsRef<Path>>(
+             .ok_or(ZipError::InvalidArchive("Invalid file path".into()))?;
+ 
+         let outpath = directory.as_ref().join(filepath);
++        // enclosed_name() checks the name, not the filesystem: an earlier entry can be
++        // a symlink, and a later entry below it would be written through it, outside
++        // the extraction directory. Refuse any entry that would.
++        refuse_through_symlink(directory.as_ref(), &outpath)?;
+ 
+         if let Some(last_modified) = file.last_modified() {
+             files_by_last_modified.push((outpath.clone(), last_modified));
+@@ -288,6 +292,32 @@ fn zip_extract<R: io::Read + io::Seek, P: AsRef<Path>>(
+     Ok((written_files, target_dirs))
+ }
+ 
++/// Refuse `path` when any part of it below `directory` already exists as a symlink,
++/// the last part included. The extraction directory is new, so the only symlinks in
++/// it are ones the archive itself created; writing through one (or onto one, which
++/// `File::create` follows) would put the entry wherever the link points.
++fn refuse_through_symlink(directory: &Path, path: &Path) -> zip::result::ZipResult<()> {
++    use zip::result::ZipError;
++    let rel = path
++        .strip_prefix(directory)
++        .map_err(|_| ZipError::InvalidArchive("Invalid file path".into()))?;
++    let mut cur = directory.to_path_buf();
++    for part in rel.components() {
++        cur.push(part);
++        match std::fs::symlink_metadata(&cur) {
++            Ok(meta) if meta.file_type().is_symlink() => {
++                return Err(ZipError::InvalidArchive(
++                    "Archive entry would be written through a symbolic link".into(),
++                ));
++            }
++            Ok(_) => {}
++            // Not there yet, so nothing below it is either.
++            Err(_) => break,
++        }
++    }
++    Ok(())
++}
++
+ fn zip_date_time_to_system_time(date_time: zip::DateTime) -> Option<SystemTime> {
+     let dt = DateTime::new(
+         date_time.year() as i16,
