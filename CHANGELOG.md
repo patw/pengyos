@@ -17,6 +17,20 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Security: zip extraction in Files, COSMIC crates, Go standard library (2026-11-12)
+- **Files (cosmic-files): zip extraction could write outside the extraction
+  folder** through a symlink the archive created. Such entries are now refused
+  (cosmic-patches/cosmic-files/0002).
+- COSMIC's locks take the semver-compatible fix for every crate OSV flags:
+  quinn-proto 0.11.19, rustls 0.23.46, rustls-webpki 0.103.16, webpki-roots, time,
+  tokio, bytes, serde_with, zstd and others, in 12 components. The zip, quick-xml
+  and lru fixes are new major versions, which need upstream code changes, and
+  stay open.
+- Go 1.27.2 carries two go1.27 release-branch fixes (crypto/x509 distrusts
+  compromised intermediates, CVE-2026-111943; an HTTP/1 server crash,
+  CVE-2026-97054). Every Go binary is rebuilt with them: podman, fzf, ipp-usb,
+  nvidia-container-toolkit.
+
 ### Added: the SBOM and the nightly see what is inside every package (2026-11-12)
 - The SBOM lists the Rust crates and Go modules each package compiles in (about
   6,500 entries on the Desktop, across COSMIC, Pengy, podman, uv and 18 more),

@@ -1,0 +1,141 @@
+From 4c1752a033aef1a66eadfb11363ff256f8daf47d Mon Sep 17 00:00:00 2001
+From: "Nicholas S. Husin" <nsh@golang.org>
+Date: Mon, 26 Oct 2026 12:40:06 -0400
+Subject: [PATCH] [release-branch.go1.27] net/http: prevent HTTP/1 server crash
+ due to MaxBytesReader header race
+
+For HTTP/1 servers, when MaxBytesReader's limit is exceeded,
+"Connection: close" header is automatically set without synchronization,
+which might race with another header being set explicitly in the server
+handler. As a result, an HTTP/1 server that utilizes MaxBytesReader or
+MaxBytesHandler can crash due to runtime panic if its handler reads the
+request body concurrently with writing the response header.
+
+This affects use cases such as running httputil.ReverseProxy (which
+forwards a request body while copying headers from an early upstream
+response) with MaxBytesHandler.
+
+Thank you to Jakub Ciolek (https://ciolek.dev) for reporting this issue.
+
+Fixes CVE-2026-97054
+For golang/go#82563
+Fixes golang/go#82565
+
+Change-Id: I66db78624184d4ea795acc7abf2d96026a6a6964
+Reviewed-on: https://go-internal-review.googlesource.com/c/go/+/6480
+Reviewed-by: Neal Patel <nealpatel@google.com>
+Reviewed-by: Damien Neil <dneil@google.com>
+Reviewed-on: https://go-internal-review.googlesource.com/c/go/+/6820
+Reviewed-on: https://go-review.googlesource.com/c/go/+/861495
+TryBot-Bypass: Gopher Robot <gobot@golang.org>
+Reviewed-by: Cherry Mui <cherryyz@google.com>
+Reviewed-by: Michael Pratt <mpratt@google.com>
+---
+ src/net/http/serve_test.go | 27 +++++++++++++++++++++++++++
+ src/net/http/server.go     | 20 ++++++++++++--------
+ 2 files changed, 39 insertions(+), 8 deletions(-)
+
+diff --git a/src/net/http/serve_test.go b/src/net/http/serve_test.go
+index 9051d332e8984c..74d1009177dc4f 100644
+--- a/src/net/http/serve_test.go
++++ b/src/net/http/serve_test.go
+@@ -7508,6 +7508,33 @@ func testMaxBytesHandler(t *testing.T, mode testMode, maxSize, requestSize int64
+ 	})
+ }
+ 
++func TestServerMaxBytesHeaderRace(t *testing.T) {
++	runSynctest(t, func(t *testing.T, mode testMode) {
++		cst := newClientServerTest(t, mode, MaxBytesHandler(HandlerFunc(func(w ResponseWriter, r *Request) {
++			var wg sync.WaitGroup
++			defer wg.Wait()
++			// MaxBytesHandler will hit its set limit when reading the request
++			// body. When this happens, it will make sure that the connection
++			// is closed after this response. In doing so, it will set
++			// "Connection: close" header. This must not race with any header
++			// that is explicitly set by the handler.
++			wg.Go(func() {
++				io.ReadAll(r.Body)
++			})
++			w.Header().Set("X-Test", "1")
++			w.WriteHeader(413)
++		}), 4), optFakeNet)
++		res, err := cst.c.Post(cst.ts.URL, "text/plain", strings.NewReader("hello"))
++		if err != nil {
++			t.Fatal(err)
++		}
++		defer res.Body.Close()
++		if res.StatusCode != 413 {
++			t.Errorf("want status 413, got %v", res.Status)
++		}
++	})
++}
++
+ func TestEarlyHints(t *testing.T) {
+ 	ht := newHandlerTest(HandlerFunc(func(w ResponseWriter, r *Request) {
+ 		h := w.Header()
+diff --git a/src/net/http/server.go b/src/net/http/server.go
+index 96bb12b2f38bcf..5e9da9d50031d9 100644
+--- a/src/net/http/server.go
++++ b/src/net/http/server.go
+@@ -475,7 +475,7 @@ type response struct {
+ 	// request. Instead, when this is set, we stop reading
+ 	// subsequent requests on this connection and stop reading
+ 	// input from it.
+-	requestBodyLimitHit bool
++	requestBodyLimitHit atomic.Bool
+ 
+ 	// trailers are the headers to be sent after the handler
+ 	// finishes writing the body. This field is initialized from
+@@ -564,11 +564,7 @@ func (w *response) declareTrailer(k string) {
+ // requestTooLarge is called by maxBytesReader when too much input has
+ // been read from the client.
+ func (w *response) requestTooLarge() {
+-	w.closeAfterReply = true
+-	w.requestBodyLimitHit = true
+-	if !w.wroteHeader {
+-		w.Header().Set("Connection", "close")
+-	}
++	w.requestBodyLimitHit.Store(true)
+ }
+ 
+ // disableWriteContinue stops Request.Body.Read from sending an automatic
+@@ -1439,6 +1435,10 @@ func (cw *chunkWriter) writeHeader(p []byte) {
+ 		w.closeAfterReply = true
+ 	}
+ 
++	if w.requestBodyLimitHit.Load() {
++		w.closeAfterReply = true
++	}
++
+ 	// We do this by default because there are a number of clients that
+ 	// send a full request before starting to read the response, and they
+ 	// can deadlock if we start writing the response with unconsumed body
+@@ -1561,6 +1561,10 @@ func (cw *chunkWriter) writeHeader(p []byte) {
+ 		return
+ 	}
+ 
++	if w.requestBodyLimitHit.Load() {
++		w.closeAfterReply = true
++	}
++
+ 	// Only override the Connection header if it is not a successful
+ 	// protocol switch response and if KeepAlives are not enabled.
+ 	// See https://golang.org/issue/36381.
+@@ -1744,7 +1748,7 @@ func (w *response) finishRequest() {
+ // shouldReuseConnection reports whether the underlying TCP connection can be reused.
+ // It must only be called after the handler is done executing.
+ func (w *response) shouldReuseConnection() bool {
+-	if w.closeAfterReply {
++	if w.closeAfterReply || w.requestBodyLimitHit.Load() {
+ 		// The request or something set while executing the
+ 		// handler indicated we shouldn't reuse this
+ 		// connection.
+@@ -2164,7 +2168,7 @@ func (c *conn) serve(ctx context.Context) {
+ 		w.finishRequest()
+ 		c.rwc.SetWriteDeadline(time.Time{})
+ 		if !w.shouldReuseConnection() {
+-			if w.requestBodyLimitHit || w.closedRequestBodyEarly() {
++			if w.requestBodyLimitHit.Load() || w.closedRequestBodyEarly() {
+ 				c.closeWriteAndWait()
+ 			}
+ 			return
