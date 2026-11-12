@@ -43,7 +43,8 @@ def _buildroot_dir(build_root: Path, version: str) -> Path:
     return build_root / f"buildroot-{version}"
 
 
-def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=sources.run_pkgstats) -> dict:
+def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=sources.run_pkgstats,
+            run_gate=None) -> dict:
     p = _paths(args)
     repo, build_root = Path(args.repo).expanduser(), Path(args.build_root).expanduser()
     p["state_dir"].mkdir(parents=True, exist_ok=True)
@@ -185,9 +186,18 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
     kev = {c: v for c, v in kev_all.items() if c in set(cves)}
     epss = guard("epss", lambda: sources.fetch_epss(cves, get=get)) or {}
 
+    # The whole-repo gate, which GitHub CI used to run on every push (sources.run_gate).
+    # Resolved at call time so the test suite's conftest can swap in a fake.
+    gate = None
+    if not getattr(args, "no_gate", False):
+        try:
+            gate = (run_gate or sources.run_gate)(repo)
+        except Exception as e:  # a gate that cannot run is a loop fault, reported
+            errors["repo gate"] = str(e)[:300]
+
     obs = {"date": dt.date.today().isoformat(), "kernel": kver, "buildroot": br_version,
            "packages": packages, "findings": findings, "kev": kev, "epss": epss,
-           "errors": errors}
+           "errors": errors, "gate": gate}
     p["obs"].write_text(json.dumps(obs, indent=1, sort_keys=True))
     return obs
 
@@ -260,6 +270,8 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
                 if not c.get("reported") and not c.get("resolved") and not c.get("patched_by")]
     new_findings = [f for f in obs["findings"] if state.finding_key(f) not in st["findings"]]
     errors = obs.get("errors", {})
+    gate = obs.get("gate")
+    gate_red = bool(gate) and not gate.get("ok", True)
     # "Open" means open in the image we ship. A CVE closed by a patch we carry is not
     # open, even though pkg-stats still flags it - counting it as open would put the
     # same 7 libxml2 CVEs in every report from now on.
@@ -286,15 +298,17 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
                          obs["findings"] if show_open else None, digest,
                          carried if show_open else None, acted if show_open else None,
                          web_url=cfgmod.load(p["policy"]).get("web_url", ""),
-                         act_at=cfgmod.act_time(cfgmod.load(p["policy"])))
+                         act_at=cfgmod.act_time(cfgmod.load(p["policy"])), gate=gate)
     subj = report.subject(today.isoformat(), new_cves, new_findings, errors, digest,
                           open_cves if show_open else None,
-                          obs["findings"] if show_open else None)
+                          obs["findings"] if show_open else None, gate_red=gate_red)
     p["reports"].mkdir(parents=True, exist_ok=True)
     out = p["reports"] / f"{today.isoformat()}.html"
     out.write_text(body)
 
-    should_send = bool(new_cves or new_findings or errors or digest or args.force_email)
+    # A red gate is sent every night it stays red: it is the one thing CI used to say.
+    should_send = bool(new_cves or new_findings or errors or digest or gate_red
+                       or args.force_email)
     sent = False
     delivery_error = None
     if should_send and not args.no_email:
@@ -336,7 +350,7 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
         st["last_delivery_error"] = f"{today.isoformat()}: {delivery_error}"
         state.save(p["state"], st)
     return {"subject": subj, "report": str(out), "sent": sent, "new_cves": len(new_cves),
-            "new_findings": len(new_findings), "errors": len(errors),
+            "new_findings": len(new_findings), "errors": len(errors), "gate_red": gate_red,
             "delivery_error": delivery_error}
 
 
@@ -669,6 +683,9 @@ def main(argv=None) -> int:
             sp.add_argument("--jobs", type=int, default=2)
             sp.add_argument("--model", default="local")
             sp.add_argument("--no-model", action="store_true", help="rules and fallback only")
+        if name in ("run", "observe"):
+            sp.add_argument("--no-gate", action="store_true",
+                            help="skip the whole-repo gate (about 10 minutes)")
         if name in ("run", "report"):
             sp.add_argument("--no-email", action="store_true",
                             help="render the report to disk but do not send it, and do NOT "

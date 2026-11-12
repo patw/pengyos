@@ -6,6 +6,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — the whole-repo gate runs every night (0.16.0)
+`observe` runs `pengyos_gate.py --base none` on the build box and records the
+result in observations.json. A red gate leads the report ("Repo gate is red", the
+failing suites) and puts "gate red" first in the subject. It mails every night it
+stays red, even when nothing else is new. A gate that cannot run is a source
+error. `--no-gate` skips it. This replaces GitHub CI's run on every push (now
+manual only): the landing gate runs only the suites a change touches, and CI,
+the one whole-repo run, was red from 10-28 to 11-11 without anyone noticing.
+
 ### Changed — the published notes are short; the evidence stays with the operator
 The notes the act lane handed `release.sh --notes` were its full evidence report:
 CVSS, upstream commits, still-open CVEs and patch-layout remarks, often well over

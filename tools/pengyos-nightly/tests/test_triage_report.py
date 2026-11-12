@@ -4,7 +4,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from pengyos_nightly import cli, report, state, triage
+from pengyos_nightly import cli, report, sources, state, triage
 
 FIX = Path(__file__).parent / "fixtures"
 IMG_PKG = {"current": "1.38.0", "editions": ["pengyos-core"], "host_only": False}
@@ -447,3 +447,65 @@ def test_the_report_names_the_act_time_this_machine_actually_runs():
     moved = report.render("2026-10-19", [], [], {}, web_url="http://behoserver:5050/",
                           act_at="02:00")
     assert "02:00 run" in moved and "21:00" not in moved, moved[:200]
+
+
+# --- the whole-repo gate (GitHub CI moved onto the build box, 2026-11-11) ----------
+
+GATE_OUT = """pengyos-gate [full] /data/PengyOS · unscoped: 171/173 checks passed
+  [ok  ] wiring-lint:pengyos-core
+  [FAIL] toolkit:pengy-games:cargo test — error: test failed
+  [FAIL] toolkit:pengyos-fans:unit tests — 2 failed, 28 passed
+"""
+
+
+def test_parse_gate_reads_the_summary_and_each_failure():
+    g = sources.parse_gate(GATE_OUT, 1)
+    assert not g["ok"] and g["summary"].endswith("171/173 checks passed")
+    assert g["failed"] == ["toolkit:pengy-games:cargo test — error: test failed",
+                           "toolkit:pengyos-fans:unit tests — 2 failed, 28 passed"]
+    assert sources.parse_gate("pengyos-gate · 173/173 checks passed\n", 0)["ok"]
+
+
+def test_a_red_gate_mails_every_night_it_stays_red(tmp_path):
+    _fake_repo(tmp_path)
+    get, run_cmd, run_pkgstats = _fakes(tmp_path)
+    args = _args(tmp_path)
+    red = lambda repo: sources.parse_gate(GATE_OUT, 1)
+    obs = cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats, run_gate=red)
+    assert obs["gate"]["failed"] and obs["errors"] == {}
+    sent = []
+    day = dt.date(2026, 11, 10)
+    r = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True, today=day)
+    assert r["sent"] and r["gate_red"] and "gate red" in r["subject"]
+    html = Path(r["report"]).read_text()
+    assert "Repo gate is red" in html and "pengyos-fans" in html
+    # Night two: nothing new upstream, but the gate is still red, so it still mails.
+    cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats, run_gate=red)
+    r2 = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True,
+                       today=day + dt.timedelta(days=1))
+    assert r2["sent"] and "gate red" in r2["subject"]
+    # Green again: quiet, and the report has no gate section.
+    cli.observe(args, get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats)
+    r3 = cli.do_report(args, send=lambda *a, **k: sent.append(a) or True,
+                       today=day + dt.timedelta(days=2))
+    assert not r3["sent"] and "Repo gate" not in Path(r3["report"]).read_text()
+
+
+def test_a_gate_that_cannot_run_is_a_source_error(tmp_path):
+    _fake_repo(tmp_path)
+    get, run_cmd, run_pkgstats = _fakes(tmp_path)
+
+    def broken(repo):
+        raise FileNotFoundError("scripts/pengyos_gate.py")
+    obs = cli.observe(_args(tmp_path), get=get, run_cmd=run_cmd, run_pkgstats=run_pkgstats,
+                      run_gate=broken)
+    assert obs["gate"] is None and "repo gate" in obs["errors"]
+
+
+def test_no_gate_skips_it(tmp_path):
+    _fake_repo(tmp_path)
+    get, run_cmd, run_pkgstats = _fakes(tmp_path)
+    called = []
+    obs = cli.observe(_args(tmp_path, no_gate=True), get=get, run_cmd=run_cmd,
+                      run_pkgstats=run_pkgstats, run_gate=lambda r: called.append(r))
+    assert obs["gate"] is None and not called

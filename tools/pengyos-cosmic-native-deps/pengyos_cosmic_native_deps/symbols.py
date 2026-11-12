@@ -1,8 +1,8 @@
 """The vendored Buildroot ``2026.08`` kconfig symbol list.
 
 This module loads the authoritative, committed symbol list
-(``scripts/tests/fixtures/buildroot-2026.08-symbols.txt``) — the same snapshot
-``pengyos-m2-defconfig`` vendors from (commit ``d5180309…``, tag ``2026.08``).
+(``scripts/tests/fixtures/buildroot-2026.08.1-symbols.txt``) — the same snapshot
+``pengyos-m2-defconfig`` vendors from (commit ``7fdeadb3…``, tag ``2026.08.1``).
 It answers a single question: *does this kconfig symbol exist in the pinned
 2026.08 tree?* The classification pass uses that answer to decide whether a
 candidate dependency needs a recipe.
@@ -39,7 +39,7 @@ def default_symbol_list_path() -> Path:
     return (
         Path(__file__).resolve().parents[3]
         / "scripts" / "tests" / "fixtures"
-        / "buildroot-2026.08-symbols.txt"
+        / "buildroot-2026.08.1-symbols.txt"
     )
 
 

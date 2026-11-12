@@ -55,7 +55,7 @@ def test_symbol_for_matches_defconfig_convention():
         "buildroot-external/configs/pengyos_desktop_defconfig"
     )
     text = defconfig.read_text(encoding="utf-8")
-    for pkg in ("cosmic-portal", "xdg-desktop-portal"):
+    for pkg in ("cosmic", "xdg-desktop-portal"):
         assert symbol_for(pkg) in text
 
 

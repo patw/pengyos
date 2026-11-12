@@ -21,13 +21,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 REPO = ROOT.parents[1]
 # The snapshot is repo-level data: scripts/tests/test_core_userland.py reads the
 # same file when it checks the layers' symbols.
-SYMBOLS_PATH = REPO / "scripts" / "tests" / "fixtures" / "buildroot-2026.08-symbols.txt"
+SYMBOLS_PATH = REPO / "scripts" / "tests" / "fixtures" / "buildroot-2026.08.1-symbols.txt"
 # The sibling repo this list is vendored from.
-SOURCE_PATH = ROOT.parent / "pengyos-m2-defconfig" / "data" / "buildroot-2026.08-symbols.txt"
+SOURCE_PATH = ROOT.parent / "pengyos-m2-defconfig" / "data" / "buildroot-2026.08.1-symbols.txt"
 
 # The authoritative provenance of the vendored snapshot.
-PROVENANCE_COMMIT = "d5180309b1b66ef3b8eaccca70ad69be8e0729a1"
-PROVENANCE_TAG = "2026.08"
+PROVENANCE_COMMIT = "7fdeadb3b9f12f78e5fccca914d7fef47090ab9a"
+PROVENANCE_TAG = "2026.08.1"
 
 # Every non-comment content line is a kconfig symbol: an identifier, no spaces.
 _SYMBOL_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -46,7 +46,7 @@ def _content_lines() -> list[str]:
 
 
 def test_vendored_symbol_list_exists_and_non_empty():
-    assert SYMBOLS_PATH.exists(), "scripts/tests/fixtures/buildroot-2026.08-symbols.txt is missing"
+    assert SYMBOLS_PATH.exists(), "scripts/tests/fixtures/buildroot-2026.08.1-symbols.txt is missing"
     assert SYMBOLS_PATH.stat().st_size > 0, "vendored symbol list is empty"
 
 

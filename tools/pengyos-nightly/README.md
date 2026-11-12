@@ -38,6 +38,7 @@ the list of what cannot be reproduced: **[`../../docs/operations.md`](../../docs
 | COSMIC | `epoch-*` tags of every repo in `scripts/cosmic-components.tsv` | major |
 | NVIDIA | tags of `NVIDIA/open-gpu-kernel-modules` vs `NVIDIA_OPEN_VERSION` | major |
 | Exploit signals | CISA Known Exploited Vulnerabilities, FIRST EPSS | feeds triage |
+| The repo itself | the whole-repo gate (`pengyos_gate.py --base none`, about 10 min; `--no-gate` skips it) | a red gate heads the report and mails every night it stays red |
 
 ## Triage
 
@@ -170,6 +171,7 @@ cd tools/pengyos-nightly
 python3 -m pengyos_nightly run                 # observe + triage + report (email)
 python3 -m pengyos_nightly run --no-email      # report to reports/<date>.html only
 python3 -m pengyos_nightly observe             # just refresh observations.json
+python3 -m pengyos_nightly run --no-gate       # skip the whole-repo gate
 python3 -m pengyos_nightly triage --max-triage 50 --jobs 2
 python3 -m pengyos_nightly report --force-email
 python3 -m pengyos_nightly plan                    # decide, change nothing

@@ -37,7 +37,7 @@ def _symbols(*present: str) -> SymbolList:
     return SymbolList(
         symbols=frozenset(present),
         tag="2026.08",
-        source="test list (tag 2026.08)",
+        source="test list (tag 2026.08.1)",
     )
 
 
@@ -169,8 +169,8 @@ def test_committed_classification_matches_the_live_classification():
 
 def test_committed_classification_records_the_tag_and_source():
     committed = _load_committed()
-    assert committed["buildroot_tag"] == "2026.08"
-    assert committed["source"] == "buildroot-2026.08-symbols.txt (tag 2026.08)"
+    assert committed["buildroot_tag"] == "2026.08.1"
+    assert committed["source"] == "buildroot-2026.08.1-symbols.txt (tag 2026.08.1)"
 
 
 def test_committed_classification_pins_the_recipe_needed_set():
