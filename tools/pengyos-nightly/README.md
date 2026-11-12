@@ -33,6 +33,7 @@ the list of what cannot be reproduced: **[`../../docs/operations.md`](../../docs
 | Source | How | Lane |
 |---|---|---|
 | Every Buildroot package in each configured edition | Buildroot's own `pkg-stats` (NVD CVEs, release-monitoring.org versions) | security; version gaps only for our recipes |
+| The Rust crates and Go modules compiled into each edition (its SBOM, `images/<edition>.cdx.json`) | osv.dev (RustSec, Go vulndb, GHSA) | report only: new critical/high listed, the rest counted |
 | Buildroot | git tags: `2026.08.x` point releases, newer series, LTS (`.02`) | routine / major |
 | Linux | kernel.org `releases.json` vs `BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE` | same series routine, new series or EOL major |
 | COSMIC | `epoch-*` tags of every repo in `scripts/cosmic-components.tsv` | major |

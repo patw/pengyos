@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengyos-sbom"
-version = "0.1.0"
+version = "0.2.0"
 description = "PengyOS SBOM: turn Buildroot legal-info/show-info into SPDX 2.3 (+ CycloneDX) with ed25519 signing."
 readme = "README.md"
 requires-python = ">=3.8"

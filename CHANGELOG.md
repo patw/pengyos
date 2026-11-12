@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: the SBOM and the nightly see what is inside every package (2026-11-12)
+- The SBOM lists the Rust crates and Go modules each package compiles in (about
+  6,500 entries on the Desktop, across COSMIC, Pengy, podman, uv and 18 more),
+  read from the lockfiles cargo and Go actually built from (pengyos-sbom 0.2.0).
+  Until now each of those packages was one line, and nothing scanned what was in it.
+- The nightly checks every one against osv.dev (RustSec, the Go vulnerability
+  database, GHSA) and reports new critical and high advisories (pengyos-nightly
+  0.17.0). The first look found 14 critical and 57 high on the Desktop.
+- 24 packages that had no CPE now have one: 13 of our recipes (flatpak,
+  xdg-desktop-portal, uutils coreutils, uv, nvidia-container-toolkit, ...) and 11
+  stock ones (nftables, libva, mosh, intel-microcode, ...; set in external.mk).
+  Without a CPE, pkg-stats can never match a CVE to a package. None of them has an
+  open CVE today. uutils alone has 44 in NVD, all fixed before the version we ship.
+- The CVE scan was blind on 11-10 and 11-11 (uv missing in the build box), and a
+  failed scan then marked every tracked CVE resolved. Fixed in pengyos-nightly
+  0.16.1: a failed scan resolves nothing, and its subject says so.
+
 ### Changed: the whole-repo gate runs on the build box, not on GitHub (2026-11-11)
 - GitHub CI ran the gate on every push and was red from 10-28 to 11-11 without
   anyone noticing: a renamed Buildroot fixture broke two tools' suites, a test

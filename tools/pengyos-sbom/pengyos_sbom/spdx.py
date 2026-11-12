@@ -35,7 +35,7 @@ import hashlib
 import re
 from typing import Dict, List, Optional
 
-from . import __version__, constants as c
+from . import __version__, bundled, constants as c
 from .licenses import LicenseConverter
 from .model import IngestResult, SCOPE_BUILD, SCOPE_HOST, SCOPE_TARGET, Rootfs
 
@@ -80,6 +80,8 @@ def _document_namespace(result: IngestResult, doc_name: str) -> str:
     h.update(doc_name.encode("utf-8"))
     for comp in result.components:
         h.update(f"{comp.scope}:{comp.name}:{comp.version}\n".encode("utf-8"))
+        for d in comp.bundled:
+            h.update(f"  {bundled.purl(d)}\n".encode("utf-8"))
     for rf in result.rootfs:
         h.update(f"rootfs:{rf.name}\n".encode("utf-8"))
     if result.buildroot_version:
@@ -167,6 +169,29 @@ def build_spdx_document(
                 "relatedSpdxElement": pkg["SPDXID"],
             }
         )
+        for d in comp.bundled:
+            dep_id = f"{pkg['SPDXID']}-{d.ecosystem}-{_spdxid_safe(d.name)}-{_spdxid_safe(d.version)}"
+            packages.append({
+                "SPDXID": dep_id,
+                "name": d.name,
+                "versionInfo": d.version,
+                "downloadLocation": "NOASSERTION",
+                "filesAnalyzed": False,
+                "licenseConcluded": "NOASSERTION",
+                "licenseDeclared": "NOASSERTION",
+                "copyrightText": "NOASSERTION",
+                "primaryPackagePurpose": "LIBRARY",
+                "externalRefs": [{
+                    "referenceCategory": "PACKAGE-MANAGER",
+                    "referenceType": "purl",
+                    "referenceLocator": bundled.purl(d),
+                }],
+            })
+            contains.append({
+                "spdxElementId": pkg["SPDXID"],
+                "relationshipType": "CONTAINS",
+                "relatedSpdxElement": dep_id,
+            })
 
     relationships: List[Dict] = [
         {

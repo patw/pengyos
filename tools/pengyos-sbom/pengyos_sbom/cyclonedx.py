@@ -62,7 +62,7 @@ _CYCLONEDX_ALG = {
     "sha512": "SHA-512",
 }
 
-from . import __version__, constants as c
+from . import __version__, bundled, constants as c
 from .licenses import LicenseConverter
 from .model import IngestResult, Rootfs
 
@@ -85,6 +85,8 @@ def _serial_number(result: IngestResult) -> str:
     h = hashlib.sha256()
     for comp in result.components:
         h.update(f"{comp.scope}:{comp.name}:{comp.version}\n".encode("utf-8"))
+        for d in comp.bundled:
+            h.update(f"  {bundled.purl(d)}\n".encode("utf-8"))
     for rf in result.rootfs:
         h.update(f"rootfs:{rf.name}:{rf.image_name or ''}\n".encode("utf-8"))
     if result.buildroot_version:
@@ -139,6 +141,14 @@ def _component_for_component(comp, expr: str) -> Dict:
     if comp.origin:
         comp_dict["externalReferences"] = [
             {"type": "distribution", "url": comp.origin}
+        ]
+    if comp.bundled:
+        # Nested components: CycloneDX's "this component is assembled from these".
+        parent = _bom_ref(comp)
+        comp_dict["components"] = [
+            {"type": "library", "bom-ref": f"{parent}:{bundled.purl(d)}",
+             "name": d.name, "version": d.version, "purl": bundled.purl(d)}
+            for d in comp.bundled
         ]
     return comp_dict
 

@@ -181,7 +181,9 @@ def generate_sbom(
     _sbom(
         repo_root,
         ["generate", "--legal-info", str(legal_info), "--show-info", str(show_info),
-         "--out", str(spdx), "--cdx", str(cdx)],
+         "--out", str(spdx), "--cdx", str(cdx),
+         # the crates and Go modules each package compiles in (pengyos-sbom 0.2.0)
+         "--build-dir", str(output / "build")],
         env, tool_runner,
     )
 

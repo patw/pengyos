@@ -144,3 +144,19 @@ def test_generate_sbom_removes_sboms_left_under_another_name(tmp_path):
     for name in stale:
         assert not (images / name).exists(), name
     assert (images / "bzImage").is_file()
+
+
+def test_generate_passes_the_build_dir_for_bundled_deps(tmp_path):
+    """pengyos-sbom 0.2.0 reads each package's Cargo.lock / vendor/modules.txt out of
+    <output>/build: the crates and Go modules no Buildroot manifest lists."""
+    root, t, out = _layout(tmp_path)
+    seen = []
+    inner = _fake_tool({})
+
+    def tool(argv, **kw):
+        seen.append(list(argv))
+        return inner(argv, **kw)
+
+    generate_sbom(t, root, runner=_fake_make(out, {}), tool_runner=tool, repo_root=None)
+    gen = next(a for a in seen if "generate" in a)
+    assert gen[gen.index("--build-dir") + 1] == str(out / "build")

@@ -121,6 +121,16 @@ class Rootfs:
     dependencies: Tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, order=True)
+class Bundled:
+    """A third-party Rust crate or Go module compiled into a package
+    (see :mod:`pengyos_sbom.bundled`). ``ecosystem`` is the purl type."""
+
+    ecosystem: str  # "cargo" | "golang"
+    name: str
+    version: str
+
+
 @dataclass(frozen=True)
 class Component:
     """One package known to have gone into the PengyOS build.
@@ -147,6 +157,7 @@ class Component:
     redistributable: Optional[bool] = None  # show-info
     virtual: bool = False  # show-info
     package_dir: str = ""  # show-info package_dir (buildroot source dir)
+    bundled: Tuple[Bundled, ...] = ()  # crates / Go modules compiled in (--build-dir)
 
     @property
     def source_hash(self) -> Optional[Hash]:

@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed — the SBOM lists the crates and Go modules each package compiles in (2026-11-12)
+- `sbom` passes `--build-dir <output>/build` to `pengyos-sbom generate` (0.2.0), so
+  the SPDX and CycloneDX documents carry every Rust crate and Go module a target
+  package builds against, read from its own lockfile. Until now `cosmic`, `pengy`
+  and `podman` were each one line, and the ~3,600 third-party libraries inside them
+  were in no SBOM and no scanner.
+
 ### Fixed — a kernel config change on the same version rebuilds the modules too (2026-11-04)
 - `configure` rebuilds the kernel and every package built against it (nvidia-open,
   v4l2loopback) when the built kernel's `.config` no longer satisfies a fragment

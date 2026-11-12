@@ -6,6 +6,27 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — advisories against bundled crates and Go modules, from OSV (0.17.0)
+pkg-stats matches CVEs to Buildroot packages by CPE. COSMIC, Pengy, podman, uv
+and the other cargo and Go packages are one package each to it, while the images
+compile in about 3,500 distinct third-party crates and modules that no CPE names.
+On 2026-11-12, the first look found 14 critical and 57 high advisories among them
+on the Desktop alone, none of which any report had ever shown. `observe` now reads
+the crates and modules out of each edition's SBOM (`images/<edition>.cdx.json`,
+nested `pkg:cargo` / `pkg:golang` components from pengyos-sbom 0.2.0). It asks
+osv.dev about every one, sending only public package names and versions, and
+records the advisories in observations.json (`bundled`). Aliases of one flaw
+(RUSTSEC, GO, GHSA, CVE) fold into one record. Withdrawn and informational
+(unmaintained, unsound) entries are dropped. Severity comes from GHSA, else from
+the CVSS 3 vector (`cvss3_score`; RustSec records carry only the vector).
+Advisory records are cached by OSV's `modified` stamp (state dir,
+`osv-cache.json`). The report lists new critical and high advisories one per line,
+with the fixed version, and counts the rest per package. The subject gets
+"N bundled high". Each advisory is reported once, and forgotten when the
+dependency moves past it. An SBOM older than 0.2.0 is a source error. The act lane
+does not act on these: a crate bump is a change to a package's lockfile, and that
+is a decision.
+
 ### Fixed — a failed CVE scan no longer reads as "everything fixed" (0.16.1)
 On 2026-11-10 `uv` vanished from the build box and pkg-stats failed for every
 edition. observe returned no packages, and triage marked every tracked CVE

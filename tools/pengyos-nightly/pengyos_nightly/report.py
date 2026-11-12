@@ -100,11 +100,44 @@ def _finding_list(items: list[dict]) -> str:
     return "<ul>" + "".join(li) + "</ul>" if li else "<p><i>none</i></p>"
 
 
+SEV_COLOR = {"CRITICAL": "#b00020", "HIGH": "#c75000"}
+
+
+def _bundled(items: list[dict]) -> str:
+    """Critical and high advisories one per line; the rest counted per package, since
+    a moderate in one of COSMIC's 2,000 crates is not a decision on its own."""
+    serious = [b for b in items if b["severity"] in ("CRITICAL", "HIGH")]
+    rest = [b for b in items if b["severity"] not in ("CRITICAL", "HIGH")]
+    rows = []
+    for b in serious:
+        fixed = f" · fixed in {_e(b['fixed'])}" if b.get("fixed") else ""
+        alias = f" ({_e(', '.join(b['aliases'][:3]))})" if b.get("aliases") else ""
+        rows.append(
+            f'<tr><td style="padding:4px 8px;vertical-align:top;color:{SEV_COLOR[b["severity"]]}">'
+            f'<b>{_e(b["severity"])}</b></td><td style="padding:4px 8px;vertical-align:top">'
+            f'<a href="https://osv.dev/vulnerability/{_e(b["id"])}">{_e(b["id"])}</a>{alias} — '
+            f'<b>{_e(b["name"])}</b> {_e(b["version"])} in {_e(", ".join(b["in"]))}{fixed}<br>'
+            f'<small>{_e(", ".join(b["editions"]))}</small><br>{_e(b.get("summary", ""))}</td></tr>')
+    out = ('<table style="border-collapse:collapse">' + "".join(rows) + "</table>") if rows else ""
+    if rest:
+        per: dict[str, dict[str, int]] = {}
+        for b in rest:
+            for pkg in b["in"]:
+                per.setdefault(pkg, {}).setdefault(b["severity"].lower(), 0)
+                per[pkg][b["severity"].lower()] += 1
+        out += ("<p><small>Also: " + "; ".join(
+            f"{_e(pkg)} " + ", ".join(f"{n} {s}" for s, n in sorted(c.items()))
+            for pkg, c in sorted(per.items())) + "</small></p>")
+    return out or "<p><i>none</i></p>"
+
+
 def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: dict,
            all_cves: list[dict] | None = None, all_findings: list[dict] | None = None,
            digest: bool = False, carried: list[dict] | None = None,
            acted: list[dict] | None = None, web_url: str = "",
-           act_at: str = cfgmod.DEFAULTS["act_time"], gate: dict | None = None) -> str:
+           act_at: str = cfgmod.DEFAULTS["act_time"], gate: dict | None = None,
+           bundled_new: list[dict] | None = None,
+           bundled_all: list[dict] | None = None) -> str:
     serious = [c for c in new_cves if c["priority"] in ("P0", "P1")]
     minor = [c for c in new_cves if c["priority"] == "P2"]
     parts = [f"<h2>PengyOS nightly — {_e(date)}</h2>"]
@@ -128,6 +161,9 @@ def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: di
     parts.append(_finding_list([f for f in new_findings if f["lane"] == "major"]))
     parts.append(f"<h3>Routine updates</h3>")
     parts.append(_finding_list([f for f in new_findings if f["lane"] == "routine"]))
+    if bundled_new:
+        parts.append(f"<h3>Bundled crates and Go modules — new advisories ({len(bundled_new)})</h3>")
+        parts.append(_bundled(bundled_new))
     if minor:
         parts.append(f"<h3>New P2 (not reachable / low; {len(minor)})</h3>")
         parts.append(_cve_rows(minor))
@@ -138,6 +174,9 @@ def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: di
         parts.append(f"<p>{len(all_cves)} CVE matches tracked; {len(open_serious)} P0/P1.</p>")
         parts.append(_by_package(open_serious) if open_serious else "")
         parts.append(_finding_list(all_findings))
+    if bundled_all is not None:
+        parts.append(f"<h3>Bundled crates and Go modules — open advisories ({len(bundled_all)})</h3>")
+        parts.append(_bundled(bundled_all))
     if carried:
         # pkg-stats still flags these, because a patch shape does not move the version.
         # Saying so out loud is the difference between a report that informs and one that
@@ -163,7 +202,7 @@ def render(date: str, new_cves: list[dict], new_findings: list[dict], errors: di
 def subject(date: str, new_cves: list[dict], new_findings: list[dict], errors: dict,
             digest: bool, open_cves: list[dict] | None = None,
             all_findings: list[dict] | None = None, gate_red: bool = False,
-            scan_failed: bool = False) -> str:
+            scan_failed: bool = False, bundled_serious: int = 0) -> str:
     p0 = sum(c["priority"] == "P0" for c in new_cves)
     p1 = sum(c["priority"] == "P1" for c in new_cves)
     major = sum(f["lane"] == "major" for f in new_findings)
@@ -181,6 +220,8 @@ def subject(date: str, new_cves: list[dict], new_findings: list[dict], errors: d
         bits.append(f"{major} major")
     if routine:
         bits.append(f"{routine} routine")
+    if bundled_serious:
+        bits.append(f"{bundled_serious} bundled high")
     if errors:
         bits.append(f"{len(errors)} source errors")
     head = "PengyOS weekly digest" if digest else "PengyOS nightly"

@@ -67,7 +67,7 @@ def test_bom_top_level_fields():
     assert doc["version"] == 1
     assert doc["metadata"]["timestamp"] == CREATED
     assert doc["metadata"]["tools"] == [
-        {"name": "pengyos-sbom", "version": "0.1.0"}
+        {"name": "pengyos-sbom", "version": "0.2.0"}
     ]
 
 

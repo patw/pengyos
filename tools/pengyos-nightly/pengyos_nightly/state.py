@@ -7,7 +7,9 @@ import tempfile
 from pathlib import Path
 
 EMPTY = {"cves": {}, "findings": {}, "last_report": "", "actions": {},
-         "patch_failures": {}, "last_delivery_error": ""}
+         "patch_failures": {}, "last_delivery_error": "",
+         # bundled-dependency advisories already reported: key -> date first reported
+         "bundled": {}}
 
 
 def load(path: Path) -> dict:
