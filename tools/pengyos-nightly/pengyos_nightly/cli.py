@@ -65,7 +65,7 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
             run_pkgstats(buildroot, out, js, p["nvd"])
             per_edition.append(sources.parse_pkgstats(json.loads(js.read_text()), t["name"]))
         except Exception as e:  # one edition failing is reported, not fatal
-            errors[f"pkg-stats {t['name']}"] = str(e)[:300]
+            errors[f"pkg-stats {t['name']}"] = _why(e)
     packages = sources.merge_packages(per_edition)
     findings += sources.package_findings(packages)
 
@@ -202,6 +202,26 @@ def observe(args, get=sources.http_get, run_cmd=sources.run_cmd, run_pkgstats=so
     return obs
 
 
+def _why(e: Exception, n: int = 300) -> str:
+    """The reason a command failed, not its argv. CalledProcessError's str() is the
+    command line, and cut to 300 characters it never reached the cause: on 11-10 and
+    11-11 the report said "Command '['env', '-u', ..." five times and hid
+    "uv: No such file or directory"."""
+    tail = getattr(e, "stderr", None) or getattr(e, "output", None) or ""
+    if isinstance(tail, bytes):
+        tail = tail.decode(errors="replace")
+    tail = tail.strip()
+    if tail:
+        return f"exit {getattr(e, 'returncode', '?')}: {tail[-n:]}"
+    return str(e)[:n]
+
+
+def scan_failed(obs: dict) -> list[str]:
+    """Editions whose pkg-stats run failed in this observation."""
+    return sorted(k.split(" ", 1)[1] for k in obs.get("errors", {})
+                  if k.startswith("pkg-stats "))
+
+
 def do_triage(args, complete=None) -> list[dict]:
     """Triage every CVE match not already in state.json; returns the new ones."""
     p = _paths(args)
@@ -235,10 +255,14 @@ def do_triage(args, complete=None) -> list[dict]:
                 # which is the model call this loop is trying not to spend twice.
                 rec["version"] = pkg["current"]
                 rec["version_refreshed"] = obs["date"]
-    # Mark matches that disappeared (the package moved past them) as resolved.
-    for key, rec in st["cves"].items():
-        if key not in present and not rec.get("resolved"):
-            rec["resolved"] = obs["date"]
+    # Mark matches that disappeared (the package moved past them) as resolved - but
+    # only when every edition was scanned. A failed pkg-stats run returns no packages,
+    # and the absence of evidence read as a fix: on 2026-11-10 every tracked CVE
+    # (40 open P0/P1 among them) was marked resolved because uv was missing.
+    if not scan_failed(obs):
+        for key, rec in st["cves"].items():
+            if key not in present and not rec.get("resolved"):
+                rec["resolved"] = obs["date"]
 
     todo = todo[: args.max_triage]
 
@@ -272,6 +296,7 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
     errors = obs.get("errors", {})
     gate = obs.get("gate")
     gate_red = bool(gate) and not gate.get("ok", True)
+    scan_red = bool(scan_failed(obs))
     # "Open" means open in the image we ship. A CVE closed by a patch we carry is not
     # open, even though pkg-stats still flags it - counting it as open would put the
     # same 7 libxml2 CVEs in every report from now on.
@@ -301,7 +326,8 @@ def do_report(args, send=report.send, today: dt.date | None = None) -> dict:
                          act_at=cfgmod.act_time(cfgmod.load(p["policy"])), gate=gate)
     subj = report.subject(today.isoformat(), new_cves, new_findings, errors, digest,
                           open_cves if show_open else None,
-                          obs["findings"] if show_open else None, gate_red=gate_red)
+                          obs["findings"] if show_open else None, gate_red=gate_red,
+                          scan_failed=scan_red)
     p["reports"].mkdir(parents=True, exist_ok=True)
     out = p["reports"] / f"{today.isoformat()}.html"
     out.write_text(body)

@@ -6,6 +6,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — a failed CVE scan no longer reads as "everything fixed" (0.16.1)
+On 2026-11-10 `uv` vanished from the build box and pkg-stats failed for every
+edition. observe returned no packages, and triage marked every tracked CVE
+resolved (40 open P0/P1 among them), so two nights of reports said "0 new P0/P1".
+Triage now resolves a match only on a night every edition was scanned. A failed
+scan puts "CVE scan failed" first in the subject, and the error records the
+command's stderr instead of its argv (which, cut to 300 characters, never reached
+"uv: No such file or directory").
+
 ### Added — the whole-repo gate runs every night (0.16.0)
 `observe` runs `pengyos_gate.py --base none` on the build box and records the
 result in observations.json. A red gate leads the report ("Repo gate is red", the
