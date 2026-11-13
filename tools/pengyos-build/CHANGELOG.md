@@ -6,6 +6,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — 11,000 false "CLEAN BUILD NEEDED" leftovers on the Desktop trees (2026-11-13)
+- A package whose file list had absorbed other packages' aged files (libmtp,
+  ldacbt, libfreeaptx) got those files aged *for it* when it was rebuilt, and the
+  real owners (tzdata, grub2, vim, cups drivers, ...) then lost their claims: the
+  Desktop builds of 26.11.15 and 26.11.16 printed "11210 file(s) ... (libmtp
+  11209)", all ordinary image files with mtime 0.
+- `trustworthy_owners` also trusts a package whose last install
+  (`.stamp_target_installed`) came before the path was first aged: a list written
+  before an aging cannot hold an absorption. `prepare_rebuild` now ages a file only
+  for a rebuilt package whose claim on it is trustworthy, and records each round's
+  time in `.pengyos-aged-times.txt` (older records fall back to `.stamp_extracted`).
+- On the real Desktop tree the report goes from 11,210 to 2: the libqalculate .so
+  the 5.13.2 rebuild replaced (a real leftover), and `/etc/sensors3.conf`, which
+  lm-sensors installs only when it is absent.
+
 ### Changed — the SBOM lists the crates and Go modules each package compiles in (2026-11-12)
 - `sbom` passes `--build-dir <output>/build` to `pengyos-sbom generate` (0.2.0), so
   the SPDX and CycloneDX documents carry every Rust crate and Go module a target

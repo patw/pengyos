@@ -369,3 +369,95 @@ def test_a_build_with_nothing_left_prints_one_line(tmp_path: Path) -> None:
     built = _build(root, target, lst)
     assert not built.leftovers
     assert "\n" not in str(built)
+
+
+# --- aged for an absorber: the 26.11.15/16 "libmtp" false leftovers ------------
+
+UTC = "./usr/share/zoneinfo/UTC"
+
+
+def test_a_file_aged_for_an_absorber_keeps_its_real_owner(tmp_path: Path) -> None:
+    # NEGATIVE CONTROL - the real Desktop trees, 11-13: libmtp's list had absorbed
+    # UTC, so libmtp's rebuild aged UTC *for libmtp*. tzdata, installed long before,
+    # still lists it; libmtp no longer does. tzdata's claim predates the aging, so it
+    # cannot be an absorption, and UTC is not a leftover.
+    _touch(tmp_path, UTC)
+    before = leftovers.parse_file_list(_list(("tzdata", UTC), ("libmtp", UTC)))
+    now = leftovers.parse_file_list(_list(("tzdata", UTC)))
+    aged = {UTC: {"libmtp"}}
+    timeline = leftovers.Timeline(installed_at={"tzdata": 100.0, "libmtp": 900.0}, aged_at={"libmtp": 500.0})
+    assert not leftovers.find_leftovers(before, now, set(), tmp_path, aged=aged, timeline=timeline)
+    # Without the timeline this is the false report the trees printed:
+    assert leftovers.find_leftovers(before, now, set(), tmp_path, aged=aged) == {UTC: "libmtp"}
+
+
+def test_an_absorber_installed_after_the_aging_is_still_not_trusted(tmp_path: Path) -> None:
+    # POSITIVE CONTROL - the 26.10.37 upower case with a timeline: the absorbers
+    # installed after upower's files were aged, so their claims still do not count.
+    _touch(tmp_path, UPOWER_STALE)
+    now = leftovers.parse_file_list(
+        _list(*[(a, UPOWER_STALE) for a in ABSORBERS], ("upower", UPOWER_STALE))
+    )
+    timeline = leftovers.Timeline(
+        installed_at={a: 300.0 for a in ABSORBERS} | {"upower": 50.0}, aged_at={"upower": 200.0}
+    )
+    found = leftovers.find_leftovers(
+        now, now, {"upower"}, tmp_path, aged={UPOWER_STALE: {"upower"}}, timeline=timeline
+    )
+    assert found == {UPOWER_STALE: "upower"}
+
+
+def test_a_dropped_file_with_only_later_absorbers_is_still_named(tmp_path: Path) -> None:
+    # POSITIVE CONTROL - the timesyncd case with a timeline: systemd dropped the unit;
+    # only absorbers installed after the aging claim it.
+    _touch(tmp_path, TIMESYNCD[0])
+    before = leftovers.parse_file_list(_list(("systemd", TIMESYNCD[0])))
+    now = leftovers.parse_file_list(_list(*[(a, TIMESYNCD[0]) for a in ABSORBERS]))
+    timeline = leftovers.Timeline(installed_at={a: 400.0 for a in ABSORBERS}, aged_at={"systemd": 300.0})
+    found = leftovers.find_leftovers(
+        before, now, set(), tmp_path, aged={TIMESYNCD[0]: {"systemd"}}, timeline=timeline
+    )
+    assert found == {TIMESYNCD[0]: "systemd"}
+
+
+def _stamp(out: Path, build_dir: str, stamp: str, at: float) -> None:
+    d = out / "build" / build_dir
+    d.mkdir(parents=True, exist_ok=True)
+    (d / stamp).touch()
+    os.utime(d / stamp, (at, at))
+
+
+def test_prepare_rebuild_does_not_age_a_file_for_a_package_that_absorbed_it(tmp_path: Path) -> None:
+    # UTC was aged for tzdata at 500; libmtp, installed at 600, absorbed it. When
+    # libmtp is rebuilt, UTC must not be aged (or recorded) for libmtp.
+    out = tmp_path
+    _touch(out / "target", UTC, "./usr/lib/libmtp.so.9")
+    (out / "build").mkdir()
+    (out / leftovers.FILE_LIST).write_text(
+        _list(("tzdata", UTC), ("libmtp", UTC), ("libmtp", "./usr/lib/libmtp.so.9"))
+    )
+    (out / leftovers.AGED).write_text(_list(("tzdata", UTC)))
+    (out / leftovers.AGED_TIMES).write_text("tzdata,500\n")
+    _stamp(out, "tzdata-2026e", ".stamp_target_installed", 550.0)
+    _stamp(out, "libmtp-1.1.23", ".stamp_target_installed", 600.0)
+    os.utime(out / "target" / UTC, (700, 700))
+    assert leftovers.prepare_rebuild(out, (out / "build" / "libmtp-1.1.23",)) == 1
+    assert leftovers.load_aged(out)[UTC] == {"tzdata"}
+    assert leftovers.load_aged(out)["./usr/lib/libmtp.so.9"] == {"libmtp"}
+    assert (out / "target" / UTC).stat().st_mtime == 700
+    assert (out / leftovers.AGED_TIMES).read_text().splitlines()[-1].startswith("libmtp,")
+
+
+def test_load_timeline_reads_stamps_and_keeps_the_earliest_aging(tmp_path: Path) -> None:
+    out = tmp_path
+    (out / leftovers.FILE_LIST).parent.mkdir(parents=True, exist_ok=True)
+    (out / leftovers.FILE_LIST).write_text(_list(("tzdata", UTC), ("libmtp", "./usr/lib/libmtp.so.9")))
+    _stamp(out, "tzdata-2026e", ".stamp_target_installed", 100.0)
+    _stamp(out, "libmtp-1.1.23", ".stamp_target_installed", 900.0)
+    _stamp(out, "libmtp-1.1.23", ".stamp_extracted", 800.0)
+    (out / leftovers.AGED_TIMES).write_text("libmtp,500\nlibmtp,700\n")
+    t = leftovers.load_timeline(out)
+    assert t.installed_at == {"tzdata": 100.0, "libmtp": 900.0}
+    assert t.aged_at["libmtp"] == 500.0
+    assert t.first_aged({"libmtp", "nothing"}) == 500.0
+    assert t.installed_before("tzdata", 500.0) and not t.installed_before("libmtp", 500.0)
