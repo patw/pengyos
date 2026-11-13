@@ -114,6 +114,13 @@ if [ "${BOOT_CHECK}" = 1 ] && [ ! -w /dev/kvm ]; then
     BOOT_CHECK=0
 fi
 [ "${PUBLISH}" = 1 ] && [ "${BOOT_CHECK}" = 0 ] && die "refusing to publish images that were not boot-checked"
+# A test build from a branch worktree in these output trees records that worktree's
+# patch paths, and legal-info (the SBOM step) copies patches from them again: a
+# removed worktree killed 26.11.15 at Desktop's SBOM, hours in. Checked before building.
+STALE_OUTPUTS=()
+for t in "${TARGETS[@]}"; do STALE_OUTPUTS+=("${BUILD_ROOT}/output/${t}"); done
+python3 "${REPO}/scripts/check-applied-patches.py" --repo "${REPO}" "${STALE_OUTPUTS[@]}" \
+    || die "output trees hold patches from outside this repo (a worktree test build?): dirclean those packages"
 
 build() { (cd "${REPO}/tools/pengyos-build" && python3 -m pengyos_build "$@" --targets "${TARGETS_FILE}"); }
 verify() { (cd "${REPO}/tools/pengyos-qemu-verify" && python3 -m pengyos_qemu_verify "$@"); }
