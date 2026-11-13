@@ -32,6 +32,13 @@ Example, /etc/containers/systemd/web.container:
   systemctl daemon-reload && systemctl start web
   pengyos-firewall allow 8080/tcp --from 10.0.23.0/24    # the firewall is default-deny
 
+Output: a container's stdout and stderr go to the journal, and stay there after
+the container is gone:
+  journalctl -u web               (system lane)
+  journalctl --user -u web        (user lane)
+`podman logs` does not work for quadlet containers (container.d/10-pengyos-log.conf
+sets LogDriver=passthrough; that file says how to choose another driver).
+
 Two traps:
   * A file with a key quadlet does not know leaves NO unit: `systemctl start web`
     says "Unit web.service not found". The reason is only in the generator's log:

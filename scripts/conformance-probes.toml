@@ -112,6 +112,26 @@ id = "tmp-shm"
 run = "t=$(mktemp) && rm \"$t\" && test -w /dev/shm"
 why = "temp files and POSIX shared memory (PyTorch DataLoader, browsers)"
 
+# --- debugging a running program (Server and up: Core has no C++ runtime) ----
+
+[[probe]]
+id = "gdb"
+when = ". /etc/os-release && test \"$VARIANT_ID\" != core"
+run = "gdb -batch -ex 'python print(1)' | grep -qx 1"
+why = "reading a core (`coredumpctl debug`) and attaching to a service; Python support runs C++ pretty-printers (26.11.12, behotv: a core read by hand)"
+
+[[probe]]
+id = "perf"
+when = ". /etc/os-release && test \"$VARIANT_ID\" != core"
+run = "perf stat -e task-clock -x, true 2>&1 | grep -q task-clock"
+why = "profiling a running service; built from our kernel tree, so it must work against the running kernel (Ubuntu's linux-tools refuses 7.x)"
+
+[[probe]]
+id = "eu-stack"
+when = ". /etc/os-release && test \"$VARIANT_ID\" != core"
+run = "eu-stack --version"
+why = "stacks of a live process or a core without a debugger session (elfutils)"
+
 # --- left out on purpose ------------------------------------------------------
 
 [[probe]]
