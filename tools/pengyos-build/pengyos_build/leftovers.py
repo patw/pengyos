@@ -57,6 +57,9 @@ REPORT = ".pengyos-leftovers.txt"
 #: ``make clean``. It is what makes an aged file's ownership decidable again (see
 #: :func:`trustworthy_owners`).
 AGED = ".pengyos-aged.txt"
+#: ``pkg,epoch`` for every aging round, append-only: when each package's files
+#: were aged (see :class:`Timeline`).
+AGED_TIMES = ".pengyos-aged-times.txt"
 #: When the last ``configure`` finished, as an epoch. Packages whose build dir is
 #: newer than this were installed by the round that is about to run.
 CONFIGURED = ".pengyos-configured"
@@ -97,6 +100,7 @@ def trustworthy_owners(
     owners: set[str],
     aged: dict[str, set[str]],
     installed: set[str] | None = None,
+    timeline: Timeline | None = None,
 ) -> set[str]:
     """The claims about ``path`` that can be trusted to explain an install.
 
@@ -119,19 +123,27 @@ def trustworthy_owners(
       cannot have written the file, and the round's install is the only thing left
       that can have. This is what keeps ``upowerd`` (written by ``upower-pengyos``
       at 21:15, while stock ``upower`` was not installed at all) off the list.
+    * it is the claim of a package whose last install came before the path was
+      first aged (``timeline``). Absorption needs an aging first, so a file list
+      written before it cannot hold one. This is what keeps the real owner of a
+      file that was aged for an *absorber* (``tzdata`` for
+      ``/usr/share/zoneinfo/UTC``, aged for ``libmtp`` because ``libmtp``'s list
+      had absorbed it) from losing its claim: the Desktop trees reported 11,000
+      such files as "libmtp" leftovers in 26.11.15 and 26.11.16.
 
     Everything else is an absorption artifact and is dropped.
     """
     aged_for = aged.get(path)
     if not aged_for:
         return owners
-    if installed is None:
-        return owners & aged_for
+    first_aged = timeline.first_aged(aged_for) if timeline else None
     keep = set()
     for pkg in owners:
         if pkg in aged_for:
             keep.add(pkg)
-        elif pkg in installed and not (aged_for & installed):
+        elif installed is not None and pkg in installed and not (aged_for & installed):
+            keep.add(pkg)
+        elif first_aged is not None and timeline.installed_before(pkg, first_aged):
             keep.add(pkg)
     return keep
 
@@ -139,6 +151,66 @@ def trustworthy_owners(
 def mark_configured(output: Path) -> None:
     """Record when this ``configure`` finished, for :func:`installed_packages`."""
     (output / CONFIGURED).write_text(str(int(time.time())) + "\n", encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class Timeline:
+    """When each package was last installed, and when each was first aged for.
+
+    ``installed_at`` comes from Buildroot's ``.stamp_target_installed`` in the
+    package's build dir. ``aged_at`` is the earliest aging round recorded for a
+    package in :data:`AGED_TIMES`; aging recorded before that file existed falls
+    back to the package's ``.stamp_extracted``, written by its latest rebuild.
+    That is later than its first aging when it was rebuilt more than once, so for
+    those old records a package installed between two rounds can be trusted
+    although its claim was absorbed; that hides a leftover only if the absorber
+    is enabled and the real owner dropped the file in the same window. Rounds
+    recorded in :data:`AGED_TIMES` are exact.
+    """
+
+    installed_at: dict[str, float]
+    aged_at: dict[str, float]
+
+    def first_aged(self, packages: set[str]) -> float | None:
+        times = [self.aged_at[p] for p in packages if p in self.aged_at]
+        return min(times) if times else None
+
+    def installed_before(self, pkg: str, when: float) -> bool:
+        at = self.installed_at.get(pkg)
+        return at is not None and at < when
+
+
+def _stamp_times(output: Path, stamp: str, packages: set[str]) -> dict[str, float]:
+    """``{package: mtime of build/<pkg>-<ver>/<stamp>}``; the newest dir wins."""
+    build = output / "build"
+    found: dict[str, float] = {}
+    if not build.is_dir():
+        return found
+    for d in build.iterdir():
+        pkg = _package_of_dir(d.name, packages) if d.is_dir() else None
+        if pkg is None:
+            continue
+        try:
+            at = (d / stamp).stat().st_mtime
+        except OSError:
+            continue
+        found[pkg] = max(at, found.get(pkg, at))
+    return found
+
+
+def load_timeline(output: Path) -> Timeline:
+    """The :class:`Timeline` for an output tree, from its stamps and records."""
+    packages = {p for ps in parse_file_list(_read(output / FILE_LIST)).values() for p in ps}
+    packages |= {p for ps in load_aged(output).values() for p in ps}
+    aged_at = _stamp_times(output, ".stamp_extracted", packages)
+    for line in _read(output / AGED_TIMES).splitlines():
+        pkg, _, raw = line.partition(",")
+        try:
+            at = float(raw)
+        except ValueError:
+            continue
+        aged_at[pkg] = min(at, aged_at.get(pkg, at))
+    return Timeline(_stamp_times(output, ".stamp_target_installed", packages), aged_at)
 
 
 def installed_packages(output: Path) -> set[str]:
@@ -178,13 +250,14 @@ def find_leftovers(
     target: Path,
     aged: dict[str, set[str]] | None = None,
     installed: set[str] | None = None,
+    timeline: Timeline | None = None,
 ) -> dict[str, str]:
     """``{path: package that installed it}`` for files no package installs now."""
     owners_of = aged or {}
     found: dict[str, str] = {}
     for path in set(now) | set(before):
-        live = trustworthy_owners(path, now.get(path, set()), owners_of, installed)
-        prior = trustworthy_owners(path, before.get(path, set()), owners_of, installed)
+        live = trustworthy_owners(path, now.get(path, set()), owners_of, installed, timeline)
+        prior = trustworthy_owners(path, before.get(path, set()), owners_of, installed, timeline)
         if live and all(_is_disabled(p, disabled) for p in live):
             found[path] = sorted(live)[0]
         elif not live and prior:
@@ -265,18 +338,27 @@ def prepare_rebuild(output: Path, build_dirs: tuple[Path, ...]) -> int:
     packages = {p for ps in owners.values() for p in ps}
     rebuilt = {pkg for d in build_dirs if (pkg := _package_of_dir(d.name, packages))}
     target = output / "target"
+    # Only a package's trustworthy claims are aged for it: aging a file for a
+    # package that merely absorbed it would hand that package the file in AGED
+    # and take it from its real owner (see trustworthy_owners).
+    history = load_aged(output)
+    timeline = load_timeline(output)
     touched = 0
     record: set[tuple[str, str]] = set()
     for path, pkgs in owners.items():
-        if pkgs & rebuilt:
+        mine = trustworthy_owners(path, pkgs, history, None, timeline) & rebuilt
+        if mine:
             try:
                 os.utime(target / path, (0, 0), follow_symlinks=False)
                 touched += 1
-                record.update((pkg, path) for pkg in sorted(pkgs & rebuilt))
+                record.update((pkg, path) for pkg in sorted(mine))
             except OSError:
                 pass
     if record:
         _append_aged(output, record)
+        now = int(time.time())
+        with (output / AGED_TIMES).open("a", encoding="utf-8") as f:
+            f.writelines(f"{pkg},{now}\n" for pkg in sorted({pkg for pkg, _ in record}))
     return touched
 
 
@@ -300,11 +382,12 @@ def _load_report(
     """Recorded leftovers that are still in ``target/`` and still unowned."""
     owners_of = load_aged(output)
     installed = installed_packages(output)
+    timeline = load_timeline(output)
     kept = {}
     for path, owners in parse_file_list(_read(output / REPORT)).items():
         live = {
             p
-            for p in trustworthy_owners(path, now.get(path, set()), owners_of, installed)
+            for p in trustworthy_owners(path, now.get(path, set()), owners_of, installed, timeline)
             if not _is_disabled(p, disabled)
         }
         if not live and _exists(output / "target", path):
@@ -336,6 +419,7 @@ def update(output: Path) -> Leftovers:
             output / "target",
             aged=load_aged(output),
             installed=installed_packages(output),
+            timeline=load_timeline(output),
         )
     )
     (output / SNAPSHOT).unlink(missing_ok=True)
