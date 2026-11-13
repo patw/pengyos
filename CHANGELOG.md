@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: Linux 7.3.4 (2026-11-13)
+- Stable point release, 1254 fixes. linux is report-only in the nightly (it
+  was "approved" there and refused every night), so it moves by hand.
+- The tarball's sha256 is in patches/linux/7.3.4/linux.hash, from kernel.org's
+  sha256sums.asc (good signature from the checksum autosigner,
+  B8868C80BA62A1FFFAF5FDA9632D3A06589DA6B1).
+- The nvidia-open RTD3 patch relies on `scoped_with_init_fs()` and the kthread
+  nullfs root; 7.3.4 touches neither. It does change `setns()` for a thread
+  whose fs_struct is shared ("mount: refuse setns() with a shared fs_struct
+  again"), which container runtimes use, so containers were run on the test
+  image.
+
 ### Fixed: release.sh refuses output trees patched from a worktree (2026-11-13)
 - Before building, release.sh runs `scripts/check-applied-patches.py` on every
   target's output tree. A test build from a branch worktree records that
