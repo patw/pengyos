@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: release.sh refuses output trees patched from a worktree (2026-11-13)
+- Before building, release.sh runs `scripts/check-applied-patches.py` on every
+  target's output tree. A test build from a branch worktree records that
+  worktree's patch paths, and the SBOM's legal-info step copies patches from them
+  again. 26.11.15 died there hours in, after the worktree was removed. While the
+  worktree still exists, the release would ship the branch's patches without any
+  error. The check names each build dir to dirclean.
+
 ### Security: zip extraction in Files, COSMIC crates, Go standard library (2026-11-12)
 - **Files (cosmic-files): zip extraction could write outside the extraction
   folder** through a symlink the archive created. Such entries are now refused
