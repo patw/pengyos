@@ -452,6 +452,23 @@ BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_PENGYOS_PATH)/patches"
 # (the same trap Core hit). Enable it up front so the Server toolset holds.
 BR2_TOOLCHAIN_BUILDROOT_CXX=y
 
+# --- Debugging -----------------------------------------------------------------
+# Debugging a running program, on the host (2026-11-12). A C++ service crashed on
+# behotv and its cause had to be dug out of a 2 GB core by hand: no gdb to read
+# it, and perf could only run inside a distrobox, whose user namespace has no
+# rights over the service's own container. gdb reads a core against the binary
+# on disk and makes `coredumpctl debug` work; perf is built from our kernel tree,
+# so it always matches the running kernel (Ubuntu's linux-tools refuses 7.x);
+# elfutils' eu-stack prints a running process's or a core's stacks, and libdw
+# is what systemd-coredump uses for the backtrace it logs. Server layer, not
+# Core: gdb and elfutils' programs need the C++ runtime, which Core leaves out.
+BR2_PACKAGE_GDB=y
+BR2_PACKAGE_GDB_DEBUGGER=y
+BR2_PACKAGE_GDB_PYTHON=y
+BR2_PACKAGE_LINUX_TOOLS_PERF=y
+BR2_PACKAGE_ELFUTILS=y
+BR2_PACKAGE_ELFUTILS_PROGS=y
+
 # --- System name --------------------------------------------------------------
 BR2_TARGET_GENERIC_HOSTNAME="pengyos-server"
 

@@ -25,6 +25,32 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   worktree still exists, the release would ship the branch's patches without any
   error. The check names each build dir to dirclean.
 
+### Added: debugging a running program on the host (2026-11-12)
+Prompted by Pengy's report on a C++ service that crashed on behotv, whose cause
+had to be recovered from a 2 GB core by hand.
+- gdb (with Python, for C++ pretty-printers), perf built from the PengyOS kernel
+  tree, and elfutils' tools (eu-stack, eu-readelf) in the Server and Desktop
+  editions (Core has no C++ runtime, which gdb needs).
+  `coredumpctl debug` now works.
+- Every crash gets a stack trace in the journal (`coredumpctl info`). The
+  coredump config set `ProcessSizeMax=2G`, meant as "don't store big dumps". It
+  did the opposite: systemd stored the 12.6 GB dump and skipped its stack trace.
+  Storage is still bounded by `MaxUse=1G` and `KeepFree=10G`.
+- Quadlet containers send stdout and stderr to their unit's journal
+  (`LogDriver=passthrough`, via `container.d/10-pengyos-log.conf` in both quadlet
+  lanes). The global `log_driver = "k8s-file"`, kept for distrobox, put a
+  service's output in a file that `--rm` deletes with the container, which took
+  the crash message with it. `podman logs` does not work for quadlets; journalctl
+  replaces it.
+- `kernel.yama.ptrace_scope` stays 1 on every edition. From the host, `perf -p`
+  and `gdb -p` already reach processes in your own rootless containers at 1 (the
+  owner of a user namespace passes Yama), without sudo. The perf EACCES in the
+  report came from running perf inside a distrobox, which has no rights over
+  another container. Host programs outside containers still need `sudo`. Scope 0
+  on Server was considered and dropped: it would let every process of a user read
+  the memory of every other (API keys and DB passwords on a server) and buys
+  nothing the line above doesn't.
+
 ### Security: zip extraction in Files, COSMIC crates, Go standard library (2026-11-12)
 - **Files (cosmic-files): zip extraction could write outside the extraction
   folder** through a symlink the archive created. Such entries are now refused
