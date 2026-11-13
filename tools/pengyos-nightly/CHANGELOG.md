@@ -6,6 +6,13 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — the tests ignore the operator's environment (0.17.1)
+`PENGYOS_RELEASE_KEY` and `PENGYOS_SITE_REMOTE` in the environment win over the
+config, and release.sh exports both before its whole-repo gate. Under 26.11.15's
+release, `test_a_missing_key_refuses_rather_than_publishing` found the real key and
+the gate went red. An autouse fixture now clears them (and `PENGYOS_EMAIL_SCRIPT`,
+`PENGY_SETTINGS`) for every test.
+
 ### Added — advisories against bundled crates and Go modules, from OSV (0.17.0)
 pkg-stats matches CVEs to Buildroot packages by CPE. COSMIC, Pengy, podman, uv
 and the other cargo and Go packages are one package each to it, while the images
