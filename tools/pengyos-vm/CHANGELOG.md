@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.3.1] - 2026-11-14
+
+### Fixed
+- `bridge enable` writes `UseDomains=yes` and `MulticastDNS=yes` on the bridge,
+  as the image's wired `.network` file has. The bridge file takes over the port,
+  so a bridged Server lost its DHCP search domain (bare LAN names stopped
+  resolving) and resolved's mDNS. A bridge enabled before this keeps the old
+  file: `sudo pengyos-vm bridge disable && sudo pengyos-vm bridge enable <port>`.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added

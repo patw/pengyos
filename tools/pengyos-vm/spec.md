@@ -17,7 +17,7 @@
 - NAT forwards: host port ≥ 1024, unique across the user's VMs, on 127.0.0.1
   unless an address is given. The SSH forward is allocated from 2201 up.
 - Bridge: networkd `.netdev`/`.network` files named `05-pengyos-br0*`, the
-  bridge with the port's MAC, DHCP on the bridge with `UseHostname=no`;
+  bridge with the port's MAC, DHCP on the bridge with `UseHostname=no`, `UseDomains=yes` and `MulticastDNS=yes` (as the image's wired link);
   `/etc/qemu/bridge.conf` = `allow pengyos-br0`. Every file starts with the
   managed-by mark and `disable` removes only marked files. Wireless and
   virtual ports are refused.

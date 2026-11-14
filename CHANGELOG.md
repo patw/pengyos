@@ -17,6 +17,15 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: bare LAN hostnames resolve on Core and Server (2026-11-14)
+- networkd dropped the DHCP-offered domain (`[DHCPv4] UseDomains=` defaults to
+  off), so a Core or Server box had no search domain: `getent hosts nas`, `ping
+  nas` and `ssh nas` failed while `nas.<lan domain>` worked. The wired and Wi-Fi
+  `.network` files now set `UseDomains=yes`. Desktop was never affected
+  (NetworkManager keeps the domain). Found and runtime-proven by Pengy on
+  behoserver.
+- The `pengyos-vm` bridge file gets the same setting, and `MulticastDNS=yes`.
+
 ### Changed: Linux 7.3.4 (2026-11-13)
 - Stable point release, 1254 fixes. linux is report-only in the nightly (it
   was "approved" there and refused every night), so it moves by hand.

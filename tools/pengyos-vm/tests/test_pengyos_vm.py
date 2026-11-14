@@ -590,6 +590,9 @@ def test_bridge_enable_writes_networkd_files_and_the_helper_acl(box: Box):
     assert "Name=enp0s31f6" in port and "Bridge=pengyos-br0" in port
     br = box.net("05-pengyos-br0.network").read_text()
     assert "Name=pengyos-br0" in br and "DHCP=yes" in br and "UseHostname=no" in br
+    # The bridge replaces 10-pengyos-ethernet.network on this machine, so it carries the
+    # same link settings: without them bare LAN names and .local stop resolving.
+    assert "UseDomains=yes" in br and "MulticastDNS=yes" in br
     assert (box.root / "etc" / "qemu" / "bridge.conf").read_text().endswith("allow pengyos-br0\n")
     assert ["reload"] in box.calls("networkctl")
     assert ["reconfigure", "enp0s31f6"] in box.calls("networkctl")

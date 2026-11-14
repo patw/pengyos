@@ -1268,9 +1268,10 @@ def cmd_bridge_enable(a) -> int:
     write_managed(net / NETDEV_FILE, f"[NetDev]\nName={BRIDGE}\nKind=bridge\nMACAddress={mac}\n")
     write_managed(net / PORT_NET_FILE, f"[Match]\nName={iface}\n\n[Network]\nBridge={BRIDGE}\n")
     write_managed(net / BRIDGE_NET_FILE,
-                  f"[Match]\nName={BRIDGE}\n\n[Network]\nDHCP=yes\n\n"
-                  f"[DHCPv4]\n# As the image's 10-pengyos-ethernet.network: the installer named this machine.\n"
-                  f"UseHostname=no\n")
+                  f"[Match]\nName={BRIDGE}\n\n[Network]\nDHCP=yes\nMulticastDNS=yes\n\n"
+                  f"[DHCPv4]\n# As the image's 10-pengyos-ethernet.network: the installer named this\n"
+                  f"# machine, and the router's domain is the search domain for bare LAN names.\n"
+                  f"UseHostname=no\nUseDomains=yes\n")
     write_managed(under_root("/" + BRIDGE_CONF), f"allow {BRIDGE}\n")
     print(f"moving this machine's wired address from {iface} to {BRIDGE}...")
     print("  (over SSH the session may pause; the address can change if your router "

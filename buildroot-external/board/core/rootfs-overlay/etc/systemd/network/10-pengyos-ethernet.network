@@ -18,5 +18,11 @@ MulticastDNS=yes
 
 # The installer gives the machine its name (/etc/hostname); a DHCP-offered
 # name would only be refused ("Could not set hostname: Access denied").
+# UseDomains=yes keeps the router's DHCP domain (option 15) as this link's
+# search domain, so bare LAN names resolve (`ssh nas`, `getent hosts nas`).
+# networkd's default drops it, and `hosts: resolve [!UNAVAIL=return]` then
+# lets resolved's NXDOMAIN win; NetworkManager on the Desktop keeps it, which
+# is why only Core and Server had the bug (found 2026-11-14).
 [DHCPv4]
 UseHostname=no
+UseDomains=yes
