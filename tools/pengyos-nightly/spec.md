@@ -343,6 +343,7 @@ does not publish more than `max_releases` images a night, and it never reaches
 | `release_cap` | at most `max_releases` signed images published per night — checked against what was already published today, so a second `act --apply` cannot publish again |
 | `batch_conflict` | two actions in one batch may not edit the same file: a conflict is a human's decision, not a merge |
 | `clean_tree` / `key_present` | act refuses rather than publishes from a dirty tree or without a key |
+| `scan_complete` | act refuses (and mails) when tonight's pkg-stats scan failed for any edition: that edition is missing from the plan, so the batch would publish a version that silently skips it (26.11.17 shipped without Desktop NVIDIA on 2026-11-14). Other source errors (kernel.org, OSV) do not block. A disarmed lane reports the kill switch instead |
 | `gate_first` | the gate runs before any build; a failed gate publishes nothing |
 
 ### Acceptance criteria (phase 3)
@@ -360,6 +361,8 @@ does not publish more than `max_releases` images a night, and it never reaches
     is created.
 17. A failed build/boot records `batch_failure` and leaves `main` where it started;
     `status` reports the blocked batch rather than reading as a quiet, healthy loop.
+18a. A failed pkg-stats scan for any edition refuses the batch as `scan_complete`
+    before anything is built, and the refusal mail names the edition and the scan's error.
 18. Dry run still changes nothing on disk and prints the batch composition — every
     action, the editions, and the commands it would run.
 
