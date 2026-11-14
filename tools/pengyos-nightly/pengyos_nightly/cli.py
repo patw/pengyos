@@ -506,9 +506,31 @@ def do_act(args, today: dt.date | None = None, run=subprocess.run,
           f"[{', '.join(a['component'] for a in batch)}] -> one image for "
           f"{', '.join(editions)}"
           + (f", closing {len(cves)} CVE match(es)" if cves else ""))
-    result = actlane.run_batch(batch, cfg, Path(args.repo).expanduser(),
-                               Path(args.build_root).expanduser(), p["site"],
-                               p["state_dir"], apply=args.apply, run=run, today=today)
+    # An edition whose pkg-stats scan failed is missing from the plan, so the batch
+    # would publish a version that silently skips it. On 2026-11-14, 26.11.17 went to
+    # testing for three editions and not Desktop NVIDIA (its tree still pointed at a
+    # deleted worktree), and the operator's machine could not see the update at all.
+    # Without the scan nobody can say what the batch would change there: refuse and
+    # say which tree to fix.
+    obs = json.loads(p["obs"].read_text()) if p["obs"].exists() else {}
+    unscanned = scan_failed(obs)
+    if unscanned and cfg["act_enabled"]:    # a disarmed lane reports the kill switch
+        errors = obs.get("errors", {})
+        detail = (f"the pkg-stats scan failed for {', '.join(unscanned)}, so the batch "
+                  "would publish a version that skips it; fix that output tree "
+                  "(`make show-info` must succeed) and re-run observe + plan. "
+                  + " | ".join(f"{e}: {errors.get(f'pkg-stats {e}', '')[-300:]}"
+                               for e in unscanned))
+        print(f"act: scan_complete: {detail}")
+        result = {"kind": "batch", "applied": False, "published": False,
+                  "journal": [{"step": "scan_complete", "ok": False, "detail": detail}],
+                  "planned": [a["id"] for a in batch], "applied_actions": [],
+                  "dropped": [], "editions": editions,
+                  "error": f"scan_complete: {detail}"}
+    else:
+        result = actlane.run_batch(batch, cfg, Path(args.repo).expanduser(),
+                                   Path(args.build_root).expanduser(), p["site"],
+                                   p["state_dir"], apply=args.apply, run=run, today=today)
     if args.apply:
         actlane.record_batch(result, batch, p["state_dir"], state.load(p["state"]),
                              today or dt.date.today(), repo=Path(args.repo).expanduser())

@@ -238,3 +238,55 @@ def test_the_notice_renders_a_batch_that_dropped_packages(tmp_path):
         "error": "clean_tree: the working tree has uncommitted changes",
         "planned": [], "dropped": [{"patch": "p/0001-x.patch", "reason": "already present"}]})
     assert "0001-x.patch" in body and "already present" in body
+
+
+# --- an edition the scan could not see must not be skipped silently -----------
+
+def _scan_failed(state_dir, edition="pengyos-desktop-nvidia"):
+    (state_dir / "observations.json").write_text(json.dumps({"errors": {
+        f"pkg-stats {edition}": "exit 1: BR2_GLOBAL_PATCH_DIR contains nonexistent "
+                                "directory /data/tmp/k734/buildroot-external/patches"}}))
+
+
+def test_a_failed_edition_scan_refuses_the_batch_and_says_which(tmp_path):
+    """2026-11-14: Desktop NVIDIA's scan failed, the plan had no Desktop NVIDIA, and the
+    act lane published 26.11.17 for the other three editions. The operator's machine
+    never saw the update. Refuse instead, before anything is built, and name the tree."""
+    repo = B._repo(tmp_path)
+    state_dir = _seed(tmp_path, [B._bump_action()])
+    _scan_failed(state_dir)
+    fake, sent = B.Fake(), []
+    result = cli.do_act(_args(tmp_path, state_dir, repo), today=TODAY, run=fake,
+                        send=lambda s, b, f, **k: sent.append((s, b)) or f.write_text(b) or True)
+    assert not result["published"], result
+    assert "scan_complete" in result["error"], result
+    assert fake.calls == [], "nothing is built when the plan is missing an edition"
+    assert len(sent) == 1 and "scan_complete" in sent[0][0], sent
+    assert "pengyos-desktop-nvidia" in sent[0][1], "the mail names the edition"
+    assert "k734" in sent[0][1], "and the scan's own error, so the fix is obvious"
+    log = json.loads((state_dir / "actions.json").read_text())["actions"]
+    assert log[-1]["published"] is False and "scan_complete" in log[-1]["error"], log
+
+
+def test_a_failed_scan_on_a_disarmed_night_reports_the_kill_switch(tmp_path):
+    """The operator's own hold is the story on a disarmed night, not the scan."""
+    repo = B._repo(tmp_path)
+    state_dir = _seed(tmp_path, [B._bump_action()],
+                      cfg='act_enabled = false\npush = false\nmax_actions = 12\n'
+                          f'max_releases = 1\nkey_file = "{B._key(tmp_path)}"\n')
+    _scan_failed(state_dir)
+    sent = []
+    cli.do_act(_args(tmp_path, state_dir, repo), today=TODAY,
+               send=lambda s, b, f, **k: sent.append(s) or f.write_text(b) or True)
+    assert len(sent) == 1 and "kill switch" in sent[0], sent
+
+
+def test_a_complete_scan_with_other_source_errors_still_publishes(tmp_path):
+    """Only a missing edition blocks the night; a flaky kernel.org fetch does not."""
+    repo = B._repo(tmp_path)
+    state_dir = _seed(tmp_path, [B._bump_action()])
+    (state_dir / "observations.json").write_text(json.dumps(
+        {"errors": {"kernel.org": "timed out", "osv": "503"}}))
+    result = cli.do_act(_args(tmp_path, state_dir, repo), today=TODAY, run=B.Fake(),
+                        send=lambda s, b, f, **k: True)
+    assert result["published"], result

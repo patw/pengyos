@@ -6,6 +6,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — the act lane refuses a batch when an edition's scan failed (0.18.0)
+An edition whose pkg-stats scan failed is missing from the plan, and the batch
+published a version without it: on 2026-11-14, 26.11.17 went to testing for three
+editions and not Desktop NVIDIA (its output tree still pointed at a deleted worktree),
+and the operator's update tool could not see it. `act` now refuses as `scan_complete`
+before building, and the refusal mail names the edition and the scan's error. Other
+source errors still do not block a night.
+
 ### Fixed — the tests never reach the operator's real mailer (0.17.2)
 Clearing `PENGYOS_EMAIL_SCRIPT` left the default, `~/.local/bin/pengyos-email`, so on
 the build host every gate run sent the operator a fake "[act lane] ... published
