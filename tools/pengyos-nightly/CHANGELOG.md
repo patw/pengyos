@@ -6,6 +6,13 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — the tests never reach the operator's real mailer (0.17.2)
+Clearing `PENGYOS_EMAIL_SCRIPT` left the default, `~/.local/bin/pengyos-email`, so on
+the build host every gate run sent the operator a fake "[act lane] ... published
+nothing" mail from the act exit-code test. On 2026-11-14 the mailer hung, the test
+timed out and the 26.11.17 Desktop NVIDIA release gate went red. The autouse fixture
+now points the default at a path that does not exist.
+
 ### Fixed — the tests ignore the operator's environment (0.17.1)
 `PENGYOS_RELEASE_KEY` and `PENGYOS_SITE_REMOTE` in the environment win over the
 config, and release.sh exports both before its whole-repo gate. Under 26.11.15's
