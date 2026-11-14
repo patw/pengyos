@@ -8,7 +8,7 @@
 # keyring yet, creating a locked, passwordless Login keyring that only a
 # password prompt can set up -- and COSMIC has no prompter (oo7 has GNOME
 # Shell's and KDE's). 0.7 creates Login with that password. Move to 0.7.0.
-OO7_VERSION = 0.7.0
+OO7_VERSION = 0.7.1
 OO7_SOURCE = $(OO7_VERSION).tar.gz
 OO7_SITE = https://github.com/linux-credentials/oo7/archive/refs/tags
 OO7_LICENSE = MIT

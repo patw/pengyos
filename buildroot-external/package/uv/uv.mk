@@ -8,7 +8,7 @@
 # per-app venv recipe (USE-CASES US-SRV-10) needs it, and until then it came only
 # from the dev guest's installer in ~/.local/bin, which is not on the host's PATH.
 # Built from source like every other package (docs/principles.md).
-UV_VERSION = 0.13.7
+UV_VERSION = 0.13.8
 UV_SITE = $(call github,astral-sh,uv,$(UV_VERSION))
 UV_LICENSE = Apache-2.0 or MIT
 UV_LICENSE_FILES = LICENSE-APACHE LICENSE-MIT
