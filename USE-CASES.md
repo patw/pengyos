@@ -651,6 +651,23 @@ administrators need no password (`60-pengyos-shares.rules`), like Printers and U
 app shows, with the user name and share password; stopping it closes 445 when it was the
 last share and leaves the files alone; a non-administrator is told so before anything runs.
 
+**US-DSK-20 — Put my apps and files on the desktop.**
+> *As the daily-driver user, I want icons for the things I use most (games, apps, files I'm
+> working on) right on the desktop, so I can open them with a double-click.*
+
+How: COSMIC Files draws the desktop (`cosmic-files-applet`, on by default) from
+`XDG_DESKTOP_DIR` (~/Desktop) and runs `.desktop` launchers there. Files dragged there stay.
+Apps that make their own shortcuts may be sandboxed: Flathub's Steam writes "Create desktop
+shortcut" and "Add to start menu" into ~/.var/app/com.valvesoftware.Steam, so
+`pengyos-steam-shortcuts` (a user `.path` unit) writes host launchers for them: digits-only
+game id and the name cross over, `Exec` is always `flatpak run com.valvesoftware.Steam
+steam://rungameid/N`, the game's icon is copied. Steam's own file is never passed through:
+the desktop runs launchers without asking, so that would let the sandbox run anything.
+**Acceptance:** "Create desktop shortcut" in Steam puts the game on the desktop within a
+moment, with its icon, and double-clicking it starts the game; "Add to start menu" puts it
+in the App Library; a deleted icon stays deleted; uninstalling the game removes the icon; a
+shortcut that is not a Steam game launch never appears.
+
 ---
 
 ## Cross-cutting stories

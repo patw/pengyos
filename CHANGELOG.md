@@ -17,6 +17,24 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: Steam's desktop shortcuts show up on the desktop (2026-11-15)
+- A user reported "Create desktop shortcut" in Steam did nothing. Flathub's Steam
+  cannot see ~/Desktop and Flatpak gives it its own home, so the shortcut (and
+  "Add to start menu") landed in `~/.var/app/com.valvesoftware.Steam/` (three
+  sat there unseen on behotv since October). Its launchers ran `steam
+  steam://rungameid/N`, which has no host command.
+- New user unit `pengyos-steam-shortcuts.path` (Desktop) runs
+  `/usr/libexec/pengyos/steam-shortcuts` when Steam's sandbox Desktop or
+  applications folder changes, and once at login. It writes a fresh launcher
+  (`flatpak run com.valvesoftware.Steam steam://rungameid/N`) to ~/Desktop or
+  the App Library and copies the game's icons. Only a digits-only game id and
+  the name are taken from Steam's file, because COSMIC Files runs desktop
+  launchers without asking; anything that is not a Steam game launch, and any
+  symlink, is skipped. A deleted icon stays deleted; uninstalling a game removes
+  its icon unless the user edited it. Shortcuts made before the update appear at
+  the next login.
+- New user story US-DSK-20 (icons and files on the desktop).
+
 ### Fixed: the volume sound is back on Desktop (2026-11-14)
 - cosmic-osd plays `freedesktop/stereo/audio-volume-change.oga` by path. Since
   26.10.49 (COSMIC 1.11, commit 0f462ecb) the image had no freedesktop sound
