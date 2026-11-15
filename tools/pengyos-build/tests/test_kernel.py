@@ -154,7 +154,8 @@ def test_same_kernel_touches_nothing(tmp_path: Path) -> None:
 def test_kernel_bump_without_show_info_says_clean_build(tmp_path: Path) -> None:
     root, target, output = _built_tree(tmp_path, "7.2.13")
     result = _reconfigure(root, target, "7.3.1", info=lambda: None)
-    assert "CLEAN BUILD NEEDED: kernel 7.2.13 -> 7.3.1" in str(result)
+    assert "needs attention: kernel 7.2.13 -> 7.3.1" in str(result)
+    assert "CLEAN BUILD NEEDED" not in str(result) and "ask the operator" in str(result)
     # The old tree is dead either way, so it still goes.
     assert not (output / "target/usr/lib/modules/7.2.13").exists()
 

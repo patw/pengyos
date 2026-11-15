@@ -273,6 +273,12 @@ def _exists(target: Path, path: str) -> bool:
     return p.exists() or p.is_symlink()
 
 
+# Operator 2026-11-15: a clean rebuild is 14+ hours at 500W+. The old wording
+# ("CLEAN BUILD NEEDED") had people and agents reaching for one over harmless files.
+LAST_RESORT = ("A clean rebuild (14+ hours) is a last resort: ask the operator "
+               "before suggesting or starting one.")
+
+
 @dataclass(frozen=True)
 class Leftovers:
     """Leftover ``(package, path)`` pairs, sorted, and where they are recorded."""
@@ -291,9 +297,11 @@ class Leftovers:
             counts[pkg] = counts.get(pkg, 0) + 1
         per_pkg = ", ".join(f"{pkg} {n}" for pkg, n in sorted(counts.items()))
         return (
-            f"CLEAN BUILD NEEDED: {len(self.files)} file(s) in target/ that no "
-            f"package installs any more ({per_pkg}); they are in the image. "
-            f"List: {self.report}"
+            f"leftovers: {len(self.files)} file(s) in target/ that no package "
+            f"installs any more ({per_pkg}); they ship in the image. Usually "
+            "harmless: an old file nothing uses. Look at the list, and only if one "
+            "changes behaviour (an enabled unit, a config, a library something loads) "
+            f"delete it from target/ by hand. {LAST_RESORT} List: {self.report}"
         )
 
 

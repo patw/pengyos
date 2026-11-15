@@ -70,8 +70,8 @@ v4l2loopback) depends on `linux` by name, so neither check above marks it. When
 built package whose `show-info` dependencies include `linux`, and deletes the old
 kernel's `target/usr/lib/modules/<old>`, which no kernel can load from any more and
 which otherwise ships in the image (82-175 MB per edition at 7.2.13, past both
-Server root filesystems' size). If `show-info` fails it says `CLEAN BUILD NEEDED`
-instead of guessing. Found on the 7.2.13 -> 7.3.1 bump, 2026-11-02.
+Server root filesystems' size). If `show-info` fails it says `needs attention:` and
+names the incremental fixes instead of guessing. Found on the 7.2.13 -> 7.3.1 bump, 2026-11-02.
 
 Rebuilding a package never deletes what it installed before, and turning a package
 off leaves all of its files in `target/`, so they go into the image
@@ -79,9 +79,11 @@ off leaves all of its files in `target/`, so they go into the image
 after `BR2_PACKAGE_SYSTEMD_TIMESYNCD` was turned off and systemd was rebuilt
 without it. `configure` keeps a copy of Buildroot's `build/packages-file-list.txt`.
 After the build, any file still in `target/` that no enabled package lists any more
-is printed as `CLEAN BUILD NEEDED: …` by `build`, `configure` and `staleness`, and
-recorded in `<out>/.pengyos-leftovers.txt` until a clean build (or removing those
-files) makes it go away.
+is printed as `leftovers: …` by `build`, `configure` and `staleness`, and recorded
+in `<out>/.pengyos-leftovers.txt` until those files are removed or a package installs
+them again. Most are harmless (an old file nothing uses); delete one by hand only if
+it changes behaviour. None of these messages call for a clean rebuild: that is 14+
+hours at 500W+, a last resort the operator decides on (2026-11-15).
 
 `build` runs `make -C <src> O=<out> BR2_EXTERNAL=<ext> [BR2_BOARD=<board>]
 -j<N>` (N defaults to `$PENGYOS_BUILD_JOBS`, else `-j$(nproc)`; lower

@@ -151,8 +151,8 @@ already been configured:
   (`usr/lib/modules`, `lib/modules`, de-duplicated through the merged-usr symlink)
   whose release is the old version, plain or with a `-`/`+` local suffix and not
   also the new one's. Each is named in the configure output. If `show-info`
-  failed, no package is guessed at and the output says `CLEAN BUILD NEEDED: kernel
-  <old> -> <new>`; the old module tree is still removed. Turning the kernel off
+  failed, no package is guessed at and the output says `needs attention: kernel
+  <old> -> <new>` with the incremental fixes; the old module tree is still removed. Turning the kernel off
   removes nothing.
 
 - **Leftovers.** Buildroot never deletes from `target/`: a rebuilt package
@@ -167,9 +167,10 @@ already been configured:
   (overlays, post-build scripts) are never reported. Leftovers are recorded in
   `<output>/.pengyos-leftovers.txt` (`pkg,./path`), re-checked against
   `target/` whenever read, and printed by `build`, `configure` and `staleness`
-  as `CLEAN BUILD NEEDED: …` with a count per package. Nothing is deleted, and
-  the exit code stays 0. The record clears itself once the files are gone
-  (a clean build or removal by hand) or a package installs them again.
+  as `leftovers: …` with a count per package, a note that they are usually
+  harmless, and that a clean rebuild is a last resort to ask the operator about.
+  Nothing is deleted, and the exit code stays 0. The record clears itself once the
+  files are gone (removed by hand) or a package installs them again.
 
 ## clean step
 
@@ -275,7 +276,7 @@ touches the network, and writes only the manifest file itself.
   prefix (7.3.1 -> 7.3.10 keeps 7.3.10). End to end with fake make: 7.2.13 -> 7.3.1
   dircleans nvidia-open and v4l2loopback, keeps an unrelated package, and drops
   `usr/lib/modules/7.2.13`; the same kernel touches nothing; a failed `show-info`
-  says `CLEAN BUILD NEEDED`; turning the kernel off removes nothing.
+  says `needs attention`; turning the kernel off removes nothing.
 - leftovers (`leftovers.py`): a file a rebuilt package stopped installing and a
   file of a package `.config` marks not set are reported; a file another enabled
   package still lists, an overlay file in neither list, and a file already gone

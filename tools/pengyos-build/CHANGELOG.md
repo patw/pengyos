@@ -6,6 +6,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed — no more "CLEAN BUILD NEEDED" (2026-11-15)
+- The leftovers report and the two kernel `show-info` failures printed
+  `CLEAN BUILD NEEDED`, which had people and agents (Claude Code, Pengy) reaching
+  for a clean rebuild over a stale gawk binary. A clean rebuild is 14+ hours at
+  500W+. Leftovers now print `leftovers: …` with a note that they are usually
+  harmless and when to delete one by hand; the kernel cases print
+  `needs attention: …` with the incremental fix. All three end by saying a clean
+  rebuild is a last resort to ask the operator about.
+
 ### Fixed — 11,000 false "CLEAN BUILD NEEDED" leftovers on the Desktop trees (2026-11-13)
 - A package whose file list had absorbed other packages' aged files (libmtp,
   ldacbt, libfreeaptx) got those files aged *for it* when it was rebuilt, and the

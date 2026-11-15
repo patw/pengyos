@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
+from .leftovers import LAST_RESORT
 from . import hostshim, kernel, leftovers, recipe, stale
 from .acquire import default_build_root, source_dir
 from .targets import Target
@@ -254,9 +255,11 @@ def configure_target(
                 )
             else:
                 kernel_notes += (
-                    f"CLEAN BUILD NEEDED: kernel {old_k} -> {new_k}, and make "
-                    "show-info failed, so the module packages built against the old "
-                    "kernel cannot be named for a rebuild",
+                    f"needs attention: kernel {old_k} -> {new_k}, but make show-info "
+                    "failed, so the packages built against the old kernel (out-of-tree "
+                    "modules such as nvidia-open, v4l2loopback) could not be named for a "
+                    "rebuild and may not load. Fix show-info and run configure again, or "
+                    "<pkg>-dirclean those packages. " + LAST_RESORT,
                 )
             trees = kernel.old_module_trees(output / "target", old_k, new_k)
             kernel.remove_trees(trees)
@@ -281,9 +284,11 @@ def configure_target(
                     )
                 else:
                     kernel_notes += (
-                        f"CLEAN BUILD NEEDED: kernel config changed ({shown}), and make "
-                        "show-info failed, so the module packages built against the old "
-                        "config cannot be named for a rebuild",
+                        f"needs attention: kernel config changed ({shown}), but make "
+                        "show-info failed, so linux and the packages built against it "
+                        "could not be named for a rebuild. Fix show-info and run configure "
+                        "again, or <pkg>-dirclean linux and its module packages. "
+                        + LAST_RESORT,
                     )
 
     # A recipe change (a .mk, a Config.in select, a patch) moves no symbol of its
