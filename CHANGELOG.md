@@ -17,22 +17,24 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Added: Steam's desktop shortcuts show up on the desktop (2026-11-15)
-- A user reported "Create desktop shortcut" in Steam did nothing. Flathub's Steam
-  cannot see ~/Desktop and Flatpak gives it its own home, so the shortcut (and
-  "Add to start menu") landed in `~/.var/app/com.valvesoftware.Steam/` (three
-  sat there unseen on behotv since October). Its launchers ran `steam
-  steam://rungameid/N`, which has no host command.
-- New user unit `pengyos-steam-shortcuts.path` (Desktop) runs
-  `/usr/libexec/pengyos/steam-shortcuts` when Steam's sandbox Desktop or
-  applications folder changes, and once at login. It writes a fresh launcher
-  (`flatpak run com.valvesoftware.Steam steam://rungameid/N`) to ~/Desktop or
-  the App Library and copies the game's icons. Only a digits-only game id and
-  the name are taken from Steam's file, because COSMIC Files runs desktop
-  launchers without asking; anything that is not a Steam game launch, and any
-  symlink, is skipped. A deleted icon stays deleted; uninstalling a game removes
-  its icon unless the user edited it. Shortcuts made before the update appear at
-  the next login.
+### Added: game launchers' desktop shortcuts show up on the desktop (2026-11-15)
+- A user reported "Create desktop shortcut" in Steam did nothing. A Flatpak app
+  has its own home and usually no ~/Desktop, so its shortcuts (and "Add to
+  start menu") land in `~/.var/app/<app id>/` (three sat there unseen on behotv
+  since October), running in-sandbox commands (`steam steam://rungameid/N`)
+  the host does not have.
+- New user service `pengyos-sandbox-shortcuts` (Desktop) watches every Flatpak
+  app's Desktop and applications folders with inotify and writes host
+  launchers by one rule: a shortcut that opens exactly one link of a scheme the
+  same app declares (`x-scheme-handler/*` in its exported desktop file)
+  becomes `flatpak run <app id> "<link>"`, with the name and the icon (copied
+  under the app's prefix). That is what clicking the link on a web page does;
+  nothing else is taken from the app's file, since COSMIC Files runs desktop
+  launchers without asking. Sandbox symlinks are never followed. A deleted icon
+  stays deleted; uninstalling a game or the app removes its icon unless the
+  user edited it. Only Steam could be tried on hardware (behotv, real
+  shortcuts in a scratch home); other launchers are covered by the rule and
+  tests, not by testing.
 - New user story US-DSK-20 (icons and files on the desktop).
 
 ### Fixed: the volume sound is back on Desktop (2026-11-14)
