@@ -18,6 +18,7 @@ config BR2_PACKAGE_COSMIC
 	select BR2_PACKAGE_PIPEWIRE
 	select BR2_PACKAGE_PIXMAN
 	select BR2_PACKAGE_SEATD
+	select BR2_PACKAGE_SOUND_THEME_FREEDESKTOP # cosmic-osd's volume sound
 	help
 	  The COSMIC desktop: compositor, session, panel, applets, settings, greeter
 	  and apps, at the commits pinned in scripts/cosmic-components.tsv, built as
