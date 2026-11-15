@@ -343,12 +343,13 @@ def test_turned_off_sub_option_is_named_after_the_build(tmp_path: Path) -> None:
 
     built = _build(root, target, _list(*(("systemd", p) for p in SYSTEMD_NOW)))
     assert built.leftovers.files == tuple(sorted(("systemd", p) for p in TIMESYNCD))
-    assert "CLEAN BUILD NEEDED: 2 file(s)" in str(built)
+    assert "leftovers: 2 file(s)" in str(built)
+    assert "CLEAN BUILD NEEDED" not in str(built) and "ask the operator" in str(built)
     assert "systemd 2" in str(built)
     assert not (out / leftovers.SNAPSHOT).exists()
 
     # Still reported by the next configure and build, though nothing changed.
-    assert any("CLEAN BUILD NEEDED" in n for n in _configure(root, target, NEW).notes)
+    assert any(n.startswith("leftovers: ") for n in _configure(root, target, NEW).notes)
     assert _build(root, target, _list(*(("systemd", p) for p in SYSTEMD_NOW))).leftovers
 
     # Removing the files (or a clean build) clears it.
