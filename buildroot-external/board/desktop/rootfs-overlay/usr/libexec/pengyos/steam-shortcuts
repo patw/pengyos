@@ -1,0 +1,306 @@
+#!/usr/bin/python3 -I
+"""Bring Flatpak Steam's game shortcuts out of its sandbox, safely.
+
+Steam from Flathub has no access to ~/Desktop, and Flatpak gives it its own
+home (~/.var/app/com.valvesoftware.Steam). "Create desktop shortcut" and "Add to
+start menu" write there, so nothing appeared on the desktop or in the App
+Library. The launchers it writes would not work on the host anyway: they run
+`steam steam://rungameid/N` (there is no host `steam`) with an icon that lives
+in the sandbox.
+
+This runs as the user (pengyos-steam-shortcuts.path / .service). For each
+shortcut Steam wrote, it writes a NEW launcher on the host:
+
+    Exec=/usr/bin/flatpak run com.valvesoftware.Steam steam://rungameid/N
+
+and copies the game's icon. Nothing else is taken from Steam's file: COSMIC
+Files runs a .desktop file on the desktop without asking, so copying Steam's
+file as is would let anything inside the sandbox start any command on the
+host. Only a game id (digits) and a display name cross over; a file whose Exec
+is not exactly a Steam rungameid launch is skipped. Symlinks are never followed.
+
+A shortcut is brought over once. If the user deletes the copy it stays deleted
+until Steam rewrites its own file. When Steam removes its shortcut (game
+uninstalled), the copy goes too, unless the user edited it.
+
+State: $XDG_STATE_HOME/pengyos/steam-shortcuts.json.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+APP_ID = "com.valvesoftware.Steam"
+MARKER = "X-PengyOS-Steam-Shortcut"
+EXEC_RE = re.compile(r'^"?steam"?\s+steam://rungameid/(\d{1,20})$')
+ICON_RE = re.compile(r"^steam_icon_(\d{1,20})$")
+ICON_FILE_RE = re.compile(r"^steam_icon_\d{1,20}\.(png|svg|xpm)$")
+SIZE_DIR_RE = re.compile(r"^(\d{1,4}x\d{1,4}(@\d)?|scalable)$")
+MAX_DESKTOP_BYTES = 64 * 1024
+MAX_ICON_BYTES = 4 * 1024 * 1024
+
+
+def home() -> Path:
+    return Path(os.environ.get("HOME") or os.path.expanduser("~"))
+
+
+def xdg(var: str, default: str) -> Path:
+    v = os.environ.get(var)
+    return Path(v) if v and os.path.isabs(v) else home() / default
+
+
+def desktop_dir() -> Path:
+    """XDG_DESKTOP_DIR from user-dirs.dirs, else ~/Desktop."""
+    conf = xdg("XDG_CONFIG_HOME", ".config") / "user-dirs.dirs"
+    try:
+        for line in conf.read_text(encoding="utf-8").splitlines():
+            m = re.match(r'^\s*XDG_DESKTOP_DIR="(.*)"\s*$', line)
+            if m:
+                val = m.group(1).replace("$HOME", str(home()))
+                if os.path.isabs(val) and Path(val) != home():
+                    return Path(val)
+    except OSError:
+        pass
+    return home() / "Desktop"
+
+
+def read_regular(path: Path, limit: int) -> bytes | None:
+    """Bytes of a regular file (never through a symlink), or None."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > limit:
+            return None
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            return f.read(limit + 1)[:limit]
+    finally:
+        os.close(fd)
+
+
+def parse_entry(data: bytes) -> dict[str, str]:
+    """Keys of the [Desktop Entry] group (unlocalized only)."""
+    out: dict[str, str] = {}
+    group = None
+    for raw in data.decode("utf-8", "replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            group = line[1:-1]
+            continue
+        if group != "Desktop Entry" or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        if "[" not in k and k not in out:
+            out[k] = v.strip()
+    return out
+
+
+def clean_name(name: str) -> str:
+    name = "".join(c for c in name if c.isprintable()).strip()
+    return name[:200]
+
+
+def game_from(path: Path) -> tuple[str, str, str] | None:
+    """(game id, name, icon) for a Steam game shortcut, else None."""
+    data = read_regular(path, MAX_DESKTOP_BYTES)
+    if data is None:
+        return None
+    e = parse_entry(data)
+    if e.get("Type", "Application") != "Application":
+        return None
+    m = EXEC_RE.match(e.get("Exec", ""))
+    if not m:
+        return None
+    gid = m.group(1)
+    name = clean_name(e.get("Name", "")) or f"Steam game {gid}"
+    icon = e.get("Icon", "")
+    icon = icon if ICON_RE.match(icon) else APP_ID
+    return gid, name, icon
+
+
+def render(gid: str, name: str, icon: str) -> str:
+    esc = name.replace("\\", "\\\\")
+    return (
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        f"Name={esc}\n"
+        "Comment=Play this game on Steam\n"
+        f"Exec=/usr/bin/flatpak run {APP_ID} steam://rungameid/{gid}\n"
+        f"Icon={icon}\n"
+        "Terminal=false\n"
+        "Categories=Game;\n"
+        f"{MARKER}={gid}\n"
+    )
+
+
+def sha(text: bytes) -> str:
+    return hashlib.sha256(text).hexdigest()
+
+
+def write_atomic(dest: Path, data: bytes, mode: int) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.pengyos-tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, mode)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    os.chmod(tmp, mode)
+    os.replace(tmp, dest)
+
+
+def safe_basename(name: str) -> bool:
+    return (name.endswith(".desktop") and not name.startswith(".")
+            and "/" not in name and "\0" not in name and len(name) <= 255)
+
+
+def copy_icons(sandbox: Path, icon: str, icons_home: Path) -> int:
+    """Copy hicolor/<size>/apps/<icon>.* out of the sandbox. Returns files copied."""
+    if not ICON_RE.match(icon):
+        return 0
+    n = 0
+    for base in (sandbox / ".local/share/icons/hicolor", sandbox / "data/icons/hicolor"):
+        try:
+            sizes = list(os.scandir(base))
+        except OSError:
+            continue
+        for size in sizes:
+            if not SIZE_DIR_RE.match(size.name) or not size.is_dir(follow_symlinks=False):
+                continue
+            apps = Path(size.path) / "apps"
+            for ext in ("png", "svg", "xpm"):
+                fname = f"{icon}.{ext}"
+                if not ICON_FILE_RE.match(fname):
+                    continue
+                data = read_regular(apps / fname, MAX_ICON_BYTES)
+                if data is None:
+                    continue
+                dest = icons_home / "hicolor" / size.name / "apps" / fname
+                try:
+                    if dest.is_symlink():
+                        continue
+                    if dest.exists() and dest.read_bytes() == data:
+                        continue
+                except OSError:
+                    continue
+                write_atomic(dest, data, 0o644)
+                n += 1
+    return n
+
+
+def sync(verbose: bool = False) -> int:
+    sandbox = home() / ".var/app" / APP_ID
+    data_home = xdg("XDG_DATA_HOME", ".local/share")
+    state_path = xdg("XDG_STATE_HOME", ".local/state") / "pengyos/steam-shortcuts.json"
+    pairs = {
+        "desktop": (sandbox / "Desktop", desktop_dir()),
+        "menu": (sandbox / ".local/share/applications", data_home / "applications"),
+    }
+
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        if not isinstance(state, dict):
+            state = {}
+    except (OSError, ValueError):
+        state = {}
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(f"steam-shortcuts: {msg}")
+
+    new_state: dict[str, dict] = {}
+    changed = 0
+    for kind, (src_dir, dst_dir) in pairs.items():
+        try:
+            entries = [e for e in os.scandir(src_dir) if safe_basename(e.name)]
+        except OSError:
+            entries = []
+        seen = set()
+        for ent in entries:
+            key = f"{kind}/{ent.name}"
+            src = Path(ent.path)
+            try:
+                st = src.lstat()
+            except OSError:
+                continue
+            if not stat.S_ISREG(st.st_mode):
+                continue
+            game = game_from(src)
+            if game is None:
+                log(f"skip {src} (not a Steam game launcher)")
+                continue
+            seen.add(key)
+            gid, name, icon = game
+            prev = state.get(key)
+            sig = [st.st_mtime_ns, st.st_size]
+            dest = dst_dir / ent.name
+            if prev and prev.get("sig") == sig:
+                new_state[key] = prev        # done before; a deleted copy stays deleted
+                continue
+            body = render(gid, name, icon).encode()
+            if dest.is_symlink() or (dest.exists() and not ours(dest)):
+                log(f"leave {dest}: not ours")
+                new_state[key] = {"sig": sig, "dest": str(dest), "sha": None}
+                continue
+            copy_icons(sandbox, icon, data_home / "icons")
+            write_atomic(dest, body, 0o755)
+            new_state[key] = {"sig": sig, "dest": str(dest), "sha": sha(body)}
+            changed += 1
+            log(f"wrote {dest} (game {gid})")
+        # Steam removed its shortcut: remove our copy if untouched.
+        for key, prev in state.items():
+            if not key.startswith(f"{kind}/") or key in seen:
+                continue
+            dest = Path(prev.get("dest", ""))
+            if prev.get("sha") and dest.is_file() and not dest.is_symlink():
+                try:
+                    if sha(dest.read_bytes()) == prev["sha"]:
+                        dest.unlink()
+                        changed += 1
+                        log(f"removed {dest}")
+                except OSError:
+                    pass
+
+    if new_state != state:
+        write_atomic(state_path, (json.dumps(new_state, indent=1, sort_keys=True) + "\n").encode(), 0o644)
+    if changed:
+        refresh_icon_cache(data_home / "icons/hicolor")
+    return changed
+
+
+def ours(dest: Path) -> bool:
+    """A file at dest we may overwrite: one we wrote (marker present)."""
+    data = read_regular(dest, MAX_DESKTOP_BYTES)
+    if data is None:
+        return False
+    return parse_entry(data).get(MARKER, "").isdigit()
+
+
+def refresh_icon_cache(hicolor: Path) -> None:
+    # Only if the user already has a cache: a stale one hides new icons.
+    if (hicolor / "icon-theme.cache").exists():
+        try:
+            subprocess.run(["gtk-update-icon-cache", "-qtf", str(hicolor)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        except OSError:
+            pass
+
+
+def main(argv: list[str]) -> int:
+    n = sync(verbose="-v" in argv or "--verbose" in argv)
+    if n:
+        print(f"steam-shortcuts: {n} launcher(s) updated")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

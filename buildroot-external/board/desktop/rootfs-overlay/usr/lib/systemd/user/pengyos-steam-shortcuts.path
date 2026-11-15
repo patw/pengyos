@@ -1,0 +1,14 @@
+# Run pengyos-steam-shortcuts.service whenever Flatpak Steam adds or removes a
+# shortcut in its sandbox. systemd watches the nearest existing parent until
+# Steam creates these folders.
+
+[Unit]
+Description=Watch Steam's sandbox for new game shortcuts
+
+[Path]
+PathChanged=%h/.var/app/com.valvesoftware.Steam/Desktop
+PathChanged=%h/.var/app/com.valvesoftware.Steam/.local/share/applications
+Unit=pengyos-steam-shortcuts.service
+
+[Install]
+WantedBy=default.target

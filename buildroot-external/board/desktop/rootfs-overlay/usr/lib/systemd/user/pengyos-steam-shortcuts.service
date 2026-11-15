@@ -1,0 +1,12 @@
+# Copy Flatpak Steam's game shortcuts (desktop + start menu) out of its sandbox
+# as host launchers. See /usr/libexec/pengyos/steam-shortcuts.
+
+[Unit]
+Description=Bring Steam game shortcuts to the desktop and App Library
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/pengyos/steam-shortcuts
+
+[Install]
+WantedBy=default.target
