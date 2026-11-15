@@ -18,6 +18,16 @@ overnight.
 
 Also the machine is tight on memory use /data/tmp not /tmp for temporary stuff.
 
+**No clean rebuilds (operator, 2026-11-15).** A clean rebuild of an output tree (wiping
+`output/<edition>`, `make clean`, rebuilding every package) is 14+ hours of compiling at
+500W+. Do not run, schedule or even *suggest* one unless it is a literal emergency:
+something deadly serious with no incremental fix. Cosmetic problems never qualify, and
+neither do dead files that are unreachable and trivial in size (such as the leftovers
+`pengyos-build` reports as `leftovers:`). Fix incrementally instead: a
+`<pkg>-dirclean`/`<pkg>-rebuild` of the one package, a `configure`, removing the one stale
+file, or leaving a harmless leftover alone. Even in an emergency, ask the operator first
+with the reason and the incremental options ruled out.
+
 ## What this is
 
 PengyOS is a from-source Linux distribution built with **Buildroot 2026.08**, in three nested editions: **Core ⊆ Server ⊆ Desktop** (plus opt-in Server NVIDIA and Desktop NVIDIA variants). The Desktop runs COSMIC behind greetd. Installed machines use an A/B layout (two read-only ext4 root slots chosen by GRUB, plus a btrfs `data` partition) and update from a signed feed. `README.md` is the user-facing front page (editions, install, what isn't ready); `docs/principles.md` holds the *why* (principles, the maintenance loop, the component rubric, the failure modes); `SPEC.md` the *what* (component decisions and rejected alternatives); `USE-CASES.md` the user stories. When `USE-CASES.md` and the spec disagree, `USE-CASES.md` wins.
