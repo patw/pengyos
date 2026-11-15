@@ -1391,9 +1391,9 @@ BR2_PACKAGE_XDG_UTILS=y
 # COSMIC session takes the screen (greetd.service.d/x-plymouth-handoff).
 # Needs `splash` on the kernel command line (grub-efi.cfg, pengyos-install).
 BR2_PACKAGE_PLYMOUTH=y
-# COSMIC's sound theme (our package; also answers COSMIC's "Pop" lookups) +
-# the freedesktop theme it selects: notification, volume, battery and plug
-# sounds. Before this /usr/share/sounds held only ALSA's test files.
+# Sounds come with BR2_PACKAGE_COSMIC: its own COSMIC theme (also answers the
+# "Pop" lookups) plus the freedesktop theme it selects, which cosmic-osd
+# plays its volume sound from by path.
 # Fonts (our packages): Fira Sans/Mono, the interface and monospace fonts
 # COSMIC defaults to (the UI was falling back to DejaVu), and Noto Color Emoji
 # (emoji were empty boxes or monochrome DejaVu glyphs). DejaVu stays as the

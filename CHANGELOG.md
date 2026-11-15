@@ -17,6 +17,19 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: the volume sound is back on Desktop (2026-11-14)
+- cosmic-osd plays `freedesktop/stereo/audio-volume-change.oga` by path. Since
+  26.10.49 (COSMIC 1.11, commit 0f462ecb) the image had no freedesktop sound
+  theme: the `select BR2_PACKAGE_SOUND_THEME_FREEDESKTOP` left with the old
+  `cosmic-sound-theme` package when it was folded into `cosmic`. Every volume OSD
+  was silent and logged "Sound file not found in XDG data directories". The
+  `cosmic` package selects the theme again (Buildroot's 0.7, 27 sounds).
+- `board/desktop/features-required.txt` now checks the volume sound and the
+  `Pop` battery sounds, so the post-build fails if either goes missing again.
+- Not fixed: AC plug/unplug stay silent. cosmic-settings-daemon looks
+  `power-plug`/`power-unplug` up only in the freedesktop theme, and those names
+  first appear in sound-theme-freedesktop 0.8; Buildroot ships 0.7.
+
 ### Fixed: bare LAN hostnames resolve on Core and Server (2026-11-14)
 - networkd dropped the DHCP-offered domain (`[DHCPv4] UseDomains=` defaults to
   off), so a Core or Server box had no search domain: `getent hosts nas`, `ping
