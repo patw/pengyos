@@ -79,11 +79,13 @@ contains  usr/share/cosmic/com.system76.CosmicPanel.Panel/v1/plugins_wings io.ca
 exists    etc/security/limits.d/60-pengyos-memlock.conf   # after PipeWire's 25-pw-rlimits.conf: no 4 GiB memlock cap for @pipewire
 
 # --- System sounds COSMIC plays by fixed name -----------------------------------
-# cosmic-osd opens freedesktop/stereo/audio-volume-change.oga by path; our COSMIC
-# theme has a same-named file it never finds. 26.10.49 to 26.11.17 shipped
-# without the freedesktop theme (the select left with the old cosmic-sound-theme
-# package): no volume sound, one journal error per volume OSD. (Buildroot's 0.7
-# has no power-plug/power-unplug, so cosmic-settings-daemon's AC sounds stay
-# silent either way.)
+# cosmic-osd opens freedesktop/stereo/audio-volume-change.oga by path, and
+# cosmic-settings-daemon looks power-plug/power-unplug up only in the freedesktop
+# theme (0.7 installs them as links to device-added/-removed); our COSMIC theme
+# has same-named files they never find. 26.10.49 to 26.11.17 shipped without the
+# freedesktop theme (the select left with the old cosmic-sound-theme package): no
+# volume or AC sounds, one journal error per volume OSD.
 exists  usr/share/sounds/freedesktop/stereo/audio-volume-change.oga  # volume OSD — BR2_PACKAGE_SOUND_THEME_FREEDESKTOP (selected by BR2_PACKAGE_COSMIC)
+exists  usr/share/sounds/freedesktop/stereo/power-plug.oga           # AC plugged — BR2_PACKAGE_SOUND_THEME_FREEDESKTOP
+exists  usr/share/sounds/freedesktop/stereo/power-unplug.oga         # AC unplugged — BR2_PACKAGE_SOUND_THEME_FREEDESKTOP
 exists  usr/share/sounds/Pop/stereo/alert/battery-low.oga            # battery sounds (theme "Pop") — COSMIC_INSTALL_SOUND_THEME in cosmic.mk

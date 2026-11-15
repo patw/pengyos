@@ -23,12 +23,12 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   theme: the `select BR2_PACKAGE_SOUND_THEME_FREEDESKTOP` left with the old
   `cosmic-sound-theme` package when it was folded into `cosmic`. Every volume OSD
   was silent and logged "Sound file not found in XDG data directories". The
-  `cosmic` package selects the theme again (Buildroot's 0.7, 27 sounds).
+  `cosmic` package selects the theme again (Buildroot's 0.7).
 - `board/desktop/features-required.txt` now checks the volume sound and the
   `Pop` battery sounds, so the post-build fails if either goes missing again.
-- Not fixed: AC plug/unplug stay silent. cosmic-settings-daemon looks
-  `power-plug`/`power-unplug` up only in the freedesktop theme, and those names
-  first appear in sound-theme-freedesktop 0.8; Buildroot ships 0.7.
+- AC plug/unplug sound again too: cosmic-settings-daemon looks `power-plug` and
+  `power-unplug` up only in the freedesktop theme, and 0.7's install makes them
+  links to `device-added`/`device-removed` (35 names from 27 sounds).
 
 ### Fixed: bare LAN hostnames resolve on Core and Server (2026-11-14)
 - networkd dropped the DHCP-offered domain (`[DHCPv4] UseDomains=` defaults to
