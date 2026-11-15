@@ -1,0 +1,444 @@
+#!/usr/bin/python3 -I
+"""Bring Flatpak apps' desktop and menu shortcuts out of their sandboxes, safely.
+
+A Flatpak app gets its own home (~/.var/app/<app id>) and usually no access to
+~/Desktop, so a game launcher's "Create desktop shortcut" or "Add to start menu"
+writes there and nothing appears (first seen with Steam). The launchers it
+writes would not work on the host anyway: they run the app's in-sandbox command
+(`steam steam://rungameid/N`, `lutris lutris:rungameid/N`, ...).
+
+The rule, for any installed Flatpak app: a shortcut it writes into its own
+Desktop or applications folder is brought over only if it opens ONE link of a
+type that same app declares it handles (x-scheme-handler/<scheme> in the
+desktop file the app exports). The host gets a NEW launcher:
+
+    Exec=/usr/bin/flatpak run <app id> "<that link>"
+
+So a launcher made this way can do exactly what clicking that link on a web
+page can: start the app, inside its own sandbox, with a link it accepts anyway.
+Nothing else is taken from the app's file: COSMIC Files runs a .desktop file on
+the desktop without asking, so passing it through would let a sandbox run any
+command on the host. The name crosses over; an icon is copied under a name
+prefixed with the app id (so no app can replace another's icon); symlinks are
+never followed.
+
+A shortcut is brought over once: a deleted copy stays deleted until the app
+rewrites its own file. When the app removes its shortcut (game uninstalled) or
+the app itself is removed, the copy goes too, unless the user edited it.
+
+`--watch` (pengyos-sandbox-shortcuts.service) syncs at start and again after
+anything changes under ~/.var/app, using inotify. Without it, one sync.
+State: $XDG_STATE_HOME/pengyos/sandbox-shortcuts.json.
+"""
+from __future__ import annotations
+
+import ctypes
+import hashlib
+import json
+import os
+import re
+import select
+import shlex
+import stat
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+MARKER = "X-PengyOS-Sandbox-Shortcut"
+APP_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*){2,}$")
+# A link: scheme, colon, then no whitespace, quotes, backslash, backtick or $
+# (the characters that would need escaping inside a quoted Exec argument).
+URI_RE = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]{0,31}):[^\s\x00-\x1f\x7f\"'`\\$]{0,2048}$")
+ICON_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.+-]{0,127}$")
+SIZE_DIR_RE = re.compile(r"^(\d{1,4}x\d{1,4}(@\d)?|scalable)$")
+MAX_DESKTOP_BYTES = 64 * 1024
+MAX_ICON_BYTES = 4 * 1024 * 1024
+# Where an app writes, relative to its sandbox home. Flatpak sets XDG_DATA_HOME
+# to data/, but apps that build paths from $HOME (Steam) use .local/share.
+SOURCES = {
+    "desktop": ("Desktop",),
+    "menu": (".local/share/applications", "data/applications"),
+}
+ICON_ROOTS = (".local/share/icons/hicolor", "data/icons/hicolor")
+
+
+def home() -> Path:
+    return Path(os.environ.get("HOME") or os.path.expanduser("~"))
+
+
+def xdg(var: str, default: str) -> Path:
+    v = os.environ.get(var)
+    return Path(v) if v and os.path.isabs(v) else home() / default
+
+
+def desktop_dir() -> Path:
+    """XDG_DESKTOP_DIR from user-dirs.dirs, else ~/Desktop."""
+    conf = xdg("XDG_CONFIG_HOME", ".config") / "user-dirs.dirs"
+    try:
+        for line in conf.read_text(encoding="utf-8").splitlines():
+            m = re.match(r'^\s*XDG_DESKTOP_DIR="(.*)"\s*$', line)
+            if m:
+                val = m.group(1).replace("$HOME", str(home()))
+                if os.path.isabs(val) and Path(val) != home():
+                    return Path(val)
+    except OSError:
+        pass
+    return home() / "Desktop"
+
+
+def export_dirs() -> list[Path]:
+    """Where Flatpak exports installed apps' desktop files (user, then system)."""
+    dirs = [xdg("XDG_DATA_HOME", ".local/share") / "flatpak/exports/share/applications"]
+    extra = os.environ.get("PENGYOS_FLATPAK_EXPORTS")      # tests
+    dirs += [Path(p) for p in extra.split(":")] if extra else [
+        Path("/var/lib/flatpak/exports/share/applications")]
+    return dirs
+
+
+def read_regular(path: Path, limit: int) -> bytes | None:
+    """Bytes of a regular file (never through a symlink), or None."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > limit:
+            return None
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            return f.read(limit + 1)[:limit]
+    finally:
+        os.close(fd)
+
+
+def read_export(path: Path) -> bytes | None:
+    """An exported desktop file. Flatpak exports are symlinks into the same
+    installation (exports/share/applications/X -> ../../../app/<id>/current/
+    active/export/...); follow one only if it stays inside that installation."""
+    root = os.path.realpath(path.parents[3])          # .../flatpak
+    real = os.path.realpath(path)
+    if not real.startswith(root + os.sep):
+        return None
+    return read_regular(Path(real), MAX_DESKTOP_BYTES)
+
+
+def unescape(v: str) -> str:
+    table = {"s": " ", "n": "\n", "t": "\t", "r": "\r", "\\": "\\"}
+    return re.sub(r"\\(.)", lambda m: table.get(m.group(1), "\\" + m.group(1)), v)
+
+
+def parse_entry(data: bytes) -> dict[str, str]:
+    """Unlocalized keys of the [Desktop Entry] group, string escapes undone."""
+    out: dict[str, str] = {}
+    group = None
+    for raw in data.decode("utf-8", "replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            group = line[1:-1]
+            continue
+        if group != "Desktop Entry" or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        if "[" not in k and k not in out:
+            out[k] = unescape(v.strip())
+    return out
+
+
+def declared_schemes(app_id: str) -> set[str]:
+    """URL schemes the installed app says it handles (its exported .desktop files)."""
+    schemes: set[str] = set()
+    for d in export_dirs():
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        for name in names:
+            if not (name == f"{app_id}.desktop"
+                    or (name.startswith(f"{app_id}.") and name.endswith(".desktop"))):
+                continue
+            data = read_export(d / name)
+            if data is None:
+                continue
+            for mime in parse_entry(data).get("MimeType", "").split(";"):
+                mime = mime.strip().lower()
+                if mime.startswith("x-scheme-handler/"):
+                    s = mime.split("/", 1)[1]
+                    if re.fullmatch(r"[a-z][a-z0-9+.-]{0,31}", s):
+                        schemes.add(s)
+    return schemes
+
+
+def clean_name(name: str) -> str:
+    return "".join(c for c in name if c.isprintable()).strip()[:200]
+
+
+def shortcut_from(path: Path, app_id: str, schemes: set[str]) -> tuple[str, str, str] | None:
+    """(link, name, icon) when the file opens exactly one link the app handles."""
+    data = read_regular(path, MAX_DESKTOP_BYTES)
+    if data is None:
+        return None
+    e = parse_entry(data)
+    if e.get("Type", "Application") != "Application":
+        return None
+    try:
+        argv = shlex.split(e.get("Exec", ""), posix=True)
+    except ValueError:
+        return None
+    links = [t for t in argv
+             if (m := URI_RE.match(t)) and m.group(1).lower() in schemes]
+    if len(links) != 1:
+        return None
+    name = clean_name(e.get("Name", "")) or app_id
+    icon = e.get("Icon", "")
+    return links[0], name, icon if ICON_NAME_RE.match(icon) else ""
+
+
+def host_icon_name(app_id: str, icon: str) -> str:
+    """Icons from a sandbox live under the app's own prefix on the host."""
+    return icon if icon == app_id or icon.startswith(app_id + ".") else f"{app_id}.{icon}"
+
+
+def render(app_id: str, link: str, name: str, icon: str, key: str) -> str:
+    name = name.replace("\\", "\\\\")
+    link = link.replace("%", "%%")          # Exec field codes
+    return (
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        f"Name={name}\n"
+        f'Exec=/usr/bin/flatpak run {app_id} "{link}"\n'
+        f"Icon={icon}\n"
+        "Terminal=false\n"
+        f"{MARKER}={key}\n"
+    )
+
+
+def sha(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
+def write_atomic(dest: Path, data: bytes, mode: int) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.pengyos-tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, mode)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    os.chmod(tmp, mode)
+    os.replace(tmp, dest)
+
+
+def safe_basename(name: str) -> bool:
+    return (name.endswith(".desktop") and not name.startswith(".")
+            and "/" not in name and "\0" not in name and len(name) <= 200)
+
+
+def copy_icons(sandbox: Path, app_id: str, icon: str, icons_home: Path) -> bool:
+    """Copy hicolor/<size>/apps/<icon>.* out of the sandbox under the host name."""
+    found = False
+    target = host_icon_name(app_id, icon)
+    for root in ICON_ROOTS:
+        try:
+            sizes = list(os.scandir(sandbox / root))
+        except OSError:
+            continue
+        for size in sizes:
+            if not SIZE_DIR_RE.match(size.name) or not size.is_dir(follow_symlinks=False):
+                continue
+            for ext in ("png", "svg", "xpm"):
+                data = read_regular(Path(size.path) / "apps" / f"{icon}.{ext}", MAX_ICON_BYTES)
+                if data is None:
+                    continue
+                found = True
+                dest = icons_home / "hicolor" / size.name / "apps" / f"{target}.{ext}"
+                try:
+                    if dest.is_symlink() or (dest.exists() and dest.read_bytes() == data):
+                        continue
+                except OSError:
+                    continue
+                write_atomic(dest, data, 0o644)
+    return found
+
+
+def ours(dest: Path, key: str) -> bool:
+    """dest is a launcher this tool wrote for the same shortcut."""
+    data = read_regular(dest, MAX_DESKTOP_BYTES)
+    return data is not None and parse_entry(data).get(MARKER) == key
+
+
+def sandboxes() -> list[tuple[str, Path]]:
+    root = home() / ".var/app"
+    try:
+        ents = list(os.scandir(root))
+    except OSError:
+        return []
+    return sorted((e.name, Path(e.path)) for e in ents
+                  if APP_ID_RE.match(e.name) and e.is_dir(follow_symlinks=False))
+
+
+def sync(verbose: bool = False) -> int:
+    data_home = xdg("XDG_DATA_HOME", ".local/share")
+    state_path = xdg("XDG_STATE_HOME", ".local/state") / "pengyos/sandbox-shortcuts.json"
+    dests = {"desktop": desktop_dir(), "menu": data_home / "applications"}
+
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        if not isinstance(state, dict):
+            state = {}
+    except (OSError, ValueError):
+        state = {}
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(f"sandbox-shortcuts: {msg}", flush=True)
+
+    new_state: dict[str, dict] = {}
+    seen: set[str] = set()
+    changed = 0
+    for app_id, sandbox in sandboxes():
+        schemes: set[str] | None = None
+        for kind, rels in SOURCES.items():
+            for rel in rels:
+                try:
+                    ents = [e for e in os.scandir(sandbox / rel) if safe_basename(e.name)]
+                except OSError:
+                    continue
+                for ent in ents:
+                    key = f"{app_id}/{kind}/{ent.name}"
+                    if key in seen:
+                        continue
+                    try:
+                        st = os.lstat(ent.path)
+                    except OSError:
+                        continue
+                    if not stat.S_ISREG(st.st_mode):
+                        continue
+                    if schemes is None:
+                        schemes = declared_schemes(app_id)
+                    sc = shortcut_from(Path(ent.path), app_id, schemes) if schemes else None
+                    if sc is None:
+                        log(f"skip {ent.path}: not a link {app_id} handles")
+                        continue
+                    seen.add(key)
+                    link, name, icon = sc
+                    sig = [st.st_mtime_ns, st.st_size]
+                    prev = state.get(key)
+                    if prev and prev.get("sig") == sig:
+                        new_state[key] = prev      # done before; a deleted copy stays deleted
+                        continue
+                    fname = ent.name if kind == "desktop" else f"{app_id}.{ent.name}"
+                    dest = dests[kind] / fname
+                    if dest.is_symlink() or (dest.exists() and not ours(dest, key)):
+                        log(f"leave {dest}: not ours")
+                        new_state[key] = {"sig": sig, "dest": str(dest), "sha": None}
+                        continue
+                    host_icon = app_id
+                    if icon and copy_icons(sandbox, app_id, icon, data_home / "icons"):
+                        host_icon = host_icon_name(app_id, icon)
+                    elif icon and icon.startswith(app_id + "."):
+                        host_icon = icon               # one the app exports itself
+                    body = render(app_id, link, name, host_icon, key).encode()
+                    write_atomic(dest, body, 0o755)
+                    new_state[key] = {"sig": sig, "dest": str(dest), "sha": sha(body)}
+                    changed += 1
+                    log(f"wrote {dest} ({app_id} {link})")
+
+    # The app removed its shortcut, or the app is gone: remove our copy if untouched.
+    for key, prev in state.items():
+        if key in seen:
+            continue
+        dest = Path(prev.get("dest", ""))
+        try:
+            if prev.get("sha") and dest.is_file() and not dest.is_symlink() \
+                    and sha(dest.read_bytes()) == prev["sha"]:
+                dest.unlink()
+                changed += 1
+                log(f"removed {dest}")
+        except OSError:
+            pass
+
+    if new_state != state:
+        write_atomic(state_path, (json.dumps(new_state, indent=1, sort_keys=True) + "\n").encode(), 0o644)
+    if changed:
+        refresh_icon_cache(data_home / "icons/hicolor")
+    return changed
+
+
+def refresh_icon_cache(hicolor: Path) -> None:
+    # Only if the user already has a cache: a stale one hides new icons.
+    if (hicolor / "icon-theme.cache").exists():
+        try:
+            subprocess.run(["gtk-update-icon-cache", "-qtf", str(hicolor)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        except OSError:
+            pass
+
+
+# --- watching ----------------------------------------------------------------
+IN_ATTRIB, IN_CLOSE_WRITE = 0x4, 0x8
+IN_MOVED_FROM, IN_MOVED_TO, IN_CREATE, IN_DELETE = 0x40, 0x80, 0x100, 0x200
+IN_DELETE_SELF, IN_MOVE_SELF, IN_ONLYDIR = 0x400, 0x800, 0x01000000
+MASK = (IN_ATTRIB | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_CREATE
+        | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF | IN_ONLYDIR)
+
+
+def watch_dirs() -> list[Path]:
+    """~/.var/app, each app dir, the deepest existing part of each source path,
+    and the Flatpak export dirs (an app installed or removed)."""
+    root = home() / ".var/app"
+    out = [root if root.is_dir() else home()]
+    for _, sandbox in sandboxes():
+        out.append(sandbox)
+        for rels in SOURCES.values():
+            for rel in rels:
+                p = sandbox / rel
+                while p != sandbox and not p.is_dir():
+                    p = p.parent
+                out.append(p)
+    out += [d for d in export_dirs() if d.is_dir()]
+    return list(dict.fromkeys(out))
+
+
+def watch(verbose: bool, settle: float = 1.0) -> int:
+    libc = ctypes.CDLL(None, use_errno=True)
+    fd = libc.inotify_init1(os.O_CLOEXEC | os.O_NONBLOCK)
+    if fd < 0:
+        print("sandbox-shortcuts: inotify unavailable", file=sys.stderr)
+        return 1
+
+    def rewatch() -> None:
+        for d in watch_dirs():
+            libc.inotify_add_watch(fd, os.fsencode(str(d)), MASK)
+
+    rewatch()
+    sync(verbose)
+    poller = select.poll()
+    poller.register(fd, select.POLLIN)
+    while True:
+        poller.poll()
+        time.sleep(settle)                      # let an app finish writing a batch
+        try:
+            while os.read(fd, 65536):
+                pass
+        except BlockingIOError:
+            pass
+        rewatch()
+        n = sync(verbose)
+        if n:
+            print(f"sandbox-shortcuts: {n} launcher(s) updated", flush=True)
+
+
+def main(argv: list[str]) -> int:
+    verbose = "-v" in argv or "--verbose" in argv
+    if "--watch" in argv:
+        return watch(verbose)
+    n = sync(verbose)
+    if n:
+        print(f"sandbox-shortcuts: {n} launcher(s) updated")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

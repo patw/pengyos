@@ -1,0 +1,17 @@
+# Bring Flatpak apps' desktop and menu shortcuts (Steam's "Create desktop
+# shortcut", ...) out of their sandboxes as host launchers that only open the
+# app's own links. See /usr/libexec/pengyos/sandbox-shortcuts.
+
+[Unit]
+Description=Bring app shortcuts out of Flatpak sandboxes to the desktop and App Library
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/pengyos/sandbox-shortcuts --watch
+Restart=on-failure
+RestartSec=10
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=default.target

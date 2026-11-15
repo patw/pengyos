@@ -657,16 +657,20 @@ last share and leaves the files alone; a non-administrator is told so before any
 
 How: COSMIC Files draws the desktop (`cosmic-files-applet`, on by default) from
 `XDG_DESKTOP_DIR` (~/Desktop) and runs `.desktop` launchers there. Files dragged there stay.
-Apps that make their own shortcuts may be sandboxed: Flathub's Steam writes "Create desktop
-shortcut" and "Add to start menu" into ~/.var/app/com.valvesoftware.Steam, so
-`pengyos-steam-shortcuts` (a user `.path` unit) writes host launchers for them: digits-only
-game id and the name cross over, `Exec` is always `flatpak run com.valvesoftware.Steam
-steam://rungameid/N`, the game's icon is copied. Steam's own file is never passed through:
-the desktop runs launchers without asking, so that would let the sandbox run anything.
-**Acceptance:** "Create desktop shortcut" in Steam puts the game on the desktop within a
-moment, with its icon, and double-clicking it starts the game; "Add to start menu" puts it
-in the App Library; a deleted icon stays deleted; uninstalling the game removes the icon; a
-shortcut that is not a Steam game launch never appears.
+Apps that make their own shortcuts may be sandboxed: a Flatpak app writes "Create desktop
+shortcut" / "Add to start menu" into ~/.var/app/<app id> (seen with Steam). The user service
+`pengyos-sandbox-shortcuts` watches those folders and writes host launchers by one rule for
+every app: a shortcut that opens exactly one link of a type the same app declares it handles
+(`x-scheme-handler/*` in its exported desktop file) becomes `flatpak run <app id> "<link>"`,
+with the name and an icon copied under the app's prefix. Such a launcher can do what clicking
+that link on a web page does, nothing more; the app's own file is never passed through,
+because the desktop runs launchers without asking.
+**Acceptance:** "Create desktop shortcut" in Steam (or any Flatpak launcher whose shortcuts
+open its own links) puts the game on the desktop within a few seconds, with its icon, and
+double-clicking it starts the game; "Add to start menu" puts it in the App Library; a deleted
+icon stays deleted; uninstalling the game or the app removes the icon; a shortcut that runs
+anything else never appears. Not covered: launchers whose shortcuts run a command instead of
+a link (none seen yet; they would need an explicit rule).
 
 ---
 
