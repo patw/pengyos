@@ -17,6 +17,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: game shortcut icons were blank until the next login (2026-11-16)
+- Braid's Steam shortcut on beholaptop (26.11.20) launched but showed no icon.
+  `pengyos-sandbox-shortcuts` had copied the icon into
+  `~/.local/share/icons/hicolor`, but that folder did not exist at login, and
+  every COSMIC process lists icon theme folders once, at startup. `start-cosmic`
+  now creates it before the session, as it already did for the Flatpak export
+  folders (8ab3ede8).
+
 ### Added: game launchers' desktop shortcuts show up on the desktop (2026-11-15)
 - A user reported "Create desktop shortcut" in Steam did nothing. A Flatpak app
   has its own home and usually no ~/Desktop, so its shortcuts (and "Add to
