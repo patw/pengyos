@@ -12,6 +12,14 @@
 #   menu (a laptop on 26.10.27, 2026-10-13). The user folders are created here
 #   for the same reason tmpfiles creates the system ones: the panel scans icon
 #   folders once, at startup.
+# - ~/.local/share/icons/hicolor: created for the same reason. Every COSMIC
+#   process (the desktop, App Library, panel) lists icon theme folders once, at
+#   startup (freedesktop-icons' THEMES is a LazyLock), and ignores a theme
+#   folder that appears later. sandbox-shortcuts copies a game's icon there
+#   when Steam makes its first shortcut, so on a user with no such folder yet
+#   the desktop launcher showed a blank icon until the next login (Braid on
+#   beholaptop, 26.11.20, 2026-11-16). Files added later to a folder that
+#   existed at startup are found: misses are only cached for 5 s.
 # - PATH: greetd's session worker hands the session a minimal environment, so
 #   PATH arrives as /usr/bin alone -- not the /usr/local/bin:/usr/bin a login
 #   shell gets. A session started by a system service never sources profile.d
@@ -61,7 +69,8 @@ export XDG_SESSION_TYPE=wayland
 export XDG_SESSION_DESKTOP=COSMIC
 export XDG_CURRENT_DESKTOP=COSMIC
 FLATPAK_USER_SHARE="${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/exports/share"
-mkdir -p "$FLATPAK_USER_SHARE/applications" "$FLATPAK_USER_SHARE/icons/hicolor" 2>/dev/null || true
+mkdir -p "$FLATPAK_USER_SHARE/applications" "$FLATPAK_USER_SHARE/icons/hicolor" \
+    "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor" 2>/dev/null || true
 export XDG_DATA_DIRS="$FLATPAK_USER_SHARE:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share"
 export XDG_CONFIG_DIRS=/etc/xdg
 export LANG="${LANG:-en_US.UTF-8}"
