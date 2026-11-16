@@ -671,6 +671,10 @@ double-clicking it starts the game; "Add to start menu" puts it in the App Libra
 icon stays deleted; uninstalling the game or the app removes the icon; a shortcut that runs
 anything else never appears. Not covered: launchers whose shortcuts run a command instead of
 a link (none seen yet; they would need an explicit rule).
+Icons can be dragged to any grid cell and stay there, per monitor (carried cosmic-files patch
+0003); "Sort by" on the desktop re-arranges them. **Acceptance:** an icon dragged to an empty
+cell stays there after a re-login; the other icons do not move; an icon dropped on a taken
+cell lands next to it; a new file appears in the first free cell.
 
 ---
 

@@ -1,0 +1,829 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] desktop: icons stay where they are dragged
+
+The desktop laid icons out as an auto-flow grid, down each column in
+sort order, with no setting and nowhere to keep a position, so an icon
+could not be moved. Keep a grid cell per icon instead:
+
+- Dragging icons within the desktop snaps them to the cell under the
+  pointer, keeping a group's shape; a taken cell gives way to the
+  nearest free one. No file is touched. Every other icon is pinned where
+  it was drawn, so one move does not reshuffle the rest later.
+- New files fill the first free cell, in upstream's order; files dropped
+  from elsewhere land where they were dropped.
+- Cells are kept per output, by file name, in the state key
+  desktop_positions. A cell that does not fit the screen (smaller
+  output, bigger icons) is ignored, not forgotten.
+- "Sort by" in the desktop menu forgets the cells and re-arranges.
+
+The layout and move rules are in src/desktop_layout.rs, with tests.
+The drop point comes from the tab's DnD destination (surface
+coordinates); the app takes off the panel margins the desktop view sits
+in. The drag image is now built in row order, which the desktop's
+column order broke for multi-column selections.
+
+Upstream: not offered; carried
+---
+diff --git a/src/app.rs b/src/app.rs
+index 77aa67d..d164775 100644
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -1185,6 +1185,14 @@ impl App {
+                 tab::Mode::Desktop
+             }
+         };
++        if let Location::Desktop(_, output, _) = &location {
++            tab.desktop_positions = self
++                .state
++                .desktop_positions
++                .get(output)
++                .cloned()
++                .unwrap_or_default();
++        }
+ 
+         let entity = self
+             .tab_model
+@@ -4465,8 +4473,20 @@ impl Application for App {
+                 config.show_hidden = !config.show_hidden;
+                 return self.update(Message::TabConfig(config));
+             }
+-            Message::TabMessage(entity_opt, tab_message) => {
++            Message::TabMessage(entity_opt, mut tab_message) => {
+                 let entity = entity_opt.unwrap_or_else(|| self.tab_model.active());
++                // A drop point is in surface coordinates; the desktop view sits
++                // inside the panel margins (view_window), so take them off.
++                if let tab::Message::DndDropAt(x, y) = &mut tab_message
++                    && let Some(margin) = self
++                        .tab_model
++                        .data::<Tab>(entity)
++                        .and_then(Tab::window_id)
++                        .and_then(|id| self.margin.get(&id))
++                {
++                    *y -= margin.0.max(0.);
++                    *x -= margin.1.max(0.);
++                }
+                 // The context menu opens on right-button release, so refresh paste availability now
+                 let right_click = matches!(tab_message, tab::Message::RightClick(..));
+ 
+@@ -4631,6 +4651,21 @@ impl Application for App {
+                                 commands.push(window::toggle_maximize(window_id));
+                             }
+                         }
++                        tab::Command::SetDesktopPositions(output, positions) => {
++                            if positions.is_empty() {
++                                self.state.desktop_positions.remove(&output);
++                            } else {
++                                self.state.desktop_positions.insert(output, positions);
++                            }
++                            if let Some(state_handler) = self.state_handler.as_ref()
++                                && let Err(err) = state_handler.set(
++                                    "desktop_positions",
++                                    &self.state.desktop_positions,
++                                )
++                            {
++                                log::warn!("Failed to save desktop positions: {err:?}");
++                            }
++                        }
+                         tab::Command::SetSort(location, heading_options, direction) => {
+                             let default_sort = tab::SORT_OPTION_FALLBACK
+                                 .get(&location)
+diff --git a/src/config.rs b/src/config.rs
+index 617c459..df6115b 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -151,6 +151,8 @@ pub enum TypeToSearch {
+ pub struct State {
+     pub sort_names: FxOrderMap<String, (HeadingOptions, bool)>,
+     pub dialog_sort_name: (HeadingOptions, bool),
++    /// Desktop icon cells per output name (see desktop_layout).
++    pub desktop_positions: std::collections::BTreeMap<String, crate::desktop_layout::Positions>,
+ }
+ 
+ impl Default for State {
+@@ -163,6 +165,7 @@ impl Default for State {
+                 )
+             })),
+             dialog_sort_name: (HeadingOptions::Modified, false),
++            desktop_positions: Default::default(),
+         }
+     }
+ }
+diff --git a/src/lib.rs b/src/lib.rs
+index f2d04d7..084a3be 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -18,6 +18,7 @@ pub mod channel;
+ pub mod clipboard;
+ pub mod config;
+ mod context_action;
++pub mod desktop_layout;
+ pub mod dialog;
+ mod key_bind;
+ pub(crate) mod large_image;
+diff --git a/src/tab.rs b/src/tab.rs
+index d462c11..f293c83 100644
+--- a/src/tab.rs
++++ b/src/tab.rs
+@@ -1764,6 +1764,8 @@ pub enum Command {
+     SetPermissions(PathBuf, u32),
+     SetMultiplePermissions(Vec<(PathBuf, u32)>),
+     SetSort(String, HeadingOptions, bool),
++    /// Desktop icon cells of one output, to save (see desktop_layout).
++    SetDesktopPositions(String, crate::desktop_layout::Positions),
+     WindowDrag,
+     WindowToggleMaximize,
+ }
+@@ -1829,6 +1831,8 @@ pub enum Message {
+     Thumbnail(PathBuf, ItemThumbnail),
+     ToggleSort(HeadingOptions),
+     Drop(Option<(Location, ClipboardPaste)>),
++    /// Where a drag was dropped, in grid coordinates (the app has taken off the panel margin).
++    DndDropAt(f32, f32),
+     DndHover(Location),
+     DndEnter(Location),
+     DndLeave(Location),
+@@ -2836,6 +2840,23 @@ pub struct Tab {
+     time_formatter: DateTimeFormatter<fieldsets::T>,
+     window_id: Option<window::Id>,
+     large_image_manager: LargeImageManager,
++    /// Desktop mode: saved icon cells of this output.
++    pub desktop_positions: crate::desktop_layout::Positions,
++    /// Desktop mode: cell of the icon last pressed, the one a drag grabs.
++    desktop_drag_anchor: Option<(usize, usize)>,
++    /// Desktop mode: where the drag being delivered was dropped.
++    dnd_drop_point: Option<(f32, f32)>,
++}
++
++struct GridMetrics {
++    icon_sizes: IconSizes,
++    grid_spacing: u16,
++    item_width: usize,
++    item_height: usize,
++    height: usize,
++    cols: usize,
++    column_spacing: u16,
++    rows: usize,
+ }
+ 
+ async fn calculate_dir_size(path: &Path, controller: Controller) -> Result<u64, OperationError> {
+@@ -2980,6 +3001,9 @@ impl Tab {
+             time_formatter: time_formatter(config.military_time),
+             window_id,
+             large_image_manager: LargeImageManager::new(),
++            desktop_positions: Default::default(),
++            desktop_drag_anchor: None,
++            dnd_drop_point: None,
+         }
+     }
+ 
+@@ -3609,6 +3633,12 @@ impl Tab {
+             Message::Click(click_i_opt) => {
+                 self.selected_clicked = false;
+                 self.edit_location = None;
++                if let Some(pos) = click_i_opt
++                    .and_then(|i| self.items_opt.as_ref()?.get(i))
++                    .and_then(|item| item.pos_opt.get())
++                {
++                    self.desktop_drag_anchor = Some(pos);
++                }
+                 if click_i_opt.is_none() {
+                     self.clicked = click_i_opt;
+                 }
+@@ -4658,6 +4688,11 @@ impl Tab {
+                 if !matches!(self.location, Location::Search(..)) {
+                     self.sort_name = heading_option;
+                     self.sort_direction = dir;
++                    if matches!(self.mode, Mode::Desktop) && !self.desktop_positions.is_empty() {
++                        // "Sort by" on the desktop re-arranges every icon.
++                        self.desktop_positions.clear();
++                        self.desktop_save(&mut commands);
++                    }
+                     if !matches!(self.location, Location::Desktop(..)) {
+                         commands.push(Command::SetSort(
+                             self.location.normalize().to_string(),
+@@ -4727,6 +4762,11 @@ impl Tab {
+                         heading_option != HeadingOptions::Modified
+                     };
+ 
++                    if matches!(self.mode, Mode::Desktop) && !self.desktop_positions.is_empty() {
++                        // "Sort by" on the desktop re-arranges every icon.
++                        self.desktop_positions.clear();
++                        self.desktop_save(&mut commands);
++                    }
+                     if !matches!(self.location, Location::Desktop(..)) {
+                         commands.push(Command::SetSort(
+                             self.location.normalize().to_string(),
+@@ -4739,8 +4779,61 @@ impl Tab {
+                     self.sort_name = heading_option;
+                 }
+             }
++            Message::DndDropAt(x, y) => {
++                self.dnd_drop_point = Some((x, y));
++            }
+             Message::Drop(Some((to, mut from))) => {
+                 self.dnd_hovered = None;
++                let drop_point = self.dnd_drop_point.take();
++                if let (Mode::Desktop, Location::Desktop(dir, ..), Some((x, y))) =
++                    (&self.mode, &to, drop_point)
++                {
++                    let target = self.desktop_cell_at(x, y);
++                    let GridMetrics { rows, cols, .. } = self.grid_metrics();
++                    let shown = self.desktop_shown();
++                    let names: Vec<String> = from
++                        .paths
++                        .iter()
++                        .filter_map(|p| Some(p.file_name()?.to_string_lossy().into_owned()))
++                        .collect();
++                    if !names.is_empty() && from.paths.iter().all(|p| p.parent() == Some(dir)) {
++                        // Icons dragged within the desktop: move them, touch no file.
++                        let moving: BTreeSet<String> = names.into_iter().collect();
++                        let anchor = self
++                            .desktop_drag_anchor
++                            .filter(|a| shown.iter().any(|(n, c)| c == a && moving.contains(n)))
++                            .or_else(|| {
++                                shown
++                                    .iter()
++                                    .filter(|(n, _)| moving.contains(n))
++                                    .map(|(_, c)| *c)
++                                    .min()
++                            });
++                        if let Some(anchor) = anchor {
++                            self.desktop_positions = crate::desktop_layout::moved(
++                                &self.desktop_positions,
++                                &shown,
++                                &moving,
++                                anchor,
++                                target,
++                                rows,
++                                cols,
++                            );
++                            self.desktop_save(&mut commands);
++                        }
++                        return commands;
++                    }
++                    // Files from elsewhere: they land where they were dropped.
++                    self.desktop_positions = crate::desktop_layout::dropped(
++                        &self.desktop_positions,
++                        &shown,
++                        &names,
++                        target,
++                        rows,
++                        cols,
++                    );
++                    self.desktop_save(&mut commands);
++                }
+                 match to {
+                     Location::Desktop(to, ..)
+                     | Location::Path(to)
+@@ -4767,6 +4860,7 @@ impl Tab {
+             }
+             Message::Drop(None) => {
+                 self.dnd_hovered = None;
++                self.dnd_drop_point = None;
+             }
+             Message::DndHover(loc) => {
+                 if self
+@@ -5667,24 +5761,14 @@ impl Tab {
+         .into()
+     }
+ 
+-    pub fn grid_view(
+-        &self,
+-    ) -> (
+-        Option<Element<'static, Message>>,
+-        Element<'_, Message>,
+-        bool,
+-    ) {
++    /// The grid's geometry, shared by `grid_view` and the desktop drop handler.
++    fn grid_metrics(&self) -> GridMetrics {
+         let cosmic_theme::Spacing {
+             space_xxs,
+             space_xxxs,
+             ..
+         } = theme::spacing();
+-
+-        let TabConfig {
+-            show_hidden,
+-            mut icon_sizes,
+-            ..
+-        } = self.config;
++        let mut icon_sizes = self.config.icon_sizes;
+ 
+         let mut grid_spacing = space_xxs;
+         if let Location::Desktop(_path, _output, desktop_config) = &self.location {
+@@ -5724,6 +5808,82 @@ impl Tab {
+             rows_m1 + 1
+         };
+ 
++        GridMetrics {
++            icon_sizes,
++            grid_spacing,
++            item_width,
++            item_height,
++            height,
++            cols,
++            column_spacing,
++            rows,
++        }
++    }
++
++    /// Desktop mode: every icon on screen with the cell it is drawn in.
++    fn desktop_shown(&self) -> Vec<(String, (usize, usize))> {
++        self.items_opt
++            .iter()
++            .flatten()
++            .filter_map(|item| Some((item.name.clone(), item.pos_opt.get()?)))
++            .collect()
++    }
++
++    /// Desktop mode: the grid cell under a point in grid coordinates.
++    fn desktop_cell_at(&self, x: f32, y: f32) -> (usize, usize) {
++        let m = self.grid_metrics();
++        let scroll_y = self.scroll_opt.map_or(0.0, |o| o.y);
++        crate::desktop_layout::cell_at(
++            x,
++            y + scroll_y,
++            f32::from(theme::spacing().space_xxs),
++            (m.item_width as f32, m.item_height as f32),
++            (f32::from(m.column_spacing), f32::from(m.grid_spacing)),
++            m.rows,
++            m.cols,
++        )
++    }
++
++    /// Desktop mode: save this output's cells (the app stores them).
++    fn desktop_save(&self, commands: &mut Vec<Command>) {
++        if let Location::Desktop(_, output, _) = &self.location {
++            commands.push(Command::SetDesktopPositions(
++                output.clone(),
++                self.desktop_positions.clone(),
++            ));
++        }
++    }
++
++    pub const fn window_id(&self) -> Option<window::Id> {
++        self.window_id
++    }
++
++    pub fn grid_view(
++        &self,
++    ) -> (
++        Option<Element<'static, Message>>,
++        Element<'_, Message>,
++        bool,
++    ) {
++        let cosmic_theme::Spacing {
++            space_xxs,
++            space_xxxs,
++            ..
++        } = theme::spacing();
++
++        let TabConfig { show_hidden, .. } = self.config;
++        let GridMetrics {
++            icon_sizes,
++            grid_spacing,
++            item_width,
++            item_height,
++            height,
++            cols,
++            column_spacing,
++            rows,
++        } = self.grid_metrics();
++        let desktop = matches!(self.mode, Mode::Desktop);
++
+         //TODO: move to function
+         let visible_rect = {
+             // Use cached content height to clamp scroll offset after resize
+@@ -5756,9 +5916,19 @@ impl Tab {
+             let mut count = 0;
+             let mut col = 0;
+             let mut row = 0;
+-            let mut page_row = 0;
+             let mut hidden = 0;
+-            let mut grid_elements = Vec::new();
++            // Each row's cells as (col, element); None is a whole-row spacer.
++            let mut grid_elements: Vec<Vec<(Option<usize>, Element<Message>)>> = Vec::new();
++            // Desktop: icons sit in their saved cells, the rest flow around them.
++            let desktop_cells = desktop.then(|| {
++                let keys: Vec<&str> = items
++                    .iter()
++                    .filter(|(_, item)| show_hidden || !item.hidden)
++                    .map(|(_, item)| item.name.as_str())
++                    .collect();
++                crate::desktop_layout::cells(&keys, &self.desktop_positions, rows, cols)
++            });
++            let mut shown = 0;
+             for &(i, item) in &items {
+                 if !show_hidden && item.hidden {
+                     item.pos_opt.set(None);
+@@ -5766,6 +5936,10 @@ impl Tab {
+                     hidden += 1;
+                     continue;
+                 }
++                if let Some(cells) = &desktop_cells {
++                    (row, col) = cells[shown];
++                }
++                shown += 1;
+                 item.pos_opt.set(Some((row, col)));
+                 let item_rect = Rectangle::new(
+                     Point::new(
+@@ -5853,30 +6027,24 @@ impl Tab {
+                         .on_middle_press(move |_| Message::MiddleClick(i))
+                         .on_enter(move || Message::HighlightActivate(i))
+                         .on_exit(move || Message::HighlightDeactivate(i));
+-                    grid_elements[row].push(Element::from(mouse_area));
++                    grid_elements[row].push((Some(col), Element::from(mouse_area)));
+                 } else {
+                     // Add a spacer if the row is empty, so scroll works
+                     if grid_elements[row].is_empty() {
+-                        grid_elements[row].push(Element::from(
+-                            widget::column::with_capacity(0)
+-                                .width(Length::Fill)
+-                                .height(Length::Fixed(item_height as f32)),
++                        grid_elements[row].push((
++                            None,
++                            Element::from(
++                                widget::column::with_capacity(0)
++                                    .width(Length::Fill)
++                                    .height(Length::Fixed(item_height as f32)),
++                            ),
+                         ));
+                     }
+                 }
+ 
+                 count += 1;
+-                if matches!(self.mode, Mode::Desktop) {
+-                    row += 1;
+-                    if row >= page_row + rows {
+-                        row = 0;
+-                        col += 1;
+-                    }
+-                    if col >= cols {
+-                        col = 0;
+-                        page_row += rows;
+-                        row = page_row;
+-                    }
++                if desktop {
++                    // Cells come from desktop_layout::cells.
+                 } else {
+                     col += 1;
+                     if col >= cols {
+@@ -5886,8 +6054,30 @@ impl Tab {
+                 }
+             }
+ 
+-            for row_elements in grid_elements {
+-                for element in row_elements {
++            let cell_spacer = || {
++                Element::from(
++                    widget::container(space::vertical().height(item_height as f32))
++                        .width(Length::Fixed(item_width as f32))
++                        .height(Length::Fixed(item_height as f32)),
++                )
++            };
++            for mut row_elements in grid_elements {
++                if desktop {
++                    // Placed icons leave gaps: fill them, and keep empty rows tall.
++                    if row_elements.is_empty() {
++                        row_elements.push((None, cell_spacer()));
++                    }
++                    row_elements.sort_by_key(|(col, _)| *col);
++                }
++                let mut next_col = 0;
++                for (col_opt, element) in row_elements {
++                    if let Some(col) = col_opt {
++                        while desktop && next_col < col {
++                            grid = grid.push(cell_spacer());
++                            next_col += 1;
++                        }
++                        next_col = col + 1;
++                    }
+                     grid = grid.push(element);
+                 }
+                 grid = grid.insert_row();
+@@ -5931,6 +6121,8 @@ impl Tab {
+             }
+         }
+ 
++        // The drag image walks rows then columns; the desktop collects by column.
++        dnd_items.sort_by_key(|(_, pos, _)| *pos);
+         let drag_list = (!dnd_items.is_empty()).then(|| {
+             let mut dnd_grid = widget::grid()
+                 .column_spacing(column_spacing)
+@@ -6626,7 +6818,9 @@ impl Tab {
+             }
+         })
+         .on_enter(move |_, _, _| Message::DndEnter(tab_location_2.clone()))
+-        .on_leave(move || Message::DndLeave(tab_location_3.clone()));
++        .on_leave(move || Message::DndLeave(tab_location_3.clone()))
++        // Surface coordinates; the app turns them into grid coordinates.
++        .on_drop(|x, y| Message::DndDropAt(x as f32, y as f32));
+ 
+         dnd_dest.into()
+     }
+diff --git a/src/desktop_layout.rs b/src/desktop_layout.rs
+new file mode 100644
+index 0000000..71ecc93
+--- /dev/null
++++ b/src/desktop_layout.rs
+@@ -0,0 +1,300 @@
++// Desktop icon placement: icons stay in the grid cell they were dragged to.
++//
++// Upstream lays the desktop out as an auto-flow grid (column by column, in sort
++// order) and has nowhere to keep a position, so a dragged icon cannot be moved.
++// Positions are kept per output, keyed by file name, as (row, col) cells. A cell
++// that no longer fits the screen (smaller output, bigger icons) is ignored, not
++// forgotten, so the icon goes back when the cell fits again.
++
++use std::collections::{BTreeMap, BTreeSet};
++
++/// Saved cells of one output: file name -> (row, col).
++pub type Positions = BTreeMap<String, (u32, u32)>;
++
++/// Positions are only pruned past this many entries, so a file that is removed
++/// and comes back (a game reinstalled, a download replaced) keeps its spot.
++const PRUNE_ABOVE: usize = 512;
++
++/// The cell of every key, in the order given.
++///
++/// Keys with a saved cell inside the `rows` x `cols` screen get it (first come,
++/// first served if two share one). The rest fill the free cells in upstream's
++/// order: down each column, left to right, then the same again one screen
++/// further down when the screen is full.
++pub fn cells(keys: &[&str], saved: &Positions, rows: usize, cols: usize) -> Vec<(usize, usize)> {
++    let rows = rows.max(1);
++    let cols = cols.max(1);
++    let mut out: Vec<Option<(usize, usize)>> = vec![None; keys.len()];
++    let mut taken = BTreeSet::new();
++    for (i, key) in keys.iter().enumerate() {
++        if let Some(&(row, col)) = saved.get(*key) {
++            let cell = (row as usize, col as usize);
++            if cell.0 < rows && cell.1 < cols && taken.insert(cell) {
++                out[i] = Some(cell);
++            }
++        }
++    }
++    let mut free = (0..).flat_map(move |page: usize| {
++        (0..cols).flat_map(move |col| (page * rows..(page + 1) * rows).map(move |row| (row, col)))
++    });
++    out.into_iter()
++        .map(|cell| {
++            cell.unwrap_or_else(|| {
++                free.by_ref()
++                    .find(|cell| !taken.contains(cell))
++                    .expect("the cell iterator is endless")
++            })
++        })
++        .collect()
++}
++
++/// The cell nearest to `want` that is not taken, or None when the screen is full.
++fn nearest_free(
++    want: (usize, usize),
++    taken: &BTreeSet<(usize, usize)>,
++    rows: usize,
++    cols: usize,
++) -> Option<(usize, usize)> {
++    let mut best: Option<((usize, usize), usize)> = None;
++    for col in 0..cols {
++        for row in 0..rows {
++            if taken.contains(&(row, col)) {
++                continue;
++            }
++            let d = row.abs_diff(want.0).pow(2) + col.abs_diff(want.1).pow(2);
++            if best.is_none_or(|(_, bd)| d < bd) {
++                best = Some(((row, col), d));
++            }
++        }
++    }
++    best.map(|(cell, _)| cell)
++}
++
++/// The positions after dragging `moving` so that the icon grabbed at `anchor`
++/// lands on `target`.
++///
++/// `shown` is every icon on screen with the cell it is drawn in. All of them are
++/// pinned where they are, so dragging one icon does not reshuffle the others
++/// later. Each dragged icon keeps its offset from the grabbed one, clamped to
++/// the screen; if that cell is taken it goes to the nearest free one.
++pub fn moved(
++    saved: &Positions,
++    shown: &[(String, (usize, usize))],
++    moving: &BTreeSet<String>,
++    anchor: (usize, usize),
++    target: (usize, usize),
++    rows: usize,
++    cols: usize,
++) -> Positions {
++    let rows = rows.max(1);
++    let cols = cols.max(1);
++    let mut out = saved.clone();
++    let mut taken = BTreeSet::new();
++    for (name, cell) in shown {
++        if cell.0 < rows && cell.1 < cols && !moving.contains(name) {
++            out.insert(name.clone(), (cell.0 as u32, cell.1 as u32));
++            taken.insert(*cell);
++        }
++    }
++    let shift = |v: usize, from: usize, to: usize, max: usize| -> usize {
++        (v as isize + to as isize - from as isize).clamp(0, max as isize - 1) as usize
++    };
++    let mut dragged: Vec<&(String, (usize, usize))> =
++        shown.iter().filter(|(name, _)| moving.contains(name)).collect();
++    // The grabbed icon first, then the others outward from it, so the icon under
++    // the pointer always gets the cell under the pointer.
++    dragged.sort_by_key(|(_, cell)| {
++        (
++            cell.0.abs_diff(anchor.0).pow(2) + cell.1.abs_diff(anchor.1).pow(2),
++            cell.1,
++            cell.0,
++        )
++    });
++    for (name, cell) in dragged {
++        let want = (
++            shift(cell.0, anchor.0, target.0, rows),
++            shift(cell.1, anchor.1, target.1, cols),
++        );
++        match nearest_free(want, &taken, rows, cols) {
++            Some(cell) => {
++                taken.insert(cell);
++                out.insert(name.clone(), (cell.0 as u32, cell.1 as u32));
++            }
++            // Screen full: let it flow to the next free cell.
++            None => {
++                out.remove(name);
++            }
++        }
++    }
++    prune(&mut out, shown);
++    out
++}
++
++/// Claim cells for files dropped onto the desktop from elsewhere, starting at
++/// `target`, before they exist. Names already shown keep their cells.
++pub fn dropped(
++    saved: &Positions,
++    shown: &[(String, (usize, usize))],
++    names: &[String],
++    target: (usize, usize),
++    rows: usize,
++    cols: usize,
++) -> Positions {
++    let rows = rows.max(1);
++    let cols = cols.max(1);
++    let mut out = saved.clone();
++    let mut taken: BTreeSet<(usize, usize)> = shown.iter().map(|(_, cell)| *cell).collect();
++    let target = (target.0.min(rows - 1), target.1.min(cols - 1));
++    for name in names {
++        if shown.iter().any(|(n, _)| n == name) {
++            continue;
++        }
++        if let Some(cell) = nearest_free(target, &taken, rows, cols) {
++            taken.insert(cell);
++            out.insert(name.clone(), (cell.0 as u32, cell.1 as u32));
++        }
++    }
++    out
++}
++
++/// The grid cell whose centre is nearest to a point in grid coordinates.
++pub fn cell_at(
++    x: f32,
++    y: f32,
++    pad: f32,
++    item: (f32, f32),
++    spacing: (f32, f32),
++    rows: usize,
++    cols: usize,
++) -> (usize, usize) {
++    let index = |v: f32, size: f32, gap: f32, max: usize| -> usize {
++        let pitch = size + gap;
++        if pitch <= 0.0 {
++            return 0;
++        }
++        (((v - pad - size / 2.0) / pitch).round().max(0.0) as usize).min(max.max(1) - 1)
++    };
++    (
++        index(y, item.1, spacing.1, rows),
++        index(x, item.0, spacing.0, cols),
++    )
++}
++
++fn prune(out: &mut Positions, shown: &[(String, (usize, usize))]) {
++    if out.len() > PRUNE_ABOVE {
++        out.retain(|name, _| shown.iter().any(|(n, _)| n == name));
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn pos(entries: &[(&str, (u32, u32))]) -> Positions {
++        entries.iter().map(|(k, v)| (k.to_string(), *v)).collect()
++    }
++
++    #[test]
++    fn nothing_saved_is_upstreams_column_flow() {
++        let got = cells(&["a", "b", "c", "d", "e"], &Positions::new(), 2, 2);
++        assert_eq!(got, vec![(0, 0), (1, 0), (0, 1), (1, 1), (2, 0)]);
++    }
++
++    #[test]
++    fn saved_cells_win_and_the_rest_flow_around_them() {
++        let saved = pos(&[("c", (0, 0)), ("a", (1, 2))]);
++        let got = cells(&["a", "b", "c", "d"], &saved, 3, 3);
++        assert_eq!(got, vec![(1, 2), (1, 0), (0, 0), (2, 0)]);
++    }
++
++    #[test]
++    fn a_cell_off_the_screen_is_ignored_but_kept() {
++        let saved = pos(&[("a", (5, 5))]);
++        assert_eq!(cells(&["a"], &saved, 2, 2), vec![(0, 0)]);
++        assert_eq!(cells(&["a"], &saved, 6, 6), vec![(5, 5)]);
++    }
++
++    #[test]
++    fn two_icons_claiming_one_cell_do_not_overlap() {
++        let saved = pos(&[("a", (0, 1)), ("b", (0, 1))]);
++        let got = cells(&["a", "b"], &saved, 2, 2);
++        assert_eq!(got[0], (0, 1));
++        assert_ne!(got[1], (0, 1));
++    }
++
++    #[test]
++    fn moving_one_icon_pins_the_others() {
++        let shown = vec![
++            ("a".to_string(), (0, 0)),
++            ("b".to_string(), (1, 0)),
++            ("c".to_string(), (2, 0)),
++        ];
++        let moving = BTreeSet::from(["a".to_string()]);
++        let got = moved(&Positions::new(), &shown, &moving, (0, 0), (2, 4), 3, 5);
++        assert_eq!(got, pos(&[("a", (2, 4)), ("b", (1, 0)), ("c", (2, 0))]));
++    }
++
++    #[test]
++    fn a_group_keeps_its_shape_and_clamps_to_the_screen() {
++        let shown = vec![("a".to_string(), (0, 0)), ("b".to_string(), (1, 1))];
++        let moving = BTreeSet::from(["a".to_string(), "b".to_string()]);
++        // Grab b, drop it in the bottom-right corner: a stays one up and left.
++        let got = moved(&Positions::new(), &shown, &moving, (1, 1), (3, 3), 4, 4);
++        assert_eq!(got, pos(&[("a", (2, 2)), ("b", (3, 3))]));
++        // Drop a past the edge: clamped, never off the screen.
++        let got = moved(&Positions::new(), &shown, &moving, (0, 0), (3, 3), 4, 4);
++        assert_eq!(got["a"], (3, 3));
++        assert!(got["b"].0 < 4 && got["b"].1 < 4 && got["b"] != got["a"]);
++    }
++
++    #[test]
++    fn dropping_on_an_occupied_cell_takes_the_nearest_free_one() {
++        let shown = vec![("a".to_string(), (0, 0)), ("b".to_string(), (2, 2))];
++        let moving = BTreeSet::from(["a".to_string()]);
++        let got = moved(&Positions::new(), &shown, &moving, (0, 0), (2, 2), 5, 5);
++        assert_eq!(got["b"], (2, 2));
++        let a = got["a"];
++        assert_ne!(a, (2, 2));
++        assert_eq!(a.0.abs_diff(2) + a.1.abs_diff(2), 1, "next to the target: {a:?}");
++    }
++
++    #[test]
++    fn the_grabbed_icon_gets_the_cell_under_the_pointer() {
++        // Two icons whose shifted cells collide at the edge: the grabbed one wins.
++        let shown = vec![("a".to_string(), (0, 0)), ("b".to_string(), (0, 1))];
++        let moving = BTreeSet::from(["a".to_string(), "b".to_string()]);
++        let got = moved(&Positions::new(), &shown, &moving, (0, 0), (0, 3), 1, 4);
++        assert_eq!(got["a"], (0, 3));
++        assert_eq!(got["b"], (0, 2));
++    }
++
++    #[test]
++    fn files_dropped_from_elsewhere_claim_cells_at_the_drop_point() {
++        let shown = vec![("a".to_string(), (1, 1))];
++        let names = vec!["x".to_string(), "y".to_string(), "a".to_string()];
++        let got = dropped(&Positions::new(), &shown, &names, (1, 1), 3, 3);
++        assert!(!got.contains_key("a"), "a file already shown keeps its cell");
++        assert_ne!(got["x"], (1, 1));
++        assert_ne!(got["x"], got["y"]);
++        assert_eq!(got["x"].0.abs_diff(1) + got["x"].1.abs_diff(1), 1);
++    }
++
++    #[test]
++    fn a_point_maps_to_the_nearest_cell_centre() {
++        // 100x160 cells, 20 px gaps, 8 px padding.
++        let at = |x, y| cell_at(x, y, 8.0, (100.0, 160.0), (20.0, 20.0), 4, 6);
++        assert_eq!(at(10.0, 10.0), (0, 0));
++        assert_eq!(at(8.0 + 120.0 + 50.0, 8.0 + 80.0), (0, 1));
++        assert_eq!(at(8.0 + 2.0 * 120.0 + 50.0, 8.0 + 180.0 + 80.0), (1, 2));
++        assert_eq!(at(1e6, 1e6), (3, 5), "clamped to the screen");
++        assert_eq!(at(-50.0, -50.0), (0, 0));
++    }
++
++    #[test]
++    fn pruning_waits_for_a_large_map() {
++        let shown = vec![("a".to_string(), (0, 0))];
++        let saved = pos(&[("gone", (1, 1))]);
++        let got = moved(&saved, &shown, &BTreeSet::new(), (0, 0), (0, 0), 3, 3);
++        assert!(got.contains_key("gone"));
++    }
++}

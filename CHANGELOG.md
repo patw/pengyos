@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: desktop icons can be dragged anywhere on the grid (2026-11-16)
+- The COSMIC desktop laid icons out down each column in sort order, with no
+  setting to move one. Dragging icons now snaps them to the grid cell under the
+  pointer (a group keeps its shape; a taken cell gives way to the nearest free
+  one), every other icon stays where it was, and new files fill the first free
+  cell. Files dropped from a Files window land where they were dropped.
+- Positions are kept per monitor, by file name. "Sort by" in the desktop's
+  right-click menu re-arranges everything. Arrow keys still stop at an empty
+  cell.
+- Carried patch `cosmic-files/0003-desktop-icons-stay-where-they-are-dragged.patch`.
+
 ### Fixed: game shortcut icons were blank until the next login (2026-11-16)
 - Braid's Steam shortcut on beholaptop (26.11.20) launched but showed no icon.
   `pengyos-sandbox-shortcuts` had copied the icon into
