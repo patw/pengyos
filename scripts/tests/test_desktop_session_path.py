@@ -118,3 +118,15 @@ def test_the_session_and_the_comfort_profile_agree_on_the_dirs():
 
     assert session_dirs == profile_dirs, (
         f"start-cosmic prepends {session_dirs}, the comfort profile {profile_dirs}")
+
+
+def test_creates_the_user_icon_theme_folder_before_the_session(tmp_path):
+    """COSMIC lists icon theme folders once per process, at startup.
+
+    A ~/.local/share/icons/hicolor made later (sandbox-shortcuts copying a
+    Steam game's icon) is never searched by the already-running desktop, so the
+    shortcut showed a blank icon until the next login (2026-11-16). The folder
+    must exist before cosmic-session starts.
+    """
+    home, _ = session_path(tmp_path, "/usr/bin:/bin")
+    assert (home / ".local/share/icons/hicolor").is_dir()
