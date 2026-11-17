@@ -538,6 +538,11 @@ BR2_PACKAGE_DISTROBOX=y
 # util-linux's standard tools (rev — distrobox-enter needs it —, findmnt, lsblk,
 # a blkid that knows btrfs, …).
 BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+# rfkill (2026-11-17; was Desktop-only): a laptop-server (US-SRV-12) whose Wi-Fi
+# is soft-blocked (an Fn key, a block that sticks after suspend or a firmware
+# toggle) is unreachable, and without `rfkill unblock wifi` the only fix was a
+# keyboard at the machine. util-linux is already built here; this is its rfkill.
+BR2_PACKAGE_UTIL_LINUX_RFKILL=y
 # curl: every "install X" line (rustup, uv, …) and distrobox itself expect it;
 # Core selects it (with GNU wget) since 26.11.0.
 # dig, host, nslookup: BIND's tools, no server (Core has a stub pointing at

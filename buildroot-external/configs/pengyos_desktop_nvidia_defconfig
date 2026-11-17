@@ -538,6 +538,11 @@ BR2_PACKAGE_DISTROBOX=y
 # util-linux's standard tools (rev — distrobox-enter needs it —, findmnt, lsblk,
 # a blkid that knows btrfs, …).
 BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+# rfkill (2026-11-17; was Desktop-only): a laptop-server (US-SRV-12) whose Wi-Fi
+# is soft-blocked (an Fn key, a block that sticks after suspend or a firmware
+# toggle) is unreachable, and without `rfkill unblock wifi` the only fix was a
+# keyboard at the machine. util-linux is already built here; this is its rfkill.
+BR2_PACKAGE_UTIL_LINUX_RFKILL=y
 # curl: every "install X" line (rustup, uv, …) and distrobox itself expect it;
 # Core selects it (with GNU wget) since 26.11.0.
 # dig, host, nslookup: BIND's tools, no server (Core has a stub pointing at
@@ -1229,8 +1234,9 @@ BR2_PACKAGE_V4L2LOOPBACK=y
 # --- Programs COSMIC runs by name (2026-10-11) ----------------------------------
 # A sweep of every Command::new("...") in the pinned COSMIC sources against the
 # image found these missing. Each one turned a COSMIC feature into a no-op:
-# - rfkill: the Bluetooth applet and Settings block/unblock the adapter with it;
-#   after airplane mode the toggle could not bring Bluetooth back.
+# - rfkill (server.config since 2026-11-17): the Bluetooth applet and Settings
+#   block/unblock the adapter with it; after airplane mode the toggle could not
+#   bring Bluetooth back.
 # - pactl: cosmic-settings-daemon sends Mono Audio to pipewire-pulse and sets
 #   virtual sinks/sources as default with it; PulseAudio-protocol apps (every
 #   Flatpak browser, Discord, Spotify) stayed stereo. PulseAudio is built
@@ -1238,7 +1244,6 @@ BR2_PACKAGE_V4L2LOOPBACK=y
 #   the socket): libpulse and pactl.
 # - qalc (libqalculate, our package): the launcher's "= 2+2" calculator.
 # - notify-send (libnotify, our package): notifications from scripts.
-BR2_PACKAGE_UTIL_LINUX_RFKILL=y
 BR2_PACKAGE_PULSEAUDIO=y
 BR2_PACKAGE_LIBQALCULATE=y
 BR2_PACKAGE_LIBNOTIFY=y

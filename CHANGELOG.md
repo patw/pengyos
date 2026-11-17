@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: `rfkill` on the Server (2026-11-17)
+- A laptop-server (US-SRV-12) whose Wi-Fi radio is soft-blocked (an Fn key, a
+  block that sticks after suspend) drops off the network, and the Server had no
+  `rfkill` to undo it: the only remedy was a keyboard at the machine. util-linux's
+  rfkill moves from the Desktop layer to the Server layer (one symbol; the
+  Desktop inherits it).
+- The Server's per-interface Wi-Fi unit (`wpa_supplicant-nl80211@`) now runs
+  `rfkill unblock wifi` first. `rfkill` over SSH cannot help a box whose only
+  link is the blocked radio, and ThinkPad/IdeaPad keep a soft block across
+  reboots; now a power cycle brings it back. Hard (switch) blocks stay.
+
 ### Added: alerts from a headless Server, over ntfy or mail (2026-11-17)
 - A Server could not tell anyone anything was wrong. There is no mail transport
   in any edition, so smartd's warnings about a failing disk went to the journal

@@ -15,6 +15,7 @@ exec-any  smartctl                                 # SMART disk health — BR2_P
 exec-any  nvme                                     # NVMe health log — BR2_PACKAGE_NVME
 exec-any  wg                                       # WireGuard keys and status — BR2_PACKAGE_WIREGUARD_TOOLS
 exec-any  ethtool                                  # NIC link, offloads, Wake-on-LAN — BR2_PACKAGE_ETHTOOL
+exec-any  rfkill                                   # unblock a soft-blocked Wi-Fi radio over SSH (US-SRV-12) — BR2_PACKAGE_UTIL_LINUX_RFKILL (server layer)
 exec-any  nvtop                                    # GPU monitor (NVIDIA, AMD, Intel) — BR2_PACKAGE_NVTOP
 exec-any  fwupdmgr                                 # firmware + dbx updates on a headless box — BR2_PACKAGE_FWUPD (server layer)
 exists    usr/lib/systemd/system/fwupd-refresh.timer   # daily LVFS metadata — BR2_PACKAGE_FWUPD
