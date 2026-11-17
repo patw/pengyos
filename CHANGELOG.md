@@ -17,6 +17,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: firmware updates on the Server (2026-11-17)
+- The Server had no way to update firmware: fwupd was Desktop-only, so a
+  headless box could not get a UEFI capsule, an SSD/NVMe update or a Secure Boot
+  dbx revocation (the class the fleet already needed once, for CVE-2026-8863).
+  fwupd and fwupd-efi move to the Server layer (the Desktop inherits them and
+  keeps its Firmware app): `sudo fwupdmgr get-updates` / `update`, metadata
+  refreshed daily by `fwupd-refresh.timer`, and the count of pending updates in
+  the SSH login message.
+- GnuTLS is now set on the Server: without it libjcat cannot check the PKCS#7
+  signature on LVFS metadata. The Desktop had it only through samba4.
+- fwupd finds the ESP through UDisks, which the Server does not have; a
+  fwupd.service drop-in names `/efi`, where the installer mounts it.
+- `board/server/features-required.txt` fails the build if fwupdmgr, the refresh
+  timer, the capsule loader or libjcat's PKCS#7 support go missing.
+
 ### Added: game launchers' desktop shortcuts show up on the desktop (2026-11-15)
 - A user reported "Create desktop shortcut" in Steam did nothing. A Flatpak app
   has its own home and usually no ~/Desktop, so its shortcuts (and "Add to
