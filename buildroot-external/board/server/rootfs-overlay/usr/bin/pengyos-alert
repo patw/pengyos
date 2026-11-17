@@ -273,7 +273,8 @@ def deliver(root: Path, title: str, body: str, priority: str, key: str | None,
             print(f"{PROG}: not sent: '{key}' was alerted {ago} min ago "
                   f"(REPEAT_HOURS={window / 3600:g})")
             return 0
-    journal(root, priority, f"{title}: {body.splitlines()[0] if body else ''}")
+    first = body.splitlines()[0] if body else ""
+    journal(root, priority, title if not first or first in title else f"{title}: {first}")
     names = transports(cfg)
     if not names:
         print(f"{PROG}: no transport configured in /{CONF}: written to the journal only")

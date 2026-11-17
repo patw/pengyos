@@ -192,6 +192,7 @@ def test_send_without_transport_goes_to_the_journal(root):
     assert r.returncode == 0, r.stderr
     assert "journal only" in r.stdout
     assert "-t pengyos-alert" in journal(root) and "backup disk missing" in journal(root)
+    assert journal(root).count("backup disk missing") == 1  # the title is not repeated
 
 
 def test_test_with_nothing_configured_fails(root):
