@@ -78,11 +78,36 @@ struct Display {
     size: DesktopSize,
     frames: FrameRx,
     cursor: CursorRx,
+    viewers: Viewers,
 }
 
 struct Updates {
     frames: FrameRx,
     cursor: CursorRx,
+    _viewer: Viewer,
+}
+
+/// How many RDP clients are being sent frames. The screen is captured only while
+/// this is above zero: an idle server kept a 1080p capture running around the clock
+/// (behotv, 2026-11-17: ~5% of a core in this process alone, plus the portal and the
+/// compositor producing frames for nobody).
+type Viewers = Arc<watch::Sender<usize>>;
+
+/// One connected client's share of [`Viewers`]; ironrdp holds the `Updates` that
+/// owns it for exactly as long as the client loop runs.
+struct Viewer(Viewers);
+
+impl Viewer {
+    fn new(viewers: &Viewers) -> Viewer {
+        viewers.send_modify(|n| *n += 1);
+        Viewer(viewers.clone())
+    }
+}
+
+impl Drop for Viewer {
+    fn drop(&mut self) {
+        self.0.send_modify(|n| *n = n.saturating_sub(1));
+    }
 }
 
 #[async_trait::async_trait]
@@ -97,7 +122,7 @@ impl RdpServerDisplay for Display {
         // Hand the current frame and cursor out immediately on (re)connect.
         frames.mark_changed();
         cursor.mark_changed();
-        Ok(Box::new(Updates { frames, cursor }))
+        Ok(Box::new(Updates { frames, cursor, _viewer: Viewer::new(&self.viewers) }))
     }
 }
 
@@ -331,24 +356,30 @@ fn cursor_meta_param() -> Result<Vec<u8>> {
         .into_inner())
 }
 
+/// Messages from the supervisor to a session's PipeWire thread.
+enum Ctl {
+    /// Capture (a client is watching) or pause (nobody is).
+    Active(bool),
+    /// The session is being replaced: stop the loop.
+    Quit,
+}
+
 fn run_pipewire(
     fd: OwnedFd,
     node: u32,
+    active: bool,
     tx: Arc<watch::Sender<Option<Arc<Frame>>>>,
     cursor_tx: Arc<watch::Sender<Option<Arc<Cursor>>>>,
-    quit: pw::channel::Receiver<()>,
+    ctl: pw::channel::Receiver<Ctl>,
     wake: mpsc::UnboundedSender<Wake>,
 ) -> Result<()> {
     let meta_param = cursor_meta_param()?;
     let mainloop = pw::main_loop::MainLoopRc::new(None)?;
     let context = pw::context::ContextRc::new(&mainloop, None)?;
     let core = context.connect_fd_rc(fd, None)?;
-    // The supervisor stops this loop when it replaces the portal session.
-    let ml = mainloop.clone();
-    let _quit = quit.attach(mainloop.loop_(), move |()| ml.quit());
 
-    let stream = pw::stream::StreamBox::new(
-        &core,
+    let stream = pw::stream::StreamRc::new(
+        core,
         "pengyos-remote",
         pw::properties::properties! {
             *pw::keys::MEDIA_TYPE => "Video",
@@ -488,12 +519,27 @@ fn run_pipewire(
     .into_inner();
     let mut params = [spa::pod::Pod::from_bytes(&values).context("pod bytes")?];
 
-    stream.connect(
-        spa::utils::Direction::Input,
-        Some(node),
-        pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS,
-        &mut params,
-    )?;
+    // An inactive stream is linked and negotiated but paused, so the portal's
+    // screencast node idles and nothing is captured until a client connects.
+    let mut flags = pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS;
+    if !active {
+        flags |= pw::stream::StreamFlags::INACTIVE;
+    }
+    stream.connect(spa::utils::Direction::Input, Some(node), flags, &mut params)?;
+
+    // The supervisor pauses and resumes the capture, and stops this loop when it
+    // replaces the portal session.
+    let (ml, weak) = (mainloop.clone(), stream.downgrade());
+    let _ctl = ctl.attach(mainloop.loop_(), move |msg| match msg {
+        Ctl::Quit => ml.quit(),
+        Ctl::Active(on) => {
+            if let Some(stream) = weak.upgrade() {
+                if let Err(e) = stream.set_active(on) {
+                    eprintln!("pipewire: set_active({on}): {e}");
+                }
+            }
+        }
+    });
     mainloop.run();
     eprintln!("pipewire: stream stopped");
     Ok(())
@@ -585,7 +631,7 @@ struct Live {
     session: Arc<Session<RemoteDesktop>>,
     node: u32,
     size: (i32, i32),
-    pw_quit: pw::channel::Sender<()>,
+    pw_ctl: pw::channel::Sender<Ctl>,
     closed_watch: tokio::task::JoinHandle<()>,
 }
 
@@ -599,17 +645,18 @@ struct Portal {
 }
 
 impl Portal {
-    async fn start(&self) -> Result<Live> {
+    /// `active`: capture from the start (a client is already watching).
+    async fn start(&self, active: bool) -> Result<Live> {
         // A saved restore token skips the consent dialog after the first run.
         let token = std::fs::read_to_string(&self.token_path).ok();
         let session = self.rd.create_session(Default::default()).await?;
         match self.start_on(&session, token.as_deref()).await {
             Ok((node, size, fd)) => {
-                let (pw_quit, quit_rx) = pw::channel::channel();
+                let (pw_ctl, ctl_rx) = pw::channel::channel();
                 let (frames, cursor, wake) =
                     (self.frames.clone(), self.cursor.clone(), self.wake.clone());
                 std::thread::spawn(move || {
-                    if let Err(e) = run_pipewire(fd, node, frames, cursor, quit_rx, wake.clone()) {
+                    if let Err(e) = run_pipewire(fd, node, active, frames, cursor, ctl_rx, wake.clone()) {
                         eprintln!("pipewire: {e:#}");
                         let _ = wake.send(Wake::Stream);
                     }
@@ -627,7 +674,7 @@ impl Portal {
                         }
                     })
                 };
-                Ok(Live { session, node, size, pw_quit, closed_watch })
+                Ok(Live { session, node, size, pw_ctl, closed_watch })
             }
             Err(e) => {
                 let _ = session.close().await;
@@ -679,7 +726,7 @@ impl Portal {
 async fn stop(live: Live) {
     // Our own Close must not read as the portal closing the next session.
     live.closed_watch.abort();
-    let _ = live.pw_quit.send(());
+    let _ = live.pw_ctl.send(Ctl::Quit);
     if let Err(e) = live.session.close().await {
         eprintln!("portal: closing the session: {e}");
     }
@@ -689,6 +736,39 @@ type Current = Arc<tokio::sync::RwLock<Option<Live>>>;
 
 const SETTLE: std::time::Duration = std::time::Duration::from_secs(2);
 const STALL: std::time::Duration = std::time::Duration::from_secs(2);
+/// A paused capture gets this long to start streaming when a client connects.
+const RESUME: std::time::Duration = std::time::Duration::from_secs(5);
+/// The capture keeps running this long after the last client leaves, so a
+/// reconnect or a resize reactivation does not pause and resume it.
+const LINGER: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Turn the viewer count into "capture or not" (with [`LINGER`]) and pass each
+/// change to the current session's PipeWire thread.
+async fn follow_viewers(
+    mut viewers: watch::Receiver<usize>,
+    watching: watch::Sender<bool>,
+    current: Current,
+) {
+    loop {
+        let n = *viewers.borrow_and_update();
+        if n == 0 && *watching.borrow() {
+            // Wait out the linger unless a client comes back first.
+            if tokio::time::timeout(LINGER, viewers.changed()).await.is_ok() {
+                continue;
+            }
+        }
+        let want = *viewers.borrow() > 0;
+        if watching.send_if_modified(|w| std::mem::replace(w, want) != want) {
+            eprintln!("rdp: {} client(s) watching: capture {}", *viewers.borrow(), if want { "on" } else { "paused" });
+            if let Some(live) = current.read().await.as_ref() {
+                let _ = live.pw_ctl.send(Ctl::Active(want));
+            }
+        }
+        if viewers.changed().await.is_err() {
+            return;
+        }
+    }
+}
 
 /// How the cursor reaches the client: as RDP pointer metadata by default, so the
 /// client draws it locally. RDP_CURSOR=embedded paints it into the frames instead
@@ -708,6 +788,7 @@ async fn supervise(
     portal: Portal,
     current: Current,
     mut outputs: watch::Receiver<Outputs>,
+    mut watching: watch::Receiver<bool>,
     mut wake: mpsc::UnboundedReceiver<Wake>,
     first_size: tokio::sync::oneshot::Sender<(i32, i32)>,
 ) {
@@ -724,7 +805,8 @@ async fn supervise(
             tokio::time::sleep(SETTLE).await;
             continue;
         }
-        let live = match portal.start().await {
+        let on = *watching.borrow();
+        let live = match portal.start(on).await {
             Ok(live) => live,
             Err(e) => {
                 eprintln!("portal: {e:#}; retrying in 5 s");
@@ -735,12 +817,20 @@ async fn supervise(
         if let Some(tx) = first_size.take() {
             let _ = tx.send(live.size);
         }
+        // A client may have come or gone while the session started.
+        let on = *watching.borrow_and_update();
+        let _ = live.pw_ctl.send(Ctl::Active(on));
         *current.write().await = Some(live);
         outputs.borrow_and_update();
 
         // Paused for longer than STALL with no way back: the backend is gone (it panicked
         // on behobasement 2026-11-02 with the stream left Paused and no Closed signal).
-        let mut stalled: Option<tokio::time::Instant> = None;
+        // Only while a client is watching: with nobody watching the pause is ours. A
+        // backend that died while idle shows when the next client connects and the
+        // capture does not start within RESUME.
+        let mut streaming = false;
+        let mut stalled: Option<tokio::time::Instant> =
+            on.then(|| tokio::time::Instant::now() + RESUME);
         let mut displays_changed = false;
         let reason = loop {
             let deadline = stalled.unwrap_or_else(|| tokio::time::Instant::now() + STALL);
@@ -750,11 +840,28 @@ async fn supervise(
                     break "the displays changed".to_string();
                 }
                 _ = tokio::time::sleep_until(deadline), if stalled.is_some() => {
-                    break format!("the stream stopped for {} s", STALL.as_secs());
+                    break "the capture stopped (or never started) with a client watching".to_string();
+                }
+                _ = watching.changed() => {
+                    stalled = if !*watching.borrow_and_update() {
+                        None
+                    } else if streaming {
+                        stalled
+                    } else {
+                        Some(tokio::time::Instant::now() + RESUME)
+                    };
                 }
                 w = wake.recv() => match w {
-                    Some(Wake::Paused) => stalled = Some(tokio::time::Instant::now() + STALL),
-                    Some(Wake::Resumed) => stalled = None,
+                    Some(Wake::Paused) => {
+                        streaming = false;
+                        if *watching.borrow() {
+                            stalled = Some(tokio::time::Instant::now() + STALL);
+                        }
+                    }
+                    Some(Wake::Resumed) => {
+                        streaming = true;
+                        stalled = None;
+                    }
                     Some(Wake::Closed) => break "the portal closed the session".to_string(),
                     w => break format!("{w:?} failed"),
                 },
@@ -853,7 +960,11 @@ async fn main() -> Result<()> {
         wake: wake_tx.clone(),
     };
     let (size_tx, size_rx) = tokio::sync::oneshot::channel();
-    tokio::spawn(supervise(portal, current.clone(), outputs_rx, wake_rx, size_tx));
+    let (viewers_tx, viewers_rx) = watch::channel(0usize);
+    let viewers: Viewers = Arc::new(viewers_tx);
+    let (watching_tx, watching_rx) = watch::channel(false);
+    tokio::spawn(follow_viewers(viewers_rx, watching_tx, current.clone()));
+    tokio::spawn(supervise(portal, current.clone(), outputs_rx, watching_rx, wake_rx, size_tx));
 
     // Stopping the server closes its portal session; a killed one left the portal
     // capturing for nobody, and the next session on that portal never streamed.
@@ -937,6 +1048,7 @@ async fn main() -> Result<()> {
             size: DesktopSize { width: sw as u16, height: sh as u16 },
             frames: frame_rx,
             cursor: cursor_rx,
+            viewers,
         })
         // Activate at the client's requested size first; the vendored server then reactivates
         // at the real size, which is what makes FreeRDP clients (Remmina) resize their surface.

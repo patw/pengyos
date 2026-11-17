@@ -7,6 +7,21 @@ and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
 ## [Unreleased]
 
+### Fixed — no screen capture while nobody is connected (2026-11-17)
+- **The server captured the screen around the clock.** It started the portal
+  session at login and kept its PipeWire stream running, so cosmic-comp and the
+  portal produced 1080p frames for nobody and this process copied every one:
+  ~5% of a core here on behotv with no client in 25 hours, and a live video
+  link in the graph at all times. The stream now connects inactive and runs only
+  while a client is connected (the session stays, so there is still no consent
+  dialog and no delay beyond the first frame); it pauses 10 s after the last
+  client leaves. Measured on behotv: this process 4.7% -> 0% idle; two FreeRDP
+  connections resumed and paused cleanly.
+- The stall check (a paused stream means a dead portal backend) now applies only
+  while a client is watching, since an idle pause is ours. A backend that died
+  while idle is caught when the next client connects and the capture does not
+  start within 5 s, and the session is replaced.
+
 ### Fixed — remote desktop survives the monitor being switched off or blanking
 - **A monitor that went away killed the session silently.** The portal session
   shares one output object; when the monitor is switched off, or goes into
