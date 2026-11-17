@@ -219,9 +219,9 @@ podman.
 |---|---|---|
 | Session | **COSMIC** (compositor, panel, launcher, settings, files, terminal, editor, store, player, viewer) behind **greetd + cosmic-greeter** | auto-login opt-in |
 | Graphics | Mesa (iris, radeonsi, virgl, llvmpipe; ANV/RADV Vulkan), libglvnd, Xwayland | |
-| Media | PipeWire + WirePlumber, GStreamer + FFmpeg, AAC/aptX/LDAC Bluetooth codecs, SOF firmware; RealtimeKit (the Realtime portal); v4l2loopback (OBS's virtual camera, loaded on demand) | |
+| Media | PipeWire + WirePlumber, GStreamer + FFmpeg, AAC/aptX/LDAC Bluetooth codecs, SOF firmware; RealtimeKit (the Realtime portal); v4l2loopback (OBS's virtual camera, loaded on demand); photos: HEIC (libde265, in the viewer's own libheif), AVIF (dav1d), JPEG XL (jxl-oxide), with HEIC/AVIF thumbnails in Files through FFmpeg | no host JACK server or jack2: Flatpak audio apps (Bitwig, Carla, …) get JACK from their runtime's libjack, which is PipeWire's and talks to the host PipeWire (2026-11-17) |
 | Hardware | NetworkManager (+ Wi-Fi, OpenVPN, WireGuard, ModemManager), BlueZ, UPower, power-profiles-daemon, thermald, fwupd, bolt, switcheroo-control, udisks; GeoClue (the Location portal; Wi-Fi lookups in BeaconDB) | |
-| Printing & scanning | CUPS + cups-filters, Gutenprint, HPLIP, ipp-usb, SANE + airscan, Avahi/mDNS | driverless first |
+| Printing & scanning | CUPS + cups-filters, Gutenprint, HPLIP, ipp-usb, SANE + airscan, Avahi/mDNS | driverless first; the scanning app is Document Scanner (`org.gnome.SimpleScan`) from Flathub, which brings its own SANE + airscan (verified on a network Brother, 2026-11-17) |
 | Apps | **Flatpak + Flathub** through COSMIC Store; Firefox installed from Flathub on first boot (once online); app updates announced by the PengyOS Updates notifier | Lane 3 (§2.5) |
 | Toolkits | GTK 3, Qt 6 (with the cutecosmic theme bridge), libcosmic | for third-party apps |
 | Boot | Plymouth splash with the PengyOS theme | |

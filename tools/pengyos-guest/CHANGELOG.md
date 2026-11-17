@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — dev box: adb and fastboot (2026-11-17)
+- **`dev.toml`** installs Ubuntu's `adb` and `fastboot` and verifies both, so
+  US-DSK-10's `adb devices` works from `dx adb devices` with no root. The image
+  does not ship them: Buildroot's android-tools is the 2013 Android 4.2 build.
+
 ### Changed — `list` marks GPU guests (2026-11-10)
 - A guest with `nvidia = true` ends its `list` description with `[GPU]`. The
   image's `dx` card prints `pengyos-guest list`, so the cuda box is named where

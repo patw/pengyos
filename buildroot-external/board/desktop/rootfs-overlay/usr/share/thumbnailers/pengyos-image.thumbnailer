@@ -1,0 +1,4 @@
+[Thumbnailer Entry]
+TryExec=ffmpeg
+Exec=/usr/libexec/pengyos/image-thumbnailer %s %i %o
+MimeType=image/heic;image/heif;image/avif;image/heic-sequence;image/heif-sequence;

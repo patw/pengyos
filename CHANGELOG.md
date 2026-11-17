@@ -17,6 +17,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: iPhone photos (HEIC) open, and HEIC/AVIF get thumbnails (2026-11-17)
+- The image viewer claimed HEIC but could not decode it: its built-in libheif
+  found no HEVC decoder at build time, so every iPhone photo showed "No decoder
+  for this image format". The cosmic package now builds after libde265, which
+  libheif picks up. AVIF and JPEG XL already opened (dav1d, jxl-oxide).
+- Files showed a plain icon for HEIC, HEIF and AVIF photos: COSMIC Files decodes
+  neither itself. A new thumbnailer (`/usr/libexec/pengyos/image-thumbnailer`)
+  renders them with FFmpeg, including the tile grids phones write.
+- `features-required.txt` checks both, so they cannot silently vanish again.
+
+### Changed: adb and fastboot in the dev box (2026-11-17)
+- `pengyos-guest`'s dev box installs Ubuntu's adb and fastboot (US-DSK-10:
+  `dx adb devices`). The image does not ship them; Buildroot's android-tools is
+  the 2013 Android 4.2 build.
+
 ### Added: `rfkill` on the Server (2026-11-17)
 - A laptop-server (US-SRV-12) whose Wi-Fi radio is soft-blocked (an Fn key, a
   block that sticks after suspend) drops off the network, and the Server had no
