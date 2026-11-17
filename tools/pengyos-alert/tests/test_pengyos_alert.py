@@ -396,7 +396,7 @@ def test_smartd_conf_hook_exists_and_is_executable():
     hook = line.split("-M exec", 1)[1].split()[0]
     path = OVERLAY / hook.lstrip("/")
     assert path.is_file() and os.access(path, os.X_OK)
-    assert "pengyos-alert smartd" in path.read_text()
+    assert "pengyos-alert smartd >/dev/null" in path.read_text()  # smartd flags any stdout
     assert os.access(SCRIPT, os.X_OK)
 
 
