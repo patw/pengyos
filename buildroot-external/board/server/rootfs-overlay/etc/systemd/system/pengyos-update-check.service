@@ -5,6 +5,8 @@
 # message. Installing is always the user's choice.
 [Unit]
 Description=Check for PengyOS updates
+# A failure sends an alert (/etc/pengyos/alert.conf), not only a journal line.
+OnFailure=pengyos-alert@%n.service
 Wants=network-online.target
 After=network-online.target pengyos-update-confirm.service
 ConditionKernelCommandLine=pengyos.data

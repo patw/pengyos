@@ -39,6 +39,8 @@ exec-any  ksmbd.mountd                             # the SMB3 server's user/shar
 exec-any  ksmbd.control                            # reload/shutdown, ksmbd.service's ExecReload — BR2_PACKAGE_KSMBD_TOOLS
 exists    usr/lib/systemd/system/ksmbd.service     # pengyos-shares enables it — BR2_PACKAGE_KSMBD_TOOLS (systemd unit dir)
 exec      usr/bin/pengyos-shares                   # board/server overlay
+exec      usr/bin/pengyos-alert                    # alerts over ntfy/mail (US-SRV-3/4) — board/server overlay
+contains  etc/smartd.conf  pengyos-alert-smartd    # smartd's problems reach pengyos-alert — overlay replaces smartmontools' file
 exec      usr/lib/systemd/systemd-logind           # power button; sessions — BR2_PACKAGE_SYSTEMD_LOGIND (core layer)
 exec      usr/lib/polkit-1/polkitd                 # logind asks it for non-root callers — BR2_PACKAGE_POLKIT (server layer)
 contains  usr/share/polkit-1/actions/org.freedesktop.login1.policy  set-self-linger   # systemd built -Dpolkit=enabled (external.mk)

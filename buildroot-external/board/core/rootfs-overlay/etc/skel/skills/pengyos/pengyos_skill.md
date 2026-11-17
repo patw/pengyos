@@ -113,6 +113,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-install-tui` | the console installer (`install`) |
 | `pengyos-autologin on\|off` | Desktop: skip the login screen at boot and the lock screen on sleep/idle |
 | `pengyos-webui status\|on\|off` | Server/Desktop: serve the Pengy web UI as a user, on `http://127.0.0.1:5000` (no login — see Gotchas) |
+| `pengyos-alert status\|test\|send` | Server/Desktop: alerts over ntfy/mail (`/etc/pengyos/alert.conf`, secrets in root-only `alert.cred`); smartd, failed timers and full disks already call it; your units join with `OnFailure=pengyos-alert@%n.service` |
 | `pengyos-shares status\|add\|remove\|passwd` | Server/Desktop: share folders over SMB (the kernel's ksmbd; no Samba server) — see Gotchas |
 | `pengyos-vm list\|create\|start\|ssh\|console\|stop` | Server/Desktop: VMs in `~/vms`, NAT or `sudo pengyos-vm bridge enable` (wired only); `loginctl enable-linger` (no sudo) or they stop at logout |
 | `pengy-vmm url` / `systemctl --user enable --now pengy-vmm` | the VMs in a browser on 127.0.0.1:5100 (token in the URL) |

@@ -26,6 +26,8 @@
 
 [Unit]
 Description=PengyOS Server backup
+# A failure sends an alert (/etc/pengyos/alert.conf), not only a journal line.
+OnFailure=pengyos-alert@%n.service
 Documentation=file:/usr/libexec/pengyos/pengyos-backup.sh
 After=network.target
 Wants=network.target

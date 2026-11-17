@@ -203,7 +203,7 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 | Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq, curl |
 | Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo (sudo-rs) |
 | Containers | **podman**, rootless and daemonless, with the API socket |
-| Ops | a metrics timer, an opt-in backup timer (off by default), the daily update check; firmware updates (fwupd: `fwupdmgr`, LVFS metadata daily, UEFI capsules and the dbx); disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
+| Ops | a metrics timer, an opt-in backup timer (off by default), the daily update check; alerts over ntfy or SMTP mail (`pengyos-alert`: smartd, failed timers, full disks); firmware updates (fwupd: `fwupdmgr`, LVFS metadata daily, UEFI capsules and the dbx); disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
 | As a VM guest | virtio (KVM, Proxmox, QEMU) and Hyper-V/Azure (VMBus disk, network, console, `hv_utils`), VMGENID |
 | Compatibility | the libraries manylinux wheels assume the host has: `libGL.so.1`/`libEGL.so.1` (libglvnd dispatch only, no GL driver) and the X11 client libraries |
 | Virtual machines | **QEMU** (x86_64 system emulation, KVM-accelerated, TCG fallback; SeaBIOS + edk2 guest firmware; `qemu-img`) and KVM, vhost, VFIO in the kernel |

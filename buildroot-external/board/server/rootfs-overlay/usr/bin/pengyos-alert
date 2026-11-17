@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+"""pengyos-alert - tell a person that something on this machine needs them.
+
+    pengyos-alert status [--json]
+    sudo pengyos-alert test
+    sudo pengyos-alert send [--title T] [--priority P] [--key K] MESSAGE...|-
+    pengyos-alert unit-failed UNIT        # pengyos-alert@.service (OnFailure=)
+    pengyos-alert smartd                  # smartd's -M exec (SMARTD_* variables)
+
+A headless Server had no way to say anything: smartd's warnings, a failed
+backup and a full disk went to the journal and stopped there. This sends one
+message over whatever /etc/pengyos/alert.conf configures:
+
+  * ntfy (NTFY_URL=https://ntfy.sh/<topic>, or a self-hosted server): an HTTP
+    POST, so the alert reaches a phone.
+  * mail (MAIL_TO= and SMTP_HOST=): SMTP with STARTTLS (or TLS, or plain on a
+    trusted LAN relay), with a login when SMTP_USER= is set.
+
+Secrets (NTFY_TOKEN=, SMTP_PASSWORD=) live in /etc/pengyos/alert.cred, which
+must be root-only (0600); a readable one is refused, as ssh refuses a readable
+key. Every alert is also written to the journal (`journalctl -t pengyos-alert`),
+whether or not a transport is set up.
+
+--key K names the condition ("unit:pengyos-backup.service"). The same key is
+sent at most once per REPEAT_HOURS (default 12), so an hourly check that keeps
+failing does not page every hour. `test` and keyless sends always go out.
+
+Exit: 0 sent (or journal only, with no transport configured; `test` exits 1
+then), 1 every configured transport failed, 2 misuse.
+
+--root DIR (anywhere on the line) is the test hook: config and state under DIR,
+DIR/usr/bin/{systemctl,logger} run instead of the real ones, no root guard.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import smtplib
+import socket
+import ssl
+import stat
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
+from pathlib import Path
+
+PROG = "pengyos-alert"
+CONF = "etc/pengyos/alert.conf"
+CRED = "etc/pengyos/alert.cred"
+STATE = "var/lib/pengyos-alert/sent.json"
+CONF_KEYS = ("NTFY_URL", "MAIL_TO", "MAIL_FROM", "SMTP_HOST", "SMTP_PORT",
+             "SMTP_TLS", "SMTP_USER", "REPEAT_HOURS")
+CRED_KEYS = ("NTFY_TOKEN", "SMTP_PASSWORD")
+PRIORITIES = ("low", "default", "high", "urgent")
+# ntfy's 1-5 scale, and the syslog level each priority is journaled at.
+NTFY_PRIORITY = {"low": "2", "default": "3", "high": "4", "urgent": "5"}
+SYSLOG_LEVEL = {"low": "info", "default": "notice", "high": "warning", "urgent": "crit"}
+TIMEOUT = 15
+MAX_BODY = 3500  # ntfy's message limit is 4096 bytes; mail gets the same text
+
+
+class Misuse(Exception):
+    """Exit 2: the command line or the config is wrong."""
+
+
+def die(msg: str, code: int = 2) -> None:
+    print(f"{PROG}: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def hostname(root: Path) -> str:
+    try:
+        name = (root / "etc/hostname").read_text().strip()
+    except OSError:
+        name = ""
+    return name or socket.gethostname()
+
+
+def parse_kv(text: str) -> dict[str, str]:
+    """KEY=VALUE lines; '#' comments; optional matching quotes around VALUE."""
+    out: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        out[key] = value
+    return out
+
+
+def load_config(root: Path, need_secrets: bool) -> tuple[dict[str, str], list[str]]:
+    """The merged config, and warnings about it (printed by status and send)."""
+    warnings: list[str] = []
+    try:
+        conf = parse_kv((root / CONF).read_text())
+    except FileNotFoundError:
+        conf = {}
+    except OSError as e:
+        raise Misuse(f"cannot read /{CONF}: {e.strerror}")
+    for k in CRED_KEYS:
+        if k in conf:
+            warnings.append(f"{k} in /{CONF} is ignored: secrets go in /{CRED} (0600)")
+            del conf[k]
+    cfg = {k: v for k, v in conf.items() if k in CONF_KEYS}
+    cred_path = root / CRED
+    if cred_path.exists():
+        try:
+            st = cred_path.stat()
+        except OSError:
+            st = None
+        if st is not None and st.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+            warnings.append(f"/{CRED} is readable by others (mode "
+                            f"{stat.S_IMODE(st.st_mode):o}): not used; chmod 600 it")
+        elif need_secrets:
+            try:
+                cred = parse_kv(cred_path.read_text())
+                cfg.update({k: v for k, v in cred.items() if k in CRED_KEYS})
+            except PermissionError:
+                warnings.append(f"/{CRED} is root-only: run as root to use it")
+    return cfg, warnings
+
+
+def transports(cfg: dict[str, str]) -> list[str]:
+    out = []
+    if cfg.get("NTFY_URL"):
+        out.append("ntfy")
+    if cfg.get("MAIL_TO") and cfg.get("SMTP_HOST"):
+        out.append("mail")
+    return out
+
+
+def repeat_seconds(cfg: dict[str, str]) -> float:
+    try:
+        hours = float(cfg.get("REPEAT_HOURS", "12"))
+    except ValueError:
+        raise Misuse(f"REPEAT_HOURS={cfg['REPEAT_HOURS']!r} is not a number")
+    return max(hours, 0.0) * 3600
+
+
+# --- state: when each key was last sent ---------------------------------------
+
+def read_state(root: Path) -> dict[str, float]:
+    try:
+        data = json.loads((root / STATE).read_text())
+        return {str(k): float(v) for k, v in data.items()}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def write_state(root: Path, state: dict[str, float]) -> None:
+    path = root / STATE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".new")
+        tmp.write_text(json.dumps(state, indent=1, sort_keys=True) + "\n")
+        os.replace(tmp, path)
+    except OSError as e:
+        print(f"{PROG}: cannot record the alert in /{STATE}: {e.strerror}", file=sys.stderr)
+
+
+# --- transports ---------------------------------------------------------------
+
+def header_safe(text: str) -> str:
+    """HTTP header values are latin-1; ntfy reads RFC 2047 for anything else."""
+    text = " ".join(text.split())
+    try:
+        text.encode("latin-1")
+        return text
+    except UnicodeEncodeError:
+        import base64
+        return "=?UTF-8?B?" + base64.b64encode(text.encode()).decode() + "?="
+
+
+def send_ntfy(cfg: dict[str, str], title: str, body: str, priority: str) -> None:
+    url = cfg["NTFY_URL"]
+    if not url.startswith(("https://", "http://")):
+        raise RuntimeError(f"NTFY_URL must start with https:// (got {url!r})")
+    req = urllib.request.Request(url, data=body.encode(), method="POST")
+    req.add_header("Title", header_safe(title))
+    req.add_header("Priority", NTFY_PRIORITY[priority])
+    req.add_header("Tags", "warning" if priority in ("high", "urgent") else "information_source")
+    if cfg.get("NTFY_TOKEN"):
+        req.add_header("Authorization", "Bearer " + cfg["NTFY_TOKEN"])
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            resp.read(1024)
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"{url}: HTTP {e.code} {e.reason}")
+    except (urllib.error.URLError, OSError) as e:
+        reason = getattr(e, "reason", e)
+        raise RuntimeError(f"{url}: {reason}")
+
+
+def send_mail(cfg: dict[str, str], host: str, title: str, body: str, priority: str) -> None:
+    tls = cfg.get("SMTP_TLS", "starttls").lower()
+    if tls not in ("starttls", "tls", "none"):
+        raise RuntimeError(f"SMTP_TLS must be starttls, tls or none (got {tls!r})")
+    default_port = {"starttls": 587, "tls": 465, "none": 25}[tls]
+    try:
+        port = int(cfg.get("SMTP_PORT") or default_port)
+    except ValueError:
+        raise RuntimeError(f"SMTP_PORT={cfg['SMTP_PORT']!r} is not a number")
+    msg = EmailMessage()
+    msg["Subject"] = title
+    msg["From"] = cfg.get("MAIL_FROM") or f"{PROG}@{host}"
+    msg["To"] = cfg["MAIL_TO"]
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=host)
+    if priority in ("high", "urgent"):
+        msg["X-Priority"] = "1" if priority == "urgent" else "2"
+    msg.set_content(body + "\n")
+    smtp_host = cfg["SMTP_HOST"]
+    try:
+        if tls == "tls":
+            conn = smtplib.SMTP_SSL(smtp_host, port, timeout=TIMEOUT,
+                                    context=ssl.create_default_context())
+        else:
+            conn = smtplib.SMTP(smtp_host, port, timeout=TIMEOUT)
+        with conn:
+            if tls == "starttls":
+                conn.starttls(context=ssl.create_default_context())
+            if cfg.get("SMTP_USER"):
+                conn.login(cfg["SMTP_USER"], cfg.get("SMTP_PASSWORD", ""))
+            conn.send_message(msg)
+    except (smtplib.SMTPException, OSError) as e:
+        raise RuntimeError(f"{smtp_host}:{port}: {e}")
+
+
+# --- the journal --------------------------------------------------------------
+
+def tool(root: Path, name: str) -> str:
+    fake = root / "usr/bin" / name
+    return str(fake) if str(root) != "/" and fake.exists() else name
+
+
+def journal(root: Path, priority: str, text: str) -> None:
+    try:
+        subprocess.run([tool(root, "logger"), "-t", PROG, "-p",
+                        "user." + SYSLOG_LEVEL[priority], "--", text],
+                       check=False, timeout=10,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+# --- the one way an alert goes out ----------------------------------------------
+
+def deliver(root: Path, title: str, body: str, priority: str, key: str | None,
+            force: bool = False) -> int:
+    cfg, warnings = load_config(root, need_secrets=True)
+    for w in warnings:
+        print(f"{PROG}: warning: {w}", file=sys.stderr)
+    host = hostname(root)
+    if len(body) > MAX_BODY:
+        body = body[:MAX_BODY] + "\n[… cut; the journal has the rest]"
+    state = read_state(root)
+    now = time.time()
+    if key and not force:
+        last = state.get(key)
+        window = repeat_seconds(cfg)
+        if last is not None and now - last < window:
+            ago = int((now - last) // 60)
+            journal(root, "low", f"suppressed (sent {ago} min ago, key {key}): {title}")
+            print(f"{PROG}: not sent: '{key}' was alerted {ago} min ago "
+                  f"(REPEAT_HOURS={window / 3600:g})")
+            return 0
+    journal(root, priority, f"{title}: {body.splitlines()[0] if body else ''}")
+    names = transports(cfg)
+    if not names:
+        print(f"{PROG}: no transport configured in /{CONF}: written to the journal only")
+        return 0
+    sent, failed = [], []
+    for name in names:
+        try:
+            if name == "ntfy":
+                send_ntfy(cfg, title, body, priority)
+            else:
+                send_mail(cfg, host, title, body, priority)
+            sent.append(name)
+        except RuntimeError as e:
+            failed.append(name)
+            print(f"{PROG}: {name} failed: {e}", file=sys.stderr)
+            journal(root, "high", f"{name} failed: {e}")
+    if sent:
+        if key:
+            state[key] = now
+        state["last_sent"] = now
+        write_state(root, state)
+        print(f"{PROG}: sent by {', '.join(sent)}")
+        return 0
+    return 1
+
+
+# --- commands -----------------------------------------------------------------
+
+def need_root(root: Path) -> None:
+    if str(root) == "/" and os.geteuid() != 0:
+        die("run as root (sudo): the secrets file and the alert state are root's", 2)
+
+
+def cmd_status(root: Path, as_json: bool) -> int:
+    cfg, warnings = load_config(root, need_secrets=False)
+    cred_path = root / CRED
+    state = read_state(root)
+    last = state.get("last_sent")
+    info = {
+        "config": f"/{CONF}",
+        "transports": transports(cfg),
+        "ntfy_url": cfg.get("NTFY_URL", ""),
+        "mail_to": cfg.get("MAIL_TO", ""),
+        "smtp_host": cfg.get("SMTP_HOST", ""),
+        "secrets_file": cred_path.exists(),
+        "repeat_hours": cfg.get("REPEAT_HOURS", "12"),
+        "last_sent": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(last)) if last else None,
+        "warnings": warnings,
+    }
+    if as_json:
+        print(json.dumps(info, indent=2))
+        return 0
+    names = info["transports"]
+    print(f"Alerts:    {', '.join(names) if names else 'none configured (journal only)'}")
+    if cfg.get("NTFY_URL"):
+        print(f"  ntfy:    {cfg['NTFY_URL']}")
+    if "mail" in names:
+        print(f"  mail:    {cfg['MAIL_TO']} via {cfg['SMTP_HOST']}")
+    print(f"Secrets:   /{CRED} {'present' if info['secrets_file'] else 'absent'}")
+    print(f"Repeat:    the same condition at most every {info['repeat_hours']} h")
+    print(f"Last sent: {info['last_sent'] or 'never'}")
+    for w in warnings:
+        print(f"Warning:   {w}")
+    if not names:
+        print(f"\nSet NTFY_URL= or MAIL_TO= + SMTP_HOST= in /{CONF}, then `sudo {PROG} test`.")
+    return 0
+
+
+def unit_body(root: Path, unit: str) -> str:
+    try:
+        r = subprocess.run([tool(root, "systemctl"), "status", "--no-pager", "--full",
+                            "--lines=25", "--", unit],
+                           capture_output=True, text=True, timeout=20)
+        text = (r.stdout or r.stderr).strip()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        text = f"(systemctl status failed: {e})"
+    return f"{unit} failed.\n\n{text}\n\nMore: journalctl -u {unit} -b"
+
+
+def main(argv: list[str]) -> int:
+    root = Path("/")
+    if "--root" in argv:
+        i = argv.index("--root")
+        if i + 1 >= len(argv):
+            die("--root needs a directory")
+        root = Path(argv[i + 1])
+        argv = argv[:i] + argv[i + 2:]
+    p = argparse.ArgumentParser(prog=PROG, description="Send an alert over ntfy or mail.")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("status", help="what is configured, and the last alert sent")
+    s.add_argument("--json", action="store_true")
+    sub.add_parser("test", help="send a test alert now (exit 1 if nothing is configured)")
+    s = sub.add_parser("send", help="send one alert")
+    s.add_argument("--title")
+    s.add_argument("--priority", choices=PRIORITIES, default="default")
+    s.add_argument("--key", help="the condition, for REPEAT_HOURS de-duplication")
+    s.add_argument("message", nargs="+", help="the text, or - to read it from stdin")
+    s = sub.add_parser("unit-failed", help="alert that a systemd unit failed (OnFailure=)")
+    s.add_argument("unit")
+    s = sub.add_parser("smartd", help="alert from smartd's -M exec (reads SMARTD_*)")
+    s.add_argument("address", nargs="*", help=argparse.SUPPRESS)  # smartd's -m, unused
+    args = p.parse_args(argv)
+
+    try:
+        if args.cmd == "status":
+            return cmd_status(root, args.json)
+        need_root(root)
+        host = hostname(root)
+        if args.cmd == "test":
+            cfg, _ = load_config(root, need_secrets=False)
+            if not transports(cfg):
+                die(f"nothing to test: set NTFY_URL= or MAIL_TO= + SMTP_HOST= in /{CONF}", 1)
+            return deliver(root, f"{host}: test alert",
+                           f"A test from {PROG} on {host}. If you can read this, "
+                           "alerts from this machine reach you.", "default", None)
+        if args.cmd == "send":
+            body = sys.stdin.read() if args.message == ["-"] else " ".join(args.message)
+            body = body.strip()
+            if not body:
+                raise Misuse("the message is empty")
+            title = args.title or f"{host}: {body.splitlines()[0][:80]}"
+            return deliver(root, title, body, args.priority, args.key)
+        if args.cmd == "unit-failed":
+            unit = args.unit
+            return deliver(root, f"{host}: {unit} failed", unit_body(root, unit),
+                           "high", f"unit:{unit}")
+        if args.cmd == "smartd":
+            env = os.environ
+            device = env.get("SMARTD_DEVICESTRING") or env.get("SMARTD_DEVICE", "a disk")
+            failtype = env.get("SMARTD_FAILTYPE", "")
+            title = f"{host}: disk warning on {device}" + (f" ({failtype})" if failtype else "")
+            body = (env.get("SMARTD_FULLMESSAGE") or env.get("SMARTD_MESSAGE")
+                    or "smartd reported a problem (no message given).")
+            body += f"\n\nMore: sudo smartctl -a {env.get('SMARTD_DEVICE', '/dev/…')}"
+            # Health: the drive itself says it is failing. EmailTest: the
+            # `-M test` directive, a check that the path works.
+            prio = {"Health": "urgent", "EmailTest": "default"}.get(failtype, "high")
+            return deliver(root, title, body, prio,
+                           None if failtype == "EmailTest" else f"smart:{device}:{failtype}")
+    except Misuse as e:
+        die(str(e), 2)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

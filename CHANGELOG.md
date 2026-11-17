@@ -17,6 +17,27 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: alerts from a headless Server, over ntfy or mail (2026-11-17)
+- A Server could not tell anyone anything was wrong. There is no mail transport
+  in any edition, so smartd's warnings about a failing disk went to the journal
+  and stopped there, and so did a failed backup, a failed update and a full
+  disk. US-SRV-3 ("a deliberately induced failure produces an alert") and
+  US-SRV-4 ("backup failures raise an alert") could not pass.
+- New `pengyos-alert` (Server overlay; stdlib Python, no daemon, no new
+  package): a push over ntfy and/or a mail over SMTP, and always a journal line
+  (`journalctl -t pengyos-alert`). Configured in `/etc/pengyos/alert.conf`,
+  secrets in a root-only `alert.cred`; `sudo pengyos-alert test` checks it.
+  Nothing is sent until a transport is set.
+- Wired in: smartd (`/etc/smartd.conf` now hands problems to it),
+  `OnFailure=pengyos-alert@%n.service` on pengyos-backup, pengyos-monitor,
+  pengyos-update-check and pengyos-update-auto, and pengyos-monitor alerts when
+  a filesystem reaches `DISK_ALERT_PCT` (90%). One alert per condition per
+  `REPEAT_HOURS` (12), so an hourly check that keeps failing does not page
+  every hour.
+- pengyos-monitor's log line had its disk fields run together
+  (`disk__=40%disk__var=…`); they are space-separated now and `/` is
+  `disk_root`, as the script's comment always said.
+
 ### Added: firmware updates on the Server (2026-11-17)
 - The Server had no way to update firmware: fwupd was Desktop-only, so a
   headless box could not get a UEFI capsule, an SSD/NVMe update or a Secure Boot
