@@ -10,7 +10,9 @@ as the user unit `pengyos-rdp-server.service`. It reads the user's
 `~/.config/pengyos-remote/` (password, cert.pem, key.pem) and refuses a
 password file others can read. The portal's restore token
 (`~/.local/state/pengyos-remote/restore-token`) skips the consent dialog after
-the first allowed session.
+the first allowed session. The portal session is held from login, but its stream is
+captured only while an RDP client is connected (paused 10 s after the last one
+leaves), so an idle server costs nothing.
 
 Host-built (`scripts/build-cosmic.sh`, into the libcosmic apps' target dir) and
 installed by the Desktop post-build to `/usr/libexec/pengyos-rdp-server`.

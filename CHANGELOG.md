@@ -17,6 +17,12 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: Remote Desktop no longer captures the screen while nobody is connected (2026-11-17)
+- With remote desktop on, `pengyos-rdp-server` kept a 1080p screen capture
+  running from login, for nobody. The capture now runs only while an RDP client
+  is connected and pauses 10 s after the last one leaves (behotv: the server's
+  idle CPU went from 4.7% of a core to 0%).
+
 ### Fixed: iPhone photos (HEIC) open, and HEIC/AVIF get thumbnails (2026-11-17)
 - The image viewer claimed HEIC but could not decode it: its built-in libheif
   found no HEVC decoder at build time, so every iPhone photo showed "No decoder
