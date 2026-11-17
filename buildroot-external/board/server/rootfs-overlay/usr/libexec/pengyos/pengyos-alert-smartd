@@ -1,0 +1,5 @@
+#!/bin/sh
+# smartd's alert hook (/etc/smartd.conf: `-M exec` this). smartd runs it with
+# the -m address as the argument and the problem in SMARTD_* variables;
+# pengyos-alert reads those and sends it over ntfy/mail (/etc/pengyos/alert.conf).
+exec /usr/bin/pengyos-alert smartd

@@ -7,6 +7,8 @@
 # and the login message.
 [Unit]
 Description=Unattended PengyOS update
+# A failed unattended install sends an alert (/etc/pengyos/alert.conf).
+OnFailure=pengyos-alert@%n.service
 Wants=network-online.target
 After=network-online.target pengyos-update-confirm.service
 ConditionKernelCommandLine=pengyos.data

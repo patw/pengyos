@@ -195,7 +195,10 @@ eza, fzf, zoxide, starship, jq) wired through the comfort profile
 > *As the self-hoster, I want to run my services in containers, so I can move fast without
 > polluting the host.*
 
-How: rootless `podman` (+ buildah/skopeo); optional nginx/Caddy, Postgres/Valkey.
+How: rootless `podman`, with quadlets for services that start at boot. `podman build`,
+`push`, `pull` and `manifest inspect` cover what buildah and skopeo are usually installed
+for, so neither ships. nginx/Caddy, Postgres and Valkey run as containers, not from the
+image.
 **Acceptance:** a container service starts on boot, survives reboot, is reachable on the
 LAN, and its data persists across updates.
 
@@ -203,13 +206,24 @@ LAN, and its data persists across updates.
 > *As the self-hoster, I want monitoring and alerts, so I hear about problems before they
 > bite.*
 
-How: TheWatcher metrics + node_exporter; ntfy/email alerts.
-**Acceptance:** metrics are exported; a deliberately induced failure produces an alert.
+How: alerts over ntfy and/or SMTP mail with `pengyos-alert` (`/etc/pengyos/alert.conf`):
+smartd's disk warnings, `OnFailure=pengyos-alert@%n.service` on the backup, monitor,
+update-check and unattended-update services, and a disk-full check in the hourly
+`pengyos-monitor` (which logs load, memory, disk and connections to
+`/var/log/pengyos-monitor.log`). Your own units join with the same `OnFailure=` line.
+**Not covered yet:** metrics *export*. Neither TheWatcher nor node_exporter is in the
+image (node_exporter has no Buildroot recipe); run one in podman meanwhile.
+**Acceptance:** metrics are exported; a deliberately induced failure produces an alert
+(`sudo systemd-run --wait -p OnFailure=pengyos-alert@induced-failure.service false`).
 
 **US-SRV-4 — Back up, and *prove* the restore.**
 > *As the self-hoster, I want tested backups, so recovery isn't a hope.*
 
-How: restic/rustic to local + remote; scheduled; restore-tested.
+How: today, `pengyos-backup` (a tarball of `/etc` and `/home` to `BACKUP_DEST` in
+`/etc/pengyos/backup.conf`, keeping `RETENTION_COUNT` copies) on an opt-in nightly timer
+that alerts when it fails (`pengyos-alert`). **Not covered yet:** remote, deduplicated
+backups and a restore check. restic/rustic are the intended tools, but Buildroot has no
+recipe for either, so one has to be written (or run in podman).
 **Acceptance:** a scheduled backup runs; a documented restore to a clean VM succeeds;
 backup failures raise an alert.
 
@@ -217,7 +231,11 @@ backup failures raise an alert.
 > *As the self-hoster, I want a hardened, reachable-from-outside server, so self-hosting
 > isn't reckless.*
 
-How: `nftables` rules; WireGuard for remote access; fail2ban/sshguard.
+How: `nftables`, default-deny inbound, ports opened one rule file at a time
+(`pengyos-firewall`); WireGuard for remote access. Against brute force: SSH is key-only
+unless `pengyos-ssh-password on`, never for root, and SMB (`pengyos-shares`) is open to
+private addresses only. **Not covered yet:** blocking a source that keeps guessing
+(fail2ban/sshguard), which matters once password logins are turned on.
 **Acceptance:** only intended ports are exposed; the WireGuard tunnel works; brute-force
 attempts are mitigated.
 
@@ -310,7 +328,9 @@ screen off after 5 idle minutes (`pengyos-console-blank`), and the battery stops
 charging at 80% (`pengyos-battery-limit`, `/etc/pengyos/battery.conf`) where the
 laptop's driver offers a limit. When the AC goes away it runs on battery and powers
 off cleanly at 5% (`pengyos-battery-shutdown`, `SHUTDOWN_AT=` in the same file)
-instead of dying mid-write.
+instead of dying mid-write. A soft-blocked Wi-Fi radio (an Fn key, a block the
+embedded controller keeps across reboots) is unblocked whenever the Wi-Fi unit starts,
+so a power cycle brings a Wi-Fi-only box back; `rfkill` shows and changes the rest.
 **Acceptance:** a Wi-Fi-only laptop installs over Wi-Fi (SSH keys imported over it) and
 is on the same network after the reboot; with the lid shut it stays up and reachable;
 the screen goes dark when idle; `cat /sys/class/power_supply/BAT0/charge_control_end_threshold`

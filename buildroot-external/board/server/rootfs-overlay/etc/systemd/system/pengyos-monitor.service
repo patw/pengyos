@@ -25,6 +25,8 @@
 
 [Unit]
 Description=PengyOS Server metrics collection
+# A failure sends an alert (/etc/pengyos/alert.conf), not only a journal line.
+OnFailure=pengyos-alert@%n.service
 Documentation=file:/usr/libexec/pengyos/pengyos-monitor.sh
 After=network.target
 Wants=network.target

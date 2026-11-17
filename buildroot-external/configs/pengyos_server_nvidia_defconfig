@@ -412,8 +412,8 @@ BR2_PACKAGE_HOST_MTOOLS=y
 # The core post-build prunes linux-firmware's iwlwifi API versions
 # (board/common/prune-iwlwifi.py), and that script imports lzma to read the .xz
 # firmware files. Buildroot pulls host Python's xz support in only when this is
-# set: the Desktop got it by accident through fwupd-efi's `uswid` (see the
-# desktop layer), Core and Server never did, so the first build after the prune
+# set: the Desktop got it by accident through fwupd-efi's `uswid` (fwupd, now
+# in server.config), Core and Server never did, so the first build after the prune
 # landed died in post-build with "No module named '_lzma'" (26.10.33). Same
 # reason and same symbol as the Desktop's.
 BR2_PACKAGE_HOST_PYTHON3_XZ=y
@@ -538,6 +538,11 @@ BR2_PACKAGE_DISTROBOX=y
 # util-linux's standard tools (rev — distrobox-enter needs it —, findmnt, lsblk,
 # a blkid that knows btrfs, …).
 BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+# rfkill (2026-11-17; was Desktop-only): a laptop-server (US-SRV-12) whose Wi-Fi
+# is soft-blocked (an Fn key, a block that sticks after suspend or a firmware
+# toggle) is unreachable, and without `rfkill unblock wifi` the only fix was a
+# keyboard at the machine. util-linux is already built here; this is its rfkill.
+BR2_PACKAGE_UTIL_LINUX_RFKILL=y
 # curl: every "install X" line (rustup, uv, …) and distrobox itself expect it;
 # Core selects it (with GNU wget) since 26.11.0.
 # dig, host, nslookup: BIND's tools, no server (Core has a stub pointing at
@@ -571,6 +576,21 @@ BR2_PACKAGE_WIREGUARD_TOOLS=y
 BR2_PACKAGE_DNSMASQ=y
 # - ethtool: link speed, offloads, and Wake-on-LAN for a box that sleeps.
 BR2_PACKAGE_ETHTOOL=y
+# - Firmware updates from LVFS (2026-11-17): UEFI capsules (system firmware),
+#   the Secure Boot dbx revocation list, NVMe/SSD, docks and Thunderbolt. Moved
+#   from desktop.config (the Desktop inherits it): the headless edition is the
+#   one nobody sits at, and it had no firmware path at all, not even for a dbx
+#   update. `fwupdmgr get-updates` / `update`; fwupd itself starts over D-Bus
+#   and fwupd-refresh.timer fetches the metadata daily (10-pengyos-server.preset).
+#   fwupd-efi is the capsule loader it stages on the ESP (/efi). The Server has no
+#   UDisks, which fwupd uses to find the ESP: the fwupd.service drop-in names
+#   /efi instead (60-pengyos-esp.conf).
+BR2_PACKAGE_FWUPD=y
+BR2_PACKAGE_FWUPD_EFI=y
+#   GnuTLS: libjcat checks the PKCS#7 signature on LVFS metadata only when
+#   GnuTLS is built; without it fwupd has no signature it can verify. The
+#   Desktop got it by accident (samba4, libsoup3, sane-airscan select it).
+BR2_PACKAGE_GNUTLS=y
 # - Firmware for the xe GPU driver (server/linux.fragment): US-SRV-9 transcoding
 #   on Battlemage / Lunar Lake and later.
 BR2_PACKAGE_LINUX_FIRMWARE_XE=y
