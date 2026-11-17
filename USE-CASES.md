@@ -551,7 +551,8 @@ the image.
 
 How: udev rules in the base granting the logged-in user access to common developer USB
 devices (Meta/Oculus vendor `2833`, Android/adb); Chrome (Flatpak or in the dev box) with
-device access.
+device access. `adb` and `fastboot` come with the dev box (`dx adb devices`; Ubuntu's
+current platform-tools, not in the image).
 **Acceptance:** with the headset plugged in, a WebUSB page in Chrome sees and talks to
 it; `adb devices` lists it — without running anything as root.
 
@@ -580,8 +581,10 @@ project with the box's toolchain, and its extensions persist across image update
 
 How: CUPS + drivers and SANE, with a way to *add* a printer from the desktop: the
 Printers app (`tools/pengyos-printers`) finds, adds and removes printers, manages the
-queue and prints a test page. There is still no scanner UI of our own. Candidate for the
-printing **extension** (US-ALL-2) rather than the base.
+queue and prints a test page. Scanning: the base has SANE + airscan (`scanimage -L`
+finds network eSCL scanners), and the scanning app is Document Scanner
+(`org.gnome.SimpleScan`) from the Store; the Flatpak carries its own SANE + airscan and
+needs nothing from the host. There is no scanner UI of our own.
 **Acceptance:** a network printer is discovered and added from the GUI; an app prints a
 test page; a scanner is found and scans from a scanning app.
 

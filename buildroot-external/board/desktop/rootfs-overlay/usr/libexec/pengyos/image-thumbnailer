@@ -1,0 +1,21 @@
+#!/bin/sh
+# HEIC/HEIF/AVIF thumbnails for COSMIC Files (freedesktop thumbnailer, see
+# /usr/share/thumbnailers/pengyos-image.thumbnailer). COSMIC Files decodes JPEG,
+# PNG, WebP and JPEG XL itself; its image crate has no HEIF or AVIF decoder, so
+# without this an iPhone photo shows a generic icon. FFmpeg decodes both (HEVC,
+# and AV1 through dav1d).
+#
+# A phone's HEIC is a tile grid: 512x512 HEVC tiles plus a stream group that
+# says how to lay them out. Mapping the group (0:g:0) gives the whole picture;
+# a plain single-image file has no group, so fall back to its first video stream.
+# Usage: image-thumbnailer SIZE INPUT OUTPUT
+set -eu
+size=$1 in=$2 out=$3
+tmp="${out}.pengyos"
+vf="scale=${size}:${size}:force_original_aspect_ratio=decrease"
+shot() {
+    ffmpeg -nostdin -v error -y -i "$in" -map "$1" -frames:v 1 -vf "$vf" \
+        -f image2 -c:v png -update 1 "$tmp"
+}
+shot 0:g:0 2>/dev/null || shot 0:v:0
+mv -f "$tmp" "$out"

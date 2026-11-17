@@ -33,9 +33,14 @@ COSMIC_LICENSE = GPL-3.0-only (COSMIC components), GPL-3.0-or-later (xdg-desktop
 COSMIC_LICENSE_FILES = cosmic-comp/LICENSE cosmic-sound-theme/LICENSE
 # Buildroot extracts nothing itself: every archive goes to $(@D)/<component>.
 COSMIC_SRCDIR = $(@D)
+# cosmic-viewer builds its own copy of libheif (libheif-sys "embedded-libheif") and
+# turns on every codec cmake can find in the sysroot. Without libde265 here it finds
+# no HEVC decoder, and every HEIC photo (what an iPhone takes) fails with "No
+# decoder for this image format" while the viewer still claims image/heic. dav1d is
+# its AVIF decoder.
 COSMIC_DEPENDENCIES = \
 	host-pkgconf host-rustc \
-	dav1d dbus flatpak gst1-plugins-base gstreamer1 libdisplay-info-pengyos \
+	dav1d libde265 dbus flatpak gst1-plugins-base gstreamer1 libdisplay-info-pengyos \
 	libglib2 libinput libxkbcommon linux-pam mesa3d pipewire pixman seatd systemd
 
 COSMIC_TARGET = $(@D)/target
