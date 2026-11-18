@@ -11,7 +11,7 @@ contract is [spec.md](spec.md).
 ## Use
 
     # 1. Where the backups go (here: a directory on another machine over SSH)
-    sudo pengyos-backup init --repo sftp:beholder@behoserver:/data/extra/backup/$(hostname)
+    sudo pengyos-backup init --repo sftp:you@backupserver:/srv/backup/$(hostname)
     #    The first time, it prints an SSH key line to add to that account's
     #    ~/.ssh/authorized_keys (it may only use SFTP), then run init again.
     #    It ends with the RECOVERY KIT: the repository and its password. Keep it
@@ -66,7 +66,7 @@ the bucket's version history.
 `status --json`:
 
 ```json
-{"host": "behothinkpad", "repository": "sftp:...", "last_check": "2026-11-17T03:10:00Z",
+{"host": "laptop", "repository": "sftp:...", "last_check": "2026-11-17T03:10:00Z",
  "last_check_ok": true,
  "jobs": [{"name": "home", "enabled": true, "paths": ["/home", "/root"], "ok": true,
            "last_run": "...", "last_success": "...", "age_hours": 7.5,

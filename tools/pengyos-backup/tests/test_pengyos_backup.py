@@ -195,14 +195,14 @@ def test_init_keeps_an_existing_password_and_repository(env):
 
 
 def test_init_sftp_makes_a_key_and_explains_how_to_authorize_it(env):
-    r = env.run("init", "--repo", "sftp:beholder@behoserver:/data/extra/backup/x",
+    r = env.run("init", "--repo", "sftp:you@backupserver:/srv/backup/x",
                 extra_env={"FAKE_FAIL": "init"})
     assert r.returncode == 1
     assert 'restrict,command="internal-sftp" ssh-ed25519 AAAAfake' in r.stdout
     assert stat.S_IMODE((env.root / "etc/pengyos/backup/ssh").stat().st_mode) == 0o700
     sftp = env.calls("restic")[0]["argv"]
     assert sftp[0] == "-o" and sftp[1].startswith("sftp.command=ssh ")
-    assert "beholder@behoserver -s sftp" in sftp[1]
+    assert "you@backupserver -s sftp" in sftp[1]
     assert "StrictHostKeyChecking=accept-new" in sftp[1] and "BatchMode=yes" in sftp[1]
 
 
