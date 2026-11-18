@@ -897,6 +897,12 @@ BR2_PACKAGE_MESA3D_VULKAN_DRIVER_AMD=y
 BR2_PACKAGE_LIBDRM_AMDGPU=y
 BR2_PACKAGE_LINUX_FIRMWARE_RADEON=y
 BR2_PACKAGE_LLVM=y
+# Keep LLVM built with RTTI (2026-11-18). Through Buildroot 2026.08.1 the iris and
+# radeonsi drivers selected Mesa's OpenCL option, which selected LLVM_RTTI; 2026.08.2
+# dropped that chain. Without this line host-llvm (RTTI on, built long ago) and the
+# target llvm disagree and Mesa refuses to configure ("LLVM was built with RTTI").
+# Turning it off instead means rebuilding host-llvm and host-clang for no gain.
+BR2_PACKAGE_LLVM_RTTI=y
 
 # --- Vulkan -----------------------------------------------------------------
 # COSMIC's apps render through wgpu, which wants Vulkan; without it wgpu falls
