@@ -95,7 +95,8 @@ def env(tmp_path):
     (data / "home" / "me" / "file.txt").write_text("hello")
     (data / "etc" / "upper").mkdir(parents=True)
     (data / "var" / "lib").mkdir(parents=True)
-    e = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", FAKE_LOG=str(log))
+    e = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", FAKE_LOG=str(log),
+             PENGYOS_BACKUP_NS_CACHE=str(tmp_path / "run" / "pengyos-backup" / "cache"))
     e.pop("RESTIC_REPOSITORY", None)
 
     class Env:

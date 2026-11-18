@@ -318,7 +318,10 @@ def run_job(cfg: dict, name: str, job: dict) -> dict:
             Path(cache).mkdir(parents=True, exist_ok=True)
             inner = [sys.executable, os.path.abspath(__file__), "--root", str(ROOT), "_ns-exec",
                      json.dumps({"binds": binds, "cmd": args, "cache": cache,
-                                 "cache_at": str(P("/run/pengyos-backup/cache"))})]
+                                 # Always the real /run (a tmpfs no snapshot covers), even
+                                 # under --root; the tests point it elsewhere.
+                                 "cache_at": os.environ.get("PENGYOS_BACKUP_NS_CACHE",
+                                                            "/run/pengyos-backup/cache")})]
             full = ["unshare", "--mount", "--propagation", "private", "--"] + inner
         else:
             full = args
