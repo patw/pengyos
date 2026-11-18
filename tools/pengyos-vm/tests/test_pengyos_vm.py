@@ -428,6 +428,43 @@ def test_run_passes_the_exit_status_through(box: Box):
     assert not (box.home / "vms" / "job").exists()
 
 
+def test_run_is_offline_by_default(box: Box):
+    """QEMU's NAT maps 10.0.2.2 onto the host's 127.0.0.1; a throwaway job must not
+    reach the host's loopback-only services, or the internet, unless asked."""
+    cp = box.run("run", "--image", str(core_image(box)), "--name", "job", "--keep", "true")
+    nic = opt(box.argv("job"), "-nic")[0].split(",")
+    assert "restrict=on" in nic
+    assert "hostfwd=tcp:127.0.0.1:2201-:22" in nic, "ssh still reaches it"
+    assert "offline" in cp.stderr
+    assert box.vm("job")["restrict"] is True
+    assert "offline" in box.run("list").stdout
+
+
+def test_run_online_reaches_the_internet(box: Box):
+    box.run("run", "--image", str(core_image(box)), "--name", "job", "--keep", "--online", "true")
+    nic = opt(box.argv("job"), "-nic")[0].split(",")
+    assert "restrict=on" not in nic
+
+
+def test_a_failed_offline_run_suggests_online(box: Box):
+    (box.root / "ssh-exit").write_text("1")
+    cp = box.run("run", "--image", str(core_image(box)), "pip", "install", "x", ok=1)
+    assert "--online" in cp.stderr
+    cp = box.run("run", "--image", str(core_image(box)), "--online", "false", ok=1)
+    assert "--online" not in cp.stderr
+
+
+def test_set_net_brings_a_kept_offline_run_online(box: Box):
+    box.run("run", "--image", str(core_image(box)), "--name", "job", "--keep", "true")
+    box.run("set", "job", "--net", "nat")
+    assert "restrict=on" not in opt(box.argv("job"), "-nic")[0]
+
+
+def test_created_vms_stay_on_nat(box: Box):
+    box.run("create", "deb", "--iso", str(box.iso))
+    assert "restrict=on" not in opt(box.argv("deb"), "-nic")[0]
+
+
 def test_run_copies_in_and_fetches_back(box: Box, tmp_path: Path):
     payload = tmp_path / "tool"
     payload.mkdir()
