@@ -93,3 +93,13 @@ exists    usr/bin/pengyos-ssh-password             # board/server overlay; on | 
 # compiling are built in the dev guest; pengyos.txt has the recipe.
 exec      usr/bin/uv                               # BR2_PACKAGE_UV (buildroot-external/package/uv)
 exec      usr/bin/uvx                              # uv's tool runner, from the same crate
+
+# --- Backups (pengyos-backup over restic, US-SRV-5) ---------------------------------
+exec      usr/bin/restic                           # the engine — package/restic (BR2_PACKAGE_RESTIC)
+exec      usr/bin/pengyos-backup                   # jobs, snapshots, alerts — server overlay
+exec      usr/bin/btrfs                            # read-only snapshots of the data subvolumes — btrfs-progs
+exec      usr/bin/unshare                          # the private mount namespace a run reads them in — util-linux
+exec      usr/bin/ssh-keygen                       # the key for an sftp: repository — openssh
+exists    etc/pengyos/backup.d/home.toml           # the shipped jobs (off) — server overlay
+exists    etc/pengyos/backup.d/system.toml
+contains  etc/systemd/system/pengyos-backup.service  /usr/bin/pengyos-backup   # the timer runs the new tool, not the old tar script

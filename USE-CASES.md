@@ -219,11 +219,14 @@ image (node_exporter has no Buildroot recipe); run one in podman meanwhile.
 **US-SRV-4 — Back up, and *prove* the restore.**
 > *As the self-hoster, I want tested backups, so recovery isn't a hope.*
 
-How: today, `pengyos-backup` (a tarball of `/etc` and `/home` to `BACKUP_DEST` in
-`/etc/pengyos/backup.conf`, keeping `RETENTION_COUNT` copies) on an opt-in nightly timer
-that alerts when it fails (`pengyos-alert`). **Not covered yet:** remote, deduplicated
-backups and a restore check. restic/rustic are the intended tools, but Buildroot has no
-recipe for either, so one has to be written (or run in podman).
+How: `pengyos-backup` over restic (our recipe): encrypted, deduplicated snapshots of
+jobs in `/etc/pengyos/backup.d/` (`system`: the `/etc` changes and `/var/lib`; `home`;
+both off until `pengyos-backup enable`) to one repository per machine, over SFTP to
+another box, a disk, or S3/B2. Each run reads btrfs read-only snapshots of the data
+subvolumes, thins old snapshots, reads part of the data back once a month (`restic
+check`), and alerts when it fails (`pengyos-alert`); `pengyos-backup restore` brings a
+file or everything back. **Not covered yet:** restoring a whole machine from the ISO, the
+Desktop app, and append-only repositories (rest-server).
 **Acceptance:** a scheduled backup runs; a documented restore to a clean VM succeeds;
 backup failures raise an alert.
 

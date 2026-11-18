@@ -1,0 +1,17 @@
+# Job "system": what makes this machine itself.
+#   /data/etc/upper  every change ever made to /etc (the overlay's upper layer:
+#                    accounts, SSH host keys, network, services): a few MB
+#   /var/lib         service state (podman volumes, databases, NetworkManager, ...)
+# Enable with  pengyos-backup enable system
+enabled = false
+paths = ["/data/etc/upper", "/var/lib"]
+exclude = [
+  "/var/lib/containers/storage/overlay",   # image layers: pulled again, not backed up
+  "/var/lib/flatpak/repo",                 # Flatpak apps: installed again from Flathub
+  "/var/lib/flatpak/runtime",
+  "/var/lib/flatpak/app",
+  "/var/lib/systemd/coredump",
+]
+exclude_if_present = [".nobackup"]
+# Back up from a btrfs read-only snapshot (one consistent moment).
+snapshot = true

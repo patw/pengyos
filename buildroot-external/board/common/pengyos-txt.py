@@ -46,6 +46,7 @@ TOOLS = {
     "dx": "one command in the dev guest, here (dx --shell)",
     "pengyos-vm": "VMs in ~/vms: create, start, ssh, console, stop",
     "pengyos-shares": "share folders over SMB: add, remove, passwd",
+    "pengyos-backup": "restic backups: init, enable JOB, run, status, restore",
     "pengyos-alert": "alerts over ntfy/mail: status, test, send",
     "pengyos-webui": "serve pengy-web at boot (no login: loopback only)",
     "pengyos-gpu-memory": "how much RAM an AMD GPU may use: status, set",

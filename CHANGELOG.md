@@ -17,6 +17,22 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: real backups, `pengyos-backup` over restic (2026-11-17)
+- Every Server and Desktop gets `pengyos-backup`: encrypted, deduplicated restic
+  snapshots of jobs in `/etc/pengyos/backup.d/` to one repository per machine (SFTP
+  to another box, a local or USB disk, or S3/Backblaze B2). `init --repo` makes the
+  password (and an SFTP-only SSH key) and prints the recovery kit; `enable system` /
+  `enable home` turns on the nightly 02:30 timer. Each run reads btrfs read-only
+  snapshots of the data subvolumes inside a private mount namespace, so the backup
+  is one consistent moment and the host's mounts never change; then old snapshots
+  are thinned (7 daily, 4 weekly, 12 monthly) and once a month 5% of the data is
+  read back. Failures alert through `pengyos-alert`.
+- restic 0.19.1 is a new recipe (`package/restic`, BSD-2-Clause, pure Go) in the
+  Server layer, so both ISOs have it for the coming whole-machine restore.
+- Replaces the tar-based backup (`pengyos-backup.sh`, `/etc/pengyos/backup.conf`),
+  which kept full tarballs on the same disk. A machine that had its timer on runs
+  the new tool, which fails (and alerts) until `pengyos-backup init` is run.
+
 ### Fixed: Remote Desktop no longer captures the screen while nobody is connected (2026-11-17)
 - With remote desktop on, `pengyos-rdp-server` kept a 1080p screen capture
   running from login, for nobody. The capture now runs only while an RDP client

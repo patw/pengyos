@@ -1,0 +1,692 @@
+#!/usr/bin/env python3
+"""pengyos-backup: encrypted, deduplicated backups of this machine, over restic.
+
+Jobs live in /etc/pengyos/backup.d/*.toml, the repository in /etc/pengyos/backup.toml.
+Each run backs up from btrfs read-only snapshots of the data subvolumes, so what is
+saved is one consistent moment. The contract is tools/pengyos-backup/spec.md.
+
+    pengyos-backup init --repo sftp:user@host:/path   then  pengyos-backup enable home
+    pengyos-backup status | snapshots | restore SNAP --path /home/me/file | kit
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import fcntl
+import json
+import os
+import re
+import secrets
+import shutil
+import socket
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+ROOT = Path("/")
+RESTIC = "restic"
+
+EXIT_OK, EXIT_FAIL, EXIT_USAGE = 0, 1, 2
+DEFAULT_KEEP = {"daily": 7, "weekly": 4, "monthly": 12}
+DEFAULT_CHECK = {"every_days": 30, "read_data_subset": "5%"}
+DEFAULT_STALE_DAYS = 3
+
+
+class Usage(Exception):
+    """Misuse or missing setup: exit 2 with the message."""
+
+
+def P(path: str) -> Path:
+    """A system path under --root (tests); the path itself on a machine."""
+    return ROOT / path.lstrip("/")
+
+
+def now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+
+
+def iso(t: dt.datetime) -> str:
+    return t.isoformat().replace("+00:00", "Z")
+
+
+def parse_iso(s: str | None) -> dt.datetime | None:
+    if not s:
+        return None
+    try:
+        return dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def say(msg: str) -> None:
+    print(f"pengyos-backup: {msg}", flush=True)
+
+
+def warn(msg: str) -> None:
+    print(f"pengyos-backup: {msg}", file=sys.stderr, flush=True)
+
+
+# --- configuration -----------------------------------------------------------------
+
+def read_toml(path: Path) -> dict:
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except FileNotFoundError:
+        return {}
+    except tomllib.TOMLDecodeError as e:
+        raise Usage(f"{path}: {e}") from None
+
+
+def machine_config() -> dict:
+    return read_toml(P("/etc/pengyos/backup.toml"))
+
+
+def jobs() -> dict[str, dict]:
+    """Every job file, by name (the file's stem)."""
+    d = P("/etc/pengyos/backup.d")
+    out = {}
+    for f in sorted(d.glob("*.toml")) if d.is_dir() else []:
+        job = read_toml(f)
+        job.setdefault("enabled", False)
+        job.setdefault("paths", [])
+        job.setdefault("exclude", [])
+        job.setdefault("exclude_if_present", [])
+        job.setdefault("snapshot", True)
+        job["_file"] = f
+        out[f.stem] = job
+    return out
+
+
+def repo_url(cfg: dict) -> str:
+    url = (cfg.get("repository") or {}).get("url", "")
+    if not url:
+        raise Usage("no repository yet: run  pengyos-backup init --repo URL"
+                    "  (e.g. sftp:user@backupserver:/srv/backup/" + socket.gethostname() + ")")
+    return url
+
+
+def secret_file(rel: str, *, required: bool) -> Path | None:
+    """A secret must be the owner's alone: refuse one that others can read."""
+    path = P(rel)
+    if not path.exists():
+        if required:
+            raise Usage(f"{rel} is missing: run  pengyos-backup init --repo URL")
+        return None
+    mode = path.stat().st_mode & 0o777
+    if mode & 0o077:
+        raise Usage(f"{rel} is readable by others (mode {mode:o}): chmod 600 {rel}")
+    return path
+
+
+def sftp_target(url: str) -> str | None:
+    """user@host for an sftp: repository (sftp:user@host:/path or sftp://user@host[:port]/path)."""
+    m = re.match(r"^sftp://([^/]+)/", url)
+    if m:
+        return m.group(1)
+    m = re.match(r"^sftp:([^:/]+):", url)
+    return m.group(1) if m else None
+
+
+def restic_base(cfg: dict) -> tuple[list[str], dict]:
+    """The restic command prefix and environment for this machine's repository."""
+    url = repo_url(cfg)
+    pw = secret_file("/etc/pengyos/backup/password", required=True)
+    env = dict(os.environ)
+    env["RESTIC_REPOSITORY"] = url
+    env["RESTIC_PASSWORD_FILE"] = str(pw)
+    env.setdefault("RESTIC_CACHE_DIR", str(P("/var/cache/pengyos-backup")))
+    extra = secret_file("/etc/pengyos/backup/env", required=False)
+    if extra:
+        for line in extra.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    cmd = [RESTIC]
+    target = sftp_target(url)
+    if target:
+        ssh = P("/etc/pengyos/backup/ssh")
+        port = ""
+        if ":" in target.split("@")[-1]:
+            target, port = target.rsplit(":", 1)
+            port = f" -p {port}"
+        cmd += ["-o", "sftp.command=ssh" + port +
+                f" -i {ssh / 'id_ed25519'} -o UserKnownHostsFile={ssh / 'known_hosts'}"
+                " -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+                " -o ServerAliveInterval=30" + f" {target} -s sftp"]
+    return cmd, env
+
+
+def restic(cfg: dict, args: list[str], *, capture: bool = False, check: bool = True):
+    cmd, env = restic_base(cfg)
+    r = subprocess.run(cmd + args, env=env, text=True,
+                       stdout=subprocess.PIPE if capture else None,
+                       stderr=subprocess.PIPE if capture else None)
+    if check and r.returncode != 0:
+        detail = (r.stderr or "").strip().splitlines()[-1:] if capture else []
+        raise RuntimeError(f"restic {args[0]} failed (exit {r.returncode})"
+                           + (f": {detail[0]}" if detail else ""))
+    return r
+
+
+# --- state ---------------------------------------------------------------------------
+
+def state_path() -> Path:
+    return P("/var/lib/pengyos-backup/state.json")
+
+
+def load_state() -> dict:
+    try:
+        return json.loads(state_path().read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"jobs": {}}
+
+
+def save_state(st: dict) -> None:
+    p = state_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(st, indent=1, sort_keys=True) + "\n")
+    tmp.replace(p)
+
+
+# --- btrfs snapshots -----------------------------------------------------------------
+
+def rootid(path: str) -> str | None:
+    r = subprocess.run(["btrfs", "inspect-internal", "rootid", path],
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def subvolume_root(path: str) -> str | None:
+    """The directory where the btrfs subvolume holding `path` is mounted or appears:
+    walk up while the subvolume id stays the same. None if not on btrfs."""
+    rid = rootid(path)
+    if rid is None:
+        return None
+    p = Path(path)
+    while p.parent != p and rootid(str(p.parent)) == rid:
+        p = p.parent
+    return str(p)
+
+
+def plan_snapshots(paths: list[str]) -> tuple[list[tuple[str, str]], list[str]]:
+    """(subvolume root, snapshot name) for each distinct subvolume, plus paths backed
+    up live because they are not on btrfs."""
+    roots, live = [], []
+    for path in paths:
+        root = subvolume_root(path)
+        if root is None:
+            live.append(path)
+        elif root not in [r for r, _ in roots]:
+            name = root.strip("/").replace("/", "_") or "top"
+            roots.append((root, name))
+    return roots, live
+
+
+# --- jobs ----------------------------------------------------------------------------
+
+def backup_args(name: str, job: dict) -> list[str]:
+    args = ["backup", "--json", "--tag", f"job:{name}", "--host", socket.gethostname()]
+    for pat in job["exclude"]:
+        args += ["--exclude", pat]
+    for marker in job["exclude_if_present"]:
+        args += ["--exclude-if-present", marker]
+    if job.get("max_file_size"):
+        args += ["--exclude-larger-than", str(job["max_file_size"])]
+    return args + list(job["paths"])
+
+
+PROGRESS_EVERY = 60  # seconds between progress lines (the journal, a terminal)
+
+
+def human(n) -> str:
+    n = float(n or 0)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if n < 1024 or unit == "TiB":
+            return f"{n:.1f} {unit}" if unit != "B" else f"{int(n)} B"
+        n /= 1024
+    return f"{n:.1f} TiB"
+
+
+def stream_backup(name: str, cmd: list[str], env: dict) -> tuple[int, dict]:
+    """Run restic backup --json, print a progress line every PROGRESS_EVERY seconds
+    from its status messages, and return (exit code, its summary message)."""
+    import time
+    summary: dict = {}
+    last = time.monotonic()
+    proc = subprocess.Popen(cmd, env=env, text=True, stdout=subprocess.PIPE)
+    for line in proc.stdout:
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            print(line, end="")
+            continue
+        kind = msg.get("message_type") if isinstance(msg, dict) else None
+        if kind == "summary":
+            summary = msg
+        elif kind == "error":
+            err = msg.get("error", {})
+            warn(f"{name}: {msg.get('item', '')}: {err.get('message', err) if isinstance(err, dict) else err}")
+        elif kind == "status" and time.monotonic() - last >= PROGRESS_EVERY:
+            last = time.monotonic()
+            pct = 100 * float(msg.get("percent_done") or 0)
+            say(f"{name}: {pct:.0f}% ({human(msg.get('bytes_done'))} of "
+                f"{human(msg.get('total_bytes'))}, {msg.get('files_done', 0)} files)")
+    return proc.wait(), summary
+
+
+def run_job(cfg: dict, name: str, job: dict) -> dict:
+    """Back up one job; returns its summary. Raises on failure. Snapshots are always
+    removed again."""
+    paths = [p for p in job["paths"] if os.path.exists(p)]
+    missing = sorted(set(job["paths"]) - set(paths))
+    for p in missing:
+        warn(f"{name}: {p} does not exist; skipped")
+    if not paths:
+        raise RuntimeError("none of its paths exist")
+    job = dict(job, paths=paths)
+    cmd, env = restic_base(cfg)
+    args = cmd + backup_args(name, job)
+
+    made: list[str] = []
+    snapdir = P("/data/.pengyos-backup-snap") / f"{name}-{os.getpid()}"
+    try:
+        binds = []
+        if job["snapshot"]:
+            roots, live = plan_snapshots(paths)
+            for p in live:
+                warn(f"{name}: {p} is not on btrfs: backed up live, not from a snapshot")
+            if roots:
+                snapdir.mkdir(parents=True, exist_ok=True)
+            for root, sname in roots:
+                dest = snapdir / sname
+                r = subprocess.run(["btrfs", "subvolume", "snapshot", "-r", root, str(dest)],
+                                   capture_output=True, text=True)
+                if r.returncode != 0:
+                    warn(f"{name}: cannot snapshot {root} ({r.stderr.strip()}): backed up live")
+                    continue
+                made.append(str(dest))
+                binds.append((str(dest), root))
+        if binds:
+            # restic reads the snapshots at the real paths, in a mount namespace of its
+            # own: --propagation private, so none of these binds reaches the host.
+            cache = env["RESTIC_CACHE_DIR"]
+            Path(cache).mkdir(parents=True, exist_ok=True)
+            inner = [sys.executable, os.path.abspath(__file__), "--root", str(ROOT), "_ns-exec",
+                     json.dumps({"binds": binds, "cmd": args, "cache": cache,
+                                 "cache_at": str(P("/run/pengyos-backup/cache"))})]
+            full = ["unshare", "--mount", "--propagation", "private", "--"] + inner
+        else:
+            full = args
+        rc, summary = stream_backup(name, full, env)
+        if rc not in (0, 3):  # 3: done, some files unreadable (reported)
+            raise RuntimeError(f"restic backup failed (exit {rc})")
+        if rc == 3:
+            warn(f"{name}: some files could not be read (see the log above)")
+        return summary
+    finally:
+        for dest in made:
+            r = subprocess.run(["btrfs", "subvolume", "delete", dest],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                warn(f"could not remove snapshot {dest}: {r.stderr.strip()}")
+        try:
+            snapdir.rmdir()
+        except OSError:
+            pass
+
+
+def ns_exec(spec_json: str) -> int:
+    """Inside the private namespace: bind each snapshot over its subvolume, run restic.
+
+    restic's cache (/var/cache/pengyos-backup) is in a subvolume that may be one of
+    them, and a snapshot is read-only, so the writable cache is first bound to a
+    place no snapshot covers (/run, a tmpfs) and restic is pointed there."""
+    spec = json.loads(spec_json)
+    Path(spec["cache_at"]).mkdir(parents=True, exist_ok=True)
+    subprocess.run(["mount", "--bind", spec["cache"], spec["cache_at"]], check=True)
+    os.environ["RESTIC_CACHE_DIR"] = spec["cache_at"]
+    for src, target in spec["binds"]:
+        subprocess.run(["mount", "--bind", src, target], check=True)
+    os.execvp(spec["cmd"][0], spec["cmd"])
+    return EXIT_FAIL  # not reached
+
+
+def alert(title: str, msg: str, *, key: str, priority: str) -> None:
+    tool = shutil.which("pengyos-alert")
+    if not tool:
+        warn(f"(no pengyos-alert) {title}: {msg}")
+        return
+    subprocess.run([tool, "send", "--title", title, "--priority", priority,
+                    "--key", key, msg], check=False)
+
+
+def cmd_run(args) -> int:
+    cfg = machine_config()
+    repo_url(cfg)
+    all_jobs = jobs()
+    names = args.jobs or [n for n, j in all_jobs.items() if j["enabled"]]
+    unknown = [n for n in names if n not in all_jobs]
+    if unknown:
+        raise Usage(f"no such job: {', '.join(unknown)} (jobs: {', '.join(all_jobs) or 'none'})")
+    if not names:
+        say("no job is enabled: nothing to do (pengyos-backup enable JOB)")
+        return EXIT_OK
+
+    lock_path = P("/run/pengyos-backup.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock = open(lock_path, "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise Usage("another backup is already running") from None
+
+    st = load_state()
+    stale_days = (cfg.get("alert") or {}).get("stale_days", DEFAULT_STALE_DAYS)
+    failed = []
+    for name in names:
+        say(f"{name}: backing up {', '.join(all_jobs[name]['paths'])}")
+        rec = st["jobs"].setdefault(name, {})
+        rec["last_run"] = iso(now())
+        try:
+            s = run_job(cfg, name, all_jobs[name])
+            rec.update(ok=True, error=None, last_success=iso(now()),
+                       snapshot=s.get("snapshot_id"), files_new=s.get("files_new"),
+                       files_total=s.get("total_files_processed"),
+                       bytes_added=s.get("data_added"))
+            say(f"{name}: done, snapshot {str(s.get('snapshot_id', '?'))[:8]}, "
+                f"{s.get('files_new', '?')} new files, {s.get('data_added', '?')} bytes added")
+        except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+            rec.update(ok=False, error=str(e))
+            failed.append(name)
+            warn(f"{name}: FAILED: {e}")
+            last_ok = parse_iso(rec.get("last_success"))
+            stale = last_ok is None or now() - last_ok > dt.timedelta(days=stale_days)
+            alert(f"Backup failed: {name} on {socket.gethostname()}",
+                  f"{e}. Last good backup: {rec.get('last_success') or 'never'}.",
+                  key=f"backup:{name}", priority="urgent" if stale else "high")
+        save_state(st)
+
+    if args.scheduled and not failed:
+        keep = {**DEFAULT_KEEP, **(cfg.get("keep") or {})}
+        say("applying retention: " + ", ".join(f"{k} {v}" for k, v in keep.items()))
+        try:
+            restic(cfg, ["forget", "--prune", "--host", socket.gethostname(),
+                         "--group-by", "host,tags"]
+                   + [a for k, v in keep.items() for a in (f"--keep-{k}", str(v))])
+        except RuntimeError as e:
+            failed.append("retention")
+            warn(f"retention FAILED: {e}")
+            alert(f"Backup retention failed on {socket.gethostname()}", str(e),
+                  key="backup:retention", priority="high")
+        chk = {**DEFAULT_CHECK, **(cfg.get("check") or {})}
+        last = parse_iso(st.get("last_check"))
+        if last is None or now() - last > dt.timedelta(days=chk["every_days"]):
+            failed += [] if check_repo(cfg, st, chk["read_data_subset"]) else ["check"]
+    return EXIT_FAIL if failed else EXIT_OK
+
+
+def check_repo(cfg: dict, st: dict, subset: str) -> bool:
+    say(f"checking the repository (reading back {subset} of the data)")
+    r = restic(cfg, ["check", "--read-data-subset", subset], check=False)
+    ok = r.returncode == 0
+    st["last_check"], st["last_check_ok"] = iso(now()), ok
+    save_state(st)
+    if not ok:
+        alert(f"Backup check failed on {socket.gethostname()}",
+              "restic check found a problem in the repository; run  pengyos-backup check",
+              key="backup:check", priority="urgent")
+    return ok
+
+
+def cmd_check(args) -> int:
+    cfg = machine_config()
+    st = load_state()
+    return EXIT_OK if check_repo(cfg, st, args.read_data) else EXIT_FAIL
+
+
+# --- setup -----------------------------------------------------------------------------
+
+def write_private(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(path, 0o600)
+
+
+def set_repo_url(url: str) -> None:
+    path = P("/etc/pengyos/backup.toml")
+    text = path.read_text() if path.exists() else "[repository]\nurl = \"\"\n"
+    line = f"url = {json.dumps(url)}"
+    if re.search(r"(?m)^url\s*=.*$", text):
+        text = re.sub(r"(?m)^url\s*=.*$", lambda _: line, text, count=1)
+    elif "[repository]" in text:
+        text = text.replace("[repository]", "[repository]\n" + line, 1)
+    else:
+        text = f"[repository]\n{line}\n\n" + text
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
+def cmd_init(args) -> int:
+    set_repo_url(args.repo)
+    pw = P("/etc/pengyos/backup/password")
+    if not pw.exists():
+        write_private(pw, secrets.token_urlsafe(32) + "\n")
+        say(f"made a repository password in {pw}")
+    target = sftp_target(args.repo)
+    if target:
+        ssh = P("/etc/pengyos/backup/ssh")
+        ssh.mkdir(parents=True, exist_ok=True)
+        os.chmod(ssh, 0o700)
+        key = ssh / "id_ed25519"
+        if not key.exists():
+            subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "",
+                            "-C", f"pengyos-backup@{socket.gethostname()}", "-f", str(key)],
+                           check=True)
+    cfg = machine_config()
+    if restic(cfg, ["cat", "config"], capture=True, check=False).returncode == 0:
+        say(f"{args.repo} already holds a repository this password opens: using it")
+    else:
+        r = restic(cfg, ["init"], capture=True, check=False)
+        if r.returncode != 0:
+            msg = (r.stderr or "").strip()
+            if target:
+                pub = (P("/etc/pengyos/backup/ssh") / "id_ed25519.pub").read_text().strip()
+                user, host = target.split("@", 1) if "@" in target else ("YOU", target)
+                print(f"""
+The repository could not be created:
+  {msg.splitlines()[-1] if msg else 'restic init failed'}
+
+If that is an SSH failure (the name not resolving, no route, or the login refused:
+try the server's full DNS name), let this machine in on {host.split(':')[0]}: as {user},
+append this line to ~/.ssh/authorized_keys (it may only use SFTP, nothing else):
+
+restrict,command="internal-sftp" {pub}
+
+and make the directory for the repository. Then run this command again.
+""")
+            else:
+                print(msg)
+            return EXIT_FAIL
+        say(f"created the repository at {args.repo}")
+    print_kit(cfg)
+    return EXIT_OK
+
+
+def print_kit(cfg: dict) -> None:
+    pw = secret_file("/etc/pengyos/backup/password", required=True).read_text().strip()
+    print(f"""
+==== PengyOS backup recovery kit: {socket.gethostname()} ({now():%Y-%m-%d}) ====
+Repository: {repo_url(cfg)}
+Password:   {pw}
+
+Keep this somewhere that is not this machine (a password manager, or printed).
+Without the password the backups cannot be read by anyone, including you.
+To restore on a new install:  pengyos-backup init --repo <repository>, put the
+password in /etc/pengyos/backup/password (chmod 600), then  pengyos-backup snapshots
+=========================================================================""")
+
+
+def cmd_kit(args) -> int:
+    print_kit(machine_config())
+    return EXIT_OK
+
+
+def cmd_enable(args, on: bool) -> int:
+    all_jobs = jobs()
+    if args.job not in all_jobs:
+        raise Usage(f"no such job: {args.job} (jobs: {', '.join(all_jobs) or 'none'})")
+    if on:
+        repo_url(machine_config())
+    f = all_jobs[args.job]["_file"]
+    text = f.read_text()
+    val = "true" if on else "false"
+    if re.search(r"(?m)^enabled\s*=.*$", text):
+        text = re.sub(r"(?m)^enabled\s*=.*$", f"enabled = {val}", text, count=1)
+    else:
+        text = f"enabled = {val}\n" + text
+    f.write_text(text)
+    any_on = any(j["enabled"] for j in jobs().values())
+    subprocess.run(["systemctl", "enable" if any_on else "disable", "--now",
+                    "pengyos-backup.timer"], check=False)
+    say(f"{args.job} {'enabled' if on else 'disabled'}; the nightly timer is "
+        f"{'on' if any_on else 'off'}")
+    return EXIT_OK
+
+
+# --- reading ---------------------------------------------------------------------------
+
+def cmd_status(args) -> int:
+    cfg = machine_config()
+    st = load_state()
+    url = (cfg.get("repository") or {}).get("url", "")
+    out = {"host": socket.gethostname(), "repository": url or None,
+           "last_check": st.get("last_check"), "last_check_ok": st.get("last_check_ok"),
+           "jobs": []}
+    for name, job in jobs().items():
+        rec = st["jobs"].get(name, {})
+        last_ok = parse_iso(rec.get("last_success"))
+        out["jobs"].append({
+            "name": name, "enabled": job["enabled"], "paths": job["paths"],
+            "ok": rec.get("ok"), "last_run": rec.get("last_run"),
+            "last_success": rec.get("last_success"),
+            "age_hours": round((now() - last_ok).total_seconds() / 3600, 1) if last_ok else None,
+            "snapshot": rec.get("snapshot"), "bytes_added": rec.get("bytes_added"),
+            "error": rec.get("error")})
+    if args.json:
+        print(json.dumps(out, indent=1))
+        return EXIT_OK
+    print(f"repository: {url or '(none: pengyos-backup init --repo URL)'}")
+    for j in out["jobs"]:
+        state = ("never run" if j["ok"] is None else "ok" if j["ok"] else f"FAILED: {j['error']}")
+        age = f", last good {j['age_hours']} h ago" if j["age_hours"] is not None else ""
+        print(f"  {j['name']:<10} {'on ' if j['enabled'] else 'off'}  {state}{age}")
+    if out["last_check"]:
+        print(f"last check: {out['last_check']} ({'ok' if out['last_check_ok'] else 'FAILED'})")
+    return EXIT_OK
+
+
+def cmd_snapshots(args) -> int:
+    cfg = machine_config()
+    extra = ["--tag", f"job:{args.job}"] if args.job else []
+    r = restic(cfg, ["snapshots", "--json", "--host", socket.gethostname()] + extra, capture=True)
+    snaps = json.loads(r.stdout or "[]")
+    if args.json:
+        print(json.dumps(snaps, indent=1))
+        return EXIT_OK
+    for s in snaps:
+        job = next((t[4:] for t in s.get("tags", []) if t.startswith("job:")), "?")
+        print(f"{s.get('short_id', s.get('id', '')[:8])}  {s.get('time', '')[:19]}  "
+              f"{job:<10} {' '.join(s.get('paths', []))}")
+    if not snaps:
+        print("no snapshots yet")
+    return EXIT_OK
+
+
+def cmd_restore(args) -> int:
+    cfg = machine_config()
+    if args.in_place:
+        target = "/"
+    else:
+        target = args.target or f"/var/tmp/pengyos-restore-{now():%Y%m%d-%H%M%S}"
+    extra = [a for p in args.path for a in ("--include", p)]
+    restic(cfg, ["restore", args.snapshot, "--target", target] + extra)
+    say(f"restored {args.snapshot} {'in place' if args.in_place else 'into ' + target}")
+    return EXIT_OK
+
+
+def cmd_mount(args) -> int:
+    cfg = machine_config()
+    say(f"browse the snapshots in {args.dir} (Ctrl-C to unmount)")
+    return restic(cfg, ["mount", args.dir], check=False).returncode
+
+
+def cmd_restic(args) -> int:
+    cfg = machine_config()
+    return restic(cfg, args.args, check=False).returncode
+
+
+# --- main ------------------------------------------------------------------------------
+
+def main(argv: list[str] | None = None) -> int:
+    global ROOT, RESTIC
+    ap = argparse.ArgumentParser(prog="pengyos-backup", description=__doc__.splitlines()[0])
+    ap.add_argument("--root", default="/", help=argparse.SUPPRESS)
+    ap.add_argument("--restic", default=os.environ.get("PENGYOS_BACKUP_RESTIC", "restic"),
+                    help="the restic binary (default: restic on PATH)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("init", help="set the repository and create it")
+    p.add_argument("--repo", required=True)
+    sub.add_parser("kit", help="print the recovery kit (repository + password)")
+    for n in ("enable", "disable"):
+        p = sub.add_parser(n, help=f"{n} a job (and the timer)")
+        p.add_argument("job")
+    p = sub.add_parser("run", help="back up now")
+    p.add_argument("jobs", nargs="*")
+    p.add_argument("--scheduled", action="store_true", help="also retention and a due check")
+    p = sub.add_parser("status")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("snapshots")
+    p.add_argument("job", nargs="?")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("restore")
+    p.add_argument("snapshot")
+    p.add_argument("--path", action="append", default=[], help="only this path (repeatable)")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--target", help="restore under this directory (default /var/tmp/...)")
+    g.add_argument("--in-place", action="store_true", help="overwrite the live files")
+    p = sub.add_parser("mount")
+    p.add_argument("dir")
+    p = sub.add_parser("check")
+    p.add_argument("--read-data", default=DEFAULT_CHECK["read_data_subset"])
+    p = sub.add_parser("restic", help="run restic on this machine's repository")
+    p.add_argument("args", nargs=argparse.REMAINDER)
+    p = sub.add_parser("_ns-exec")
+    p.add_argument("spec")
+
+    a = ap.parse_args(argv)
+    ROOT, RESTIC = Path(a.root), a.restic
+    try:
+        if a.cmd == "_ns-exec":
+            return ns_exec(a.spec)
+        if a.cmd in ("enable", "disable"):
+            return cmd_enable(a, a.cmd == "enable")
+        return {"init": cmd_init, "kit": cmd_kit, "run": cmd_run, "status": cmd_status,
+                "snapshots": cmd_snapshots, "restore": cmd_restore, "mount": cmd_mount,
+                "check": cmd_check, "restic": cmd_restic}[a.cmd](a)
+    except Usage as e:
+        warn(str(e))
+        return EXIT_USAGE
+    except RuntimeError as e:
+        warn(str(e))
+        return EXIT_FAIL
+
+
+if __name__ == "__main__":
+    sys.exit(main())
