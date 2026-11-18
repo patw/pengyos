@@ -44,6 +44,11 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 - The kconfig symbol fixture is regenerated from the new tree: two added
   (`BR2_GOPROXY`, `BR2_TOOLCHAIN_HAS_GCC_BUG_104820`), one removed
   (`BR2_HIDE_SECONDARY_TARGET_OPTIONS`, unused here).
+- Desktop sets `BR2_PACKAGE_LLVM_RTTI=y` itself. Until 2026.08.2 our Mesa drivers
+  selected it through Mesa's OpenCL option; without it the target llvm rebuilt
+  without RTTI while host-llvm kept it, and Mesa refused to configure. The
+  target clang, libclc and SPIR-V tools that chain also pulled in are no longer
+  selected (their files stay in existing build trees until a clean build).
 
 ### Added: real backups, `pengyos-backup` over restic (2026-11-17)
 - Every Server and Desktop gets `pengyos-backup`: encrypted, deduplicated restic
