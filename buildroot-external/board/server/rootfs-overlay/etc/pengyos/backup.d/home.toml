@@ -1,0 +1,20 @@
+# Job "home": everyone's files.
+# Put an empty file named .nobackup in any folder to leave that folder out.
+# Enable with  pengyos-backup enable home
+enabled = false
+paths = ["/home", "/root"]
+exclude = [
+  "/home/*/.cache",
+  "/home/*/.local/share/Trash",
+  "/home/*/.var/app/*/cache",
+  "/home/*/.local/share/Steam/steamapps",
+  "/home/*/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps",
+  "/home/*/.local/share/containers/storage",
+  "/root/.cache",
+  "node_modules",
+  "*.iso",
+]
+exclude_if_present = [".nobackup"]
+# Skip single files larger than this (disk images, downloads); "" for no limit.
+max_file_size = "8G"
+snapshot = true

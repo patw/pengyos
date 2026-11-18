@@ -88,7 +88,7 @@ yet.
 | Path | What |
 |---|---|
 | `/etc/os-release` | `ID=pengyos`, `VARIANT`, `IMAGE_ID`, `IMAGE_VERSION`, `BUILD_ID` |
-| `/etc/pengyos/` | this machine's config: `update.conf`, `autologin.conf`, `backup.conf`, `monitor.conf`, `buildroot.config` |
+| `/etc/pengyos/` | this machine's config: `update.conf`, `autologin.conf`, `backup.toml` + `backup.d/` (backups), `monitor.conf`, `buildroot.config` |
 | `/usr/lib/pengyos/` | the boot machinery: `preinit`, the `update.d/` steps, session scripts |
 | `/usr/share/pengyos/` | signing keys, guest definitions (`guests.d/`) |
 | `/data/` | the btrfs data partition (mounted as `/etc` upper, `/home`, `/var`) |
@@ -113,6 +113,7 @@ site: <https://pengyos.catbee.ca>.
 | `pengyos-install-tui` | the console installer (`install`) |
 | `pengyos-autologin on\|off` | Desktop: skip the login screen at boot and the lock screen on sleep/idle |
 | `pengyos-webui status\|on\|off` | Server/Desktop: serve the Pengy web UI as a user, on `http://127.0.0.1:5000` (no login — see Gotchas) |
+| `pengyos-backup status\|run\|snapshots\|restore\|kit` | Server/Desktop: restic backups of the jobs in `/etc/pengyos/backup.d` (`system`, `home`; `enable JOB`) to the repository in `/etc/pengyos/backup.toml` (`init --repo`), read from btrfs snapshots; nightly 02:30; `status --json`. Restores go to `/var/tmp/pengyos-restore-*` unless `--in-place` |
 | `pengyos-alert status\|test\|send` | Server/Desktop: alerts over ntfy/mail (`/etc/pengyos/alert.conf`, secrets in root-only `alert.cred`); smartd, failed timers and full disks already call it; your units join with `OnFailure=pengyos-alert@%n.service` |
 | `pengyos-shares status\|add\|remove\|passwd` | Server/Desktop: share folders over SMB (the kernel's ksmbd; no Samba server) — see Gotchas |
 | `pengyos-vm list\|create\|start\|ssh\|console\|stop` | Server/Desktop: VMs in `~/vms`, NAT or `sudo pengyos-vm bridge enable` (wired only); `loginctl enable-linger` (no sudo) or they stop at logout |

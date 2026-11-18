@@ -556,6 +556,10 @@ BR2_PACKAGE_LIBOPENSSL_BIN=y
 # rclone mount, sshfs-style tools, AppImages. The Desktop already pulled it in
 # through its portals; the Server had no /dev/fuse at all.
 BR2_PACKAGE_LIBFUSE3=y
+# restic: encrypted, deduplicated backups (US-SRV-5), the engine under
+# pengyos-backup (Server overlay). Our recipe (package/restic); pure Go, ~40 MB.
+# Here, not in the Desktop, so a Server and both ISOs can restore.
+BR2_PACKAGE_RESTIC=y
 
 # --- An unattended box: health, VPN, NIC, GPU firmware, wheels (2026-10-25) ----
 # Found by setting the 26.10.40 Server against its user stories next to the

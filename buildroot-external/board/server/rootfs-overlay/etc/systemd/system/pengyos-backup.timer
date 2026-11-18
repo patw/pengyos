@@ -1,25 +1,14 @@
-# ============================================================================
-# PengyOS Server — pengyos-backup.timer (backup cadence)
-# ----------------------------------------------------------------------------
-# Triggers pengyos-backup.service daily at 02:00 (OnCalendar=*-*-* 02:00:00),
-# off-peak so backups do not compete with daytime I/O. Persistent=yes means a
-# missed run (host asleep) is caught up on the next boot/run, so a long downtime
-# does not skip a nightly backup.
-#
-# Shipped DISABLED by 10-pengyos-server.preset (without it, the image build's
-# `systemctl preset-all` would enable it from [Install]). The defaults tar all
-# of /etc and /home onto the same disk and keep 7 copies, so on a Desktop
-# (Steam libraries, Flatpak data in /home) it filled the drive. To turn it on, point BACKUP_DEST in
-# /etc/pengyos/backup.conf at a different disk, then
-#   systemctl enable --now pengyos-backup.timer
-# ============================================================================
+# Nightly backups at 02:30 (spread over 30 min), before pengyos-update-auto's 04:00
+# window. Persistent=yes: a machine that was off catches up at the next boot.
+# Shipped DISABLED (10-pengyos-server.preset); `pengyos-backup enable JOB` turns it
+# on, and it goes off again when the last job is disabled.
 
 [Unit]
-Description=PengyOS Server backup timer
-Documentation=file:/usr/libexec/pengyos/pengyos-backup.sh
+Description=Nightly PengyOS backup
 
 [Timer]
-OnCalendar=*-*-* 02:00:00
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=30min
 Persistent=yes
 Unit=pengyos-backup.service
 

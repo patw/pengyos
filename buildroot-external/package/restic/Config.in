@@ -1,0 +1,10 @@
+config BR2_PACKAGE_RESTIC
+	bool "restic"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	help
+	  Encrypted, deduplicated backups to a local disk, SFTP, S3
+	  (and Backblaze B2 through its S3 API) or a REST server: the
+	  engine under pengyos-backup. Buildroot 2026.08 does not ship
+	  it.
+
+	  https://restic.net
