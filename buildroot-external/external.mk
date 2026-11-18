@@ -290,7 +290,7 @@ ifeq ($(BR2_PACKAGE_PIPEWIRE),y)
 LINUX_FIRMWARE_DIRS += cirrus ti/audio/tas2781
 endif
 
-# CPU microcode, built into the kernel (core.config says why). The early loader
+# CPU microcode, built into the kernel (server.config says why). The early loader
 # looks built-in firmware up by name (intel-ucode/ff-mm-ss,
 # amd-ucode/microcode_amd_famXXh.bin), so CONFIG_EXTRA_FIRMWARE lists every file
 # both packages provide, from one directory: intel-microcode installs to

@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: Core is a leaner VM image with uv; throwaway runs are offline (2026-11-18)
+- Core no longer ships linux-firmware or CPU microcode: a VM loads neither, and
+  they were 305 MB of Core's 667 MB root. They start at the Server layer, so Server
+  and Desktop ship exactly what they did (SPEC §2.1, §2.2).
+- `uv` moves from Server to Core, for US-CORE-9: an agent's throwaway VM installs
+  the Python packages a job needs (`uv venv`, `uv pip install`, `uv run --with`).
+- `pengyos-vm run` (0.4.0) is offline by default: QEMU's `restrict=on`, so the job
+  reaches neither the internet nor the host. Plain QEMU NAT maps 10.0.2.2 onto the
+  host's 127.0.0.1, which let a job reach loopback-only services. `--online` lets a
+  job install packages; a failed offline run says so. `create`d VMs are unchanged.
+
 ### Changed: Buildroot 2026.08.2 (2026-11-18)
 - Buildroot moves to the 2026.08.2 point release (2026-11-16, tag signed by the
   release manager, same key as 2026.08.1). For what we ship it is mostly security

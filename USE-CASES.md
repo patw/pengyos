@@ -63,7 +63,7 @@ This is a real design requirement, not an afterthought.
 **The story of this edition:** a tiny, headless, unattended machine that must run for
 years on cheap hardware and be fixable from a distance.
 
-> **2026-10-31:** Core's own use is now a **throwaway VM** (US-CORE-8): spun up for a
+> **2026-10-31:** Core's own use is now a **throwaway VM** (US-CORE-8, US-CORE-9): spun up for a
 > job, given a static binary or Python, run isolated, then deleted. It is not updated
 > in place (US-CORE-4 is retired for Core) and bare-metal Core is not a goal; the node
 > stories below hold for the editions stacked on Core, the Server first.
@@ -155,10 +155,28 @@ is in the journal; removing it is deleting the unit and the file.
 How: `pengyos-vm run --image pengyos-core-x86_64.img --copy ./tool -- ./tool/run`
 on a Server boots a copy-on-write overlay of the cached Core image, with a key made for
 this run, puts the files in `/root/run`, runs the command, copies `--fetch` paths back
-and deletes the VM.
+and deletes the VM. The run is offline unless asked (`--online`): it reaches neither the
+internet nor the host, whose loopback-only services QEMU's NAT would otherwise expose.
 **Acceptance:** the command's output and exit status come back; afterwards no VM
 folder, unit or disk is left (also after Ctrl-C); a second run starts from the same
-clean image.
+clean image; without `--online` the guest cannot reach the host's 127.0.0.1 services
+or the internet.
+
+**US-CORE-9 — A throwaway Python workbench.** *(2026-11-18)*
+> *As an agent, I want to spin up a VM, install whatever Python packages a job needs and
+> run it, so that trying a library or a messy pipeline never touches the host's Python
+> or the next job.*
+
+How: `pengyos-vm run --online --copy job/ -- 'cd job && uv venv && uv pip install -r
+requirements.txt && .venv/bin/python main.py'`, or `uv run --with pandas --with httpx
+main.py` for a one-off. Core ships `uv` against its own python3; wheels come from PyPI
+(manylinux wheels run on Core's glibc), and the venv lives on the run's overlay disk, so
+it is gone with the VM. A package that only ships an sdist needing a compiler is out of
+scope for Core (no toolchain): build the wheel on a Server (`dx uv build --wheel`) and
+`--copy` it in.
+**Acceptance:** from a Server, a run installs a handful of common packages (requests,
+numpy, pandas) with `uv` and runs a script that imports them; its output comes back;
+nothing is left on the host but what `--fetch` brought back.
 
 ---
 

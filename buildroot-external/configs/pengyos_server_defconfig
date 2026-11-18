@@ -281,43 +281,11 @@ BR2_PACKAGE_OPENSSH_KEY_UTILS=y
 # made at build time instead. The Desktop layer lists this table with its own.
 BR2_ROOTFS_USERS_TABLES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/users.table"
 
-# --- Hardware firmware (real-hardware support: GPU, wired NIC, WiFi) ---------
-# On the N100 weather station /lib/firmware was empty: i915 (Alder Lake-N GPU)
-# failed to load DMC/GuC firmware and WiFi had no regulatory.db. Ship the small
-# subset an Intel mini-PC actually needs (not all of linux-firmware).
-BR2_PACKAGE_LINUX_FIRMWARE=y
-BR2_PACKAGE_LINUX_FIRMWARE_I915=y
-BR2_PACKAGE_LINUX_FIRMWARE_RTL_8169=y
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_9XXX=y
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_QUZ=y
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E=y
-# AX200 = iwlwifi-cc-a0 (Buildroot ships it under the 22260 option); miniserv.
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22260=y
-# Intel Wireless 8265 (iwlwifi-8265) — behothinkpad.
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8265=y
-# Realtek RTL8821CE (rtw88) — behobasement.
-BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW88=y
-# Broader firmware so the "boot anywhere" stick works on other hardware: AMD GPU,
-# Atheros/Broadcom/Realtek WiFi families.
-BR2_PACKAGE_LINUX_FIRMWARE_AMDGPU=y
-BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_6174=y
-BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_11K_WCN6855=y
-BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XXX=y
-BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW89=y
-# regulatory.db — required for any WiFi regulatory domain.
-BR2_PACKAGE_WIRELESS_REGDB=y
-
-# --- CPU microcode (Intel + AMD) ----------------------------------------------
-# No edition shipped any: behoweather's N100 ran its factory revision 0xe
-# ("Running old microcode", "Register File Data Sampling: Vulnerable: No
-# microcode"; Intel's 20260812 release has 0x21). The image has no initramfs, so
-# the files are built INTO the kernel (CONFIG_EXTRA_FIRMWARE, set by external.mk)
-# and the early loader applies them at boot. Riding inside bzImage means every
-# existing install gets them from a normal update - no grub.cfg or updater change.
-# Not installed to /lib/firmware: the kernel copy is the one that is used.
-BR2_PACKAGE_INTEL_MICROCODE=y
-# BR2_PACKAGE_INTEL_MICROCODE_INSTALL_TARGET is not set
-BR2_PACKAGE_LINUX_FIRMWARE_AMD_UCODE=y
+# --- No hardware firmware or microcode in Core (2026-11-18) ------------------
+# Core is a disposable VM image (US-CORE-8, decided 2026-10-31): a guest loads no
+# GPU, NIC or Wi-Fi blobs and the hypervisor owns microcode. linux-firmware and
+# the microcode were 305 MB of Core's 667 MB root; they now start at the Server
+# layer (server.config), so Server and Desktop ship exactly what they did.
 
 # --- Installer / rescue tooling (future: install PengyOS to a target disk) ---
 # The stick doubles as a rescue/installer: partition a target disk (parted /
@@ -358,6 +326,11 @@ BR2_PACKAGE_PYTHON3_CURSES=y
 BR2_PACKAGE_PYTHON3_PYEXPAT=y      # xml
 BR2_PACKAGE_PYTHON3_UNICODEDATA=y
 BR2_PACKAGE_PYTHON3_DECIMAL=y
+# uv (2026-11-18): an agent's throwaway VM installs Python packages for its job
+# (US-CORE-9: `uv venv`, `uv pip install`, `uv run --with`), against this
+# python3. Was Server-only (Pengy's field review R4); Server and Desktop still
+# have it through this layer.
+BR2_PACKAGE_UV=y
 
 # --- Pengy: the built-in agent ------------------------------------------------
 # package/pengy (PengyR): one Rust agent core, three front ends — pengy-cli in
@@ -526,8 +499,7 @@ BR2_PACKAGE_CRUN=y
 BR2_PACKAGE_PYTHON3_CODECSCJK=y
 BR2_PACKAGE_PYTHON_PIP=y
 BR2_PACKAGE_PYTHON_SETUPTOOLS=y
-# uv on the host (Pengy's field review R4): US-SRV-10's one-venv-per-app recipe.
-BR2_PACKAGE_UV=y
+# uv comes from Core (core.config): US-SRV-10's one-venv-per-app recipe.
 # Shells and source control. zsh is the Desktop installer's default shell for
 # the user it creates; root keeps bash.
 BR2_PACKAGE_ZSH=y
@@ -565,6 +537,46 @@ BR2_PACKAGE_LIBFUSE3=y
 # pengyos-backup (Server overlay). Our recipe (package/restic); pure Go, ~40 MB.
 # Here, not in the Desktop, so a Server and both ISOs can restore.
 BR2_PACKAGE_RESTIC=y
+
+# --- Hardware firmware (real-hardware support: GPU, wired NIC, WiFi) ---------
+# Moved from core.config on 2026-11-18: Core is a VM-only image and needs none of
+# it, so real hardware starts at this layer.
+# On the N100 weather station /lib/firmware was empty: i915 (Alder Lake-N GPU)
+# failed to load DMC/GuC firmware and WiFi had no regulatory.db. Ship the small
+# subset an Intel mini-PC actually needs (not all of linux-firmware).
+BR2_PACKAGE_LINUX_FIRMWARE=y
+BR2_PACKAGE_LINUX_FIRMWARE_I915=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_8169=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_9XXX=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_QUZ=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E=y
+# AX200 = iwlwifi-cc-a0 (Buildroot ships it under the 22260 option); miniserv.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22260=y
+# Intel Wireless 8265 (iwlwifi-8265) — behothinkpad.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8265=y
+# Realtek RTL8821CE (rtw88) — behobasement.
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW88=y
+# Broader firmware so the "boot anywhere" stick works on other hardware: AMD GPU,
+# Atheros/Broadcom/Realtek WiFi families.
+BR2_PACKAGE_LINUX_FIRMWARE_AMDGPU=y
+BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_6174=y
+BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_11K_WCN6855=y
+BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XXX=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW89=y
+# regulatory.db — required for any WiFi regulatory domain.
+BR2_PACKAGE_WIRELESS_REGDB=y
+
+# --- CPU microcode (Intel + AMD) ----------------------------------------------
+# No edition shipped any: behoweather's N100 ran its factory revision 0xe
+# ("Running old microcode", "Register File Data Sampling: Vulnerable: No
+# microcode"; Intel's 20260812 release has 0x21). The image has no initramfs, so
+# the files are built INTO the kernel (CONFIG_EXTRA_FIRMWARE, set by external.mk)
+# and the early loader applies them at boot. Riding inside bzImage means every
+# existing install gets them from a normal update - no grub.cfg or updater change.
+# Not installed to /lib/firmware: the kernel copy is the one that is used.
+BR2_PACKAGE_INTEL_MICROCODE=y
+# BR2_PACKAGE_INTEL_MICROCODE_INSTALL_TARGET is not set
+BR2_PACKAGE_LINUX_FIRMWARE_AMD_UCODE=y
 
 # --- An unattended box: health, VPN, NIC, GPU firmware, wheels (2026-10-25) ----
 # Found by setting the 26.10.40 Server against its user stories next to the

@@ -183,10 +183,12 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
   `/bin/sh` is bash.
 - **Storage tools:** e2fsprogs, btrfs-progs, dosfstools, exfatprogs, parted, LVM2,
   cryptsetup, efibootmgr.
-- **Hardware:** a broad firmware set (Intel/Realtek/MediaTek/Qualcomm/Broadcom
-  Wi-Fi, i915, amdgpu) and kernel drivers for the fleet's NICs, storage, sensors;
-  Intel and AMD CPU microcode built into the kernel (applied by the early loader, no
-  initramfs); the Intel IOMMU on by default; WireGuard.
+- **Hardware:** kernel drivers for the fleet's NICs, storage and sensors (the
+  kernel is shared with Server); the Intel IOMMU on by default; WireGuard. **No
+  firmware blobs or CPU microcode** (2026-11-18): a VM loads none, so
+  linux-firmware and the microcode start at the Server layer (§2.2).
+- **Python jobs:** `uv` (2026-11-18, from Server) against the system python3, so a
+  throwaway run can install what it needs (US-CORE-9).
 - **Provenance:** `/etc/os-release` carries `IMAGE_ID`, `IMAGE_VERSION` and
   `BUILD_ID` (the git commit); the SBOM is embedded.
 - **Image:** a disk image (`pengyos-core-x86_64.img`) written straight to the target.
@@ -201,9 +203,10 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 | Group | Ships |
 |---|---|
 | Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq, curl |
-| Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo (sudo-rs) |
+| Developer | Python 3 + pip (uv comes from Core), distrobox (a full distro userspace in a container), sudo (sudo-rs) |
 | Containers | **podman**, rootless and daemonless, with the API socket |
 | Ops | a metrics timer, backups (`pengyos-backup` over restic: jobs in `/etc/pengyos/backup.d`, read from btrfs read-only snapshots, to SFTP, a disk or S3/B2, retention and a monthly read-back check; off until a job is enabled), the daily update check; alerts over ntfy or SMTP mail (`pengyos-alert`: smartd, failed timers, full disks); firmware updates (fwupd: `fwupdmgr`, LVFS metadata daily, UEFI capsules and the dbx); disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
+| Hardware | linux-firmware (Intel/Realtek/MediaTek/Qualcomm/Broadcom Wi-Fi, i915, xe, amdgpu, regulatory.db) and Intel + AMD CPU microcode built into the kernel (applied by the early loader, no initramfs); in Core until 2026-11-18, which is VM-only |
 | As a VM guest | virtio (KVM, Proxmox, QEMU) and Hyper-V/Azure (VMBus disk, network, console, `hv_utils`), VMGENID |
 | Compatibility | the libraries manylinux wheels assume the host has: `libGL.so.1`/`libEGL.so.1` (libglvnd dispatch only, no GL driver) and the X11 client libraries |
 | Virtual machines | **QEMU** (x86_64 system emulation, KVM-accelerated, TCG fallback; SeaBIOS + edk2 guest firmware; `qemu-img`) and KVM, vhost, VFIO in the kernel |
