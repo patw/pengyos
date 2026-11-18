@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: Buildroot 2026.08.2 (2026-11-18)
+- Buildroot moves to the 2026.08.2 point release (2026-11-16, tag signed by the
+  release manager, same key as 2026.08.1). For what we ship it is mostly security
+  bumps: libcurl 8.23.0, expat 2.10.0, CUPS 2.4.20, BIND 9.20.30, p11-kit 0.26.5,
+  zlib 1.4, nghttp2 1.70.0, parted 3.8, rsync 3.5.2, patch 2.8.1, Python 3.14.10,
+  GLib 2.88.4, OpenSSH 10.6p2, libarchive 3.8.10, NSS 3.132, and systemd 258.12.
+- Go is 1.27.3, so the carried crypto/x509 patch (CVE-2026-111943) is upstream and
+  deleted; the go1.27.4 net/http patch (CVE-2026-97054) moves to
+  `patches/go-src/1.27.3`. Every Go package (podman, runc, fzf, ipp-usb,
+  nvidia-container-toolkit, restic) needs a `<pkg>-dirclean` once, because
+  Buildroot does not rebuild a package when its host toolchain changes.
+- `BR2_GOPROXY="direct"`: 2026.08.2 makes proxy.golang.org the default for
+  vendoring Go modules; we keep fetching them from their sources, as before.
+- The kconfig symbol fixture is regenerated from the new tree: two added
+  (`BR2_GOPROXY`, `BR2_TOOLCHAIN_HAS_GCC_BUG_104820`), one removed
+  (`BR2_HIDE_SECONDARY_TARGET_OPTIONS`, unused here).
+
 ### Added: real backups, `pengyos-backup` over restic (2026-11-17)
 - Every Server and Desktop gets `pengyos-backup`: encrypted, deduplicated restic
   snapshots of jobs in `/etc/pengyos/backup.d/` to one repository per machine (SFTP

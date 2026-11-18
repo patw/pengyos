@@ -50,6 +50,11 @@ BR2_TOOLCHAIN_HAS_THREADS=y
 # same absolute paths on every host you compare. (That is also why external.mk
 # can turn the build-id back on, which BR2_REPRODUCIBLE switches off.)
 BR2_REPRODUCIBLE=y
+# Go modules are fetched straight from their source repositories, as before
+# Buildroot 2026.08.2 made the module proxy (proxy.golang.org) its default. The
+# vendored tarball and its hash are the same either way; this keeps a Go recipe
+# bump from depending on, or reporting module names to, a third-party mirror.
+BR2_GOPROXY="direct"
 
 # --- Compiler cache -----------------------------------------------------------
 # ccache in front of every host and target C/C++ compile, cache in
