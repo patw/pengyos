@@ -17,6 +17,16 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: quadlet containers that log to /dev/stderr start again (2026-11-19)
+- Quadlet containers now use podman's journald log driver, not `passthrough`.
+  Passthrough (since 26.11.16) made the container's stdout and stderr the
+  journal's socket, and an image that opens `/dev/stdout` or `/dev/stderr` by
+  path fails with ENXIO: the official nginx image (its `error.log` links to
+  `/dev/stderr`) exited at start, found when a ThinkPad Server on 26.11.13 jumped
+  to 26.11.23. With journald the output still reaches `journalctl [--user] -u
+  NAME` and survives `--rm`, and `podman logs` works for quadlets again. Tested
+  on the ThinkPad in both lanes.
+
 ### Changed: Core is a leaner VM image with uv; throwaway runs are offline (2026-11-18)
 - Core no longer ships linux-firmware or CPU microcode: a VM loads neither, and
   they were 305 MB of Core's 667 MB root. They start at the Server layer, so Server
