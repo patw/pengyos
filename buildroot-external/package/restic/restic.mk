@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-RESTIC_VERSION = 0.19.1
+RESTIC_VERSION = 0.20.0
 RESTIC_SITE = $(call github,restic,restic,v$(RESTIC_VERSION))
 RESTIC_GOMOD = github.com/restic/restic
 RESTIC_LICENSE = BSD-2-Clause
