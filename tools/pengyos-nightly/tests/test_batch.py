@@ -134,6 +134,8 @@ class Fake:
 
     def __init__(self, fail=(), patch_fails=None, repo=None):
         self.calls, self.fail = [], tuple(fail)
+        # needle -> stdout, for a step whose output the test needs to shape.
+        self.out_for: dict[str, str] = {}
         self.patch_fails = {k: tuple(v) for k, v in (patch_fails or {}).items()}
         self.repo = repo
         # A name we have actually seen in the tree is ours: it fails while the file is
@@ -158,7 +160,7 @@ class Fake:
         self.calls.append(argv)
         joined = " ".join(argv)
         rc = 1 if any(f in joined for f in self.fail) else 0
-        out = "ok " + joined
+        out = next((o for n, o in self.out_for.items() if n in joined), "ok " + joined)
         if rc == 0 and self.repo:
             for pkg, names in self.patch_fails.items():
                 if f"{pkg}-patch" not in joined:
@@ -1269,3 +1271,51 @@ def test_routine_night_says_so():
     text = A.release_notes([_bump_action()])
     _notes_ok(text)
     assert text == "Routine updates to libmtp.\n\n- libmtp 1.1.23\n"
+
+
+# --- a failed release says what failed, and keeps everything ------------------
+
+# The shape of the 2026-11-22 nightly: the boot check prints the FAIL lines, then
+# the rest of the matrix in PASS lines, so 2000 characters from the end never
+# reached the name of the check that failed.
+BOOT_FAIL_OUTPUT = (
+    "[release] pengyos-server: boot check\n"
+    "result:   pass (2 variant(s), 50 checks, 0 failed)\n"
+    "[release] pengyos-server-nvidia: boot check\n"
+    "variant:  uefi FAIL\n"
+    "          check podman-service FAIL\n"
+    + "          check no-io-errors PASS \x1b[0;32m  OK  \x1b[0m] Started thing.\n" * 300
+    + "\x1b]3008;start=abc;type=session\x1b\\login\n"
+    "result:   fail (2 variant(s), 50 checks, 1 failed)\n")
+
+
+def test_a_boot_check_failure_names_the_check_and_keeps_the_full_output(tmp_path):
+    actions = [_patch_action(), _bump_action()]
+    repo, site, state = _repo(tmp_path), _site(tmp_path), tmp_path / "state"
+    fake = Fake(["release.sh"], None, repo)
+    fake.out_for["release.sh"] = BOOT_FAIL_OUTPUT
+    result = A.run_batch(actions, _cfg(key_file=_key(tmp_path)), repo, tmp_path, site,
+                         state, apply=True, run=fake, today=TODAY)
+    err = result["error"]
+    assert "failed in: pengyos-server-nvidia: boot check" in err, err[:400]
+    assert "check podman-service FAIL" in err, err[:400]
+    assert "no-io-errors PASS" not in err.split("--- last output ---")[0], \
+        "a PASS line is not a failure because its name says error"
+    assert "\x1b" not in err, "escape codes are noise in actions.json and the mail"
+    log = state / "reports" / f"{TODAY.isoformat()}-act-release.log"
+    assert log.read_text() == BOOT_FAIL_OUTPUT, "the whole output, byte for byte"
+    assert str(log) in err
+    assert "podman-service FAIL" in result["batch_failure"]["detail"]
+    assert _branch(repo) == "main" and not _dirty(repo)
+
+
+def test_release_failure_says_when_the_log_could_not_be_written(tmp_path):
+    blocker = tmp_path / "reports"
+    blocker.write_text("a file where the directory should be")
+    why = A.release_failure("check x FAIL\n", blocker / "r.log")
+    assert "check x FAIL" in why and "full output NOT saved" in why
+
+
+def test_release_failure_without_a_log_path_still_reports(tmp_path):
+    why = A.release_failure("[release] core: build\nmake: *** Error 2\n", None)
+    assert why.startswith("failed in: core: build") and "Error 2" in why
