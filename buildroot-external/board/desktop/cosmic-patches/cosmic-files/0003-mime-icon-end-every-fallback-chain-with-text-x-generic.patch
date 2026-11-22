@@ -1,0 +1,42 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] mime_icon: end every fallback chain with text-x-generic
+
+A file's icon names come from shared-mime-info: the type's own icon,
+<type>-<subtype>, then the generic icon (application-x-generic,
+inode-x-generic, ...). text-x-generic was used only when that list was
+empty, which it never is. So a type whose names the icon theme does not
+have drew a blank tile: on PengyOS 113 of 793 types, among them
+application/x-sharedlib, which is what every PIE binary sniffs as.
+Append text-x-generic to the fallback names when it is not already
+there, so no file is drawn without an icon.
+
+Upstream: not offered; carried
+---
+diff --git a/src/mime_icon.rs b/src/mime_icon.rs
+--- a/src/mime_icon.rs
++++ b/src/mime_icon.rs
+@@ -38,12 +38,19 @@
+                     return None;
+                 }
+                 let icon_name = icon_names.remove(0);
+-                let mut named = icon::from_name(icon_name).prefer_svg(true).size(key.size);
+-                if !icon_names.is_empty() {
+-                    let fallback_names =
+-                        icon_names.into_iter().map(std::borrow::Cow::from).collect();
+-                    named = named.fallback(Some(icon::IconFallback::Names(fallback_names)));
++                // The names come from shared-mime-info, not from the icon theme: when
++                // the theme has none of them (no application-x-generic, say) the
++                // handle resolved to nothing and the file drew a blank tile. End the
++                // chain with the same generic icon an unknown type gets, so every
++                // file has an icon.
++                if !icon_names.iter().any(|n| n.as_str() == FALLBACK_MIME_ICON) {
++                    icon_names.push(FALLBACK_MIME_ICON.to_string());
+                 }
++                let fallback_names = icon_names.into_iter().map(std::borrow::Cow::from).collect();
++                let named = icon::from_name(icon_name)
++                    .prefer_svg(true)
++                    .size(key.size)
++                    .fallback(Some(icon::IconFallback::Names(fallback_names)));
+                 Some(named.handle())
+             })
+             .clone()

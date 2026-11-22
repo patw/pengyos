@@ -17,6 +17,22 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: COSMIC Files draws an icon for every file (2026-11-22)
+- Programs, `.so` files, SQLite `.db` files, disk images, certificates, core
+  dumps and 3D models (`.stl`) showed as blank tiles in Files. Files draws a
+  file's MIME icon or its generic icon, and the Desktop's themes had neither
+  for 113 of 793 MIME types: no `application-x-generic` anywhere, and every PIE
+  binary sniffs as `application/x-sharedlib`. Pop's full-colour file-type icons
+  (SVG, 1.8 MB) are now installed, with Pop's `model` icon linked as
+  `model-x-generic`, which gives 79 of those types a real icon. cosmic-files
+  patch 0003 falls back to `text-x-generic` for the rest (sockets, FIFOs, device
+  nodes, broken links). The Desktop build fails if a common type loses its icon
+  again (`board/desktop/check-mime-icons.py`).
+- Settings → Appearance → Icons and toolkit theming no longer offers "Pop" and
+  "Default": our Pop is partial (no colour app/folder icons) and "Default" is
+  only the cursor theme, so picking either left GTK/Qt apps without icons. Both
+  are `Hidden=true`; COSMIC is the one icon theme listed.
+
 ### Fixed: quadlet containers that log to /dev/stderr start again (2026-11-19)
 - Quadlet containers now use podman's journald log driver, not `passthrough`.
   Passthrough (since 26.11.16) made the container's stdout and stderr the
