@@ -165,6 +165,8 @@ impl Catalogue {
         if self.version != 1 {
             return Err(err!("catalogue version {} is not supported (1 is)", self.version));
         }
+        // Ids are unique per kind: packs, colours and Looks are named by
+        // different commands, so a Look may share its colour theme's id.
         let mut ids = HashSet::new();
         let mut dirs = HashSet::new();
         for p in &self.icons {
@@ -192,16 +194,18 @@ impl Catalogue {
                 }
             }
         }
+        let mut colour_ids = HashSet::new();
         for c in &self.colours {
-            if !valid_id(&c.id) || !ids.insert(c.id.clone()) {
+            if !valid_id(&c.id) || !colour_ids.insert(c.id.clone()) {
                 return Err(err!("colour theme id {:?} is not a unique slug", c.id));
             }
             if crate::unpack::plain_components(Path::new(&c.file)).is_none_or(|c| c.is_empty()) {
                 return Err(err!("colour theme {}: file {:?} must be relative, without ..", c.id, c.file));
             }
         }
+        let mut look_ids = HashSet::new();
         for l in &self.looks {
-            if !valid_id(&l.id) || !ids.insert(l.id.clone()) {
+            if !valid_id(&l.id) || !look_ids.insert(l.id.clone()) {
                 return Err(err!("look id {:?} is not a unique slug", l.id));
             }
             if l.icons != COSMIC_ICONS && !dirs.contains(&l.icons) {
@@ -290,6 +294,14 @@ mode = "dark"
 "#;
 
     #[test]
+    fn ids_are_unique_per_kind() {
+        let colour = "\n[[colours]]\nid = \"frost\"\nname = \"F\"\nauthor = \"a\"\nlicense = \"MIT\"\nfile = \"c.ron\"\n";
+        let twice = GOOD.to_string() + &GOOD[GOOD.find("[[looks]]").unwrap()..];
+        assert!(Catalogue::parse(&(GOOD.to_string() + colour)).is_ok(), "a Look may share its colours' id");
+        assert!(Catalogue::parse(&twice).unwrap_err().0.contains("unique slug"));
+    }
+
+    #[test]
     fn a_good_catalogue_loads() {
         let c = Catalogue::parse(GOOD).unwrap();
         assert_eq!(c.pack_for_theme("Ice-Dark").unwrap().id, "ice");
@@ -308,7 +320,7 @@ mode = "dark"
             ("{ dir = \"Ice\"", "{ dir = \"Cosmic\"", "plain name"),
             ("icons = \"Ice-Dark\"", "icons = \"Papirus\"", "not Cosmic"),
             ("colours = \"default\"", "colours = \"nord\"", "not \"default\""),
-            ("id = \"frost\"", "id = \"ice\"", "unique slug"),
+            ("id = \"frost\"", "id = \"Frost\"", "unique slug"),
             ("summary = \"test\"\nlicense", "summary = \"test\"\nhack = 1\nlicense", "unknown field"),
         ];
         for (from, to, why) in bad {

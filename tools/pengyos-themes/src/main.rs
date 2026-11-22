@@ -107,9 +107,13 @@ fn catalogue(paths: &Paths) -> std::result::Result<Catalogue, Fail> {
     Ok(Catalogue::load(&paths.catalogue)?)
 }
 
-/// The catalogue when there is one (colours and Looks work without it).
-fn catalogue_opt(paths: &Paths) -> Option<Catalogue> {
-    Catalogue::load(&paths.catalogue).ok()
+/// The catalogue when there is one (colours and Looks work without it). A
+/// catalogue that is there but does not load is an error, not "no catalogue".
+fn catalogue_opt(paths: &Paths) -> std::result::Result<Option<Catalogue>, Fail> {
+    if !paths.catalogue.exists() {
+        return Ok(None);
+    }
+    Ok(Some(Catalogue::load(&paths.catalogue)?))
 }
 
 fn run(raw: Vec<String>) -> R {
@@ -221,7 +225,7 @@ fn run(raw: Vec<String>) -> R {
             Ok(())
         }
         ["colours" | "colors", "apply", arg] => {
-            let cat = catalogue_opt(&paths);
+            let cat = catalogue_opt(&paths)?;
             let (e, mode) = colours::apply(&paths, cat.as_ref(), arg)?;
             println!("Colours: {} ({}).", e.name, mode.as_str());
             Ok(())
@@ -245,7 +249,7 @@ fn run(raw: Vec<String>) -> R {
             Ok(())
         }
         ["looks", "list"] => {
-            let cat = catalogue_opt(&paths);
+            let cat = catalogue_opt(&paths)?;
             let all = looks::list(&paths, cat.as_ref());
             if a.json {
                 let v: Vec<_> = all
@@ -267,13 +271,13 @@ fn run(raw: Vec<String>) -> R {
             Ok(())
         }
         ["looks", "apply", id] => {
-            let cat = catalogue_opt(&paths);
+            let cat = catalogue_opt(&paths)?;
             let l = looks::apply(&paths, cat.as_ref(), id, &Curl)?;
             println!("Look: {} (icons {}, {}). Undo with: pengyos-themes undo", l.name, l.icons, l.mode.as_str());
             Ok(())
         }
         ["looks", "save", name @ ..] if !name.is_empty() => {
-            let cat = catalogue_opt(&paths);
+            let cat = catalogue_opt(&paths)?;
             let l = looks::save(&paths, cat.as_ref(), &name.join(" "))?;
             println!("Saved the Look {} ({}).", l.name, l.id);
             Ok(())
