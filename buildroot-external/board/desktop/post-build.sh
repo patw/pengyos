@@ -844,6 +844,15 @@ for icon in help-info-symbolic link-symbolic view-grid-symbolic view-list-symbol
 done
 echo "post-build: COSMIC's theme icons are all present"
 
+# --- File-type icons COSMIC Files draws ---------------------------------------
+# Files draws a file's MIME icon or its generic icon, and nothing when the theme
+# has neither: until 2026-11-22 every PIE binary and .so (application/x-sharedlib),
+# SQLite file, disk image and core dump was a blank tile (no application-x-generic
+# in any theme). pop-cursor-theme now ships Pop's file-type icons, and cosmic-files
+# patch 0003 falls back to text-x-generic; this fails the build if a common type
+# loses its real icon again, which the fallback alone would hide.
+python3 "$(dirname "$0")/check-mime-icons.py" "${TARGET_DIR}"
+
 # --- gdk-pixbuf can load those icons ---------------------------------------------
 # The themes are SVG only. Until 26.10.35 gdk-pixbuf had no SVG loader, so a
 # host GTK3 window (the portal's app chooser and print dialog) loaded none of
