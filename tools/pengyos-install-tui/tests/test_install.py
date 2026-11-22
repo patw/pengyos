@@ -107,10 +107,24 @@ def test_ssh_password_opt_in_line_by_line(payload):
 
 
 def test_desktop_autologin_opt_in(desktop_payload):
-    rc, out, calls = _drive(desktop_payload, ["1", "box", "pat", "", KEY, "", "", "y", "erase"],
+    rc, out, calls = _drive(desktop_payload, ["1", "box", "pat", "", KEY, "", "", "y", "", "erase"],
                             ["hunter22", "hunter22"])
     assert rc == 0 and "automatic" in out
     assert calls[0][1].autologin is True
+    assert calls[0][1].appearance == "dark", "dark is the default"
+
+
+def test_desktop_light_appearance(desktop_payload):
+    rc, out, calls = _drive(desktop_payload, ["1", "box", "pat", "", KEY, "", "", "", "l", "erase"],
+                            ["hunter22", "hunter22"])
+    assert rc == 0 and "light (Glacier Light)" in out
+    assert calls[0][1].appearance == "light"
+
+
+def test_server_has_no_appearance(payload):
+    rc, out, calls = _drive(payload, ["1", "box", "pat", "", KEY, "", "", "erase"],
+                            ["hunter22", "hunter22"])
+    assert rc == 0 and calls[0][1].appearance == ""
 
 
 def test_not_confirmed_changes_nothing(payload):

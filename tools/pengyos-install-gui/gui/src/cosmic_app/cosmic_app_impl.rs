@@ -110,6 +110,8 @@ pub enum Message {
     SetConfirm(String),
     /// "Log in automatically" switched (off by default).
     SetAutologin(bool),
+    /// "Dark mode" on the account page.
+    SetDark(bool),
     /// "Allow SSH logins with a password" switched (off by default).
     SetSshPassword(bool),
     /// The assistant's base URL field changed.
@@ -144,6 +146,8 @@ pub struct AppModel {
     confirm: String,
     /// Start straight into the desktop at boot, skipping the login screen.
     autologin: bool,
+    /// The desktop starts dark (Glacier, the default) or light (Glacier Light).
+    dark: bool,
     /// SSH also accepts the user's password, not only keys (less safe; root
     /// still needs a key). Off by default; `pengyos-ssh-password` changes it later.
     ssh_password: bool,
@@ -306,6 +310,7 @@ impl AppModel {
             hostname: host.to_string(),
             username: user.to_string(),
             autologin: self.autologin,
+            dark: self.dark,
             ssh_password: self.ssh_password,
             pengy_base_url: base_url.clone(),
             pengy_api_key: !api_key.is_empty(),
@@ -434,6 +439,7 @@ impl cosmic::Application for AppModel {
             pengy_model: String::new(),
             confirm: String::new(),
             autologin: false,
+            dark: true,
             ssh_password: false,
             progress: 0.0,
             status: String::new(),
@@ -474,6 +480,7 @@ impl cosmic::Application for AppModel {
             Message::SetConfirm(c) => self.confirm = c,
             Message::SetRepair(on) => self.repair_choice = on,
             Message::SetAutologin(on) => self.autologin = on,
+            Message::SetDark(on) => self.dark = on,
             Message::SetSshPassword(on) => self.ssh_password = on,
             // The Pengy screen: keep the text locally (the key is a secret and
             // the engine reads it from stdin) and mirror it into the model so
@@ -817,6 +824,15 @@ impl AppModel {
                     .control(widget::toggler(self.autologin).on_toggle(Message::SetAutologin)),
             )
             .add(
+                item::builder("Dark mode")
+                    .description(
+                        "Glacier: cool blue-grey, with Papirus icons. Off, Glacier Light. \
+                         Change it any time in Settings, Appearance, or in Themes.",
+                    )
+                    // A plain switch, for the same reason as the one above.
+                    .control(widget::toggler(self.dark).on_toggle(Message::SetDark)),
+            )
+            .add(
                 item::builder("Allow SSH logins with a password")
                     .description(
                         "Log in to this computer from another one over the network with \
@@ -891,6 +907,11 @@ impl AppModel {
                     "Automatic"
                 } else {
                     "Password required"
+                })))
+                .add(item::builder("Appearance").control(text::body(if self.dark {
+                    "Dark (Glacier)"
+                } else {
+                    "Light (Glacier Light)"
                 })))
                 .add(item::builder("SSH").control(text::body(if self.ssh_password {
                     "Password allowed (less secure; root needs a key)"

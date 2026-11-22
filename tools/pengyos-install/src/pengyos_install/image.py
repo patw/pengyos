@@ -127,6 +127,10 @@ PENGY_SYSTEM_MESSAGE = (
 )
 #: Where a user's Pengy settings live (PengyR's ``pengy_config_dir``).
 PENGY_CONFIG_REL = ".config/pengy/settings.json"
+#: The Desktop's theme catalogue (tools/pengyos-themes): its [defaults] name the
+#: Look for each mode, and so the icon theme that goes with it.
+THEMES_CATALOGUE = "/usr/share/pengyos/themes/catalogue.toml"
+APPEARANCES = ("dark", "light")
 #: The image's switch for SSH password logins (board/server overlay).
 SSH_PASSWORD_TOOL = "/usr/bin/pengyos-ssh-password"
 #: Pengy talks to an OpenAI-compatible endpoint: http(s) only, no spaces.
@@ -410,6 +414,9 @@ class ProvisionAnswers:
     #: Desktop only: start straight into this user's desktop at boot instead of
     #: the login screen (opt-in, like Ubuntu's "Log in automatically").
     autologin: bool = False
+    #: Desktop only: "dark" or "light" (the wizard's Appearance question). Empty
+    #: keeps the image's default (Glacier, dark).
+    appearance: str = ""
     #: The assistant's endpoint, key and model — every one of them optional.
     #: An empty ``pengy_base_url`` means "skip": Pengy keeps its own defaults
     #: (the local Ollama port, no key, no model) and the user configures it
@@ -456,6 +463,41 @@ class ProvisionAnswers:
     def pengy_configured(self) -> bool:
         """True when the wizard supplied a Pengy endpoint to seed the config with."""
         return bool(self.pengy_base_url.strip())
+
+
+def write_appearance(root: Path, username: str, appearance: str, run) -> None:
+    """Write the user's dark/light choice (and the matching icon theme) into their
+    COSMIC config: ``com.system76.CosmicTheme.Mode`` ``is_dark`` and
+    ``com.system76.CosmicTk`` ``icon_theme``, the keys Settings writes. The colours
+    themselves are the image's defaults for each mode, so nothing else is needed."""
+    import tomllib
+
+    if appearance not in APPEARANCES:
+        raise ImageInstallError(f"appearance must be dark or light, not {appearance!r}")
+    icons = None
+    try:
+        cat = tomllib.loads((root / THEMES_CATALOGUE.lstrip("/")).read_text())
+        look_id = cat.get("defaults", {}).get(appearance)
+        icons = next((l.get("icons") for l in cat.get("looks", []) if l.get("id") == look_id), None)
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+    home = root / "home" / username
+    config = home / ".config"
+    made_config = not config.exists()
+    cosmic = config / "cosmic"
+    mode = cosmic / "com.system76.CosmicTheme.Mode" / "v1"
+    mode.mkdir(parents=True, exist_ok=True)
+    (mode / "is_dark").write_text("true" if appearance == "dark" else "false")
+    if isinstance(icons, str) and icons:
+        tk = cosmic / "com.system76.CosmicTk" / "v1"
+        tk.mkdir(parents=True, exist_ok=True)
+        (tk / "icon_theme").write_text(json.dumps(icons))
+    owner = f"{username}:{username}"
+    _run(run, ["chroot", str(root), "chown", "-R", owner, f"/home/{username}/.config/cosmic"],
+         "giving the user their appearance settings")
+    if made_config:
+        _run(run, ["chroot", str(root), "chown", owner, f"/home/{username}/.config"],
+             "giving the user their appearance settings")
 
 
 def render_pengy_settings(answers: ProvisionAnswers) -> str:
@@ -1038,6 +1080,11 @@ def _provision(root: Path, answers: ProvisionAnswers, run: Runner,
             "# `sudo pengyos-autologin on|off`.\n"
             f"[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin={answers.username}\n"
         )
+
+    # Dark or light, on a Desktop: the user's own COSMIC mode and the icon theme
+    # of that mode's default Look, written where COSMIC Settings writes them.
+    if answers.appearance and (root / THEMES_CATALOGUE.lstrip("/")).is_file():
+        write_appearance(root, answers.username, answers.appearance, run)
 
     # SSH keys for the user (sshd is key-only). Owned by the user, via chroot:
     # the uid exists only in the target's passwd.

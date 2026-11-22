@@ -33,6 +33,10 @@ def _choice_page(session: Session, page, inp, out: TextIO) -> None:
         yes = _read(inp, "Log in automatically, skipping the login screen? [y/N]: ")
         session.choose(page, 1 if yes.strip().lower() in ("y", "yes") else 0)
         return
+    if page.key == "appearance":
+        light = _read(inp, "Dark or light desktop? [D/l] (dark: Glacier, light: Glacier Light): ")
+        session.choose(page, 1 if light.strip().lower() in ("l", "light") else 0)
+        return
     if page.key == "action":
         no = _read(inp, f"Repair PengyOS on {session.disk.path}, keeping your files and "
                         "settings? [Y/n] (n: erase it and install fresh): ")
