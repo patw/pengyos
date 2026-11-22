@@ -1,0 +1,50 @@
+# pengyos-themes: icon themes, colour themes and Looks for the COSMIC desktop,
+# installed per user (see spec.md).
+#
+# The library does everything (catalogue, checked downloads, safe unpacking, the
+# COSMIC config it writes, undo); `cargo test` runs it with no display, no network
+# and no real home directory. The CLI is `src/main.rs`; the window comes later,
+# behind a `cosmic` feature like the other PengyOS apps.
+[package]
+name = "pengyos-themes"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Pat Wendorf"]
+description = "Themes: icon themes, colour themes and Looks for COSMIC, installed per user."
+
+[lib]
+name = "pengyos_themes"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pengyos-themes"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+sha2 = "0.10"
+flate2 = "1"
+tar = { version = "0.4", default-features = false }
+# Same ron as libcosmic's workspace, so a ThemeBuilder parses and prints exactly
+# as COSMIC Settings does.
+ron = "0.12"
+
+# The theme model and config writer COSMIC itself uses. Pinned to the libcosmic
+# rev the Desktop's COSMIC is built with (scripts/cosmic-libcosmic.pin), not the
+# one the host-built apps use: the keys written here are read by the desktop's
+# compositor and panel, so they must be that version's keys.
+[dependencies.cosmic-theme]
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "430f3d48a97d8779f9c1985473912e594ccca1ae"
+default-features = false
+
+[dependencies.cosmic-config]
+git = "https://github.com/pop-os/libcosmic.git"
+rev = "430f3d48a97d8779f9c1985473912e594ccca1ae"
+default-features = false
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,21 @@
+# Changelog — pengyos-themes
+
+## [Unreleased]
+
+## [0.1.0] - 2026-11-22
+
+### Added
+- The `pengyos-themes` CLI (spec.md): `icons list|install|use|remove`,
+  `colours search|apply|library|forget`, `looks list|apply|save|forget`, `undo`,
+  `reset`, `status` (`--json` on the read-only ones).
+- Icon packs install from the catalogue only, refused unless the download's
+  sha256 matches; only the declared theme directories are unpacked, into staging,
+  and an absolute or `..` path, a link leaving the themes, a write through a
+  symlink, a hard link or device, or an archive past its size budget refuses the
+  whole pack and leaves nothing behind. Themes this tool did not install are never
+  replaced or removed.
+- Colour themes are written with libcosmic's own `write_entry`, exactly as COSMIC
+  Settings' *Import* writes them (a test compares the two key by key).
+- Every change is snapshotted first; `undo` restores it byte for byte (20 steps).
+- The catalogue: Papirus 20260801 (793 of 793 MIME types have an icon), three
+  colour themes of our own (Glacier, Meadow, Ember) and a Look for each.
