@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Themes: Glacier and Glacier Light, split on the diagonal, each with a window in its accent. -->
+  <defs>
+    <clipPath id="tile"><rect x="8" y="8" width="112" height="112" rx="24"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="8" y="8" width="112" height="112" fill="#e8eef3"/>
+    <path d="M8 8 H120 L8 120 Z" fill="#121b22"/>
+  </g>
+  <rect x="8.75" y="8.75" width="110.5" height="110.5" rx="23.25" fill="none" stroke="#0b1218" stroke-opacity="0.25" stroke-width="1.5"/>
+  <!-- dark window -->
+  <rect x="20" y="22" width="52" height="36" rx="7" fill="#1f2c36"/>
+  <rect x="20" y="22" width="52" height="9" rx="4.5" fill="#2a3a46"/>
+  <circle cx="27" cy="26.5" r="2" fill="#5eb6e8"/>
+  <rect x="27" y="38" width="20" height="4" rx="2" fill="#c8d6e0"/>
+  <rect x="27" y="46" width="30" height="6" rx="3" fill="#5eb6e8"/>
+  <!-- light window -->
+  <rect x="56" y="70" width="52" height="36" rx="7" fill="#f5f8fb" stroke="#c6d3de" stroke-width="1.2"/>
+  <rect x="56" y="70" width="52" height="9" rx="4.5" fill="#dfe7ee"/>
+  <circle cx="63" cy="74.5" r="2" fill="#2b7bb9"/>
+  <rect x="63" y="86" width="20" height="4" rx="2" fill="#3a4a56"/>
+  <rect x="63" y="94" width="30" height="6" rx="3" fill="#2b7bb9"/>
+</svg>
