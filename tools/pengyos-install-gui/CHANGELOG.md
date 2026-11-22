@@ -8,6 +8,9 @@ and this project adheres to Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- **Dark mode** on the account page (on by default): the desktop starts with
+  Glacier, or with Glacier Light when it is off. Passed to the engine as
+  `--appearance dark|light`, and shown on the Summary.
 - Repair: a disk that already has PengyOS is marked on the Disk screen, which
   then offers "Repair PengyOS" (the default: the system is written again, files,
   accounts and settings are kept) or "Erase the disk and install fresh". Repair

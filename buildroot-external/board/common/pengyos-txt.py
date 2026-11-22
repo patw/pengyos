@@ -68,6 +68,7 @@ TOOLS = {
     "pengyos-firmware": "the Firmware app (fwupd)",
     "pengyos-gamepads": "the Gamepads app: list and test controllers",
     "pengyos-printers": "the Printers app: printers, queue, test page",
+    "pengyos-themes": "icon themes, colour themes and Looks, with undo",
     "pengyos-dri-prime": "run an app on the discrete AMD GPU",
     "prime-run": "run an app on the NVIDIA GPU",
 }

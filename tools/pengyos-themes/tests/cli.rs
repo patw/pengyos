@@ -47,6 +47,29 @@ fn the_shipped_catalogue_is_valid() {
     assert!(c.colours.iter().all(|x| x.author == "PengyOS" && x.license == "MIT"));
 }
 
+/// board/desktop/theme-defaults is generated from the catalogue's [defaults];
+/// it must match what this tool writes now (catalogue and libcosmic pin alike).
+#[test]
+fn the_images_theme_defaults_are_generated_from_the_catalogue() {
+    let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../buildroot-external/board/desktop/theme-defaults");
+    let h = tempfile::tempdir().unwrap();
+    let out = h.path().join("out");
+    std::fs::create_dir_all(&out).unwrap();
+    let o = run(h.path(), &["system-defaults", out.to_str().unwrap()]);
+    assert!(o.status.success(), "{}", text(&o));
+    let mut want = pengyos_themes::desktop::tree(&committed);
+    want.retain(|(p, _)| p != Path::new("README.md"));
+    assert_eq!(
+        pengyos_themes::desktop::tree(&out),
+        want,
+        "theme-defaults is stale: regenerate it (see its README)"
+    );
+    let cat = Catalogue::load(&shipped()).unwrap();
+    let d = cat.defaults.as_ref().unwrap();
+    assert_eq!((d.dark.as_str(), d.light.as_str()), ("glacier", "glacier-light"));
+    assert_eq!(cat.follow("Papirus-Dark", pengyos_themes::catalogue::Mode::Light), Some("Papirus-Light"));
+}
+
 #[test]
 fn a_broken_catalogue_is_reported_not_ignored() {
     let h = tempfile::tempdir().unwrap();

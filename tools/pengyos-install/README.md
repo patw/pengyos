@@ -54,6 +54,7 @@ pengyos-install provision-plan --config install.toml [--layout layout.json] [--s
 pengyos-install disks [--json]
 pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
                       [--password-stdin] [--authorized-keys FILE] [--ssh-password] [--autologin]
+                      [--appearance dark|light]
                       [--pengy-base-url URL [--pengy-api-key KEY | --pengy-api-key-stdin]
                        [--pengy-model NAME]]
                       [--progress text|json]
@@ -86,7 +87,10 @@ pengyos-install repair --target DEV --yes [--payload DIR] [--allow-older] [--pro
   and — on a Desktop image, only with `--autologin` ("Log in automatically";
   off by default, so the desktop starts at its login screen) — make the
   desktop log them in at boot (`/etc/pengyos/autologin.conf`, changeable later
-  with `pengyos-autologin`), give them the SSH public keys in
+  with `pengyos-autologin`), on a Desktop with `--appearance dark|light` write
+  their COSMIC mode and that mode's default icon theme (from the image's theme
+  catalogue: Glacier with Papirus Dark, or Glacier Light with Papirus Light;
+  omitted, the image default, dark), give them the SSH public keys in
   `--authorized-keys FILE` (the Server's sshd accepts keys only, unless `--ssh-password`: then it also accepts the user's password, root stays key-only, and the image's `pengyos-ssh-password on --offline` writes the setting so `pengyos-ssh-password off` undoes it), set the user's and root's password (random salt each), copy the
   live session's NetworkManager profiles (e.g. the Wi-Fi joined on the stick)
   or, on the Server, its `wpa_supplicant-nl80211-<iface>.conf` with that

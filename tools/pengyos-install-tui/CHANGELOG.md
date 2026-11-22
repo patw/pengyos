@@ -7,6 +7,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- A *Dark or light* page on the Desktop (after *Logging in*): Glacier or Glacier
+  Light, dark by default; plain mode asks `[D/l]`. Passed to the engine as
+  `appearance`, and shown in the review.
 - Repair: when the chosen disk already has PengyOS (`pengyos-install disks`
   marks it), a "PengyOS is already on this disk" page offers "Repair PengyOS"
   (the default: the system is written again, files, accounts and settings are

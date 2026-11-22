@@ -17,6 +17,28 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Changed: Glacier is the Desktop's look (2026-11-22)
+- New users get **Glacier**: cool blue-grey surfaces, an ice-blue accent and
+  Papirus Dark icons; or **Glacier Light** (frosted off-white, a deep glacier-blue
+  accent, Papirus Light). Dark is the default. They replace the light, green-accent
+  defaults from 2026-09, and are generated from `tools/pengyos-themes`' catalogue
+  (`board/desktop/theme-defaults`), so every key COSMIC reads is present.
+- The installer asks: **Dark mode** on the account page of the graphical
+  installer, a *Dark or light* page in the text one (`pengyos-install image
+  --appearance dark|light`).
+- The **Papirus** icon theme ships with the Desktop (`papirus-icon-theme`:
+  Papirus, Papirus-Dark, Papirus-Light; GPL-3.0, 250 MB). Each draws all 793 file
+  types with an icon of its own; the Desktop build checks them as it checks Cosmic.
+  The Desktop root filesystem grows from 4000M to 4400M to keep its headroom.
+- Icons follow dark and light: `pengyos-themes follow` (session autostart) swaps
+  Papirus Dark and Papirus Light when the mode changes, from Settings or the sunset
+  switch. Only that pair; a theme chosen by hand stays until the next change.
+- **Themes**, a new app in the App Library's System folder: Looks (icons and
+  colours together, previewed in their own colours), icon themes (Papirus comes
+  with PengyOS; more install per user, checked against the catalogue), colour
+  themes (yours, ours and cosmic-themes.org's), Save as a Look, Undo and Reset.
+  `pengyos-themes` is also its CLI. Catalogue in `/usr/share/pengyos/themes`.
+
 ### Fixed: COSMIC Files draws an icon for every file (2026-11-22)
 - Programs, `.so` files, SQLite `.db` files, disk images, certificates, core
   dumps and 3D models (`.stl`) showed as blank tiles in Files. Files draws a

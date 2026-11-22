@@ -111,7 +111,9 @@ Chosen once, inherited everywhere.
 > Desktop), dconf (LGPL-2.1+, the GSettings backend: GIO module, `dconf-service`, CLI;
 > Desktop), librsvg (LGPL-2.1+, gdk-pixbuf's SVG loader; Desktop), libsecret (LGPL-2.1+, the
 > Secret Service client prebuilt apps dlopen; Desktop). NSS and NSPR (MPL-2.0; Desktop)
-> ship for the same prebuilt apps. Binary blobs: CPU **microcode** (Intel
+> ship for the same prebuilt apps. The **Papirus** icon theme (GPL-3.0; Desktop, since
+> 2026-11-22) is data, not code: the default icons, unmodified, with the Glacier colour
+> themes (ours, MIT) in `tools/pengyos-themes`. Binary blobs: CPU **microcode** (Intel
 > `intel-microcode`, AMD `amd-ucode`; built into the kernel since 26.10.23) and device
 > **firmware** (`linux-firmware`, `sof-firmware`) in every edition, and the **NVIDIA
 > driver** in the NVIDIA editions only (§2.5). Every

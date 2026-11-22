@@ -8,6 +8,7 @@ Usage::
     pengyos-install disks [--json]
     pengyos-install image --target DEV --hostname H --user U --yes [--payload DIR]
                           [--password-stdin] [--authorized-keys FILE] [--autologin]
+                          [--appearance dark|light]
                           [--progress json]
 
 This module wires argparse + dispatch. The engine logic lives in
@@ -215,6 +216,7 @@ def cmd_image(args, *, out=None, err=None) -> int:
     answers = image_install.ProvisionAnswers(
         hostname=args.hostname, username=args.user, password=_read_password(args),
         authorized_keys=keys, ssh_password=args.ssh_password, autologin=args.autologin,
+        appearance=args.appearance or "",
         pengy_base_url=args.pengy_base_url, pengy_api_key=_read_pengy_api_key(args),
         pengy_model=args.pengy_model,
     )
@@ -386,6 +388,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_image.add_argument("--autologin", action="store_true",
                          help="Desktop: log the user in automatically at boot instead of "
                               "showing the login screen (off by default)")
+    p_image.add_argument("--appearance", choices=("dark", "light"), default=None,
+                         help="Desktop: the user's mode, with that mode's default Look "
+                              "(Glacier or Glacier Light); omitted, the image default (dark)")
     p_image.add_argument("--pengy-base-url", default="", metavar="URL",
                          help="assistant: the OpenAI-compatible endpoint to seed "
                               "~/.config/pengy/settings.json with (http/https). "

@@ -307,7 +307,10 @@ def test_desktop_login_page(desktop_manifest):
     fill_to_review(app)
     assert app.page.key == "login"
     press(app, "down", "enter")
-    assert app.page.key == "review" and "automatic" in screen(app)
+    assert app.page.key == "appearance"
+    press(app, "down", "enter")
+    assert app.page.key == "review"
+    assert "automatic" in screen(app) and "light (Glacier Light)" in screen(app)
 
 
 @pytest.mark.parametrize("h,w", [(24, 80), (40, 160), (67, 240)])
@@ -327,6 +330,8 @@ def test_every_screen_fits(request, edition, h, w):
     app.key = checked
     fill_to_review(app)
     if app.page.key == "login":
+        press(app, "enter")
+    if app.page.key == "appearance":
         press(app, "enter")
     press(app, "ctrl-c", "n")
     type_(app, "erase"); press(app, "enter")

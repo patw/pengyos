@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use pengyos_themes::catalogue::{Catalogue, Mode};
 use pengyos_themes::colours::{self, Now, Order, Query};
 use pengyos_themes::fetch::Curl;
-use pengyos_themes::{desktop, icons, looks, Error, Paths};
+use pengyos_themes::{desktop, follow, icons, looks, Error, Paths};
 use serde_json::json;
 
 const HELP: &str = "\
@@ -30,6 +30,11 @@ pengyos-themes — icon themes, colour themes and Looks for COSMIC, for you only
   undo                             put back what the last change replaced
   reset                            COSMIC's icons and default colours (dark/light stays)
   status                           the icon theme, dark or light, and the colours in use
+
+  follow                           keep a dark/light icon pair matched to the mode (runs
+                                   in each session, from /etc/xdg/autostart)
+  system-defaults DIR              write COSMIC's default theme files for the catalogue's
+                                   [defaults] into DIR (for the image; see the README)
 
   --json                           machine-readable output (list, library, search, status)
 
@@ -81,6 +86,18 @@ fn parse_args(raw: Vec<String>) -> std::result::Result<Args, Fail> {
 
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
+    // No arguments: the Themes window, when built with it.
+    #[cfg(feature = "cosmic")]
+    if raw.is_empty() {
+        let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(1000.0, 760.0));
+        return match cosmic::app::run::<pengyos_themes::app::App>(settings, ()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("pengyos-themes: {e}");
+                ExitCode::from(1)
+            }
+        };
+    }
     if raw.is_empty() || matches!(raw[0].as_str(), "-h" | "--help" | "help") {
         print!("{HELP}");
         return if raw.is_empty() { ExitCode::from(2) } else { ExitCode::SUCCESS };
@@ -121,7 +138,12 @@ fn run(raw: Vec<String>) -> R {
     let w: Vec<&str> = a.words.iter().map(String::as_str).collect();
     let changes = !matches!(
         w.as_slice(),
-        ["status"] | ["icons", "list"] | ["colours" | "colors", "search", ..] | ["colours" | "colors", "library"] | ["looks", "list"]
+        ["status"]
+            | ["icons", "list"]
+            | ["colours" | "colors", "search", ..]
+            | ["colours" | "colors", "library"]
+            | ["looks", "list"]
+            | ["system-defaults", _]
     );
     if changes && running_as_root() {
         return Err(Fail::Run(Error(
@@ -134,6 +156,10 @@ fn run(raw: Vec<String>) -> R {
         ["icons", "install", id] => {
             let cat = catalogue(&paths)?;
             let pack = cat.pack(id).ok_or_else(|| Error(format!("no icon theme {id:?} in the catalogue")))?;
+            if icons::included(&paths, pack) {
+                println!("{} comes with PengyOS: nothing to install.", pack.name);
+                return Ok(());
+            }
             eprintln!(
                 "Downloading {} {} ({} MB, {}; {} MB installed)…",
                 pack.name,
@@ -146,12 +172,13 @@ fn run(raw: Vec<String>) -> R {
             let names: Vec<&str> = pack.themes.iter().map(|t| t.dir.as_str()).collect();
             match &r {
                 icons::Installed::AlreadyThere => println!("{} {} is already installed.", pack.name, pack.version),
+                icons::Installed::Included => println!("{} comes with PengyOS: nothing to install.", pack.name),
                 icons::Installed::Fresh => println!("Installed {}: {}.", pack.name, names.join(", ")),
                 icons::Installed::Updated { from } => {
                     println!("Updated {} from {from} to {}: {}.", pack.name, pack.version, names.join(", "))
                 }
             }
-            if !matches!(r, icons::Installed::AlreadyThere) {
+            if matches!(r, icons::Installed::Fresh | icons::Installed::Updated { .. }) {
                 println!("Use one with: pengyos-themes icons use {}", names[0]);
             }
             Ok(())
@@ -300,6 +327,17 @@ fn run(raw: Vec<String>) -> R {
             Ok(())
         }
         ["status"] => status(&paths, a.json),
+        ["follow"] => {
+            let cat = catalogue(&paths)?;
+            follow::run(&paths, &cat, |m| eprintln!("pengyos-themes follow: {m}"))?;
+            Ok(())
+        }
+        ["system-defaults", dir] => {
+            let cat = catalogue(&paths)?;
+            desktop::write_system_defaults(&cat, std::path::Path::new(dir))?;
+            println!("Wrote COSMIC's defaults for {} into {dir}.", cat.defaults.as_ref().map(|d| d.dark.as_str()).unwrap_or(""));
+            Ok(())
+        }
         _ => usage(&format!("unknown command: {}", a.words.join(" "))),
     }
 }
@@ -312,12 +350,14 @@ fn icons_list(paths: &Paths, json_out: bool) -> R {
         .iter()
         .map(|p| {
             let inst = icons::installed(paths, p);
+            let included = icons::included(paths, p);
             json!({
                 "id": p.id, "name": p.name, "version": p.version, "summary": p.summary,
                 "license": p.license, "download_mb": p.size.div_ceil(1_000_000),
                 "installed_mb": p.installed_size.div_ceil(1_000_000),
                 "themes": p.themes.iter().map(|t| t.dir.clone()).collect::<Vec<_>>(),
                 "installed": inst.as_ref().map(|m| m.version.clone()),
+                "included": included,
                 "update": inst.as_ref().is_some_and(|m| m.version != p.version),
             })
         })
@@ -329,6 +369,7 @@ fn icons_list(paths: &Paths, json_out: bool) -> R {
     println!("Icons in use: {active}");
     for (p, r) in cat.icons.iter().zip(&rows) {
         let state = match (&r["installed"], r["update"].as_bool().unwrap_or(false)) {
+            _ if r["included"] == true => "comes with PengyOS".to_string(),
             (serde_json::Value::Null, _) => "not installed".to_string(),
             (v, true) => format!("installed {}, update to {}", v.as_str().unwrap_or(""), p.version),
             (_, false) => "installed".to_string(),
