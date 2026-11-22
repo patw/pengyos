@@ -15,6 +15,7 @@ pub mod catalogue;
 pub mod colours;
 pub mod desktop;
 pub mod fetch;
+pub mod follow;
 pub mod icons;
 pub mod looks;
 pub mod unpack;

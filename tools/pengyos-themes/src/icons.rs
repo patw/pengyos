@@ -55,6 +55,14 @@ pub fn find_theme(paths: &Paths, name: &str) -> Option<PathBuf> {
         .find(|d| d.join("index.theme").is_file())
 }
 
+/// Every theme of `pack` comes with the system (`/usr/share/icons`): on the
+/// Desktop, Papirus does. Such a pack needs no install and cannot be removed.
+pub fn included(paths: &Paths, pack: &IconPack) -> bool {
+    pack.themes.iter().all(|t| {
+        paths.system_data.iter().any(|d| d.join("icons").join(&t.dir).join("index.theme").is_file())
+    })
+}
+
 fn sha256_file(p: &Path) -> Result<String> {
     let mut f = io_at(fs::File::open(p), "cannot open", p)?;
     let mut h = Sha256::new();
@@ -75,10 +83,15 @@ pub enum Installed {
     Fresh,
     Updated { from: String },
     AlreadyThere,
+    /// It comes with the system; nothing to download.
+    Included,
 }
 
 pub fn install(paths: &Paths, cat: &Catalogue, id: &str, fetch: &dyn Fetch) -> Result<Installed> {
     let pack = cat.pack(id).ok_or_else(|| err!("no icon theme {id:?} in the catalogue"))?;
+    if included(paths, pack) {
+        return Ok(Installed::Included);
+    }
     let had = installed(paths, pack);
     if had.as_ref().is_some_and(|m| m.version == pack.version && m.sha256 == pack.sha256) {
         return Ok(Installed::AlreadyThere);
@@ -173,6 +186,9 @@ pub fn remove(paths: &Paths, cat: &Catalogue, id: &str) -> Result<bool> {
         .filter(|d| marker(paths, d).is_some_and(|m| m.pack == pack.id))
         .collect();
     if ours.is_empty() {
+        if included(paths, pack) {
+            return Err(err!("{} comes with PengyOS and cannot be removed", pack.name));
+        }
         return Err(err!("{} is not installed", pack.name));
     }
     let active = desktop::icon_theme(paths);
@@ -317,6 +333,20 @@ mod tests {
         assert!(p.icons().join("Ice/48x48/apps/new.svg").is_file());
         assert!(!p.icons().join("Ice/48x48/apps/a.svg").exists());
         assert_eq!(left_behind(&p), vec!["Ice", "Ice-Dark"]);
+    }
+
+    #[test]
+    fn a_pack_that_comes_with_the_system_needs_nothing() {
+        let (_d, p, cat, _) = setup(&pack_bytes());
+        for t in ["Ice", "Ice-Dark"] {
+            let t = p.system_data[0].join("icons").join(t);
+            fs::create_dir_all(&t).unwrap();
+            fs::write(t.join("index.theme"), "x").unwrap();
+        }
+        assert_eq!(install(&p, &cat, "ice", &Stub::default()).unwrap(), Installed::Included);
+        assert!(remove(&p, &cat, "ice").unwrap_err().0.contains("comes with PengyOS"));
+        assert_eq!(left_behind(&p), Vec::<String>::new());
+        use_theme(&p, "Ice-Dark").unwrap();
     }
 
     #[test]

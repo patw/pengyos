@@ -8,6 +8,14 @@
 # own colour themes; packs are downloaded by the user, and checked against sha256.
 version = 1
 
+# What a new Desktop user gets: COSMIC's shipped defaults are generated from these
+# Looks (`pengyos-themes system-defaults`, into board/desktop/theme-defaults), and
+# the installer's Dark/Light question picks between them.
+[defaults]
+dark = "glacier"
+light = "glacier-light"
+mode = "dark"
+
 [[icons]]
 id = "papirus"
 name = "Papirus"
@@ -26,6 +34,9 @@ themes = [
   { dir = "Papirus-Dark", path = "papirus-icon-theme-20260801/Papirus-Dark" },
   { dir = "Papirus-Light", path = "papirus-icon-theme-20260801/Papirus-Light" },
 ]
+# Papirus-Dark is drawn for dark panels and Papirus-Light for light ones; `follow`
+# swaps them when the desktop changes mode.
+follow = { dark = "Papirus-Dark", light = "Papirus-Light" }
 
 # Colour themes made for PengyOS (MIT, like this tool): COSMIC's own dark and
 # light themes with a different accent, tint and background.

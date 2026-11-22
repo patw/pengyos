@@ -189,6 +189,42 @@ pub fn builder_digest(paths: &Paths, mode: Mode) -> String {
     crate::sha256_hex(ron::to_string(&b).unwrap_or_default().as_bytes())
 }
 
+// ---- the image's defaults -------------------------------------------------------
+
+/// Write COSMIC's system defaults for the catalogue's `[defaults]` into `out`
+/// (laid over `/usr/share/cosmic` by the Desktop's post-build): each mode's
+/// builder and the theme built from it, the default mode, and the default
+/// mode's icon theme. The same `write_entry` calls as everything else here, so
+/// the files are exactly what Settings would write for those choices.
+pub fn write_system_defaults(cat: &crate::catalogue::Catalogue, out: &Path) -> Result<()> {
+    let d = cat.defaults.as_ref().ok_or_else(|| err!("the catalogue has no [defaults]"))?;
+    let scratch = out.join(".pengyos-themes-defaults");
+    let _ = fs::remove_dir_all(&scratch);
+    let tmp = Paths::under(&scratch);
+    let mut icons = None;
+    for id in [&d.dark, &d.light] {
+        let look = cat.look(id).ok_or_else(|| err!("no Look {id}"))?;
+        let c = cat.colour(&look.colours).ok_or_else(|| err!("Look {id} must carry its own colours"))?;
+        let b = crate::colours::parse(&cat.colour_text(c)?)?;
+        let mode = Mode::from_dark(b.palette.is_dark());
+        b.write_entry(&config(&tmp, builder_id(mode), ThemeBuilder::VERSION)?)
+            .map_err(|e| err!("cannot write the defaults: {e:?}"))?;
+        b.build()
+            .write_entry(&config(&tmp, theme_id(mode), Theme::VERSION)?)
+            .map_err(|e| err!("cannot write the defaults: {e:?}"))?;
+        if mode == d.mode {
+            icons = Some(look.icons.clone());
+        }
+    }
+    set_mode(&tmp, d.mode)?;
+    set_icon_theme(&tmp, icons.as_deref().unwrap_or(COSMIC_ICONS))?;
+    for e in io_at(fs::read_dir(tmp.cosmic()), "cannot read", &tmp.cosmic())? {
+        let e = e?;
+        sync_tree(&e.path(), &out.join(e.file_name()))?;
+    }
+    io_at(fs::remove_dir_all(&scratch), "cannot remove", &scratch)
+}
+
 // ---- undo -------------------------------------------------------------------
 
 /// What a snapshot holds: these keys and these whole config ids, as they were

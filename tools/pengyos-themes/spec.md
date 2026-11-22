@@ -148,6 +148,19 @@ not a Tweaks replacement.
    intact (all of it lives on `data`).
 8. The gate runs the CLI's tests (`verify.toml`), with the network stubbed.
 
+## Defaults and following (operator, 2026-11-22, after trying Glacier)
+
+- **Glacier and Glacier Light are the Desktop's defaults**, dark first. Papirus
+  therefore ships in the image (`papirus-icon-theme`, GPL-3.0, recorded in
+  SPEC.md), and the catalogue lists it as coming with PengyOS. COSMIC's system
+  defaults (`board/desktop/theme-defaults`) are generated from the catalogue's
+  `[defaults]` by `pengyos-themes system-defaults`, and a test keeps them equal.
+- **The installer asks dark or light** and writes that user's mode and icon theme.
+- **Icons follow the mode.** `pengyos-themes follow` (session autostart) swaps a
+  pack's declared dark/light pair when `CosmicTheme.Mode` changes. It never
+  touches any other theme, acts only on a mode change (so a hand-picked icon
+  theme stays until the next one), and is not an undo step.
+
 ## Decisions (operator, 2026-11-22)
 
 - **First catalogue: Papirus only** (with -Dark and -Light). Later themes are added

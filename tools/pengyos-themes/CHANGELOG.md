@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-22
+
+### Added
+- `follow`: in each session (Desktop autostart), swaps a pack's dark and light
+  variants (`follow = { dark, light }` in the catalogue: Papirus-Dark and
+  Papirus-Light) whenever `CosmicTheme.Mode` changes, and once at login. Only a
+  declared pair, only on a mode change; not an undo step.
+- `system-defaults DIR`: writes COSMIC's default theme files for the catalogue's
+  new `[defaults]` (the Look for each mode, and the mode), with the same
+  `write_entry` calls as Settings. The Desktop's `board/desktop/theme-defaults`
+  is this output, and a test fails when the two disagree.
+- A pack that comes with the system (`/usr/share/icons`, as Papirus does on the
+  Desktop) shows as "comes with PengyOS": `install` has nothing to do and
+  `remove` refuses.
+- In the Desktop image: `/usr/bin/pengyos-themes`, the catalogue in
+  `/usr/share/pengyos/themes`, and the `follow` autostart entry.
+
 ## [0.1.1] - 2026-11-22
 
 ### Added

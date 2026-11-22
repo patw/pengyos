@@ -18,6 +18,14 @@
 //! themes = [
 //!   { dir = "Papirus", path = "papirus-icon-theme-20260801/Papirus" },
 //! ]
+//! # Optional: the pack's dark and light variants, which `follow` swaps when
+//! # the desktop goes dark or light.
+//! follow = { dark = "Papirus-Dark", light = "Papirus-Light" }
+//!
+//! [defaults]               # what a new user gets (the Desktop's shipped defaults)
+//! dark = "glacier"         # the Look for dark mode
+//! light = "glacier-light"  # the Look for light mode
+//! mode = "dark"
 //!
 //! [[colours]]
 //! id = "pengyos-glacier-dark"
@@ -58,6 +66,8 @@ pub struct Catalogue {
     pub colours: Vec<CatColour>,
     #[serde(default)]
     pub looks: Vec<CatLook>,
+    #[serde(default)]
+    pub defaults: Option<Defaults>,
     /// The directory the catalogue was read from (colour files are relative to it).
     #[serde(skip)]
     pub dir: PathBuf,
@@ -77,6 +87,25 @@ pub struct IconPack {
     pub size: u64,
     pub installed_size: u64,
     pub themes: Vec<PackTheme>,
+    #[serde(default)]
+    pub follow: Option<Follow>,
+}
+
+/// A pack's dark and light variants.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Follow {
+    pub dark: String,
+    pub light: String,
+}
+
+/// What a new user gets: a Look for each mode, and which mode.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Defaults {
+    pub dark: String,
+    pub light: String,
+    pub mode: Mode,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -193,6 +222,13 @@ impl Catalogue {
                     return Err(err!("icon pack {}: path {:?} must be relative, without ..", p.id, t.path));
                 }
             }
+            if let Some(f) = &p.follow {
+                for d in [&f.dark, &f.light] {
+                    if !p.themes.iter().any(|t| &t.dir == d) {
+                        return Err(err!("icon pack {}: follow names {d:?}, which it does not provide", p.id));
+                    }
+                }
+            }
         }
         let mut colour_ids = HashSet::new();
         for c in &self.colours {
@@ -213,6 +249,14 @@ impl Catalogue {
             }
             if l.colours != "default" && !self.colours.iter().any(|c| c.id == l.colours) {
                 return Err(err!("look {}: colours {:?} is not \"default\" or a catalogue colour theme", l.id, l.colours));
+            }
+        }
+        if let Some(d) = &self.defaults {
+            for (id, mode) in [(&d.dark, Mode::Dark), (&d.light, Mode::Light)] {
+                match self.look(id) {
+                    Some(l) if l.mode == mode => {}
+                    _ => return Err(err!("defaults: {id:?} is not a {} Look in the catalogue", mode.as_str())),
+                }
             }
         }
         Ok(())
@@ -259,6 +303,15 @@ impl Catalogue {
     pub fn look(&self, id: &str) -> Option<&CatLook> {
         self.looks.iter().find(|l| l.id == id)
     }
+
+    /// The icon theme to use in `mode` when `current` is one half of a pack's
+    /// dark/light pair; `None` when there is nothing to swap.
+    pub fn follow(&self, current: &str, mode: Mode) -> Option<&str> {
+        self.icons.iter().filter_map(|p| p.follow.as_ref()).find_map(|f| {
+            let want = if mode.is_dark() { &f.dark } else { &f.light };
+            (current == f.dark || current == f.light).then_some(want.as_str()).filter(|w| *w != current)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -283,6 +336,7 @@ themes = [
   { dir = "Ice", path = "pack-1/Ice" },
   { dir = "Ice-Dark", path = "pack-1/Ice-Dark" },
 ]
+follow = { dark = "Ice-Dark", light = "Ice" }
 
 [[looks]]
 id = "frost"
@@ -292,6 +346,23 @@ icons = "Ice-Dark"
 colours = "default"
 mode = "dark"
 "#;
+
+    #[test]
+    fn follow_swaps_only_a_declared_pair() {
+        let c = Catalogue::parse(GOOD).unwrap();
+        assert_eq!(c.follow("Ice-Dark", Mode::Light), Some("Ice"));
+        assert_eq!(c.follow("Ice", Mode::Dark), Some("Ice-Dark"));
+        assert_eq!(c.follow("Ice-Dark", Mode::Dark), None, "already right");
+        assert_eq!(c.follow("Cosmic", Mode::Light), None);
+        let bad = GOOD.replace("light = \"Ice\" }", "light = \"Ice-Grey\" }");
+        assert!(Catalogue::parse(&bad).unwrap_err().0.contains("does not provide"));
+    }
+
+    #[test]
+    fn defaults_must_name_a_look_of_each_mode() {
+        let d = "\n[defaults]\ndark = \"frost\"\nlight = \"frost\"\nmode = \"dark\"\n";
+        assert!(Catalogue::parse(&(GOOD.to_string() + d)).unwrap_err().0.contains("not a light Look"));
+    }
 
     #[test]
     fn ids_are_unique_per_kind() {
