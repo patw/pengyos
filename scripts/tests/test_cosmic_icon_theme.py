@@ -36,8 +36,12 @@ NEEDED_FROM_POP = {
 def test_recipe_installs_pops_symbolic_icons():
     mk = (PKG / "pop-cursor-theme.mk").read_text(encoding="utf-8")
     assert "cp -a $(@D)/Pop/scalable $(TARGET_DIR)/usr/share/icons/Pop/scalable" in mk
-    # The 68 MB of fixed-size PNGs stay out: only scalable/ is copied.
+    # The 68 MB of fixed-size icons stay out, except each size's mimetypes folder
+    # (SVG, 1.8 MB): COSMIC Files needs Pop's generic file icons (2026-11-22).
     assert not re.search(r"Pop/(16x16|24x24|32x32|48x48|64x64|128x128|256x256)", mk)
+    assert "cp -a $(@D)/Pop/$$d/mimetypes" in mk
+    sizes = re.search(r"^POP_CURSOR_THEME_MIME_SIZES = (.*)$", mk, re.M).group(1).split()
+    assert sizes == ["16x16", "24x24", "32x32", "48x48", "64x64", "128x128", "256x256"]
 
 
 def test_pop_index_lists_the_scalable_directories():
@@ -50,7 +54,13 @@ def test_pop_index_lists_the_scalable_directories():
     for d in listed:
         section = re.search(rf"^\[{re.escape(d)}\]\n((?:[A-Za-z]+=.*\n)+)", idx, re.M)
         assert section, f"{d} is listed but has no section"
-        assert "Type=Scalable" in section.group(1)
+        # scalable/* are Scalable; the sized file-type folders are Fixed at their size.
+        if d.startswith("scalable/"):
+            assert "Type=Scalable" in section.group(1)
+        else:
+            size = d.split("x", 1)[0]
+            assert d.endswith("/mimetypes"), f"{d}: only file-type icons come from Pop's sized folders"
+            assert "Type=Fixed" in section.group(1) and f"Size={size}\n" in section.group(1)
     # Pop is COSMIC's parent, and must not send lookups back into Cosmic.
     assert re.search(r"^Inherits=hicolor$", idx, re.M)
 

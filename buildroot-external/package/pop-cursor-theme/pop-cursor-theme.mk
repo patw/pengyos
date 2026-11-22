@@ -20,7 +20,19 @@ POP_CURSOR_THEME_LICENSE_FILES = COPYING LICENSE
 # (help-info-symbolic, view-grid/list-symbolic, network-vpn-symbolic,
 # media-playlist-*-symbolic, link-symbolic, …); without them those buttons
 # rendered blank (the Store's release-notes button on behoweather, 26.10.25).
-# Pop's fixed-size PNG folders (68 MB) are not needed by COSMIC and stay out.
+# Pop's fixed-size PNG folders (68 MB) are not needed by COSMIC and stay out,
+# except their mimetypes (SVG, 225 icons in 7 sizes, 1.8 MB): COSMIC Files asks
+# for a file's MIME icon and then its generic icon (application-x-generic, …),
+# with no further fallback. Cosmic draws 82 file-type icons and Pop's symbolic
+# set none of the generic ones, so 113 MIME types drew a blank tile - among them
+# application/x-sharedlib, which is what every PIE binary sniffs as (1075 of the
+# Desktop's 1280 /usr/bin + /usr/lib/pengyos files), .so files, SQLite, disk
+# images and certificates. These folders fix 79 of them (the binaries and .so
+# files through application-x-generic); the
+# cosmic-files patch 0003 makes the rest fall back to text-x-generic.
+# Pop draws 3D models (STL, 3MF, ...) as "model", but Files asks for model-stl and
+# then model-x-generic; the link gives every model/* type Pop's model icon.
+POP_CURSOR_THEME_MIME_SIZES = 16x16 24x24 32x32 48x48 64x64 128x128 256x256
 define POP_CURSOR_THEME_INSTALL_TARGET_CMDS
 	rm -rf $(TARGET_DIR)/usr/share/icons/Pop/cursors
 	mkdir -p $(TARGET_DIR)/usr/share/icons/Pop/cursors
@@ -39,6 +51,12 @@ define POP_CURSOR_THEME_INSTALL_TARGET_CMDS
 	rm -f $(@D)/.cursor-sums
 	rm -rf $(TARGET_DIR)/usr/share/icons/Pop/scalable
 	cp -a $(@D)/Pop/scalable $(TARGET_DIR)/usr/share/icons/Pop/scalable
+	for d in $(POP_CURSOR_THEME_MIME_SIZES); do \
+		rm -rf $(TARGET_DIR)/usr/share/icons/Pop/$$d; \
+		mkdir -p $(TARGET_DIR)/usr/share/icons/Pop/$$d; \
+		cp -a $(@D)/Pop/$$d/mimetypes $(TARGET_DIR)/usr/share/icons/Pop/$$d/mimetypes || exit 1; \
+		ln -sf model.svg $(TARGET_DIR)/usr/share/icons/Pop/$$d/mimetypes/model-x-generic.svg; \
+	done
 	$(INSTALL) -D -m 0644 $(POP_CURSOR_THEME_PKGDIR)/Pop-index.theme \
 		$(TARGET_DIR)/usr/share/icons/Pop/index.theme
 	$(INSTALL) -D -m 0644 $(POP_CURSOR_THEME_PKGDIR)/default-index.theme \
