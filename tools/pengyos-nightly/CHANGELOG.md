@@ -6,6 +6,20 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — a failed release says what failed; a hung mailer is not a crash (0.18.1)
+- The act lane kept the last 2000 characters of a failed `scripts/release.sh`. A
+  boot check prints its FAIL lines and then the rest of the matrix as PASS lines,
+  so on 2026-11-22 actions.json, the unit log and the mail all said "1 failed"
+  without the check's name. The whole output is now saved to
+  `reports/<date>-act-release.log` (`<date>-<action>-release.log` for a single
+  action), and the error starts with the step that failed and every FAIL / error
+  line (ANSI codes stripped, PASS lines skipped) before a shorter tail.
+- `report.send` ran the mailer with a 120 s timeout and let `TimeoutExpired`
+  escape: the 2026-11-22 failure notice hung (no IPv6 route to the SMTP server)
+  and the run ended in a traceback. A timeout is now retried once, then reported
+  like any failed delivery (`exited 124: timed out ...`); the act result, the
+  record and the report on disk are unchanged by it.
+
 ### Added — the act lane refuses a batch when an edition's scan failed (0.18.0)
 An edition whose pkg-stats scan failed is missing from the plan, and the batch
 published a version without it: on 2026-11-14, 26.11.17 went to testing for three

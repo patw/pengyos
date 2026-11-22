@@ -290,3 +290,61 @@ def test_a_complete_scan_with_other_source_errors_still_publishes(tmp_path):
     result = cli.do_act(_args(tmp_path, state_dir, repo), today=TODAY, run=B.Fake(),
                         send=lambda s, b, f, **k: True)
     assert result["published"], result
+
+
+# --- a mailer that hangs is a delivery failure, not a crash ------------------
+#
+# 2026-11-22: the notice hung on a black-holed IPv6 route to the SMTP server, the
+# TimeoutExpired was not caught, and the run ended in a traceback instead of saying
+# "NOT delivered".
+
+def _mailer(tmp_path):
+    m = tmp_path / "pengyos-email"
+    m.write_text("#!/bin/sh\nexit 0\n")
+    m.chmod(0o755)
+    return m
+
+
+def _hangs(times):
+    calls = []
+
+    def run(argv, **kw):
+        calls.append(argv)
+        if len(calls) <= times:
+            raise subprocess.TimeoutExpired(argv, kw.get("timeout"))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+    return run, calls
+
+
+def test_a_mailer_that_hangs_once_is_retried(tmp_path):
+    run, calls = _hangs(1)
+    assert R.send("s", "<p>b</p>", tmp_path / "b.html", script=_mailer(tmp_path), run=run)
+    assert len(calls) == 2
+
+
+def test_a_mailer_that_keeps_hanging_is_a_delivery_failure(tmp_path):
+    run, calls = _hangs(99)
+    try:
+        R.send("s", "<p>b</p>", tmp_path / "b.html", script=_mailer(tmp_path), run=run)
+    except subprocess.CalledProcessError as exc:
+        assert exc.returncode == 124 and "timed out" in exc.stderr
+    else:
+        raise AssertionError("a mailer that never finished must not count as sent")
+    assert len(calls) == R.MAILER_TRIES
+
+
+def test_a_hung_mailer_leaves_the_act_result_alone(tmp_path, capsys):
+    repo = B._repo(tmp_path)
+    (repo / "VERSION").write_text("dirty\n")
+    state_dir = _seed(tmp_path, [B._patch_action()])
+    run, _ = _hangs(99)
+    mailer = _mailer(tmp_path)
+
+    def send(subject, body, f, **kw):
+        return R.send(subject, body, f, script=mailer, run=run, **kw)
+
+    result = cli.do_act(_args(tmp_path, state_dir, repo), today=TODAY, send=send)
+    out = capsys.readouterr().out
+    assert "clean_tree" in result["error"], "the refusal is still the story"
+    assert "NOT delivered" in out and "timed out" in out, out
+    assert _sent(tmp_path), "the notice is on disk even when the mailer hung"
