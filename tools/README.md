@@ -102,6 +102,7 @@ python3 scripts/pengyos_gate.py run --repo . --mode full        # + every tool's
 | [`pengyos-sbom`](pengyos-sbom/) | Turn Buildroot legal-info / show-info manifests into a valid SPDX 2.3 SBOM (and CycloneDX 1.5), with ed25519 signin… |
 | [`pengyos-server-toolset`](pengyos-server-toolset/) | The Server edition's remote-admin comfort set for PengyOS. It ships two things, both validated by a pytest suite: |
 | [`pengyos-sign`](pengyos-sign/) | Minimal, modern artifact signing for PengyOS. |
+| [`pengyos-themes`](pengyos-themes/) | *Themes*: icon themes (checked downloads from a curated catalogue), colour themes (cosmic-themes.org, files, our own) and Looks that pair them, per user, with undo. CLI built; the window (System folder) is next (Rust, libcosmic's theme model). |
 | [`pengyos-update`](pengyos-update/) | The on-device A/B updater: read the signed feed, write the release into the other root slot, boot it once, keep it only if it comes up (`status`/`check`/`apply`/`rollback`/`channel`). |
 | [`pengyos-updates`](pengyos-updates/) | *PengyOS Updates*: the Desktop app + notifier (Rust, libcosmic) over `pengyos-update`. |
 | [`pengyos-usage`](pengyos-usage/) | *Disk Usage*: what is taking the space, as a ring chart you click into beside a ranked list; your home or any filesystem, read-only (Rust, libcosmic). |

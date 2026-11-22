@@ -1,6 +1,7 @@
 # pengyos-themes — spec
 
-Status: **agreed**, 2026-11-22 (operator decisions recorded under *Decisions*). Nothing is built yet.
+Status: **agreed**, 2026-11-22 (operator decisions recorded under *Decisions*). The CLI is
+built (0.1.0); the window and the image wiring are next.
 
 ## Why
 
@@ -41,16 +42,21 @@ that code lives in libcosmic.
 
 ### Icons (pages: *Icons*)
 
-- A **catalogue** shipped in the image, `/usr/share/pengyos/themes/icons.toml`: each
-  entry has a name, version, download URL, `sha256`, license, installed size, the
-  theme directory names it provides (e.g. `Papirus`, `Papirus-Dark`, `Papirus-Light`),
-  and a preview. Curated and **complete themes only**. First entry: Papirus.
-  The catalogue moves with image updates, like any other file in the rootfs.
+- A **catalogue** shipped in the image, `/usr/share/pengyos/themes/catalogue.toml`
+  (icon packs, our colour themes, curated Looks; format in `src/catalogue.rs`): each
+  icon pack has a name, version, download URL, `sha256`, license, download and
+  installed size, and the theme directories it provides with their path in the
+  archive (e.g. `Papirus`, `Papirus-Dark`, `Papirus-Light`). Curated and **complete
+  themes only**. First entry: Papirus. The catalogue moves with image updates, like
+  any other file in the rootfs. (Previews are the app's job, drawn from the theme.)
 - `install` downloads the archive, **refuses it unless the sha256 matches**, and
   unpacks only the declared theme directories into `~/.local/share/icons/<Theme>`. Entries
   that are absolute, contain `..`, or would be written through a symlink are refused
   (the cosmic-files zip lesson, patch 0002). Unpacking goes to a temporary directory
-  first and is moved into place, so a failed install leaves nothing behind.
+  first and is moved into place, so a failed install leaves nothing behind. Links
+  must stay inside the pack's themes (Papirus-Dark links into Papirus); hard links
+  and devices refuse; a size and entry budget stops a bomb. Each installed theme
+  carries a marker, and a theme without it (not ours) is never replaced or removed.
 - `use <theme>` sets `icon_theme` in `com.system76.CosmicTk` (exactly what COSMIC
   Settings writes). `remove` deletes the theme directories, and if the removed theme
   was active, it switches back to `Cosmic` first.
@@ -59,11 +65,15 @@ that code lives in libcosmic.
 
 ### Colours (page: *Colours*)
 
-- Browses **cosmic-themes.org** through its public JSON API (`/api/`: list, search,
-  sort by popular/new/name, filter by colour), the same source COSMIC Tweaks uses.
-  Nothing is fetched until the page is opened; no account, no upload.
+- Browses **cosmic-themes.org** through its public JSON API (`/api/themes/`:
+  `search`, `order=popular|new|name`, `color=#rrggbb`, `limit`, `offset`, RON inline),
+  the same source COSMIC Tweaks uses. Nothing is fetched until the page is opened; no
+  account, no upload. The API has no single-theme endpoint, so the last answers are
+  kept (`site-cache.json`) and `apply <site id>` takes the theme from there.
 - A theme is a RON `ThemeBuilder`. It is parsed with libcosmic's types and **rejected
-  unless it parses** (data only: nothing in it is executed), with a size cap.
+  unless it parses** (data only: nothing in it is executed), with a 64 KB cap.
+  Themes in an older format this COSMIC cannot read (Settings' Import refuses them
+  too) are left out of search results.
   Previews are drawn from the parsed palette, not from screenshots.
 - `apply` does what COSMIC Settings' *Import* does: switch dark/light to match the
   palette, write the builder to `com.system76.CosmicTheme.{Dark|Light}.Builder` and the
@@ -80,7 +90,10 @@ that code lives in libcosmic.
 - **Undo is built in.** Before anything changes the desktop (a Look, an icon theme or a
   colour theme), the current `CosmicTk.icon_theme`, both theme builders and the mode are
   snapshotted to `~/.local/share/pengyos-themes/undo/`. `pengyos-themes undo`, or the
-  app's *Undo*, restores the last snapshot exactly. *Reset* restores COSMIC's defaults.
+  app's *Undo*, restores the last snapshot exactly (20 steps are kept). *Reset*
+  restores COSMIC's icons and its shipped colours, dark and light (copied from
+  `/usr/share/cosmic`, else libcosmic's own); dark or light stays as the user has it,
+  as Settings' *Reset to default*. Reset is undoable.
 
 ## CLI
 
@@ -88,12 +101,14 @@ that code lives in libcosmic.
 pengyos-themes icons list | install <name> | use <theme> | remove <name>
 pengyos-themes colours search [TEXT] [--order popular|new|name] [--color HEX]
 pengyos-themes colours apply <id|file.ron> | library | forget <id>
-pengyos-themes looks list | apply <name> | save <name>
+pengyos-themes looks list | apply <id> | save <name> | forget <id>
 pengyos-themes undo | reset | status
 ```
 
 Exit codes: `0` done; `1` failed (download, checksum, parse, write); `2` usage.
-`status` prints the active icon theme, mode, and colour theme source (`--json` too).
+`status` prints the active icon theme, mode, and colour theme source (`--json` too;
+so do the list, library and search commands). Commands that change anything refuse
+to run as root.
 
 ## Boundaries
 
