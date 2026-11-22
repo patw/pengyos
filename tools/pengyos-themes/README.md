@@ -30,8 +30,8 @@ pengyos-themes undo | reset | status [--json]
   library id, or a `.ron` file, and writes it exactly as Settings' *Import* does.
   Every theme you apply is kept in your library
   (`~/.local/share/pengyos-themes/colours/`), so it works offline later.
-- **Looks.** Three curated ones ship (Glacier, Meadow, Ember: Papirus icons with
-  colour themes of our own); `looks save` keeps what the desktop shows now.
+- **Looks.** Four curated ones ship (Glacier, Glacier Light, Meadow, Ember: Papirus
+  icons with colour themes of our own); `looks save` keeps what the desktop shows now.
   Applying a Look installs its icons if needed, then changes everything in one
   step.
 - **Undo.** Before any change the tool snapshots every key it may write;

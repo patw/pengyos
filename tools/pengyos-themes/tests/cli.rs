@@ -38,11 +38,29 @@ fn the_shipped_catalogue_is_valid() {
     let papirus = c.pack("papirus").unwrap();
     assert!(papirus.url.contains(&papirus.version), "the URL is pinned to the listed version");
     assert!(c.looks.len() >= 2, "curated Looks ship at launch");
+    assert!(c.looks.iter().any(|l| l.mode.is_dark()) && c.looks.iter().any(|l| !l.mode.is_dark()),
+            "a curated Look for each mode");
     for l in &c.looks {
         assert_ne!(l.colours, "default", "{}: a curated Look carries its own colours", l.id);
     }
     // Our own colour themes, so they can ship in the image.
     assert!(c.colours.iter().all(|x| x.author == "PengyOS" && x.license == "MIT"));
+}
+
+#[test]
+fn a_broken_catalogue_is_reported_not_ignored() {
+    let h = tempfile::tempdir().unwrap();
+    let bad = h.path().join("catalogue.toml");
+    std::fs::write(&bad, "version = 9\n").unwrap();
+    let o = Command::new(BIN)
+        .args(["looks", "list"])
+        .env_clear()
+        .env("HOME", h.path())
+        .env("PENGYOS_THEMES_CATALOGUE", &bad)
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("version 9 is not supported"));
 }
 
 #[test]

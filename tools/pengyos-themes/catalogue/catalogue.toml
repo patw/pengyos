@@ -38,6 +38,13 @@ license = "MIT"
 file = "colours/glacier-dark.ron"
 
 [[colours]]
+id = "glacier-light"
+name = "Glacier Light"
+author = "PengyOS"
+license = "MIT"
+file = "colours/glacier-light.ron"
+
+[[colours]]
 id = "meadow-light"
 name = "Meadow"
 author = "PengyOS"
@@ -58,6 +65,14 @@ summary = "Cool blue-grey surfaces, an ice-blue accent and Papirus Dark icons."
 icons = "Papirus-Dark"
 colours = "glacier-dark"
 mode = "dark"
+
+[[looks]]
+id = "glacier-light"
+name = "Glacier Light"
+summary = "Frosted off-white surfaces, a deep glacier-blue accent and Papirus Light icons: Glacier for daytime."
+icons = "Papirus-Light"
+colours = "glacier-light"
+mode = "light"
 
 [[looks]]
 id = "meadow"

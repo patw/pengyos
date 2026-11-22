@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-22
+
+### Added
+- Glacier Light: a light Look as complete as Glacier (frosted off-white surfaces,
+  brighter cards, a slate-blue neutral tint, a deep glacier-blue accent readable on
+  white, Papirus Light), after the operator found the light side the weaker one.
+
+### Fixed
+- A catalogue that exists but does not load (say, a bad edit) was silently treated
+  as no catalogue, so `looks apply` said "no Look" instead of why. It is now an error.
+- Catalogue ids are unique per kind, so a Look can share its colour theme's id
+  (`glacier-light`).
+
 ## [0.1.0] - 2026-11-22
 
 ### Added
