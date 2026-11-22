@@ -68,6 +68,19 @@ pub fn list(paths: &Paths, cat: Option<&Catalogue>) -> Vec<Look> {
     v
 }
 
+/// The colours a Look's preview shows: its colour theme, or COSMIC's shipped
+/// default for its mode.
+pub fn swatch(paths: &Paths, cat: Option<&Catalogue>, look: &Look) -> Option<colours::Swatch> {
+    let b = match look.colours.as_str() {
+        "default" => {
+            let scratch = Paths { config: paths.state().join(".swatch-default"), ..paths.clone() };
+            desktop::current_builder(&scratch, look.mode).ok()?
+        }
+        c => colours::parse(&colours::resolve(paths, cat, c).ok()?.text).ok()?,
+    };
+    Some(colours::swatch(&b))
+}
+
 /// Apply a Look. An icon theme from the catalogue that is not installed yet is
 /// installed first (the only network a Look needs); everything else is local.
 pub fn apply(paths: &Paths, cat: Option<&Catalogue>, id: &str, fetch: &dyn Fetch) -> Result<Look> {

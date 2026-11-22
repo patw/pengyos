@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-22
+
+### Added
+- The **Themes** window (feature `cosmic`; `pengyos-themes` with no arguments):
+  Looks, Icons and Colours pages, previews drawn in each theme's own colours and
+  icons, Undo and Reset in the header, cosmic-themes.org search. In the App
+  Library's System folder (`io.catbee.pengyos.Themes.desktop`).
+- Library helpers for it: `colours::swatch`, `icons::installed_themes` (what
+  Settings' picker lists), `icons::preview`, `looks::swatch`.
+- libcosmic is pinned to the Desktop's rev, like cosmic-theme; its git
+  dependency on dbus-settings-bindings is locked to the commit the Desktop's own
+  COSMIC builds with (that repository's head no longer has the crate).
+
 ## [0.2.0] - 2026-11-22
 
 ### Added

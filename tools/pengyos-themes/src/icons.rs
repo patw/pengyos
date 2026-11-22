@@ -63,6 +63,108 @@ pub fn included(paths: &Paths, pack: &IconPack) -> bool {
     })
 }
 
+/// An icon theme someone can pick (what COSMIC Settings' picker lists).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemeInfo {
+    /// Directory name, the value of `icon_theme`.
+    pub dir: String,
+    /// `Name=` from index.theme.
+    pub name: String,
+    /// In `~/.local/share/icons` (else it comes with the system).
+    pub user: bool,
+}
+
+fn index_value(index: &str, key: &str) -> Option<String> {
+    let mut in_section = false;
+    for line in index.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_section = line == "[Icon Theme]";
+        } else if in_section {
+            if let Some(v) = line.strip_prefix(key).and_then(|r| r.trim_start().strip_prefix('=')) {
+                return Some(v.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Every pickable icon theme: the user's, then the system's; not `Hidden=true`,
+/// not hicolor (the fallback), and only themes with icons (not cursor-only).
+pub fn installed_themes(paths: &Paths) -> Vec<ThemeInfo> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    let roots = std::iter::once((paths.icons(), true))
+        .chain(paths.system_data.iter().map(|d| (d.join("icons"), false)));
+    for (root, user) in roots {
+        let Ok(rd) = fs::read_dir(&root) else { continue };
+        let mut dirs: Vec<_> = rd.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        dirs.sort();
+        for dir in dirs {
+            if dir == "hicolor" || !valid_theme_dir(&dir) || seen.contains(&dir) {
+                continue;
+            }
+            let Ok(index) = fs::read_to_string(root.join(&dir).join("index.theme")) else { continue };
+            if index_value(&index, "Hidden").is_some_and(|v| v.eq_ignore_ascii_case("true"))
+                || index_value(&index, "Directories").is_none_or(|v| v.trim().is_empty())
+            {
+                continue;
+            }
+            seen.insert(dir.clone());
+            let name = index_value(&index, "Name").unwrap_or_else(|| dir.clone());
+            out.push(ThemeInfo { dir, name, user });
+        }
+    }
+    out
+}
+
+/// For a preview: each of `names` as an SVG from `theme` (or a theme it
+/// inherits), at the size closest to `size`. `None` where the theme has none.
+pub fn preview(paths: &Paths, theme: &str, names: &[&str], size: u32) -> Vec<Option<PathBuf>> {
+    let mut chain = vec![theme.to_string()];
+    let mut i = 0;
+    while i < chain.len() && i < 8 {
+        if let Some(dir) = find_theme(paths, &chain[i]) {
+            if let Ok(index) = fs::read_to_string(dir.join("index.theme")) {
+                for t in index_value(&index, "Inherits").unwrap_or_default().split(',') {
+                    let t = t.trim().to_string();
+                    if !t.is_empty() && t != "hicolor" && !chain.contains(&t) {
+                        chain.push(t);
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    let dirs: Vec<(PathBuf, u32)> = chain
+        .iter()
+        .filter_map(|t| find_theme(paths, t))
+        .flat_map(|root| {
+            let index = fs::read_to_string(root.join("index.theme")).unwrap_or_default();
+            let mut ds: Vec<(PathBuf, u32)> = index_value(&index, "Directories")
+                .unwrap_or_default()
+                .split(',')
+                .map(|d| d.trim())
+                .filter(|d| !d.is_empty() && !d.contains('@'))
+                .map(|d| {
+                    // "48x48/apps", "apps/48", "scalable/apps": the size, or 1000 for scalable.
+                    let n = d
+                        .split(['/', 'x'])
+                        .find_map(|p| p.parse::<u32>().ok())
+                        .unwrap_or(1000);
+                    (root.join(d), n.abs_diff(size))
+                })
+                .collect();
+            ds.sort_by_key(|(_, dist)| *dist);
+            ds
+        })
+        .collect();
+    names
+        .iter()
+        .map(|n| dirs.iter().map(|(d, _)| d.join(format!("{n}.svg"))).find(|p| p.exists()))
+        .collect()
+}
+
 fn sha256_file(p: &Path) -> Result<String> {
     let mut f = io_at(fs::File::open(p), "cannot open", p)?;
     let mut h = Sha256::new();
@@ -347,6 +449,35 @@ mod tests {
         assert!(remove(&p, &cat, "ice").unwrap_err().0.contains("comes with PengyOS"));
         assert_eq!(left_behind(&p), Vec::<String>::new());
         use_theme(&p, "Ice-Dark").unwrap();
+    }
+
+    #[test]
+    fn pickable_themes_and_previews() {
+        let d = tempfile::tempdir().unwrap();
+        let p = Paths::under(d.path());
+        let mk = |root: PathBuf, dir: &str, index: &str| {
+            fs::create_dir_all(root.join(dir)).unwrap();
+            fs::write(root.join(dir).join("index.theme"), index).unwrap();
+        };
+        let sys = p.system_data[0].join("icons");
+        mk(sys.clone(), "Cosmic", "[Icon Theme]\nName=COSMIC\nInherits=Pop,hicolor\nDirectories=scalable/places\n");
+        mk(sys.clone(), "Pop", "[Icon Theme]\nName=Pop\nHidden=true\nDirectories=48x48/mimetypes,16x16/mimetypes\n");
+        mk(sys.clone(), "default", "[Icon Theme]\nInherits=Pop\n");
+        mk(sys.clone(), "hicolor", "[Icon Theme]\nName=Hicolor\nDirectories=48x48/apps\n");
+        mk(p.icons(), "Mine", "[Icon Theme]\nName=My Icons\nDirectories=48x48/places\n");
+        let names: Vec<(String, bool)> = installed_themes(&p).into_iter().map(|t| (t.name, t.user)).collect();
+        assert_eq!(names, vec![("My Icons".into(), true), ("COSMIC".into(), false)]);
+
+        fs::create_dir_all(sys.join("Cosmic/scalable/places")).unwrap();
+        fs::write(sys.join("Cosmic/scalable/places/folder.svg"), "<svg/>").unwrap();
+        for s in ["16x16", "48x48"] {
+            fs::create_dir_all(sys.join(format!("Pop/{s}/mimetypes"))).unwrap();
+            fs::write(sys.join(format!("Pop/{s}/mimetypes/text-x-generic.svg")), "<svg/>").unwrap();
+        }
+        let got = preview(&p, "Cosmic", &["folder", "text-x-generic", "nope"], 48);
+        assert_eq!(got[0], Some(sys.join("Cosmic/scalable/places/folder.svg")));
+        assert_eq!(got[1], Some(sys.join("Pop/48x48/mimetypes/text-x-generic.svg")), "inherited, closest size");
+        assert_eq!(got[2], None);
     }
 
     #[test]

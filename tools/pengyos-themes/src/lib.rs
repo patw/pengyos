@@ -11,6 +11,8 @@
 //! * [`looks`]: an icon theme and a colour theme, applied together.
 //! * [`desktop`]: the COSMIC config keys, undo snapshots and reset.
 
+#[cfg(feature = "cosmic")]
+pub mod app;
 pub mod catalogue;
 pub mod colours;
 pub mod desktop;

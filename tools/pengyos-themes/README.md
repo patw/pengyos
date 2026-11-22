@@ -5,11 +5,18 @@ together) for the COSMIC desktop, installed **per user**: nothing in the image
 changes, and what you pick lives in your home directory on the `data` partition,
 so it survives A/B updates. The contract is [`spec.md`](spec.md).
 
-Status: the **CLI** is built and ships in the Desktop (0.2.0), which also takes
-its look from here: the catalogue's `[defaults]` (Glacier for dark, Glacier Light
-for light, with Papirus, which ships in the image) are generated into the
-Desktop's COSMIC defaults. The *Themes* window (libcosmic, in the App Library's
-System folder) comes next.
+Status (0.3.0): the **Themes window** and the CLI ship in the Desktop, in one
+binary: `pengyos-themes` with no arguments opens the window (App Library, System
+folder), with arguments it is the CLI. The Desktop also takes its look from here:
+the catalogue's `[defaults]` (Glacier for dark, Glacier Light for light, with
+Papirus, which ships in the image) are generated into its COSMIC defaults.
+
+The window has three pages: **Looks** (the front page: a card per Look with a
+preview in its own colours and icons, Apply, and *Save as a Look*), **Icons**
+(the installed themes with previews and Use; the catalogue's packs with Install,
+Update, Remove) and **Colours** (your library and the catalogue's, and a
+cosmic-themes.org browser). Undo and Reset are in the header. Downloads run off
+the UI thread; everything else is the same library calls as the CLI.
 
 ```
 pengyos-themes icons list | install <id> | use <theme> | remove <id>
@@ -69,7 +76,8 @@ It refuses to run as root for anything that changes state: themes are per user.
 | `src/looks.rs` | Looks |
 | `src/desktop.rs` | the COSMIC config keys, undo snapshots, reset, the image's defaults |
 | `src/follow.rs` | icons that follow dark and light |
-| `src/main.rs` | the CLI |
+| `src/main.rs` | the CLI (and, with no arguments, the window) |
+| `src/app.rs` | the Themes window (feature `cosmic`) |
 | `catalogue/` | the catalogue and our colour themes (to `/usr/share/pengyos/themes/`) |
 
 `cosmic-theme` and `cosmic-config` are pinned to the libcosmic rev the Desktop's

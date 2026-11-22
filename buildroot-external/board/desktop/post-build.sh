@@ -216,8 +216,9 @@ else
 fi
 
 # --- Themes (icon themes, colour themes, Looks; icons that follow dark/light) ---
-# tools/pengyos-themes, host-built the same way (no libcosmic: only its theme
-# model). Per user and unprivileged. Its catalogue (Papirus, our colour themes,
+# tools/pengyos-themes, host-built the same way: the Themes window (System
+# folder; .desktop in the overlay) and the CLI in one binary. Per user and
+# unprivileged. Its catalogue (Papirus, our colour themes,
 # the Looks) goes to /usr/share/pengyos/themes; the session's `follow` (overlay
 # autostart) swaps Papirus-Dark and Papirus-Light when the mode changes. The
 # catalogue is installed even without the binary: it is data, and the theme

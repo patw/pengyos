@@ -138,7 +138,7 @@ fi
 
 # Our libcosmic apps share one target dir so they share the libcosmic build.
 if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ]; then
-    for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-usage pengyos-gamepads pengyos-printers pengyos-firmware pengyos-sharing pengyos-remote-desktop pengy-games pengyos-hwmon; do
+    for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-usage pengyos-gamepads pengyos-printers pengyos-firmware pengyos-sharing pengyos-remote-desktop pengy-games pengyos-hwmon pengyos-themes; do
         wanted "${app}" || continue
         features=cosmic
         # The Hardware Monitor's Desktop binary carries the terminal view too,
@@ -157,16 +157,6 @@ if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted pengyos-rdp-server; 
     echo "[cosmic] cargo build --release -p pengyos-rdp-server --locked"
     (cd "${REPO}/tools/pengyos-rdp-server" && \
         CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p pengyos-rdp-server --locked)
-    built=$((built + 1))
-fi
-
-# pengyos-themes: no libcosmic window yet, only libcosmic's theme model (pinned to
-# the Desktop's libcosmic rev, as the keys it writes are read by that COSMIC).
-# Same target dir; board/desktop/post-build.sh reads install-gui/release/pengyos-themes.
-if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted pengyos-themes; then
-    echo "[cosmic] cargo build --release -p pengyos-themes --locked"
-    (cd "${REPO}/tools/pengyos-themes" && \
-        CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p pengyos-themes --locked)
     built=$((built + 1))
 fi
 

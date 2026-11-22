@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Themes
+GenericName=Icons and Colours
+Comment=Icon themes, colour themes and Looks that pair them, with undo
+Exec=pengyos-themes
+Icon=preferences-desktop-theme
+Terminal=false
+Categories=System;Settings;
+Keywords=theme;look;appearance;icons;colours;colors;dark;light;papirus;glacier;accent;
+StartupNotify=true

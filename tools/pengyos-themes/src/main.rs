@@ -86,6 +86,18 @@ fn parse_args(raw: Vec<String>) -> std::result::Result<Args, Fail> {
 
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
+    // No arguments: the Themes window, when built with it.
+    #[cfg(feature = "cosmic")]
+    if raw.is_empty() {
+        let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(1000.0, 760.0));
+        return match cosmic::app::run::<pengyos_themes::app::App>(settings, ()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("pengyos-themes: {e}");
+                ExitCode::from(1)
+            }
+        };
+    }
     if raw.is_empty() || matches!(raw[0].as_str(), "-h" | "--help" | "help") {
         print!("{HELP}");
         return if raw.is_empty() { ExitCode::from(2) } else { ExitCode::SUCCESS };

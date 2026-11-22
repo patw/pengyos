@@ -1,7 +1,7 @@
 # pengyos-themes — spec
 
-Status: **agreed**, 2026-11-22 (operator decisions recorded under *Decisions*). The CLI is
-built (0.1.0); the window and the image wiring are next.
+Status: **agreed**, 2026-11-22 (operator decisions recorded under *Decisions*). The CLI and
+the window are built (0.3.0) and wired into the Desktop.
 
 ## Why
 

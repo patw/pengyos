@@ -43,6 +43,28 @@ pub fn palette_name(b: &ThemeBuilder) -> String {
     }
 }
 
+/// The colours a preview needs, as RGBA, from the theme a builder builds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Swatch {
+    pub bg: [f32; 4],
+    pub card: [f32; 4],
+    pub accent: [f32; 4],
+    pub text: [f32; 4],
+    pub dark: bool,
+}
+
+pub fn swatch(b: &ThemeBuilder) -> Swatch {
+    let t = b.clone().build();
+    let c = |x: cosmic_theme::palette::Srgba| [x.red, x.green, x.blue, x.alpha];
+    Swatch {
+        bg: c(t.bg_color()),
+        card: c(t.primary_container_color()),
+        accent: c(t.accent_color()),
+        text: c(t.on_bg_color()),
+        dark: b.palette.is_dark(),
+    }
+}
+
 // ---- cosmic-themes.org ----------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -409,6 +431,14 @@ pub(crate) mod tests {
             {"id": 27, "name": "Broken", "ron": "(palette: Nope)"},
         ]))
         .unwrap()
+    }
+
+    #[test]
+    fn swatches_come_from_the_built_theme() {
+        let s = swatch(&ThemeBuilder::dark());
+        assert!(s.dark && s.bg[0] < 0.3 && s.text[0] > 0.7);
+        let s = swatch(&ThemeBuilder::light());
+        assert!(!s.dark && s.bg[0] > 0.7 && s.text[0] < 0.3);
     }
 
     #[test]
