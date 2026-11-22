@@ -2,6 +2,9 @@
 # apps under Xwayland) both load the theme named "default" unless
 # XCURSOR_THEME is set. Without one, cosmic-comp drew a single built-in arrow
 # for every cursor shape.
+# Hidden: it is a cursor theme, but its index.theme made COSMIC Settings list it
+# as an icon theme ("Default", i.e. the partial Pop). Cursor loaders ignore Hidden.
 [Icon Theme]
 Name=Default
+Hidden=true
 Inherits=Pop

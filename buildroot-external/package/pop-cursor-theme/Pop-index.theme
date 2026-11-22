@@ -8,8 +8,12 @@
 # hold the generic file icons COSMIC Files falls back to (application-x-generic,
 # which every PIE binary and .so ends up at), which neither Cosmic nor Pop's
 # symbolic set draws.
+# Hidden from COSMIC Settings' icon theme picker: this is a partial Pop (no
+# colour apps/places), so choosing it left GTK/Qt apps without folder and app
+# icons. Hidden only filters listings; Cosmic still inherits it.
 [Icon Theme]
 Name=Pop
+Hidden=true
 Comment=Pop cursors, symbolic icons and file-type icons
 Inherits=hicolor
 Directories=scalable/actions,scalable/apps,scalable/categories,scalable/devices,scalable/emblems,scalable/emotes,scalable/mimetypes,scalable/places,scalable/status,16x16/mimetypes,24x24/mimetypes,32x32/mimetypes,48x48/mimetypes,64x64/mimetypes,128x128/mimetypes,256x256/mimetypes

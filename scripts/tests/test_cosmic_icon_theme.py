@@ -72,3 +72,13 @@ def test_post_build_refuses_an_image_without_them():
     checked = set(re.findall(r"[a-z-]+-symbolic", block))
     assert NEEDED_FROM_POP <= checked, NEEDED_FROM_POP - checked
     assert "exit 1" in block
+
+
+def test_partial_pop_and_the_cursor_stub_are_hidden_from_the_picker():
+    """COSMIC Settings lists every icon theme without Hidden=true. Our Pop is
+    partial and "default" is only the cursor theme: offering either as an icon
+    theme left GTK/Qt apps without folder and app icons (2026-11-22)."""
+    for f in ("Pop-index.theme", "default-index.theme"):
+        idx = (PKG / f).read_text(encoding="utf-8")
+        head = idx.split("[Icon Theme]", 1)[1].split("\n[", 1)[0]
+        assert re.search(r"^Hidden=true$", head, re.M), f
