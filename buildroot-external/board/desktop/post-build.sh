@@ -215,6 +215,25 @@ else
     echo "post-build: ${FIRMWARE_GUI} not built — no Firmware app (firmware updates need a terminal)"
 fi
 
+# --- Themes (icon themes, colour themes, Looks; icons that follow dark/light) ---
+# tools/pengyos-themes, host-built the same way (no libcosmic: only its theme
+# model). Per user and unprivileged. Its catalogue (Papirus, our colour themes,
+# the Looks) goes to /usr/share/pengyos/themes; the session's `follow` (overlay
+# autostart) swaps Papirus-Dark and Papirus-Light when the mode changes. The
+# catalogue is installed even without the binary: it is data, and the theme
+# defaults in theme-defaults/ were generated from it.
+THEMES_BIN="${GUI_BUILD}/install-gui/release/pengyos-themes"
+rm -rf "${TARGET_DIR}/usr/share/pengyos/themes"
+mkdir -p "${TARGET_DIR}/usr/share/pengyos/themes"
+cp -r "${PENGYOS_TOOLS}/pengyos-themes/catalogue/." "${TARGET_DIR}/usr/share/pengyos/themes/"
+if [ -x "${THEMES_BIN}" ]; then
+    install -Dm0755 "${THEMES_BIN}" "${TARGET_DIR}/usr/bin/pengyos-themes"
+    echo "post-build: installed pengyos-themes and its catalogue"
+else
+    rm -f "${TARGET_DIR}/etc/xdg/autostart/io.catbee.pengyos.ThemesFollow.desktop"
+    echo "post-build: ${THEMES_BIN} not built — no pengyos-themes (icons will not follow dark/light)"
+fi
+
 # --- The pack-in games (one binary, eight games) -----------------------------
 # tools/pengy-games links every tools/pengy-<game> crate and runs the one it is
 # called as: /usr/bin/pengy-<game> is a symlink to it, so each launcher's
@@ -241,7 +260,7 @@ if [ -n "${STRIP_BIN}" ]; then
              "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-usage \
              "${TARGET_DIR}"/usr/bin/pengyos-gamepads \
              "${TARGET_DIR}"/usr/bin/pengyos-printers "${TARGET_DIR}"/usr/bin/pengyos-firmware \
-             "${TARGET_DIR}"/usr/bin/pengy-games; do
+             "${TARGET_DIR}"/usr/bin/pengy-games "${TARGET_DIR}"/usr/bin/pengyos-themes; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
     echo "post-build: stripped host-built binaries"

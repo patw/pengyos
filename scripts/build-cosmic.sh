@@ -160,6 +160,16 @@ if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted pengyos-rdp-server; 
     built=$((built + 1))
 fi
 
+# pengyos-themes: no libcosmic window yet, only libcosmic's theme model (pinned to
+# the Desktop's libcosmic rev, as the keys it writes are read by that COSMIC).
+# Same target dir; board/desktop/post-build.sh reads install-gui/release/pengyos-themes.
+if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ] && wanted pengyos-themes; then
+    echo "[cosmic] cargo build --release -p pengyos-themes --locked"
+    (cd "${REPO}/tools/pengyos-themes" && \
+        CARGO_TARGET_DIR="${BUILD}/install-gui" cargo build --release -p pengyos-themes --locked)
+    built=$((built + 1))
+fi
+
 # The Server's Hardware Monitor: the same crate with only the terminal view, so
 # no libcosmic, wayland or GPU libraries. Its own target dir, because a build with
 # different features into install-gui would overwrite the Desktop binary.

@@ -17,6 +17,10 @@ cosmic-files patch 0003 now ends every chain with ``text-x-generic``, so nothing
 draws blank any more. That is a floor, not an icon. This check replays the lookup
 *without* it, so a theme change that drops a common type's icon still fails here.
 
+It checks every theme a user gets without asking: Cosmic (COSMIC's own, always)
+and, when the image has them, the default Papirus-Dark / Papirus-Light
+(papirus-icon-theme, the Glacier defaults since 2026-11-22).
+
     check-mime-icons.py TARGET_DIR    exit 1 and name every REQUIRED type that is blank
 """
 from __future__ import annotations
@@ -25,8 +29,10 @@ import os
 import sys
 from pathlib import Path
 
-#: The theme COSMIC asks first (libcosmic's icon_theme::COSMIC).
+#: The theme COSMIC asks first (libcosmic's icon_theme::COSMIC); it must exist.
 THEME = "Cosmic"
+#: The image's default icon themes, checked when present.
+DEFAULT_THEMES = ("Papirus-Dark", "Papirus-Light")
 
 #: Types a user meets in an ordinary home directory or /usr: each must draw a real
 #: icon of its own or its generic one. The PIE/shared-library pair is the one that
@@ -75,7 +81,7 @@ def _inherits(theme_dir: Path) -> list[str]:
     return []
 
 
-def svg_names(icons_root: Path, theme: str = THEME) -> set[str]:
+def svg_names(icons_root: Path, theme: str) -> set[str]:
     """Every SVG icon name reachable from ``theme`` through Inherits (plus hicolor)."""
     names: set[str] = set()
     seen: set[str] = set()
@@ -96,13 +102,13 @@ def svg_names(icons_root: Path, theme: str = THEME) -> set[str]:
     return names
 
 
-def audit(target: Path) -> tuple[list[str], list[str], int]:
+def audit(target: Path, theme: str = THEME) -> tuple[list[str], list[str], int]:
     """(required types that are blank, all blank types, number of types in the database)."""
     mime_dir = target / "usr/share/mime"
     types = [l.strip() for l in (mime_dir / "types").read_text(encoding="utf-8").splitlines()
              if l.strip()]
     icons, generic = _kv(mime_dir / "icons"), _kv(mime_dir / "generic-icons")
-    have = svg_names(target / "usr/share/icons")
+    have = svg_names(target / "usr/share/icons", theme)
     blank = [m for m in types if not any(n in have for n in icon_names(m, icons, generic))]
     known = set(types)
     req_blank = [m for m in REQUIRED
@@ -119,16 +125,20 @@ def main(argv: list[str]) -> int:
         print(f"check-mime-icons: ERROR: {target}/usr/share/mime/types is missing "
               "(shared-mime-info not installed?)", file=sys.stderr)
         return 1
-    req_blank, blank, total = audit(target)
-    if req_blank:
+    icons = target / "usr/share/icons"
+    themes = [THEME] + [t for t in DEFAULT_THEMES if (icons / t / "index.theme").is_file()]
+    failed = False
+    for theme in themes:
+        req_blank, blank, total = audit(target, theme)
         for m in req_blank:
-            print(f"check-mime-icons: ERROR: COSMIC Files draws {m} with no icon of its "
-                  "own or its generic one", file=sys.stderr)
-        return 1
-    print(f"check-mime-icons: every common file type has an icon "
-          f"({total - len(blank)} of {total} types; the other {len(blank)} fall back "
-          "to text-x-generic)")
-    return 0
+            print(f"check-mime-icons: ERROR: with {theme} icons, COSMIC Files draws {m} "
+                  "with no icon of its own or its generic one", file=sys.stderr)
+            failed = True
+        if not req_blank:
+            print(f"check-mime-icons: {theme}: every common file type has an icon "
+                  f"({total - len(blank)} of {total} types; the other {len(blank)} fall "
+                  "back to text-x-generic)")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

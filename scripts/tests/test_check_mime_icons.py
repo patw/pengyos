@@ -74,6 +74,22 @@ def test_an_inherited_generic_icon_is_enough(tmp_path, capsys):
     assert "every common file type has an icon" in capsys.readouterr().out
 
 
+def test_the_default_papirus_themes_are_checked_too(tmp_path, capsys):
+    t = _target(tmp_path, ["application/x-sharedlib"],
+                generic={"application/x-sharedlib": "application-x-generic"})
+    _theme(t, "Cosmic", "hicolor", {"scalable/mimetypes": ["application-x-generic.svg"]})
+    _theme(t, "hicolor", None, {})
+    _theme(t, "Papirus-Dark", "hicolor", {"48x48/mimetypes": ["application-x-generic.svg"]})
+    _theme(t, "Papirus-Light", "hicolor", {})
+    assert cmi.main(["x", str(t)]) == 1
+    err = capsys.readouterr().err
+    assert "with Papirus-Light icons" in err and "Papirus-Dark" not in err
+    _theme(t, "Papirus-Light", "hicolor", {"48x48/mimetypes": ["application-x-sharedlib.svg"]})
+    assert cmi.main(["x", str(t)]) == 0
+    out = capsys.readouterr().out
+    assert "Cosmic:" in out and "Papirus-Dark:" in out and "Papirus-Light:" in out
+
+
 def test_png_only_and_dangling_links_do_not_count(tmp_path):
     """Files looks up SVG only (prefer_svg -> force_svg); a dead link draws nothing."""
     t = _target(tmp_path, ["application/x-sharedlib"],

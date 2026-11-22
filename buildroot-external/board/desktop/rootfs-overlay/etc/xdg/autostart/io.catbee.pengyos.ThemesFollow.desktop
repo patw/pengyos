@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PengyOS Themes: icons follow dark and light
+Comment=Swaps Papirus Dark and Papirus Light when the desktop goes dark or light
+Exec=pengyos-themes follow
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
