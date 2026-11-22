@@ -14,6 +14,15 @@ name = "server"
 description = "PengyOS Server — Core plus nftables, podman, sshd, metrics/update timers (backup timer off)"
 image = "output/pengyos-server/images/pengyos-server-x86_64.img"
 
+# Readiness: the boot is over only when BOTH are on the serial log. The serial
+# getty does not wait for multi-user.target, so a slow guest can print the
+# login prompt before the late status lines this matrix checks for; with
+# `login:` alone the harness killed it 4 s later with those lines unread
+# (26.11.23 try 2 and the 2026-11-22 nightly: Server NVIDIA failed podman-service,
+# multi-user and server-target on an image that booted fine). A boot that never
+# gets there still fails, at the variant's timeout.
+ready = ["pengyos-server login:", "Reached target .*PengyOS Server marker target"]
+
 [[variant]]
 id = "uefi"
 description = "plain UEFI/OVMF disk boot (GRUB2 on the ESP)"

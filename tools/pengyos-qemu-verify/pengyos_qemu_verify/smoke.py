@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import tomllib
 import xml.etree.ElementTree as ET
@@ -184,6 +185,13 @@ class SmokeMatrix:
         image: default image path, relative to the repo root (the CLI
             ``--image`` flag overrides it).
         version: the schema version this matrix was written against.
+        ready: readiness markers (regexes) every variant waits for, all of
+            them, before the settle window starts; empty means the boot
+            default (``login:``). A matrix whose checks look for status lines
+            systemd may print *after* the login prompt (Multi-User, a marker
+            target) lists the last of them here, so a slow boot waits for it
+            instead of being killed 4 s after ``login:`` with those lines
+            unread (26.11.23 try 2 and the 2026-11-22 nightly, Server NVIDIA).
     """
 
     name: str
@@ -192,10 +200,23 @@ class SmokeMatrix:
     description: str = ""
     image: str = ""
     version: int = MATRIX_VERSION
+    ready: "tuple[str, ...]" = ()
 
     def __post_init__(self) -> None:
         if not str(self.name).strip():
             raise MatrixError("SmokeMatrix.name must be a non-empty string")
+        for pattern in self.ready:
+            if not str(pattern).strip():
+                raise MatrixError(
+                    f"matrix {self.name!r}: 'ready' holds an empty pattern"
+                )
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise MatrixError(
+                    f"matrix {self.name!r}: 'ready' pattern {pattern!r} "
+                    f"does not compile: {exc}"
+                ) from None
         if int(self.version) != MATRIX_VERSION:
             raise MatrixError(
                 f"matrix {self.name!r}: unsupported version {self.version!r} "
@@ -349,6 +370,9 @@ def matrix_from_dict(data: "dict", source: str = "<dict>") -> SmokeMatrix:
         raise MatrixError(f"{source}: the matrix must be a TOML table")
     if "name" not in data:
         raise MatrixError(f"{source}: the matrix is missing 'name'")
+    ready = data.get("ready", ())
+    if isinstance(ready, str) or not all(isinstance(p, str) for p in ready):
+        raise MatrixError(f"{source}: 'ready' must be a list of regex strings")
     return SmokeMatrix(
         name=str(data["name"]),
         description=str(data.get("description", "")),
@@ -358,6 +382,7 @@ def matrix_from_dict(data: "dict", source: str = "<dict>") -> SmokeMatrix:
             _variant_from_dict(v, source) for v in data.get("variant", ())
         ),
         checks=tuple(_check_from_dict(c, source) for c in data.get("check", ())),
+        ready=tuple(ready),
     )
 
 
@@ -628,6 +653,7 @@ def run_matrix(
         variants: subset of variant ids to run (default: all, in matrix order).
         boot_kwargs: extra keyword arguments merged into every boot call
             (e.g. ``{"kvm": False}`` to force TCG, or a shared ``workdir``).
+            An ``expect`` given here overrides the matrix's ``ready`` list.
 
     Returns:
         A :class:`MatrixOutcome`; it never raises for a failed boot or a failed
@@ -650,6 +676,8 @@ def run_matrix(
 
     extra = dict(boot_kwargs or {})
     extra.setdefault("settle", settle)
+    if matrix.ready:
+        extra.setdefault("expect", tuple(matrix.ready))
     started = time.monotonic()
     outcomes: "list[VariantOutcome]" = []
     for variant in selected:
