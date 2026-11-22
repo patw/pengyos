@@ -106,10 +106,15 @@ pengyos-qemu-verify desktop <installer-image>
   CI/JUnit consumers read it unchanged). All checks are blocking — the exit
   code is `0` only when every variant booted ready **and** every check passed.
   `smoke --dry-run` prints the plan (variants, their checks, each variant's QEMU
-  argv) and boots nothing.
+  argv) and boots nothing. A matrix may set a top-level `ready = [regex, …]`:
+  every variant is then ready only when **all** of them are on the serial log,
+  and the `--settle` window starts after that. Both shipped matrices list the
+  login prompt plus their last status line (Core: Multi-User, Server: the
+  marker target), because the serial getty does not wait for multi-user.target
+  and a slow guest prints `login:` before the lines the checks look for.
 * `--settle SECONDS` (`boot`, `smoke`) — keep reading the serial log for this
   many seconds **after** readiness, then terminate QEMU. Readiness is the login
-  prompt; the login banner and the shell prompt follow it, and the matrices'
+  prompt (or a smoke matrix's `ready` markers); the login banner and the shell prompt follow it, and the matrices'
   `autologin-shell` check can only pass if they were captured. Default
   `DEFAULT_SETTLE` (4 s); `0` stops on readiness, which is the pre-0.4.0
   behaviour. The window is counted in the reported `duration`.

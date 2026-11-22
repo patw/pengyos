@@ -1172,3 +1172,35 @@ def test_boot_settle_captures_what_follows_the_login_prompt(tmp_path):
 def test_boot_rejects_a_negative_settle(tmp_path):
     with pytest.raises(ValueError, match="settle must not be negative"):
         _boot(tmp_path, "login", settle=-1.0)
+
+
+def test_boot_waits_for_every_readiness_marker_not_just_the_login_prompt(tmp_path):
+    """The smoke race (26.11.23 try 2, 2026-11-22 nightly): the login prompt
+    arrives, the marker target follows more than the settle window later. With
+    `login:` alone the line is lost; with both markers the harness waits for it."""
+    qemu = _write_exec(tmp_path, "fake-qemu", FAKE_QEMU)
+    late = "Reached target PengyOS Server marker target."
+    os.environ["FAKE_QEMU_BEHAVIOR"] = "custom"
+    os.environ["FAKE_QEMU_SCRIPT"] = (
+        "pengyos-server login: \x1e\x1e\x1e\x1e" + late + "\n"
+    )
+    os.environ["FAKE_QEMU_SLEEP"] = "0.4"
+    try:
+        both = boot_image(
+            _make_image(tmp_path), kvm=False, poll_interval=0.02, timeout=15.0,
+            qemu_bin=qemu, settle=0.1,
+            expect=("pengyos-server login:", "Reached target .*PengyOS Server marker target"),
+        )
+        login_only = boot_image(
+            _make_image(tmp_path), kvm=False, poll_interval=0.02, timeout=15.0,
+            qemu_bin=qemu, settle=0.1,
+        )
+    finally:
+        for key in ("FAKE_QEMU_BEHAVIOR", "FAKE_QEMU_SCRIPT", "FAKE_QEMU_SLEEP"):
+            os.environ.pop(key, None)
+
+    assert both.ready is True and login_only.ready is True
+    both_log = Path(both.serial_log).read_text(encoding="utf-8", errors="replace")
+    login_log = Path(login_only.serial_log).read_text(encoding="utf-8", errors="replace")
+    assert late in both_log
+    assert late not in login_log
