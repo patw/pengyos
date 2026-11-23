@@ -137,7 +137,7 @@ max_actions  = 12            # changes prepared and verified per night (the batc
 max_releases = 1             # signed images published per night — the blast radius
 cooldown_days = 7            # per component, consumed only by a published action
 allow_patch_shape = true
-skip_cosmic  = true
+skip_cosmic  = false         # true = ship the apps' last build (merged app changes wait)
 ```
 
 The signing key and the site target never enter the repo and are never printed:

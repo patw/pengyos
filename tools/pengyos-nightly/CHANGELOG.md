@@ -6,6 +6,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed — the act lane rebuilds our apps that changed (0.19.0)
+- `skip_cosmic` now defaults to false, so the act lane's `scripts/release.sh`
+  runs `scripts/build-cosmic.sh` again. Since 2026-10-28 that script builds only
+  our own libcosmic apps (COSMIC itself is a Buildroot package); post-build copies
+  them into the image as they are, so skipping it shipped each app's last hand
+  build. The RDP server's capture-only-while-connected fix (merged 2026-11-17)
+  was in no image until this was found on 2026-11-23. cargo rebuilds only the
+  apps whose code or locks changed: about 3 s when none did.
+
 ### Fixed — a failed release says what failed; a hung mailer is not a crash (0.18.1)
 - The act lane kept the last 2000 characters of a failed `scripts/release.sh`. A
   boot check prints its FAIL lines and then the rest of the matrix as PASS lines,
