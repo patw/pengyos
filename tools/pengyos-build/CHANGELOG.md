@@ -6,6 +6,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed — the kernel rebuilt on every configure (2026-11-22)
+- The kernel fragment check required every line of every fragment layer, but
+  Buildroot merges the layers and a later one overrides an earlier one. Core's
+  `CONFIG_FRAMEBUFFER_CONSOLE=y`, `VMD=m` and `BTRFS_FS=m`, overridden by the
+  Desktop and Server layers, could never hold, so every Desktop and Server
+  configure rebuilt linux and its module packages (v4l2loopback, nvidia-open)
+  for nothing. Only each symbol's last setting is checked now; all five output
+  trees come out clean.
+
 ### Changed — no more "CLEAN BUILD NEEDED" (2026-11-15)
 - The leftovers report and the two kernel `show-info` failures printed
   `CLEAN BUILD NEEDED`, which had people and agents (Claude Code, Pengy) reaching
