@@ -18,6 +18,7 @@ from .build import BuildError, build_target, status_for
 from .clean import CleanError, clean_target
 from .configure import ConfigureError, configure_target, output_dir
 from .manifest import ManifestError, write_manifest
+from .prune import PruneError, prune_target
 from . import leftovers
 from .recipe import recipe_staleness
 from .sbom import SbomError, generate_sbom
@@ -189,6 +190,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--build-root",
         default=None,
         help="build root (default: $PENGYOS_BUILD_ROOT or ~/build/pengyos)",
+    )
+
+    prune_p = sub.add_parser(
+        "prune",
+        help="remove the build dirs of package versions the target no longer "
+        "builds (old versions left by version bumps; rebuilds nothing). Dry run "
+        "unless --apply",
+    )
+    prune_p.add_argument("target", help="target name from the targets file")
+    prune_p.add_argument(
+        "--targets",
+        default="targets.toml",
+        help="path to the targets file (default: ./targets.toml)",
+    )
+    prune_p.add_argument(
+        "--build-root",
+        default=None,
+        help="build root (default: $PENGYOS_BUILD_ROOT or ~/build/pengyos)",
+    )
+    prune_p.add_argument(
+        "--apply", action="store_true", help="remove them (default: only list them)"
     )
 
     man_p = sub.add_parser(
@@ -369,6 +391,20 @@ def main(argv: list[str] | None = None) -> int:
         print(recipe_staleness(target.external_tree, output))
         left = leftovers.current(output)
         print(left)
+        return 0
+
+    if args.command == "prune":
+        try:
+            target = load_target(args.targets, args.target)
+        except TargetsFileError as exc:
+            print(f"pengyos-build: error: {exc}", file=sys.stderr)
+            return 1
+        try:
+            result = prune_target(target, args.build_root, apply=args.apply)
+        except PruneError as exc:
+            print(f"pengyos-build: error: {exc}", file=sys.stderr)
+            return 1
+        print(result)
         return 0
 
     if args.command == "manifest":

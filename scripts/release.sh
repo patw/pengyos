@@ -121,6 +121,14 @@ STALE_OUTPUTS=()
 for t in "${TARGETS[@]}"; do STALE_OUTPUTS+=("${BUILD_ROOT}/output/${t}"); done
 python3 "${REPO}/scripts/check-applied-patches.py" --repo "${REPO}" "${STALE_OUTPUTS[@]}" \
     || die "output trees hold patches from outside this repo (a worktree test build?): dirclean those packages"
+# A full build disk fails a release hours in, at whatever step ran out. Refuse to
+# start under PENGYOS_MIN_FREE_GB (default 30), and warn under twice that.
+MIN_FREE_GB="${PENGYOS_MIN_FREE_GB:-30}"
+FREE_GB=$(( $(df -Pk "${BUILD_ROOT}" | awk 'NR==2 {print $4}') / 1048576 ))
+[ "${FREE_GB}" -ge "${MIN_FREE_GB}" ] \
+    || die "only ${FREE_GB} GB free under ${BUILD_ROOT} (need ${MIN_FREE_GB}): free space first (pengyos-build prune <target>, old test trees); never a clean rebuild"
+[ "${FREE_GB}" -ge $(( MIN_FREE_GB * 2 )) ] \
+    || echo "[release] WARNING: only ${FREE_GB} GB free under ${BUILD_ROOT}" >&2
 
 build() { (cd "${REPO}/tools/pengyos-build" && python3 -m pengyos_build "$@" --targets "${TARGETS_FILE}"); }
 verify() { (cd "${REPO}/tools/pengyos-qemu-verify" && python3 -m pengyos_qemu_verify "$@"); }
@@ -203,5 +211,11 @@ if [ "${PUSH}" = 1 ]; then
     say "push ${SITE}/ -> ${PENGYOS_SITE_REMOTE}"
     "${REPO}/scripts/push-site.sh" "${SITE}" "${PENGYOS_SITE_REMOTE}"   # retries a host that is away
 fi
+
+# Each version bump leaves the old version's build dir behind; drop the ones
+# this build made obsolete. Never fails the release: it is housekeeping.
+for t in "${TARGETS[@]}"; do
+    build prune "${t}" --apply || echo "[release] WARNING: prune ${t} failed (left as is)" >&2
+done
 
 say "done: ${TARGETS[*]} at ${VERSION}"

@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — `prune`: old package versions leave the output trees (2026-11-23)
+- Buildroot never removes `build/<pkg>-<old version>/` when a version moves, so
+  every output tree kept every version it had built (pengy 1.15.5 next to
+  1.16.1, a uv from a batch that never landed). `pengyos-build prune <target>`
+  lists them and `--apply` removes them; it rebuilds nothing. What is current
+  comes from the build's own `images/<target>.show-info.json`, and a dir is
+  only removed when it is an older version of a package show-info lists, that
+  package's current dir exists, and the dir is older than the show-info (a
+  bump lives in `.mk`, not `.config`, so yesterday's show-info calls the new
+  version old). The toolchain and packages no longer enabled are left alone.
+  `scripts/release.sh` prunes every target it built after publishing, and
+  refuses to start under 30 GB free (`PENGYOS_MIN_FREE_GB`), warning under 60.
+
 ### Fixed — the kernel rebuilt on every configure (2026-11-22)
 - The kernel fragment check required every line of every fragment layer, but
   Buildroot merges the layers and a later one overrides an earlier one. Core's
