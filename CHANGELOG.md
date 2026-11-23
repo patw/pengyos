@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: desktop icons can be dragged anywhere on the grid (2026-11-23)
+- The COSMIC desktop laid icons out down each column in sort order, with no
+  setting to move one. Dragging icons now snaps them to the grid cell under the
+  pointer (a group keeps its shape; a taken cell gives way to the nearest free
+  one), every other icon stays where it was, and new files fill the first free
+  cell. Files dropped from a Files window land where they were dropped.
+- Positions are kept per monitor, by file name. "Sort by" in the desktop's
+  right-click menu re-arranges everything. Arrow keys still stop at an empty
+  cell.
+- Carried patch `cosmic-files/0004-desktop-icons-stay-where-they-are-dragged.patch`.
+
 ### Changed: Glacier is the Desktop's look (2026-11-22)
 - New users get **Glacier**: cool blue-grey surfaces, an ice-blue accent and
   Papirus Dark icons; or **Glacier Light** (frosted off-white, a deep glacier-blue
@@ -181,6 +192,14 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   fwupd.service drop-in names `/efi`, where the installer mounts it.
 - `board/server/features-required.txt` fails the build if fwupdmgr, the refresh
   timer, the capsule loader or libjcat's PKCS#7 support go missing.
+
+### Fixed: game shortcut icons were blank until the next login (2026-11-16)
+- Braid's Steam shortcut on beholaptop (26.11.20) launched but showed no icon.
+  `pengyos-sandbox-shortcuts` had copied the icon into
+  `~/.local/share/icons/hicolor`, but that folder did not exist at login, and
+  every COSMIC process lists icon theme folders once, at startup. `start-cosmic`
+  now creates it before the session, as it already did for the Flatpak export
+  folders (8ab3ede8).
 
 ### Added: game launchers' desktop shortcuts show up on the desktop (2026-11-15)
 - A user reported "Create desktop shortcut" in Steam did nothing. A Flatpak app
