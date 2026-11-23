@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.4.0] - 2026-11-18
+
+### Changed
+- `pengyos-vm run` is offline by default: the VM's NAT gets QEMU's `restrict=on`,
+  so a throwaway job reaches neither the internet nor this machine. Before, QEMU's
+  NAT mapped 10.0.2.2 onto the host's 127.0.0.1, so a job could talk to services
+  that listen only there (pengy-vmm, a local model server). `--online` gives the
+  old behaviour for jobs that install packages or fetch data; a failed offline
+  run says so. `list` shows these VMs' network as `offline`. `create` is unchanged.
+
 ## [0.3.1] - 2026-11-14
 
 ### Fixed

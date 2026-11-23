@@ -1,9 +1,9 @@
 # PengyOS Server (and every edition built on it). Presets are read in name order,
 # first match wins; a unit no file names is enabled (see 10-pengyos-core.preset).
 #
-# The backup timer is opt-in. Its defaults tar all of /etc and /home onto the
-# same disk and keep 7 copies, which filled Desktops' drives. `enable *` would
-# arm it at image build from its [Install] section, so it is named here.
+# The backup timer is opt-in: it has nowhere to go until `pengyos-backup init`,
+# and `pengyos-backup enable JOB` turns it on. `enable *` would arm it at image
+# build from its [Install] section, so it is named here.
 disable pengyos-backup.timer
 
 # Wi-Fi on the Server is one wpa_supplicant-nl80211@<iface>.service per card,
@@ -32,3 +32,10 @@ disable dnsmasq.service
 # Installing stays the administrator's choice; `enable *` would otherwise turn
 # on nightly installs and restarts on every machine.
 disable pengyos-update-auto.timer
+
+# Firmware metadata from LVFS, fetched daily, so `fwupdmgr get-updates` (and the
+# login message, /run/motd.d) know about new firmware and dbx updates. fwupd
+# itself starts over D-Bus. Named here because a headless box with stale
+# metadata never hears of a firmware fix (it would be enabled anyway, but on
+# purpose is better than by default).
+enable fwupd-refresh.timer

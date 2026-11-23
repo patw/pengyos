@@ -46,6 +46,8 @@ TOOLS = {
     "dx": "one command in the dev guest, here (dx --shell)",
     "pengyos-vm": "VMs in ~/vms: create, start, ssh, console, stop",
     "pengyos-shares": "share folders over SMB: add, remove, passwd",
+    "pengyos-backup": "restic backups: init, enable JOB, run, status, restore",
+    "pengyos-alert": "alerts over ntfy/mail: status, test, send",
     "pengyos-webui": "serve pengy-web at boot (no login: loopback only)",
     "pengyos-gpu-memory": "how much RAM an AMD GPU may use: status, set",
     "pengyos-ssh-password": "SSH password logins: status, on, off (keys only)",
@@ -66,6 +68,7 @@ TOOLS = {
     "pengyos-firmware": "the Firmware app (fwupd)",
     "pengyos-gamepads": "the Gamepads app: list and test controllers",
     "pengyos-printers": "the Printers app: printers, queue, test page",
+    "pengyos-themes": "icon themes, colour themes and Looks, with undo",
     "pengyos-dri-prime": "run an app on the discrete AMD GPU",
     "prime-run": "run an app on the NVIDIA GPU",
 }

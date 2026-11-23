@@ -89,7 +89,7 @@ Chosen once, inherited everywhere.
 | **File sharing (SMB)** | **ksmbd** (the kernel's SMB3 server) + ksmbd-tools, driven by `pengyos-shares`, off until a share exists (Server, Desktop); **cifs-utils** for mounting shares; Samba's **libsmbclient** on the Desktop only, for Files' `smb://` (gvfs) | GPL-2.0 / GPL-3.0 | Samba's smbd as the server (a large build on every Server, and its guest/`force user` defaults are how a share became anonymously root-writable in 2026-08) | 🟢 |
 | **Firewall** | **nftables**, default-deny inbound in every edition (Core layer; Desktop: ports above 1024 open, as Fedora Workstation; rootful podman bridges and published ports allowed). A machine opens its own ports with `pengyos-firewall`, one rule file each in `/etc/pengyos/nftables.d/` | GPL-2.0 | iptables, firewalld | 🟢 |
 | **Storage** | **A/B ext4 system slots** (read-only) + a **btrfs `data`** partition; `/etc` an overlay on `data` | GPL-2.0 | btrfs root with snapshots (designed, parked) | 🟢 |
-| **Swap** | zram (`zram-generator`) | MIT | swap partition | 🟢 |
+| **Swap** | zram (`zram-generator`). **No hibernation, suspend only** (decided 2026-11-17): it needs a RAM-sized swap file on btrfs `data`, `resume=` in every A/B slot with no initramfs, and fails under Secure Boot lockdown; it would also write RAM in clear to an unencrypted disk. With no disk swap, logind reports CanHibernate=na and COSMIC offers no Hibernate | MIT | swap partition | 🟢 |
 | **Time / trust** | chrony; ca-certificates; OpenSSL | GPL-2.0 / MPL-2.0 / Apache-2.0 | timesyncd | 🟢 |
 | **Remote** | OpenSSH, key-only by default; host keys generated on first boot. Server and Desktop: password logins for people's accounts are an opt-in (installer "Keys or password", `pengyos-ssh-password on`), never for root. Added 2026-11-07 after people with no SSH key could not get in at all | BSD | password logins on by default (Debian, Ubuntu Server) | 🟢 |
 | **GPU monitor** | **nvtop** (Server and Desktop) — our recipe `package/nvtop`: NVIDIA through NVML (dlopened, so one build serves every edition), AMD through libdrm_amdgpu, Intel through DRM fdinfo | GPL-3.0 | `nvidia-smi` alone (NVIDIA only, a snapshot with no history); btop (a whole system monitor, for the GPU view alone) | 🟢 |
@@ -102,7 +102,8 @@ Chosen once, inherited everywhere.
 > **Licenses.** Freedom-first (README Principle 1): permissive preferred, weak copyleft
 > fine when dynamically linked, strong copyleft fine for standalone programs. The GPL
 > and LGPL components above are such programs or dynamically linked libraries, as are
-> the ones the editions add: QEMU (GPL-2.0, Server/Desktop), libqalculate/`qalc`
+> the ones the editions add: QEMU (GPL-2.0, Server/Desktop), fwupd and GnuTLS (LGPL-2.1+;
+> Server/Desktop), libqalculate/`qalc`
 > (GPL-2.0+), libnotify and PulseAudio's client library and `pactl` (LGPL-2.1+; no
 > PulseAudio daemon), cosmic-osk (GPL-3.0), RealtimeKit (GPL-3.0+ daemon, MIT client;
 > Desktop), GeoClue (GPL-2.0+ service, LGPL-2.1+ libgeoclue; Desktop), v4l2loopback
@@ -110,7 +111,9 @@ Chosen once, inherited everywhere.
 > Desktop), dconf (LGPL-2.1+, the GSettings backend: GIO module, `dconf-service`, CLI;
 > Desktop), librsvg (LGPL-2.1+, gdk-pixbuf's SVG loader; Desktop), libsecret (LGPL-2.1+, the
 > Secret Service client prebuilt apps dlopen; Desktop). NSS and NSPR (MPL-2.0; Desktop)
-> ship for the same prebuilt apps. Binary blobs: CPU **microcode** (Intel
+> ship for the same prebuilt apps. The **Papirus** icon theme (GPL-3.0; Desktop, since
+> 2026-11-22) is data, not code: the default icons, unmodified, with the Glacier colour
+> themes (ours, MIT) in `tools/pengyos-themes`. Binary blobs: CPU **microcode** (Intel
 > `intel-microcode`, AMD `amd-ucode`; built into the kernel since 26.10.23) and device
 > **firmware** (`linux-firmware`, `sof-firmware`) in every edition, and the **NVIDIA
 > driver** in the NVIDIA editions only (§2.5). Every
@@ -182,10 +185,12 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
   `/bin/sh` is bash.
 - **Storage tools:** e2fsprogs, btrfs-progs, dosfstools, exfatprogs, parted, LVM2,
   cryptsetup, efibootmgr.
-- **Hardware:** a broad firmware set (Intel/Realtek/MediaTek/Qualcomm/Broadcom
-  Wi-Fi, i915, amdgpu) and kernel drivers for the fleet's NICs, storage, sensors;
-  Intel and AMD CPU microcode built into the kernel (applied by the early loader, no
-  initramfs); the Intel IOMMU on by default; WireGuard.
+- **Hardware:** kernel drivers for the fleet's NICs, storage and sensors (the
+  kernel is shared with Server); the Intel IOMMU on by default; WireGuard. **No
+  firmware blobs or CPU microcode** (2026-11-18): a VM loads none, so
+  linux-firmware and the microcode start at the Server layer (§2.2).
+- **Python jobs:** `uv` (2026-11-18, from Server) against the system python3, so a
+  throwaway run can install what it needs (US-CORE-9).
 - **Provenance:** `/etc/os-release` carries `IMAGE_ID`, `IMAGE_VERSION` and
   `BUILD_ID` (the git commit); the SBOM is embedded.
 - **Image:** a disk image (`pengyos-core-x86_64.img`) written straight to the target.
@@ -200,9 +205,10 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
 | Group | Ships |
 |---|---|
 | Remote comfort | tmux, mosh, git, zsh, ripgrep, fd, bat, eza, fzf, zoxide, starship, zsh-autosuggestions, zsh-syntax-highlighting, jq, curl |
-| Developer | Python 3 + pip, distrobox (a full distro userspace in a container), sudo (sudo-rs) |
+| Developer | Python 3 + pip (uv comes from Core), distrobox (a full distro userspace in a container), sudo (sudo-rs) |
 | Containers | **podman**, rootless and daemonless, with the API socket |
-| Ops | a metrics timer, an opt-in backup timer (off by default), the daily update check; disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
+| Ops | a metrics timer, backups (`pengyos-backup` over restic: jobs in `/etc/pengyos/backup.d`, read from btrfs read-only snapshots, to SFTP, a disk or S3/B2, retention and a monthly read-back check; off until a job is enabled), the daily update check; alerts over ntfy or SMTP mail (`pengyos-alert`: smartd, failed timers, full disks); firmware updates (fwupd: `fwupdmgr`, LVFS metadata daily, UEFI capsules and the dbx); disk health (smartmontools, nvme-cli), `wg`, ethtool; CPU/drive temperature sensors and the iTCO/sp5100 hardware watchdogs in the kernel |
+| Hardware | linux-firmware (Intel/Realtek/MediaTek/Qualcomm/Broadcom Wi-Fi, i915, xe, amdgpu, regulatory.db) and Intel + AMD CPU microcode built into the kernel (applied by the early loader, no initramfs); in Core until 2026-11-18, which is VM-only |
 | As a VM guest | virtio (KVM, Proxmox, QEMU) and Hyper-V/Azure (VMBus disk, network, console, `hv_utils`), VMGENID |
 | Compatibility | the libraries manylinux wheels assume the host has: `libGL.so.1`/`libEGL.so.1` (libglvnd dispatch only, no GL driver) and the X11 client libraries |
 | Virtual machines | **QEMU** (x86_64 system emulation, KVM-accelerated, TCG fallback; SeaBIOS + edk2 guest firmware; `qemu-img`) and KVM, vhost, VFIO in the kernel |
@@ -218,9 +224,9 @@ podman.
 |---|---|---|
 | Session | **COSMIC** (compositor, panel, launcher, settings, files, terminal, editor, store, player, viewer) behind **greetd + cosmic-greeter** | auto-login opt-in |
 | Graphics | Mesa (iris, radeonsi, virgl, llvmpipe; ANV/RADV Vulkan), libglvnd, Xwayland | |
-| Media | PipeWire + WirePlumber, GStreamer + FFmpeg, AAC/aptX/LDAC Bluetooth codecs, SOF firmware; RealtimeKit (the Realtime portal); v4l2loopback (OBS's virtual camera, loaded on demand) | |
+| Media | PipeWire + WirePlumber, GStreamer + FFmpeg, AAC/aptX/LDAC Bluetooth codecs, SOF firmware; RealtimeKit (the Realtime portal); v4l2loopback (OBS's virtual camera, loaded on demand); photos: HEIC (libde265, in the viewer's own libheif), AVIF (dav1d), JPEG XL (jxl-oxide), with HEIC/AVIF thumbnails in Files through FFmpeg | no host JACK server or jack2: Flatpak audio apps (Bitwig, Carla, …) get JACK from their runtime's libjack, which is PipeWire's and talks to the host PipeWire (2026-11-17) |
 | Hardware | NetworkManager (+ Wi-Fi, OpenVPN, WireGuard, ModemManager), BlueZ, UPower, power-profiles-daemon, thermald, fwupd, bolt, switcheroo-control, udisks; GeoClue (the Location portal; Wi-Fi lookups in BeaconDB) | |
-| Printing & scanning | CUPS + cups-filters, Gutenprint, HPLIP, ipp-usb, SANE + airscan, Avahi/mDNS | driverless first |
+| Printing & scanning | CUPS + cups-filters, Gutenprint, HPLIP, ipp-usb, SANE + airscan, Avahi/mDNS | driverless first; the scanning app is Document Scanner (`org.gnome.SimpleScan`) from Flathub, which brings its own SANE + airscan (verified on a network Brother, 2026-11-17) |
 | Apps | **Flatpak + Flathub** through COSMIC Store; Firefox installed from Flathub on first boot (once online); app updates announced by the PengyOS Updates notifier | Lane 3 (§2.5) |
 | Toolkits | GTK 3, Qt 6 (with the cutecosmic theme bridge), libcosmic | for third-party apps |
 | Boot | Plymouth splash with the PengyOS theme | |

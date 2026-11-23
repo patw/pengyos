@@ -15,7 +15,12 @@ exec-any  smartctl                                 # SMART disk health — BR2_P
 exec-any  nvme                                     # NVMe health log — BR2_PACKAGE_NVME
 exec-any  wg                                       # WireGuard keys and status — BR2_PACKAGE_WIREGUARD_TOOLS
 exec-any  ethtool                                  # NIC link, offloads, Wake-on-LAN — BR2_PACKAGE_ETHTOOL
+exec-any  rfkill                                   # unblock a soft-blocked Wi-Fi radio over SSH (US-SRV-12) — BR2_PACKAGE_UTIL_LINUX_RFKILL (server layer)
 exec-any  nvtop                                    # GPU monitor (NVIDIA, AMD, Intel) — BR2_PACKAGE_NVTOP
+exec-any  fwupdmgr                                 # firmware + dbx updates on a headless box — BR2_PACKAGE_FWUPD (server layer)
+exists    usr/lib/systemd/system/fwupd-refresh.timer   # daily LVFS metadata — BR2_PACKAGE_FWUPD
+exists    usr/libexec/fwupd/efi/fwupdx64.efi       # the capsule loader fwupd stages on /efi — BR2_PACKAGE_FWUPD_EFI
+contains  usr/lib/libjcat.so.1  gnutls_pkcs7_verify      # LVFS metadata signatures checkable — BR2_PACKAGE_GNUTLS (server layer)
 
 # --- GPU firmware for xe (US-SRV-9 transcoding) ---------------------------------
 exists    usr/lib/firmware/xe/bmg_guc_70.bin       # Battlemage GuC — BR2_PACKAGE_LINUX_FIRMWARE_XE
@@ -35,6 +40,8 @@ exec-any  ksmbd.mountd                             # the SMB3 server's user/shar
 exec-any  ksmbd.control                            # reload/shutdown, ksmbd.service's ExecReload — BR2_PACKAGE_KSMBD_TOOLS
 exists    usr/lib/systemd/system/ksmbd.service     # pengyos-shares enables it — BR2_PACKAGE_KSMBD_TOOLS (systemd unit dir)
 exec      usr/bin/pengyos-shares                   # board/server overlay
+exec      usr/bin/pengyos-alert                    # alerts over ntfy/mail (US-SRV-3/4) — board/server overlay
+contains  etc/smartd.conf  pengyos-alert-smartd    # smartd's problems reach pengyos-alert — overlay replaces smartmontools' file
 exec      usr/lib/systemd/systemd-logind           # power button; sessions — BR2_PACKAGE_SYSTEMD_LOGIND (core layer)
 exec      usr/lib/polkit-1/polkitd                 # logind asks it for non-root callers — BR2_PACKAGE_POLKIT (server layer)
 contains  usr/share/polkit-1/actions/org.freedesktop.login1.policy  set-self-linger   # systemd built -Dpolkit=enabled (external.mk)
@@ -86,3 +93,13 @@ exists    usr/bin/pengyos-ssh-password             # board/server overlay; on | 
 # compiling are built in the dev guest; pengyos.txt has the recipe.
 exec      usr/bin/uv                               # BR2_PACKAGE_UV (buildroot-external/package/uv)
 exec      usr/bin/uvx                              # uv's tool runner, from the same crate
+
+# --- Backups (pengyos-backup over restic, US-SRV-5) ---------------------------------
+exec      usr/bin/restic                           # the engine — package/restic (BR2_PACKAGE_RESTIC)
+exec      usr/bin/pengyos-backup                   # jobs, snapshots, alerts — server overlay
+exec      usr/bin/btrfs                            # read-only snapshots of the data subvolumes — btrfs-progs
+exec      usr/bin/unshare                          # the private mount namespace a run reads them in — util-linux
+exec      usr/bin/ssh-keygen                       # the key for an sftp: repository — openssh
+exists    etc/pengyos/backup.d/home.toml           # the shipped jobs (off) — server overlay
+exists    etc/pengyos/backup.d/system.toml
+contains  etc/systemd/system/pengyos-backup.service  /usr/bin/pengyos-backup   # the timer runs the new tool, not the old tar script

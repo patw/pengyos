@@ -11,11 +11,16 @@
 # `pengyos-guest destroy dev` and enter it again.
 
 [guests.dev]
-description = "Ubuntu 24.04 build box: compilers, cmake, git, go, rust, uv"
+description = "Ubuntu 24.04 build box: compilers, cmake, git, go, rust, uv, adb"
 image = "docker.io/library/ubuntu:24.04"
 packages = [
   "build-essential", "cmake", "ninja-build", "pkg-config", "git", "curl",
   "wget", "ca-certificates", "python3", "python3-venv", "golang", "zsh",
+  # Android/Quest work (US-DSK-10): Ubuntu's adb and fastboot are current
+  # platform-tools; Buildroot's android-tools is the 2013 Android 4.2 build.
+  # USB access needs no root: the Desktop's udev rules tag the device uaccess,
+  # and the box shares the host's /dev and network (adb's server on :5037).
+  "adb", "fastboot",
 ]
 # Runs as you inside the box, after the packages, on every apply: keep each
 # step idempotent. rustup installs into ~/.cargo; uv into the box's /usr/local.
@@ -43,6 +48,7 @@ setup = [
 verify = [
   "gcc --version", "cmake --version", "ninja --version", "go version",
   "rustc --version", "cargo --version", "uv --version",
+  "adb version", "fastboot --version",
   # sudo without a password (distrobox's NOPASSWD rule for a rootless box): the
   # setup steps above use it, and an agent in the box cannot answer a prompt.
   "sudo -n true && echo sudo: no password needed",

@@ -13,6 +13,8 @@ pub struct InstallOptions {
     pub username: String,
     /// "Log in automatically": skip the login screen at boot.
     pub autologin: bool,
+    /// "Dark mode": the desktop starts dark (Glacier) or light (Glacier Light).
+    pub dark: bool,
     /// "Allow SSH logins with a password": SSH accepts the user's password as
     /// well as keys (less safe; root still needs a key). The engine runs the
     /// image's `pengyos-ssh-password on --offline` in the new system.
@@ -45,6 +47,8 @@ pub fn engine_args(o: &InstallOptions) -> Vec<String> {
     if o.autologin {
         args.push("--autologin".into());
     }
+    args.push("--appearance".into());
+    args.push(if o.dark { "dark" } else { "light" }.into());
     if o.ssh_password {
         args.push("--ssh-password".into());
     }
@@ -94,7 +98,7 @@ mod tests {
             a,
             [
                 "image", "--target", "/dev/nvme0n1", "--hostname", "desk", "--user", "alex",
-                "--yes", "--password-stdin", "--progress", "json",
+                "--yes", "--password-stdin", "--progress", "json", "--appearance", "light",
             ]
         );
         assert!(!a.iter().any(|s| s == "--ssh-password" || s == "--autologin"));
@@ -105,6 +109,16 @@ mod tests {
         let a = engine_args(&InstallOptions { ssh_password: true, ..base() });
         assert_eq!(a.iter().filter(|s| *s == "--ssh-password").count(), 1);
         assert!(!a.iter().any(|s| s == "--autologin"));
+    }
+
+    #[test]
+    fn appearance_is_always_said() {
+        let a = engine_args(&InstallOptions { dark: true, ..base() });
+        let i = a.iter().position(|s| s == "--appearance").unwrap();
+        assert_eq!(a[i + 1], "dark");
+        let a = engine_args(&InstallOptions { dark: false, ..base() });
+        let i = a.iter().position(|s| s == "--appearance").unwrap();
+        assert_eq!(a[i + 1], "light");
     }
 
     #[test]
@@ -121,7 +135,8 @@ mod tests {
             pengy_model: "qwen3:8b".into(),
             ..base()
         });
-        let tail: Vec<&str> = a[11..].iter().map(String::as_str).collect();
+        // After the 11 fixed arguments and --appearance <mode>.
+        let tail: Vec<&str> = a[13..].iter().map(String::as_str).collect();
         assert_eq!(
             tail,
             ["--pengy-base-url", "http://127.0.0.1:11434/v1", "--pengy-api-key-stdin", "--pengy-model", "qwen3:8b"]

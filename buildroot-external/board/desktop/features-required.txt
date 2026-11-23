@@ -93,3 +93,12 @@ exists  usr/share/sounds/Pop/stereo/alert/battery-low.oga            # battery s
 # --- App shortcuts out of Flatpak sandboxes ------------------------------------
 exec    usr/libexec/pengyos/sandbox-shortcuts                         # US-DSK-20 — desktop overlay
 exists  usr/lib/systemd/user/pengyos-sandbox-shortcuts.service    # runs it in --watch mode at login — desktop overlay
+
+# --- Phone photos: HEIC and AVIF -------------------------------------------------
+# cosmic-viewer claims image/heic and decodes it with its own embedded libheif,
+# which only has an HEVC decoder when libde265 is in the sysroot at build time;
+# without it every iPhone photo fails with "No decoder" (26.11.x and earlier).
+contains  usr/bin/cosmic-viewer de265_new_decoder   # HEIC in the viewer — libde265 in COSMIC_DEPENDENCIES (cosmic.mk)
+exec      usr/libexec/pengyos/image-thumbnailer     # HEIC/AVIF thumbnails in Files (FFmpeg) — desktop overlay
+exists    usr/share/thumbnailers/pengyos-image.thumbnailer   # registers it for image/heic, heif, avif — desktop overlay
+exec      usr/bin/ffmpeg                            # what the thumbnailer runs — ffmpeg-pengyos

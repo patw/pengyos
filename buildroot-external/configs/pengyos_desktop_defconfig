@@ -50,6 +50,11 @@ BR2_TOOLCHAIN_HAS_THREADS=y
 # same absolute paths on every host you compare. (That is also why external.mk
 # can turn the build-id back on, which BR2_REPRODUCIBLE switches off.)
 BR2_REPRODUCIBLE=y
+# Go modules are fetched straight from their source repositories, as before
+# Buildroot 2026.08.2 made the module proxy (proxy.golang.org) its default. The
+# vendored tarball and its hash are the same either way; this keeps a Go recipe
+# bump from depending on, or reporting module names to, a third-party mirror.
+BR2_GOPROXY="direct"
 
 # --- Compiler cache -----------------------------------------------------------
 # ccache in front of every host and target C/C++ compile, cache in
@@ -276,43 +281,11 @@ BR2_PACKAGE_OPENSSH_KEY_UTILS=y
 # made at build time instead. The Desktop layer lists this table with its own.
 # BR2_ROOTFS_USERS_TABLES: set by the desktop layer
 
-# --- Hardware firmware (real-hardware support: GPU, wired NIC, WiFi) ---------
-# On the N100 weather station /lib/firmware was empty: i915 (Alder Lake-N GPU)
-# failed to load DMC/GuC firmware and WiFi had no regulatory.db. Ship the small
-# subset an Intel mini-PC actually needs (not all of linux-firmware).
-BR2_PACKAGE_LINUX_FIRMWARE=y
-BR2_PACKAGE_LINUX_FIRMWARE_I915=y
-BR2_PACKAGE_LINUX_FIRMWARE_RTL_8169=y
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_9XXX=y
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_QUZ=y
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E=y
-# AX200 = iwlwifi-cc-a0 (Buildroot ships it under the 22260 option); miniserv.
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22260=y
-# Intel Wireless 8265 (iwlwifi-8265) — behothinkpad.
-BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8265=y
-# Realtek RTL8821CE (rtw88) — behobasement.
-BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW88=y
-# Broader firmware so the "boot anywhere" stick works on other hardware: AMD GPU,
-# Atheros/Broadcom/Realtek WiFi families.
-BR2_PACKAGE_LINUX_FIRMWARE_AMDGPU=y
-BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_6174=y
-BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_11K_WCN6855=y
-BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XXX=y
-BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW89=y
-# regulatory.db — required for any WiFi regulatory domain.
-BR2_PACKAGE_WIRELESS_REGDB=y
-
-# --- CPU microcode (Intel + AMD) ----------------------------------------------
-# No edition shipped any: behoweather's N100 ran its factory revision 0xe
-# ("Running old microcode", "Register File Data Sampling: Vulnerable: No
-# microcode"; Intel's 20260812 release has 0x21). The image has no initramfs, so
-# the files are built INTO the kernel (CONFIG_EXTRA_FIRMWARE, set by external.mk)
-# and the early loader applies them at boot. Riding inside bzImage means every
-# existing install gets them from a normal update - no grub.cfg or updater change.
-# Not installed to /lib/firmware: the kernel copy is the one that is used.
-BR2_PACKAGE_INTEL_MICROCODE=y
-# BR2_PACKAGE_INTEL_MICROCODE_INSTALL_TARGET is not set
-BR2_PACKAGE_LINUX_FIRMWARE_AMD_UCODE=y
+# --- No hardware firmware or microcode in Core (2026-11-18) ------------------
+# Core is a disposable VM image (US-CORE-8, decided 2026-10-31): a guest loads no
+# GPU, NIC or Wi-Fi blobs and the hypervisor owns microcode. linux-firmware and
+# the microcode were 305 MB of Core's 667 MB root; they now start at the Server
+# layer (server.config), so Server and Desktop ship exactly what they did.
 
 # --- Installer / rescue tooling (future: install PengyOS to a target disk) ---
 # The stick doubles as a rescue/installer: partition a target disk (parted /
@@ -353,6 +326,11 @@ BR2_PACKAGE_PYTHON3_CURSES=y
 BR2_PACKAGE_PYTHON3_PYEXPAT=y      # xml
 BR2_PACKAGE_PYTHON3_UNICODEDATA=y
 BR2_PACKAGE_PYTHON3_DECIMAL=y
+# uv (2026-11-18): an agent's throwaway VM installs Python packages for its job
+# (US-CORE-9: `uv venv`, `uv pip install`, `uv run --with`), against this
+# python3. Was Server-only (Pengy's field review R4); Server and Desktop still
+# have it through this layer.
+BR2_PACKAGE_UV=y
 
 # --- Pengy: the built-in agent ------------------------------------------------
 # package/pengy (PengyR): one Rust agent core, three front ends — pengy-cli in
@@ -412,11 +390,11 @@ BR2_PACKAGE_HOST_MTOOLS=y
 # The core post-build prunes linux-firmware's iwlwifi API versions
 # (board/common/prune-iwlwifi.py), and that script imports lzma to read the .xz
 # firmware files. Buildroot pulls host Python's xz support in only when this is
-# set: the Desktop got it by accident through fwupd-efi's `uswid` (see the
-# desktop layer), Core and Server never did, so the first build after the prune
+# set: the Desktop got it by accident through fwupd-efi's `uswid` (fwupd, now
+# in server.config), Core and Server never did, so the first build after the prune
 # landed died in post-build with "No module named '_lzma'" (26.10.33). Same
 # reason and same symbol as the Desktop's.
-# BR2_PACKAGE_HOST_PYTHON3_XZ: set by the desktop layer
+BR2_PACKAGE_HOST_PYTHON3_XZ=y
 # post-image.sh stamps the rootfs UUID into grub.cfg + genimage.cfg and
 # assembles the GPT disk image with genimage.
 # BR2_ROOTFS_POST_IMAGE_SCRIPT: set by the desktop layer
@@ -521,8 +499,7 @@ BR2_PACKAGE_CRUN=y
 BR2_PACKAGE_PYTHON3_CODECSCJK=y
 BR2_PACKAGE_PYTHON_PIP=y
 BR2_PACKAGE_PYTHON_SETUPTOOLS=y
-# uv on the host (Pengy's field review R4): US-SRV-10's one-venv-per-app recipe.
-BR2_PACKAGE_UV=y
+# uv comes from Core (core.config): US-SRV-10's one-venv-per-app recipe.
 # Shells and source control. zsh is the Desktop installer's default shell for
 # the user it creates; root keeps bash.
 BR2_PACKAGE_ZSH=y
@@ -538,6 +515,11 @@ BR2_PACKAGE_DISTROBOX=y
 # util-linux's standard tools (rev — distrobox-enter needs it —, findmnt, lsblk,
 # a blkid that knows btrfs, …).
 BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+# rfkill (2026-11-17; was Desktop-only): a laptop-server (US-SRV-12) whose Wi-Fi
+# is soft-blocked (an Fn key, a block that sticks after suspend or a firmware
+# toggle) is unreachable, and without `rfkill unblock wifi` the only fix was a
+# keyboard at the machine. util-linux is already built here; this is its rfkill.
+BR2_PACKAGE_UTIL_LINUX_RFKILL=y
 # curl: every "install X" line (rustup, uv, …) and distrobox itself expect it;
 # Core selects it (with GNU wget) since 26.11.0.
 # dig, host, nslookup: BIND's tools, no server (Core has a stub pointing at
@@ -551,6 +533,50 @@ BR2_PACKAGE_LIBOPENSSL_BIN=y
 # rclone mount, sshfs-style tools, AppImages. The Desktop already pulled it in
 # through its portals; the Server had no /dev/fuse at all.
 BR2_PACKAGE_LIBFUSE3=y
+# restic: encrypted, deduplicated backups (US-SRV-5), the engine under
+# pengyos-backup (Server overlay). Our recipe (package/restic); pure Go, ~40 MB.
+# Here, not in the Desktop, so a Server and both ISOs can restore.
+BR2_PACKAGE_RESTIC=y
+
+# --- Hardware firmware (real-hardware support: GPU, wired NIC, WiFi) ---------
+# Moved from core.config on 2026-11-18: Core is a VM-only image and needs none of
+# it, so real hardware starts at this layer.
+# On the N100 weather station /lib/firmware was empty: i915 (Alder Lake-N GPU)
+# failed to load DMC/GuC firmware and WiFi had no regulatory.db. Ship the small
+# subset an Intel mini-PC actually needs (not all of linux-firmware).
+BR2_PACKAGE_LINUX_FIRMWARE=y
+BR2_PACKAGE_LINUX_FIRMWARE_I915=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_8169=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_9XXX=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_QUZ=y
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E=y
+# AX200 = iwlwifi-cc-a0 (Buildroot ships it under the 22260 option); miniserv.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22260=y
+# Intel Wireless 8265 (iwlwifi-8265) — behothinkpad.
+BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8265=y
+# Realtek RTL8821CE (rtw88) — behobasement.
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW88=y
+# Broader firmware so the "boot anywhere" stick works on other hardware: AMD GPU,
+# Atheros/Broadcom/Realtek WiFi families.
+BR2_PACKAGE_LINUX_FIRMWARE_AMDGPU=y
+BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_6174=y
+BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_11K_WCN6855=y
+BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XXX=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW89=y
+# regulatory.db — required for any WiFi regulatory domain.
+BR2_PACKAGE_WIRELESS_REGDB=y
+
+# --- CPU microcode (Intel + AMD) ----------------------------------------------
+# No edition shipped any: behoweather's N100 ran its factory revision 0xe
+# ("Running old microcode", "Register File Data Sampling: Vulnerable: No
+# microcode"; Intel's 20260812 release has 0x21). The image has no initramfs, so
+# the files are built INTO the kernel (CONFIG_EXTRA_FIRMWARE, set by external.mk)
+# and the early loader applies them at boot. Riding inside bzImage means every
+# existing install gets them from a normal update - no grub.cfg or updater change.
+# Not installed to /lib/firmware: the kernel copy is the one that is used.
+BR2_PACKAGE_INTEL_MICROCODE=y
+# BR2_PACKAGE_INTEL_MICROCODE_INSTALL_TARGET is not set
+BR2_PACKAGE_LINUX_FIRMWARE_AMD_UCODE=y
 
 # --- An unattended box: health, VPN, NIC, GPU firmware, wheels (2026-10-25) ----
 # Found by setting the 26.10.40 Server against its user stories next to the
@@ -571,6 +597,21 @@ BR2_PACKAGE_WIREGUARD_TOOLS=y
 BR2_PACKAGE_DNSMASQ=y
 # - ethtool: link speed, offloads, and Wake-on-LAN for a box that sleeps.
 BR2_PACKAGE_ETHTOOL=y
+# - Firmware updates from LVFS (2026-11-17): UEFI capsules (system firmware),
+#   the Secure Boot dbx revocation list, NVMe/SSD, docks and Thunderbolt. Moved
+#   from desktop.config (the Desktop inherits it): the headless edition is the
+#   one nobody sits at, and it had no firmware path at all, not even for a dbx
+#   update. `fwupdmgr get-updates` / `update`; fwupd itself starts over D-Bus
+#   and fwupd-refresh.timer fetches the metadata daily (10-pengyos-server.preset).
+#   fwupd-efi is the capsule loader it stages on the ESP (/efi). The Server has no
+#   UDisks, which fwupd uses to find the ESP: the fwupd.service drop-in names
+#   /efi instead (60-pengyos-esp.conf).
+BR2_PACKAGE_FWUPD=y
+BR2_PACKAGE_FWUPD_EFI=y
+#   GnuTLS: libjcat checks the PKCS#7 signature on LVFS metadata only when
+#   GnuTLS is built; without it fwupd has no signature it can verify. The
+#   Desktop got it by accident (samba4, libsoup3, sane-airscan select it).
+BR2_PACKAGE_GNUTLS=y
 # - Firmware for the xe GPU driver (server/linux.fragment): US-SRV-9 transcoding
 #   on Battlemage / Lunar Lake and later.
 BR2_PACKAGE_LINUX_FIRMWARE_XE=y
@@ -786,7 +827,9 @@ BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_PENGYOS_PATH)/board/core/
 # all gone), and updates grow the filesystem to fill the slot, so raising this
 # only has to stay under 8G. 475 MiB (12%) free at 26.11.9;
 # board/common/rootfs-headroom.sh fails the build under 150 MiB.
-BR2_TARGET_ROOTFS_EXT2_SIZE="4000M"
+# 4400M from 2026-11-22: Papirus (248 MB on disk, 103k files) would have left
+# 89 MiB of the 337 MiB free at 4000M.
+BR2_TARGET_ROOTFS_EXT2_SIZE="4400M"
 
 # --- Graphics: Mesa (EGL/GBM/GLES) -------------------------------------------
 # virgl: QEMU's virtio-gpu-gl. llvmpipe: the software rasterizer (LLVM JIT,
@@ -856,6 +899,12 @@ BR2_PACKAGE_MESA3D_VULKAN_DRIVER_AMD=y
 BR2_PACKAGE_LIBDRM_AMDGPU=y
 BR2_PACKAGE_LINUX_FIRMWARE_RADEON=y
 BR2_PACKAGE_LLVM=y
+# Keep LLVM built with RTTI (2026-11-18). Through Buildroot 2026.08.1 the iris and
+# radeonsi drivers selected Mesa's OpenCL option, which selected LLVM_RTTI; 2026.08.2
+# dropped that chain. Without this line host-llvm (RTTI on, built long ago) and the
+# target llvm disagree and Mesa refuses to configure ("LLVM was built with RTTI").
+# Turning it off instead means rebuilding host-llvm and host-clang for no gain.
+BR2_PACKAGE_LLVM_RTTI=y
 
 # --- Vulkan -----------------------------------------------------------------
 # COSMIC's apps render through wgpu, which wants Vulkan; without it wgpu falls
@@ -1214,8 +1263,9 @@ BR2_PACKAGE_V4L2LOOPBACK=y
 # --- Programs COSMIC runs by name (2026-10-11) ----------------------------------
 # A sweep of every Command::new("...") in the pinned COSMIC sources against the
 # image found these missing. Each one turned a COSMIC feature into a no-op:
-# - rfkill: the Bluetooth applet and Settings block/unblock the adapter with it;
-#   after airplane mode the toggle could not bring Bluetooth back.
+# - rfkill (server.config since 2026-11-17): the Bluetooth applet and Settings
+#   block/unblock the adapter with it; after airplane mode the toggle could not
+#   bring Bluetooth back.
 # - pactl: cosmic-settings-daemon sends Mono Audio to pipewire-pulse and sets
 #   virtual sinks/sources as default with it; PulseAudio-protocol apps (every
 #   Flatpak browser, Discord, Spotify) stayed stereo. PulseAudio is built
@@ -1223,7 +1273,6 @@ BR2_PACKAGE_V4L2LOOPBACK=y
 #   the socket): libpulse and pactl.
 # - qalc (libqalculate, our package): the launcher's "= 2+2" calculator.
 # - notify-send (libnotify, our package): notifications from scripts.
-BR2_PACKAGE_UTIL_LINUX_RFKILL=y
 BR2_PACKAGE_PULSEAUDIO=y
 BR2_PACKAGE_LIBQALCULATE=y
 BR2_PACKAGE_LIBNOTIFY=y
@@ -1282,13 +1331,9 @@ BR2_PACKAGE_THERMALD=n
 BR2_PACKAGE_THERMALD_PENGYOS=y
 BR2_PACKAGE_POWER_PROFILES_DAEMON=y
 BR2_PACKAGE_PYTHON_GOBJECT=y
-# Firmware updates from LVFS (UEFI capsules incl. the system firmware, SSDs,
-# docks, …). fwupd-efi is the capsule loader it stages on the ESP (/efi).
-BR2_PACKAGE_FWUPD=y
-BR2_PACKAGE_FWUPD_EFI=y
-# fwupd-efi's build runs host `uswid`, which imports lzma; Buildroot's recipe
-# does not pull the host Python's xz support in ("No module named '_lzma'").
-BR2_PACKAGE_HOST_PYTHON3_XZ=y
+# Firmware updates (fwupd, fwupd-efi): server.config since 2026-11-17; the
+# Desktop adds the Firmware app (board/desktop/post-build.sh). Host Python's xz
+# support, which fwupd-efi's `uswid` needs, is in core.config.
 # The TPM 2.0 userspace (disk health, smartmontools + nvme-cli: server.config).
 # With tpm2-tss present systemd is built with TPM2 support, and its
 # systemd-tpm2-generator makes early boot WAIT (90 s) for /dev/tpmrm0 whenever it
@@ -1325,6 +1370,9 @@ BR2_PACKAGE_OO7=y
 # "Unable to load xcursor, using fallback cursor" and drew one arrow for every
 # shape (no text I-beam, no resize arrows); X11 apps got the bare X cursor.
 BR2_PACKAGE_POP_CURSOR_THEME=y
+# The default icons since 2026-11-22 (with the Glacier colour themes; see
+# board/desktop/theme-defaults): Papirus, Papirus-Dark and Papirus-Light, 250 MB.
+BR2_PACKAGE_PAPIRUS_ICON_THEME=y
 BR2_PACKAGE_GVFS=y
 # SMB client for Files (US-DSK-17). gvfs.mk has no SMB switch of its own: it
 # builds gvfsd-smb/-smb-browse (-Dsmb=true) only when samba4 is selected, so

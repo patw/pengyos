@@ -1,0 +1,12 @@
+config BR2_PACKAGE_PAPIRUS_ICON_THEME
+	bool "papirus-icon-theme"
+	help
+	  The Papirus icon theme, in its three variants (Papirus,
+	  Papirus-Dark, Papirus-Light): the Desktop's default icons
+	  since 2026-11-22, with the Glacier colour themes. Every MIME
+	  type the image knows draws an icon of its own in each variant
+	  (board/desktop/check-mime-icons.py). About 250 MB on disk.
+	  The other variants in the archive (ePapirus, …) are not
+	  installed.
+
+	  https://github.com/PapirusDevelopmentTeam/papirus-icon-theme

@@ -7,6 +7,7 @@ config BR2_PACKAGE_COSMIC
 	depends on BR2_INSTALL_LIBSTDCPP
 	select BR2_PACKAGE_HOST_RUSTC
 	select BR2_PACKAGE_DAV1D
+	select BR2_PACKAGE_LIBDE265 # cosmic-viewer: HEIC photos (see cosmic.mk)
 	select BR2_PACKAGE_DBUS
 	select BR2_PACKAGE_GSTREAMER1
 	select BR2_PACKAGE_GST1_PLUGINS_BASE

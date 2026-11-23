@@ -4,11 +4,19 @@
 # release-notes button, Files' view toggle, the VPN icon, Player's repeat and
 # subtitle buttons, …): with no Pop icons those buttons were blank.
 # Upstream Pop also inherits Adwaita, which PengyOS does not ship.
+# Pop's full-colour mimetypes are installed too (the sized folders below): they
+# hold the generic file icons COSMIC Files falls back to (application-x-generic,
+# which every PIE binary and .so ends up at), which neither Cosmic nor Pop's
+# symbolic set draws.
+# Hidden from COSMIC Settings' icon theme picker: this is a partial Pop (no
+# colour apps/places), so choosing it left GTK/Qt apps without folder and app
+# icons. Hidden only filters listings; Cosmic still inherits it.
 [Icon Theme]
 Name=Pop
-Comment=Pop cursors and symbolic icons
+Hidden=true
+Comment=Pop cursors, symbolic icons and file-type icons
 Inherits=hicolor
-Directories=scalable/actions,scalable/apps,scalable/categories,scalable/devices,scalable/emblems,scalable/emotes,scalable/mimetypes,scalable/places,scalable/status
+Directories=scalable/actions,scalable/apps,scalable/categories,scalable/devices,scalable/emblems,scalable/emotes,scalable/mimetypes,scalable/places,scalable/status,16x16/mimetypes,24x24/mimetypes,32x32/mimetypes,48x48/mimetypes,64x64/mimetypes,128x128/mimetypes,256x256/mimetypes
 
 [scalable/actions]
 Context=Actions
@@ -72,3 +80,38 @@ Size=16
 MinSize=16
 MaxSize=256
 Type=Scalable
+
+[16x16/mimetypes]
+Context=MimeTypes
+Size=16
+Type=Fixed
+
+[24x24/mimetypes]
+Context=MimeTypes
+Size=24
+Type=Fixed
+
+[32x32/mimetypes]
+Context=MimeTypes
+Size=32
+Type=Fixed
+
+[48x48/mimetypes]
+Context=MimeTypes
+Size=48
+Type=Fixed
+
+[64x64/mimetypes]
+Context=MimeTypes
+Size=64
+Type=Fixed
+
+[128x128/mimetypes]
+Context=MimeTypes
+Size=128
+Type=Fixed
+
+[256x256/mimetypes]
+Context=MimeTypes
+Size=256
+Type=Fixed

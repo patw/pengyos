@@ -1,0 +1,11 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The suite drives the shipped script against a sandbox root (--root DIR) with fakes
+# for restic, btrfs, unshare, mount, systemctl and pengyos-alert, so it needs no
+# root, no network and no build. With a real restic on PATH one test also backs up,
+# restores and checks a local repository for real.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-backup"
+expect = "exit0"
+timeout = 600

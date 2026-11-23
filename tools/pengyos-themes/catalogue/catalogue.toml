@@ -1,0 +1,102 @@
+# pengyos-themes catalogue: what the Themes app and `pengyos-themes` offer.
+# Installed in the Desktop image as /usr/share/pengyos/themes/catalogue.toml,
+# with colours/ beside it. The format and its rules: src/catalogue.rs.
+#
+# Icon packs: complete themes only. Before a pack is listed, its themes must pass
+# buildroot-external/board/desktop/check-mime-icons.py (every common file type
+# has an icon). Nothing here is shipped in the image except this metadata and our
+# own colour themes; packs are downloaded by the user, and checked against sha256.
+version = 1
+
+# What a new Desktop user gets: COSMIC's shipped defaults are generated from these
+# Looks (`pengyos-themes system-defaults`, into board/desktop/theme-defaults), and
+# the installer's Dark/Light question picks between them.
+[defaults]
+dark = "glacier"
+light = "glacier-light"
+mode = "dark"
+
+[[icons]]
+id = "papirus"
+name = "Papirus"
+version = "20260801"
+summary = "Flat, colourful icons for every app and file type, in dark and light variants."
+license = "GPL-3.0-only"
+homepage = "https://github.com/PapirusDevelopmentTeam/papirus-icon-theme"
+url = "https://github.com/PapirusDevelopmentTeam/papirus-icon-theme/archive/refs/tags/20260801.tar.gz"
+# 2026-11-22: 793 of 793 MIME types draw an icon of their own in all three.
+sha256 = "646f622e9e7e9e65eef9d0ab58999d4920ddb33d98e6a75232627cfe3bd508f9"
+size = 33053628
+# On disk (103 427 small files; 117 MB of content).
+installed_size = 250000000
+themes = [
+  { dir = "Papirus", path = "papirus-icon-theme-20260801/Papirus" },
+  { dir = "Papirus-Dark", path = "papirus-icon-theme-20260801/Papirus-Dark" },
+  { dir = "Papirus-Light", path = "papirus-icon-theme-20260801/Papirus-Light" },
+]
+# Papirus-Dark is drawn for dark panels and Papirus-Light for light ones; `follow`
+# swaps them when the desktop changes mode.
+follow = { dark = "Papirus-Dark", light = "Papirus-Light" }
+
+# Colour themes made for PengyOS (MIT, like this tool): COSMIC's own dark and
+# light themes with a different accent, tint and background.
+
+[[colours]]
+id = "glacier-dark"
+name = "Glacier"
+author = "PengyOS"
+license = "MIT"
+file = "colours/glacier-dark.ron"
+
+[[colours]]
+id = "glacier-light"
+name = "Glacier Light"
+author = "PengyOS"
+license = "MIT"
+file = "colours/glacier-light.ron"
+
+[[colours]]
+id = "meadow-light"
+name = "Meadow"
+author = "PengyOS"
+license = "MIT"
+file = "colours/meadow-light.ron"
+
+[[colours]]
+id = "ember-dark"
+name = "Ember"
+author = "PengyOS"
+license = "MIT"
+file = "colours/ember-dark.ron"
+
+[[looks]]
+id = "glacier"
+name = "Glacier"
+summary = "Cool blue-grey surfaces, an ice-blue accent and Papirus Dark icons."
+icons = "Papirus-Dark"
+colours = "glacier-dark"
+mode = "dark"
+
+[[looks]]
+id = "glacier-light"
+name = "Glacier Light"
+summary = "Frosted off-white surfaces, a deep glacier-blue accent and Papirus Light icons: Glacier for daytime."
+icons = "Papirus-Light"
+colours = "glacier-light"
+mode = "light"
+
+[[looks]]
+id = "meadow"
+name = "Meadow"
+summary = "Light, with a green accent and Papirus Light icons."
+icons = "Papirus-Light"
+colours = "meadow-light"
+mode = "light"
+
+[[looks]]
+id = "ember"
+name = "Ember"
+summary = "Warm dark surfaces, an orange accent and Papirus Dark icons."
+icons = "Papirus-Dark"
+colours = "ember-dark"
+mode = "dark"

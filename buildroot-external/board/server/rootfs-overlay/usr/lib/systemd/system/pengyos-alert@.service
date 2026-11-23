@@ -1,0 +1,35 @@
+# PengyOS — alert that a unit failed (pengyos-alert, /etc/pengyos/alert.conf).
+#
+# Units opt in with `OnFailure=pengyos-alert@%n.service` in [Unit]; the Server's
+# own timers' services do (pengyos-backup, pengyos-monitor, pengyos-update-check).
+# The instance is the failed unit's name. The same unit alerts at most once per
+# REPEAT_HOURS. Root, because the secrets file and the failed unit's journal are
+# root's; sandboxed otherwise. No OnFailure= here: an alert about an alert
+# would loop.
+[Unit]
+Description=Alert that %i failed
+Documentation=file:/usr/bin/pengyos-alert
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pengyos-alert unit-failed %i
+TimeoutStartSec=90
+StateDirectory=pengyos-alert
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

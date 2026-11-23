@@ -15,6 +15,9 @@ A Python CLI `pengyos-qemu-verify` that boots a disk image under QEMU (q35), wai
 - pengyos-qemu-verify smoke [--matrix PATH] [--image IMAGE] [--variant ID]... [--json OUT] [--junit OUT] [--dry-run]:
   boots every variant declared in a smoke matrix (default `smoke/core.toml`) and reports one
   verdict — the machine-checkable form of the Core acceptance gate's "passes the smoke matrix".
+  A matrix's optional top-level `ready` list (regexes) replaces the default `login:` readiness
+  marker for every variant: the boot is ready only when all of them have matched, so checks on
+  status lines printed after the login prompt are not decided on a log cut short.
 
 ## Verification (tests are first-class)
 - argv construction for KVM vs no-KVM, with/without --uefi and --tpm (golden strings).

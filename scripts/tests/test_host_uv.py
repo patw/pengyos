@@ -8,8 +8,10 @@ second half: the host Python's sysconfig named the *build host's* cross compiler
 compile failed with "No such file or directory" for a path on another machine
 instead of reaching the no-toolchain stub and its dev-guest recipe.
 
-1. uv is a from-source cargo package, in Server and Desktop, not Core;
-2. external.mk strips the cross prefix from sysconfig, and Server's post-build
+1. uv is a from-source cargo package, in every edition (Core since 2026-11-18,
+   for US-CORE-9's throwaway Python workbench; Server before that);
+2. external.mk strips the cross prefix from sysconfig, and Core's post-build (so
+   every edition's)
    refuses an image that still has it (without tripping on FREEZE_MODULE or the
    stdlib's own -L paths, which keep the build host's dir);
 3. the gcc stub prints the wheel recipe for the host's Python, other stubs do not;
@@ -43,11 +45,13 @@ def test_uv_package_from_source():
     assert 'package/uv/Config.in"' in (EXT / "Config.in").read_text()
 
 
-def test_uv_in_server_and_desktop_not_core():
+def test_uv_in_every_edition_from_core():
     cfg = lambda n: (EXT / f"configs/pengyos_{n}_defconfig").read_text()
-    for n in ("server", "server_nvidia", "desktop", "desktop_nvidia"):
+    for n in ("core", "server", "server_nvidia", "desktop", "desktop_nvidia"):
         assert "BR2_PACKAGE_UV=y" in cfg(n), n
-    assert "BR2_PACKAGE_UV=y" not in cfg("core")
+    layers = EXT / "configs/layers"
+    assert "BR2_PACKAGE_UV=y" in (layers / "core.config").read_text()
+    assert "BR2_PACKAGE_UV=y" not in (layers / "server.config").read_text(), "lowest layer only"
     req = (EXT / "board/server/features-required.txt").read_text()
     assert re.search(r"^exec\s+usr/bin/uv\s", req, re.M)
     assert re.search(r"^exec\s+usr/bin/uvx\s", req, re.M)
@@ -72,8 +76,8 @@ def _hook_sed() -> str:
 
 
 def _guard(tmp: Path, text: str) -> subprocess.CompletedProcess:
-    """Server post-build's sysconfig block, run alone on a fake tree."""
-    body = (EXT / "board/server/post-build.sh").read_text()
+    """Core post-build's sysconfig block, run alone on a fake tree."""
+    body = (EXT / "board/core/post-build.sh").read_text()
     m = re.search(r"\n(for f in \"\$\{TARGET_DIR\}\"/usr/lib/python3\*/_sysconfigdata_.*?\ndone)\n", body, re.S)
     assert m, "the post-build guard"
     t = tmp / "target"
@@ -96,7 +100,7 @@ def test_sysconfig_hook_and_guard(tmp_path):
 
 
 def test_guard_runs_before_pengyos_txt():
-    body = (EXT / "board/server/post-build.sh").read_text()
+    body = (EXT / "board/core/post-build.sh").read_text()
     assert body.index("_sysconfigdata_") < body.index("pengyos-txt.py") < body.index("check-needed-libs.py")
 
 

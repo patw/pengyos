@@ -873,3 +873,99 @@ def test_distro_welcome_split_at_the_other_write_boundary():
 ])
 def test_distro_welcome_refuses_look_alikes(label, log_text):
     assert run_assertions(log_text, (_welcome(),))[0].passed is False, label
+
+
+# --- readiness markers (`ready`) --------------------------------------------
+#
+# The serial getty does not wait for multi-user.target: a slow guest prints the
+# login prompt before the late status lines a matrix checks. With `login:` as the
+# only readiness marker the harness killed it 4 s later with them unread
+# (26.11.23 try 2, the 2026-11-22 nightly: Server NVIDIA, healthy image).
+
+
+def _recording_boot(log_path, seen):
+    inner = _boot_from(log_path)
+
+    def _boot(image, *, assertions=(), **kwargs):
+        seen.append(kwargs)
+        return inner(image, assertions=assertions, **kwargs)
+
+    return _boot
+
+
+def test_matrix_ready_defaults_to_empty():
+    assert _matrix().ready == ()
+
+
+def test_matrix_ready_is_parsed_as_a_tuple():
+    m = _matrix(ready=["login:", "Reached target .*Multi-User System"])
+    assert m.ready == ("login:", "Reached target .*Multi-User System")
+
+
+@pytest.mark.parametrize("bad", ["login:", ["login:", 3]])
+def test_matrix_ready_must_be_a_list_of_strings(bad):
+    with pytest.raises(smoke.MatrixError, match="'ready' must be a list"):
+        _matrix(ready=bad)
+
+
+def test_matrix_ready_rejects_an_empty_pattern():
+    with pytest.raises(smoke.MatrixError, match="empty pattern"):
+        _matrix(ready=["login:", " "])
+
+
+def test_matrix_ready_rejects_a_pattern_that_does_not_compile():
+    with pytest.raises(smoke.MatrixError, match="does not compile"):
+        _matrix(ready=["login:", "Reached target ("])
+
+
+def test_run_matrix_passes_ready_to_every_boot_as_expect():
+    seen = []
+    m = _matrix(ready=["login:", "Multi-User"])
+    smoke.run_matrix(m, "img", boot_fn=_recording_boot(CORE_UEFI_LOG, seen))
+    assert [k["expect"] for k in seen] == [("login:", "Multi-User")] * 2
+
+
+def test_run_matrix_without_ready_keeps_the_boot_default():
+    seen = []
+    smoke.run_matrix(_matrix(), "img", boot_fn=_recording_boot(CORE_UEFI_LOG, seen))
+    assert all("expect" not in k for k in seen)
+
+
+def test_run_matrix_explicit_expect_overrides_ready():
+    seen = []
+    m = _matrix(ready=["login:", "Multi-User"])
+    smoke.run_matrix(
+        m, "img", boot_fn=_recording_boot(CORE_UEFI_LOG, seen),
+        boot_kwargs={"expect": ("other",)},
+    )
+    assert all(k["expect"] == ("other",) for k in seen)
+
+
+@pytest.mark.parametrize(
+    "matrix_file, logs",
+    [
+        ("core.toml", [CORE_UEFI_LOG, CORE_TPM_LOG]),
+        ("server.toml", [SERVER_UEFI_LOG, SERVER_TPM_LOG]),
+    ],
+)
+def test_shipped_ready_markers_match_real_good_boots(matrix_file, logs):
+    """Every shipped readiness marker appears in real captures of a good boot,
+    so a healthy image becomes ready instead of running into the timeout."""
+    from pengyos_qemu_verify.boot import detect_readiness
+
+    matrix = smoke.load_matrix(str(Path(smoke.default_matrix_path()).parent / matrix_file))
+    assert len(matrix.ready) >= 2, "login: alone races the late status lines"
+    for log in logs:
+        text = Path(log).read_text(encoding="utf-8", errors="replace")
+        ready, markers = detect_readiness(text, matrix.ready)
+        assert ready, [m.pattern for m in markers if not m.matched]
+
+
+def test_server_ready_markers_are_not_met_by_a_core_boot():
+    """The Server marker target is Server-only: a Core image booted against the
+    Server matrix must not count as ready."""
+    from pengyos_qemu_verify.boot import detect_readiness
+
+    matrix = smoke.load_matrix(str(Path(smoke.default_matrix_path()).parent / "server.toml"))
+    text = CORE_UEFI_LOG.read_text(encoding="utf-8", errors="replace")
+    assert detect_readiness(text, matrix.ready)[0] is False

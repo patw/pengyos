@@ -17,7 +17,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
-### Added: desktop icons can be dragged anywhere on the grid (2026-11-16)
+### Added: desktop icons can be dragged anywhere on the grid (2026-11-23)
 - The COSMIC desktop laid icons out down each column in sort order, with no
   setting to move one. Dragging icons now snaps them to the grid cell under the
   pointer (a group keeps its shape; a taken cell gives way to the nearest free
@@ -26,7 +26,172 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 - Positions are kept per monitor, by file name. "Sort by" in the desktop's
   right-click menu re-arranges everything. Arrow keys still stop at an empty
   cell.
-- Carried patch `cosmic-files/0003-desktop-icons-stay-where-they-are-dragged.patch`.
+- Carried patch `cosmic-files/0004-desktop-icons-stay-where-they-are-dragged.patch`.
+
+### Changed: Glacier is the Desktop's look (2026-11-22)
+- New users get **Glacier**: cool blue-grey surfaces, an ice-blue accent and
+  Papirus Dark icons; or **Glacier Light** (frosted off-white, a deep glacier-blue
+  accent, Papirus Light). Dark is the default. They replace the light, green-accent
+  defaults from 2026-09, and are generated from `tools/pengyos-themes`' catalogue
+  (`board/desktop/theme-defaults`), so every key COSMIC reads is present.
+- The installer asks: **Dark mode** on the account page of the graphical
+  installer, a *Dark or light* page in the text one (`pengyos-install image
+  --appearance dark|light`).
+- The **Papirus** icon theme ships with the Desktop (`papirus-icon-theme`:
+  Papirus, Papirus-Dark, Papirus-Light; GPL-3.0, 250 MB). Each draws all 793 file
+  types with an icon of its own; the Desktop build checks them as it checks Cosmic.
+  The Desktop root filesystem grows from 4000M to 4400M to keep its headroom.
+- Icons follow dark and light: `pengyos-themes follow` (session autostart) swaps
+  Papirus Dark and Papirus Light when the mode changes, from Settings or the sunset
+  switch. Only that pair; a theme chosen by hand stays until the next change.
+- **Themes**, a new app in the App Library's System folder: Looks (icons and
+  colours together, previewed in their own colours), icon themes (Papirus comes
+  with PengyOS; more install per user, checked against the catalogue), colour
+  themes (yours, ours and cosmic-themes.org's), Save as a Look, Undo and Reset.
+  `pengyos-themes` is also its CLI. Catalogue in `/usr/share/pengyos/themes`.
+
+### Fixed: COSMIC Files draws an icon for every file (2026-11-22)
+- Programs, `.so` files, SQLite `.db` files, disk images, certificates, core
+  dumps and 3D models (`.stl`) showed as blank tiles in Files. Files draws a
+  file's MIME icon or its generic icon, and the Desktop's themes had neither
+  for 113 of 793 MIME types: no `application-x-generic` anywhere, and every PIE
+  binary sniffs as `application/x-sharedlib`. Pop's full-colour file-type icons
+  (SVG, 1.8 MB) are now installed, with Pop's `model` icon linked as
+  `model-x-generic`, which gives 79 of those types a real icon. cosmic-files
+  patch 0003 falls back to `text-x-generic` for the rest (sockets, FIFOs, device
+  nodes, broken links). The Desktop build fails if a common type loses its icon
+  again (`board/desktop/check-mime-icons.py`).
+- Settings → Appearance → Icons and toolkit theming no longer offers "Pop" and
+  "Default": our Pop is partial (no colour app/folder icons) and "Default" is
+  only the cursor theme, so picking either left GTK/Qt apps without icons. Both
+  are `Hidden=true`; COSMIC is the one icon theme listed.
+
+### Fixed: quadlet containers that log to /dev/stderr start again (2026-11-19)
+- Quadlet containers now use podman's journald log driver, not `passthrough`.
+  Passthrough (since 26.11.16) made the container's stdout and stderr the
+  journal's socket, and an image that opens `/dev/stdout` or `/dev/stderr` by
+  path fails with ENXIO: the official nginx image (its `error.log` links to
+  `/dev/stderr`) exited at start, found when a ThinkPad Server on 26.11.13 jumped
+  to 26.11.23. With journald the output still reaches `journalctl [--user] -u
+  NAME` and survives `--rm`, and `podman logs` works for quadlets again. Tested
+  on the ThinkPad in both lanes.
+
+### Changed: Core is a leaner VM image with uv; throwaway runs are offline (2026-11-18)
+- Core no longer ships linux-firmware or CPU microcode: a VM loads neither, and
+  they were 305 MB of Core's 667 MB root. They start at the Server layer, so Server
+  and Desktop ship exactly what they did (SPEC §2.1, §2.2).
+- `uv` moves from Server to Core, for US-CORE-9: an agent's throwaway VM installs
+  the Python packages a job needs (`uv venv`, `uv pip install`, `uv run --with`).
+- `pengyos-vm run` (0.4.0) is offline by default: QEMU's `restrict=on`, so the job
+  reaches neither the internet nor the host. Plain QEMU NAT maps 10.0.2.2 onto the
+  host's 127.0.0.1, which let a job reach loopback-only services. `--online` lets a
+  job install packages; a failed offline run says so. `create`d VMs are unchanged.
+
+### Changed: Buildroot 2026.08.2 (2026-11-18)
+- Buildroot moves to the 2026.08.2 point release (2026-11-16, tag signed by the
+  release manager, same key as 2026.08.1). For what we ship it is mostly security
+  bumps: libcurl 8.23.0, expat 2.10.0, CUPS 2.4.20, BIND 9.20.30, p11-kit 0.26.5,
+  zlib 1.4, nghttp2 1.70.0, parted 3.8, rsync 3.5.2, patch 2.8.1, Python 3.14.10,
+  GLib 2.88.4, OpenSSH 10.6p2, libarchive 3.8.10, NSS 3.132, and systemd 258.12.
+- Go is 1.27.3, so the carried crypto/x509 patch (CVE-2026-111943) is upstream and
+  deleted; the go1.27.4 net/http patch (CVE-2026-97054) moves to
+  `patches/go-src/1.27.3`. Every Go package (podman, runc, fzf, ipp-usb,
+  nvidia-container-toolkit, restic) needs a `<pkg>-dirclean` once, because
+  Buildroot does not rebuild a package when its host toolchain changes.
+- `BR2_GOPROXY="direct"`: 2026.08.2 makes proxy.golang.org the default for
+  vendoring Go modules; we keep fetching them from their sources, as before.
+- The kconfig symbol fixture is regenerated from the new tree: two added
+  (`BR2_GOPROXY`, `BR2_TOOLCHAIN_HAS_GCC_BUG_104820`), one removed
+  (`BR2_HIDE_SECONDARY_TARGET_OPTIONS`, unused here).
+- Desktop sets `BR2_PACKAGE_LLVM_RTTI=y` itself. Until 2026.08.2 our Mesa drivers
+  selected it through Mesa's OpenCL option; without it the target llvm rebuilt
+  without RTTI while host-llvm kept it, and Mesa refused to configure. The
+  target clang, libclc and SPIR-V tools that chain also pulled in are no longer
+  selected (their files stay in existing build trees until a clean build).
+
+### Added: real backups, `pengyos-backup` over restic (2026-11-17)
+- Every Server and Desktop gets `pengyos-backup`: encrypted, deduplicated restic
+  snapshots of jobs in `/etc/pengyos/backup.d/` to one repository per machine (SFTP
+  to another box, a local or USB disk, or S3/Backblaze B2). `init --repo` makes the
+  password (and an SFTP-only SSH key) and prints the recovery kit; `enable system` /
+  `enable home` turns on the nightly 02:30 timer. Each run reads btrfs read-only
+  snapshots of the data subvolumes inside a private mount namespace, so the backup
+  is one consistent moment and the host's mounts never change; then old snapshots
+  are thinned (7 daily, 4 weekly, 12 monthly) and once a month 5% of the data is
+  read back. Failures alert through `pengyos-alert`.
+- restic 0.19.1 is a new recipe (`package/restic`, BSD-2-Clause, pure Go) in the
+  Server layer, so both ISOs have it for the coming whole-machine restore.
+- Replaces the tar-based backup (`pengyos-backup.sh`, `/etc/pengyos/backup.conf`),
+  which kept full tarballs on the same disk. A machine that had its timer on runs
+  the new tool, which fails (and alerts) until `pengyos-backup init` is run.
+
+### Fixed: Remote Desktop no longer captures the screen while nobody is connected (2026-11-17)
+- With remote desktop on, `pengyos-rdp-server` kept a 1080p screen capture
+  running from login, for nobody. The capture now runs only while an RDP client
+  is connected and pauses 10 s after the last one leaves (behotv: the server's
+  idle CPU went from 4.7% of a core to 0%).
+
+### Fixed: iPhone photos (HEIC) open, and HEIC/AVIF get thumbnails (2026-11-17)
+- The image viewer claimed HEIC but could not decode it: its built-in libheif
+  found no HEVC decoder at build time, so every iPhone photo showed "No decoder
+  for this image format". The cosmic package now builds after libde265, which
+  libheif picks up. AVIF and JPEG XL already opened (dav1d, jxl-oxide).
+- Files showed a plain icon for HEIC, HEIF and AVIF photos: COSMIC Files decodes
+  neither itself. A new thumbnailer (`/usr/libexec/pengyos/image-thumbnailer`)
+  renders them with FFmpeg, including the tile grids phones write.
+- `features-required.txt` checks both, so they cannot silently vanish again.
+
+### Changed: adb and fastboot in the dev box (2026-11-17)
+- `pengyos-guest`'s dev box installs Ubuntu's adb and fastboot (US-DSK-10:
+  `dx adb devices`). The image does not ship them; Buildroot's android-tools is
+  the 2013 Android 4.2 build.
+
+### Added: `rfkill` on the Server (2026-11-17)
+- A laptop-server (US-SRV-12) whose Wi-Fi radio is soft-blocked (an Fn key, a
+  block that sticks after suspend) drops off the network, and the Server had no
+  `rfkill` to undo it: the only remedy was a keyboard at the machine. util-linux's
+  rfkill moves from the Desktop layer to the Server layer (one symbol; the
+  Desktop inherits it).
+- The Server's per-interface Wi-Fi unit (`wpa_supplicant-nl80211@`) now runs
+  `rfkill unblock wifi` first. `rfkill` over SSH cannot help a box whose only
+  link is the blocked radio, and ThinkPad/IdeaPad keep a soft block across
+  reboots; now a power cycle brings it back. Hard (switch) blocks stay.
+
+### Added: alerts from a headless Server, over ntfy or mail (2026-11-17)
+- A Server could not tell anyone anything was wrong. There is no mail transport
+  in any edition, so smartd's warnings about a failing disk went to the journal
+  and stopped there, and so did a failed backup, a failed update and a full
+  disk. US-SRV-3 ("a deliberately induced failure produces an alert") and
+  US-SRV-4 ("backup failures raise an alert") could not pass.
+- New `pengyos-alert` (Server overlay; stdlib Python, no daemon, no new
+  package): a push over ntfy and/or a mail over SMTP, and always a journal line
+  (`journalctl -t pengyos-alert`). Configured in `/etc/pengyos/alert.conf`,
+  secrets in a root-only `alert.cred`; `sudo pengyos-alert test` checks it.
+  Nothing is sent until a transport is set.
+- Wired in: smartd (`/etc/smartd.conf` now hands problems to it),
+  `OnFailure=pengyos-alert@%n.service` on pengyos-backup, pengyos-monitor,
+  pengyos-update-check and pengyos-update-auto, and pengyos-monitor alerts when
+  a filesystem reaches `DISK_ALERT_PCT` (90%). One alert per condition per
+  `REPEAT_HOURS` (12), so an hourly check that keeps failing does not page
+  every hour.
+- pengyos-monitor's log line had its disk fields run together
+  (`disk__=40%disk__var=…`); they are space-separated now and `/` is
+  `disk_root`, as the script's comment always said.
+
+### Added: firmware updates on the Server (2026-11-17)
+- The Server had no way to update firmware: fwupd was Desktop-only, so a
+  headless box could not get a UEFI capsule, an SSD/NVMe update or a Secure Boot
+  dbx revocation (the class the fleet already needed once, for CVE-2026-8863).
+  fwupd and fwupd-efi move to the Server layer (the Desktop inherits them and
+  keeps its Firmware app): `sudo fwupdmgr get-updates` / `update`, metadata
+  refreshed daily by `fwupd-refresh.timer`, and the count of pending updates in
+  the SSH login message.
+- GnuTLS is now set on the Server: without it libjcat cannot check the PKCS#7
+  signature on LVFS metadata. The Desktop had it only through samba4.
+- fwupd finds the ESP through UDisks, which the Server does not have; a
+  fwupd.service drop-in names `/efi`, where the installer mounts it.
+- `board/server/features-required.txt` fails the build if fwupdmgr, the refresh
+  timer, the capsule loader or libjcat's PKCS#7 support go missing.
 
 ### Fixed: game shortcut icons were blank until the next login (2026-11-16)
 - Braid's Steam shortcut on beholaptop (26.11.20) launched but showed no icon.

@@ -1,0 +1,10 @@
+# How this tool is tested (run by `scripts/pengyos_gate.py run --mode full`).
+# The suite drives the shipped script against a sandbox root (--root DIR) with a
+# fake logger and systemctl, and real transports on loopback (an HTTP server for
+# ntfy, a small SMTP server for mail), so it needs no root, no network and no build.
+[[check]]
+name = "unit tests"
+run = ["python3", "-m", "pytest", "-q"]
+cwd = "tools/pengyos-alert"
+expect = "exit0"
+timeout = 600

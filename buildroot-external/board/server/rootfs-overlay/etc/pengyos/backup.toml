@@ -1,0 +1,30 @@
+# PengyOS backups: this machine's repository and policy (pengyos-backup, over restic).
+# The jobs (what to back up) are /etc/pengyos/backup.d/*.toml.
+#
+# Start:  pengyos-backup init --repo sftp:you@backupserver:/srv/backup/THISHOST
+#         pengyos-backup enable system ; pengyos-backup enable home
+# The repository password is /etc/pengyos/backup/password (made by init, 0600).
+# Print it with  pengyos-backup kit  and keep it off this machine: without it the
+# backups cannot be read by anyone.
+
+[repository]
+# sftp:user@host:/path   a directory on any SSH server
+# /path                  a local or USB disk (not the disk being backed up)
+# s3:host/bucket/path    S3 or Backblaze B2 (keys in /etc/pengyos/backup/env)
+url = ""
+
+[keep]
+# After each nightly run, older snapshots are thinned to these (per job).
+daily = 7
+weekly = 4
+monthly = 12
+
+[check]
+# Every N days the nightly run reads back part of the data to prove it restores.
+every_days = 30
+read_data_subset = "5%"
+
+[alert]
+# A failed backup alerts (pengyos-alert) at "high"; "urgent" once the last good
+# one is older than this many days.
+stale_days = 3

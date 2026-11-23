@@ -63,7 +63,7 @@ This is a real design requirement, not an afterthought.
 **The story of this edition:** a tiny, headless, unattended machine that must run for
 years on cheap hardware and be fixable from a distance.
 
-> **2026-10-31:** Core's own use is now a **throwaway VM** (US-CORE-8): spun up for a
+> **2026-10-31:** Core's own use is now a **throwaway VM** (US-CORE-8, US-CORE-9): spun up for a
 > job, given a static binary or Python, run isolated, then deleted. It is not updated
 > in place (US-CORE-4 is retired for Core) and bare-metal Core is not a goal; the node
 > stories below hold for the editions stacked on Core, the Server first.
@@ -155,10 +155,28 @@ is in the journal; removing it is deleting the unit and the file.
 How: `pengyos-vm run --image pengyos-core-x86_64.img --copy ./tool -- ./tool/run`
 on a Server boots a copy-on-write overlay of the cached Core image, with a key made for
 this run, puts the files in `/root/run`, runs the command, copies `--fetch` paths back
-and deletes the VM.
+and deletes the VM. The run is offline unless asked (`--online`): it reaches neither the
+internet nor the host, whose loopback-only services QEMU's NAT would otherwise expose.
 **Acceptance:** the command's output and exit status come back; afterwards no VM
 folder, unit or disk is left (also after Ctrl-C); a second run starts from the same
-clean image.
+clean image; without `--online` the guest cannot reach the host's 127.0.0.1 services
+or the internet.
+
+**US-CORE-9 — A throwaway Python workbench.** *(2026-11-18)*
+> *As an agent, I want to spin up a VM, install whatever Python packages a job needs and
+> run it, so that trying a library or a messy pipeline never touches the host's Python
+> or the next job.*
+
+How: `pengyos-vm run --online --copy job/ -- 'cd job && uv venv && uv pip install -r
+requirements.txt && .venv/bin/python main.py'`, or `uv run --with pandas --with httpx
+main.py` for a one-off. Core ships `uv` against its own python3; wheels come from PyPI
+(manylinux wheels run on Core's glibc), and the venv lives on the run's overlay disk, so
+it is gone with the VM. A package that only ships an sdist needing a compiler is out of
+scope for Core (no toolchain): build the wheel on a Server (`dx uv build --wheel`) and
+`--copy` it in.
+**Acceptance:** from a Server, a run installs a handful of common packages (requests,
+numpy, pandas) with `uv` and runs a script that imports them; its output comes back;
+nothing is left on the host but what `--fetch` brought back.
 
 ---
 
@@ -195,7 +213,10 @@ eza, fzf, zoxide, starship, jq) wired through the comfort profile
 > *As the self-hoster, I want to run my services in containers, so I can move fast without
 > polluting the host.*
 
-How: rootless `podman` (+ buildah/skopeo); optional nginx/Caddy, Postgres/Valkey.
+How: rootless `podman`, with quadlets for services that start at boot. `podman build`,
+`push`, `pull` and `manifest inspect` cover what buildah and skopeo are usually installed
+for, so neither ships. nginx/Caddy, Postgres and Valkey run as containers, not from the
+image.
 **Acceptance:** a container service starts on boot, survives reboot, is reachable on the
 LAN, and its data persists across updates.
 
@@ -203,13 +224,27 @@ LAN, and its data persists across updates.
 > *As the self-hoster, I want monitoring and alerts, so I hear about problems before they
 > bite.*
 
-How: TheWatcher metrics + node_exporter; ntfy/email alerts.
-**Acceptance:** metrics are exported; a deliberately induced failure produces an alert.
+How: alerts over ntfy and/or SMTP mail with `pengyos-alert` (`/etc/pengyos/alert.conf`):
+smartd's disk warnings, `OnFailure=pengyos-alert@%n.service` on the backup, monitor,
+update-check and unattended-update services, and a disk-full check in the hourly
+`pengyos-monitor` (which logs load, memory, disk and connections to
+`/var/log/pengyos-monitor.log`). Your own units join with the same `OnFailure=` line.
+**Not covered yet:** metrics *export*. Neither TheWatcher nor node_exporter is in the
+image (node_exporter has no Buildroot recipe); run one in podman meanwhile.
+**Acceptance:** metrics are exported; a deliberately induced failure produces an alert
+(`sudo systemd-run --wait -p OnFailure=pengyos-alert@induced-failure.service false`).
 
 **US-SRV-4 — Back up, and *prove* the restore.**
 > *As the self-hoster, I want tested backups, so recovery isn't a hope.*
 
-How: restic/rustic to local + remote; scheduled; restore-tested.
+How: `pengyos-backup` over restic (our recipe): encrypted, deduplicated snapshots of
+jobs in `/etc/pengyos/backup.d/` (`system`: the `/etc` changes and `/var/lib`; `home`;
+both off until `pengyos-backup enable`) to one repository per machine, over SFTP to
+another box, a disk, or S3/B2. Each run reads btrfs read-only snapshots of the data
+subvolumes, thins old snapshots, reads part of the data back once a month (`restic
+check`), and alerts when it fails (`pengyos-alert`); `pengyos-backup restore` brings a
+file or everything back. **Not covered yet:** restoring a whole machine from the ISO, the
+Desktop app, and append-only repositories (rest-server).
 **Acceptance:** a scheduled backup runs; a documented restore to a clean VM succeeds;
 backup failures raise an alert.
 
@@ -217,7 +252,11 @@ backup failures raise an alert.
 > *As the self-hoster, I want a hardened, reachable-from-outside server, so self-hosting
 > isn't reckless.*
 
-How: `nftables` rules; WireGuard for remote access; fail2ban/sshguard.
+How: `nftables`, default-deny inbound, ports opened one rule file at a time
+(`pengyos-firewall`); WireGuard for remote access. Against brute force: SSH is key-only
+unless `pengyos-ssh-password on`, never for root, and SMB (`pengyos-shares`) is open to
+private addresses only. **Not covered yet:** blocking a source that keeps guessing
+(fail2ban/sshguard), which matters once password logins are turned on.
 **Acceptance:** only intended ports are exposed; the WireGuard tunnel works; brute-force
 attempts are mitigated.
 
@@ -310,7 +349,9 @@ screen off after 5 idle minutes (`pengyos-console-blank`), and the battery stops
 charging at 80% (`pengyos-battery-limit`, `/etc/pengyos/battery.conf`) where the
 laptop's driver offers a limit. When the AC goes away it runs on battery and powers
 off cleanly at 5% (`pengyos-battery-shutdown`, `SHUTDOWN_AT=` in the same file)
-instead of dying mid-write.
+instead of dying mid-write. A soft-blocked Wi-Fi radio (an Fn key, a block the
+embedded controller keeps across reboots) is unblocked whenever the Wi-Fi unit starts,
+so a power cycle brings a Wi-Fi-only box back; `rfkill` shows and changes the rest.
 **Acceptance:** a Wi-Fi-only laptop installs over Wi-Fi (SSH keys imported over it) and
 is on the same network after the reboot; with the lid shut it stays up and reachable;
 the screen goes dark when idle; `cat /sys/class/power_supply/BAT0/charge_control_end_threshold`
@@ -531,7 +572,8 @@ the image.
 
 How: udev rules in the base granting the logged-in user access to common developer USB
 devices (Meta/Oculus vendor `2833`, Android/adb); Chrome (Flatpak or in the dev box) with
-device access.
+device access. `adb` and `fastboot` come with the dev box (`dx adb devices`; Ubuntu's
+current platform-tools, not in the image).
 **Acceptance:** with the headset plugged in, a WebUSB page in Chrome sees and talks to
 it; `adb devices` lists it — without running anything as root.
 
@@ -560,8 +602,10 @@ project with the box's toolchain, and its extensions persist across image update
 
 How: CUPS + drivers and SANE, with a way to *add* a printer from the desktop: the
 Printers app (`tools/pengyos-printers`) finds, adds and removes printers, manages the
-queue and prints a test page. There is still no scanner UI of our own. Candidate for the
-printing **extension** (US-ALL-2) rather than the base.
+queue and prints a test page. Scanning: the base has SANE + airscan (`scanimage -L`
+finds network eSCL scanners), and the scanning app is Document Scanner
+(`org.gnome.SimpleScan`) from the Store; the Flatpak carries its own SANE + airscan and
+needs nothing from the host. There is no scanner UI of our own.
 **Acceptance:** a network printer is discovered and added from the GUI; an app prints a
 test page; a scanner is found and scans from a scanning app.
 

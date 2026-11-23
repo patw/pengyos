@@ -223,5 +223,23 @@ def test_a_newly_unset_line_counts(tmp_path: Path) -> None:
     assert "# CONFIG_DEBUG_INFO is not set" in str(result)
 
 
+def test_a_later_layer_overrides_an_earlier_one(tmp_path: Path) -> None:
+    """2026-11-22: core asks VMD=m and a framebuffer console, the Desktop layer
+    VMD=y and none; the kernel built from the merge has the Desktop's. That is
+    satisfied, not stale (it rebuilt the kernel on every configure)."""
+    root, target, output = _fragment_tree(
+        tmp_path, "CONFIG_DRM_AMDGPU=m\nCONFIG_VMD=y\n",
+        "CONFIG_VMD=y\n# CONFIG_FRAMEBUFFER_CONSOLE is not set\n")
+    ext = target.external_tree
+    (ext / "board/core/linux.fragment").write_text(
+        "CONFIG_DRM_AMDGPU=m\nCONFIG_VMD=m\nCONFIG_FRAMEBUFFER_CONSOLE=y\n")
+    assert kernel.stale_fragment_lines(_config("7.3.1", FRAGS), ext, output) == ()
+    # The last layer is still checked.
+    (output / "build/linux-7.3.1/.config").write_text("CONFIG_DRM_AMDGPU=m\nCONFIG_VMD=m\n")
+    assert kernel.stale_fragment_lines(_config("7.3.1", FRAGS), ext, output) == ("CONFIG_VMD=y",)
+    result = _reconfigure_frag(root, target)
+    assert "linux-7.3.1" in result.rebuilt
+
+
 def test_no_built_kernel_nothing_is_stale(tmp_path: Path) -> None:
     assert kernel.stale_fragment_lines(_config("7.3.1", FRAGS), tmp_path, tmp_path / "out") == ()

@@ -138,6 +138,12 @@ LOGIN = Page(
     "in, which is handy on a machine nobody else uses.",
     choice=True,
 )
+APPEARANCE = Page(
+    "appearance", "Dark or light",
+    "How the desktop looks: Glacier, cool blue-grey and dark, or Glacier Light. "
+    "Change it any time in Settings, Appearance, or in Themes.",
+    choice=True,
+)
 ACTION = Page(
     "action", "PengyOS is already on this disk",
     "Repair it if it does not start any more: the system is written again and "
@@ -174,6 +180,11 @@ LOGIN_OPTIONS = (
     Option("Log in automatically"),
 )
 
+APPEARANCE_OPTIONS = (
+    Option("Dark", "Glacier"),
+    Option("Light", "Glacier Light"),
+)
+
 
 def _answers_problem(**kw) -> str | None:
     """The engine's verdict on one or two answers, with the rest set to valid
@@ -207,6 +218,8 @@ class Session:
         #: person's is lost) instead of erasing it.
         self.repair_chosen = True
         self.autologin = False
+        #: Desktop: dark (Glacier, the default) or light (Glacier Light).
+        self.dark = True
         #: "Keys or password" on the ssh_login page (default: keys only).
         self.ssh_password = False
         #: Keys imported on the ssh page, and where from.
@@ -276,7 +289,7 @@ class Session:
                 pages.append(WIFI_PASSWORD)
         pages += [SSH, SSH_LOGIN, PENGY]
         if self.edition == "desktop":
-            pages.append(LOGIN)
+            pages += [LOGIN, APPEARANCE]
         pages.append(REVIEW)
         return pages
 
@@ -306,6 +319,8 @@ class Session:
             return list(ACTION_OPTIONS)
         if page.key == "login":
             return list(LOGIN_OPTIONS)
+        if page.key == "appearance":
+            return list(APPEARANCE_OPTIONS)
         if page.key == "ssh_login":
             return list(SSH_LOGIN_OPTIONS)
         if page.key == "wifi":
@@ -344,6 +359,8 @@ class Session:
             return 1 if self.ssh_password else 0
         if page.key == "action":
             return 0 if self.repair_chosen else 1
+        if page.key == "appearance":
+            return 0 if self.dark else 1
         return 1 if self.autologin else 0
 
     def choose(self, page: Page, index: int) -> str | None:
@@ -365,6 +382,8 @@ class Session:
                 self._leave()
         elif page.key == "ssh_login":
             self.ssh_password = index == 1
+        elif page.key == "appearance":
+            self.dark = index == 0
         else:
             self.autologin = index == 1
         return None
@@ -528,6 +547,7 @@ class Session:
             password=v.get("password", ""), authorized_keys=self.authorized_keys,
             ssh_password=self.ssh_password,
             autologin=self.autologin and self.edition == "desktop",
+            appearance=("dark" if self.dark else "light") if self.edition == "desktop" else "",
             pengy_base_url=base_url,
             pengy_api_key=v.get("pengy_api_key", "") if base_url else "",
             pengy_model=v.get("pengy_model", "") if base_url else "",
@@ -582,4 +602,5 @@ class Session:
         ]
         if self.edition == "desktop":
             rows.append(("Login", "automatic" if a.autologin else "password required"))
+            rows.append(("Appearance", "dark (Glacier)" if self.dark else "light (Glacier Light)"))
         return rows

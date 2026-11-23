@@ -22,6 +22,15 @@ name = "core"
 description = "PengyOS Core — GRUB2/UEFI boots systemd to a serial login, networked, with sshd up"
 image = "output/pengyos-core/images/pengyos-core-x86_64.img"
 
+# Readiness: the boot is over only when BOTH are on the serial log. The serial
+# getty does not wait for multi-user.target, so a slow guest can print the
+# login prompt before the late status lines this matrix checks for; with
+# `login:` alone the harness killed it 4 s later with those lines unread
+# (seen on Server NVIDIA, 26.11.23 try 2 and the 2026-11-22 nightly; Core's
+# multi-user check has the same exposure). A boot that never gets there still
+# fails, at the variant's timeout.
+ready = ["pengyos-core login:", "Reached target .*Multi-User System"]
+
 [[variant]]
 id = "uefi"
 description = "plain UEFI/OVMF disk boot (GRUB2 on the ESP)"

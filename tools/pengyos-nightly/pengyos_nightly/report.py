@@ -13,6 +13,13 @@ from pengyos_nightly import config as cfgmod
 #: launcher. A machine with neither stays report-only - the HTML report is still
 #: written to disk, and the queue is not marked as reported.
 DEFAULT_EMAIL_SCRIPT = Path.home() / ".local/bin/pengyos-email"
+#: Seconds one mailer run may take, and how many runs a report gets. A timeout is a
+#: delivery failure like a non-zero exit, never a crash: on 2026-11-22 the act lane's
+#: failure notice hung on a black-holed IPv6 route to the SMTP server, the uncaught
+#: TimeoutExpired took the run down with a traceback, and nobody heard about the
+#: failed release.
+MAILER_TIMEOUT = 120
+MAILER_TRIES = 2
 PRI_COLOR = {"P0": "#b00020", "P1": "#c75000", "P2": "#666666"}
 
 
@@ -336,5 +343,15 @@ def send(subject_line: str, html_body: str, body_file: Path, to: str | None = No
         argv += ["--to", to]
     # Captured, not inherited: a failed mailer's own error line is what makes the cron
     # log and `status` say *why* nothing arrived, instead of a bare traceback.
-    run(argv, check=True, timeout=120, capture_output=True, text=True)
-    return True
+    for attempt in range(1, MAILER_TRIES + 1):
+        try:
+            run(argv, check=True, timeout=MAILER_TIMEOUT, capture_output=True, text=True)
+            return True
+        except subprocess.TimeoutExpired:
+            if attempt == MAILER_TRIES:
+                # The shape the callers already report: "<mailer> exited 124: <why>".
+                raise subprocess.CalledProcessError(
+                    124, argv, output="",
+                    stderr=f"timed out after {MAILER_TIMEOUT} s, {MAILER_TRIES} tries",
+                ) from None
+    return False  # unreachable: the loop returns or raises

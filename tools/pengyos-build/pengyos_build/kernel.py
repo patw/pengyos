@@ -114,9 +114,16 @@ def fragment_files(config_text: str, external: Path) -> tuple[Path, ...]:
 
 
 def stale_fragment_lines(config_text: str, external: Path, output: Path) -> tuple[str, ...]:
-    """Fragment lines the built kernel's ``.config`` does not satisfy.
+    """Fragment settings the built kernel's ``.config`` does not satisfy.
 
-    Empty when no kernel has been built yet (nothing to be stale) or every line
+    The fragments are layers (core, server, desktop): Buildroot merges them in
+    order and a later setting of a symbol overrides an earlier one, so only each
+    symbol's last setting is required. Until 2026-11-22 every line of every layer
+    was, and the core lines a later layer overrides (``FRAMEBUFFER_CONSOLE=y``,
+    ``VMD=m``, ``BTRFS_FS=m``) could never hold: every Desktop and Server configure
+    rebuilt the kernel and its module packages (nvidia-open included) for nothing.
+
+    Empty when no kernel has been built yet (nothing to be stale) or every setting
     holds. ``CONFIG_X=v`` needs X=v; ``# CONFIG_X is not set`` needs X unset.
     """
     version = kernel_version(config_text)
@@ -126,17 +133,22 @@ def stale_fragment_lines(config_text: str, external: Path, output: Path) -> tupl
     if not built.is_file():
         return ()
     have = _kconfig(built.read_text(encoding="utf-8", errors="replace"))
-    bad: list[str] = []
+    # symbol -> (the line, the value wanted; None = not set), last layer wins.
+    want: dict[str, tuple[str, str | None]] = {}
     for frag in fragment_files(config_text, external):
         if not frag.is_file():
             continue
         for line in frag.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            m = _KSET.match(line)
-            if m and have.get(m.group(1)) != m.group(2):
+            if m := _KSET.match(line):
+                want[m.group(1)] = (line, m.group(2))
+            elif u := _KUNSET.match(line):
+                want[u.group(1)] = (line, None)
+    bad: list[str] = []
+    for sym, (line, value) in want.items():
+        if value is None:
+            if sym in have:
                 bad.append(line)
-                continue
-            u = _KUNSET.match(line)
-            if u and u.group(1) in have:
-                bad.append(line)
+        elif have.get(sym) != value:
+            bad.append(line)
     return tuple(bad)

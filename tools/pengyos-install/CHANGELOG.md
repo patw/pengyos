@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `image --appearance dark|light` (Desktop): writes the new user's COSMIC mode
+  (`com.system76.CosmicTheme.Mode` `is_dark`) and the icon theme of that mode's
+  default Look, read from the image's theme catalogue (`[defaults]` in
+  `/usr/share/pengyos/themes/catalogue.toml`): Glacier with Papirus Dark, or
+  Glacier Light with Papirus Light. Without it, or on an image without the
+  catalogue (Server, Core), nothing is written and the image default stands.
 - `repair` (`repair_image`): reinstall the system on an installed PengyOS disk
   and keep its data partition, for a machine whose system will not start (both
   slots broken, or the disk copied to a new drive). Recognises the disk by its

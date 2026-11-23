@@ -45,6 +45,13 @@
   128 + the signal when interrupted (Ctrl-C 130, SIGTERM 143), 1 when a fetch failed after COMMAND succeeded. Each
   `run` first deletes `run_owner` VMs whose process is gone. `--keep` drops
   `run_owner`, so the VM stays an ordinary one.
+- A `run` is **offline** unless `--online`: its NAT NIC gets `restrict=on` and
+  `vm.json` `"restrict": true`, so the guest reaches neither the internet nor
+  this machine. (Plain QEMU NAT maps 10.0.2.2 onto the host's 127.0.0.1, which
+  would let a job reach services that listen only there.) The forwards, ssh
+  included, still work. `list` shows its NET as `offline`; a non-zero exit
+  other than 124 in an offline run prints a hint to try `--online`. VMs made
+  with `create` are unchanged; `set NAME --net` on a kept run drops `restrict`.
 
 ## Verification
 

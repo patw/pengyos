@@ -240,6 +240,66 @@ def test_install_image_autologin_opt_in(tmp_path, monkeypatch):
     assert "[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=pat\n" in text
 
 
+def _appearance_install(tmp_path, monkeypatch, appearance, *, catalogue=True):
+    payload = _payload(tmp_path, b"R" * 8192, b"E" * 4096)
+    target = tmp_path / "vda"
+    target.touch()
+    for n in (1, 2, 3, 4):
+        (tmp_path / f"vda{n}").touch()
+    esp_dir, root = tmp_path / "esp", tmp_path / "root"
+    (esp_dir / "EFI" / "BOOT").mkdir(parents=True)
+    (root / "etc" / "ssh").mkdir(parents=True)
+    (root / "data").mkdir()
+    (root / "etc" / "group").write_text("root:x:0:\nwheel:x:10:root\n")
+    if catalogue:
+        cat = root / im.THEMES_CATALOGUE.lstrip("/")
+        cat.parent.mkdir(parents=True)
+        cat.write_text('version = 1\n[defaults]\ndark = "glacier"\nlight = "glacier-light"\nmode = "dark"\n'
+                       '[[looks]]\nid = "glacier"\nicons = "Papirus-Dark"\n'
+                       '[[looks]]\nid = "glacier-light"\nicons = "Papirus-Light"\n')
+    monkeypatch.setattr(im, "TARGET_ESP", str(esp_dir))
+    monkeypatch.setattr(im, "TARGET_ROOT", str(root))
+    monkeypatch.setattr(im, "EFIVARS", str(tmp_path / "no-efivars"))
+    run = FakeRun(root)
+    install_image(str(target), ProvisionAnswers("desk", "pat", "hunter22", appearance=appearance),
+                  payload_dir=str(payload), confirm=True, run=run,
+                  disks=[Disk("vda", str(target), BIG)], nm_connections=str(tmp_path / "none"),
+                  wifi_configs=str(tmp_path / "none"))
+    return root, run
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_appearance_light_writes_the_users_mode_and_icons(tmp_path, monkeypatch):
+    root, run = _appearance_install(tmp_path, monkeypatch, "light")
+    cosmic = root / "home/pat/.config/cosmic"
+    assert (cosmic / "com.system76.CosmicTheme.Mode/v1/is_dark").read_text() == "false"
+    assert (cosmic / "com.system76.CosmicTk/v1/icon_theme").read_text() == '"Papirus-Light"'
+    assert ["chroot", str(root), "chown", "-R", "pat:pat", "/home/pat/.config/cosmic"] in run.calls
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_appearance_dark_and_no_answer(tmp_path, monkeypatch):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    root, _ = _appearance_install(tmp_path / "a", monkeypatch, "dark")
+    cosmic = root / "home/pat/.config/cosmic"
+    assert (cosmic / "com.system76.CosmicTheme.Mode/v1/is_dark").read_text() == "true"
+    assert (cosmic / "com.system76.CosmicTk/v1/icon_theme").read_text() == '"Papirus-Dark"'
+    root, _ = _appearance_install(tmp_path / "b", monkeypatch, "")
+    assert not (root / "home/pat/.config/cosmic").exists(), "no answer: the image default stands"
+
+
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs zstd")
+def test_appearance_is_ignored_without_the_desktops_catalogue(tmp_path, monkeypatch):
+    root, _ = _appearance_install(tmp_path, monkeypatch, "light", catalogue=False)
+    assert not (root / "home/pat/.config/cosmic").exists()
+
+
+def test_appearance_rejects_anything_else(tmp_path):
+    with pytest.raises(im.ImageInstallError):
+        im.write_appearance(tmp_path, "pat", "purple", lambda *a, **k: None)
+
+
 def _ssh_password_install(tmp_path, monkeypatch, *, tool: bool, ssh_password: bool):
     payload = _payload(tmp_path, b"R" * 8192, b"E" * 4096)
     target = tmp_path / "vda"

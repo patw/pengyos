@@ -20,6 +20,8 @@ set -euo pipefail
 LOG_FILE="/var/log/pengyos-monitor.log"
 SAMPLE_INTERVAL_SECS=300
 DISK_TARGETS="/ /var /home"
+# Alert (pengyos-alert) when a filesystem is this full; 0 turns it off.
+DISK_ALERT_PCT=90
 
 # --- load configuration ------------------------------------------------------
 # shellcheck disable=SC1091
@@ -41,6 +43,7 @@ load_conf() {
             LOG_FILE) LOG_FILE="$value" ;;
             SAMPLE_INTERVAL_SECS) SAMPLE_INTERVAL_SECS="$value" ;;
             DISK_TARGETS) DISK_TARGETS="$value" ;;
+            DISK_ALERT_PCT) DISK_ALERT_PCT="$value" ;;
             *) : ;;  # unknown keys are ignored
         esac
     done < "$conf"
@@ -84,13 +87,34 @@ disk_usage() {
         pct="$(printf '%s\n' "$rest" | awk '{print $5}' | tr -d '%')"
         mount="$(printf '%s\n' "$rest" | awk '{print $6}')"
         [ -n "$pct" ] && [ -n "$mount" ] && {
-            # normalise the mount point into a label ("/" -> "root")
-            mlabel="${mount//\//_}"
-            [ -z "$mlabel" ] && mlabel="root"
-            out+="disk_${mlabel}=${pct}%"
+            # normalise the mount point into a label ("/" -> "root",
+            # "/var/lib" -> "var_lib"); "/" used to come out as "_"
+            if [ "$mount" = / ]; then
+                mlabel="root"
+            else
+                mlabel="${mount#/}"
+                mlabel="${mlabel//\//_}"
+            fi
+            out+="${out:+ }disk_${mlabel}=${pct}%"
+            check_full "$mount" "$pct"
         }
     done
     printf '%s' "$out"
+}
+
+# Alert once a filesystem passes DISK_ALERT_PCT. pengyos-alert sends the same
+# mount at most once per REPEAT_HOURS, so an hourly sample of a full disk does
+# not page every hour; /, /var and /home on one filesystem are one key.
+check_full() {
+    local mount="$1" pct="$2"
+    case "$DISK_ALERT_PCT" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$DISK_ALERT_PCT" -gt 0 ] || return 0
+    [ "$pct" -ge "$DISK_ALERT_PCT" ] 2>/dev/null || return 0
+    command -v pengyos-alert >/dev/null 2>&1 || return 0
+    pengyos-alert send --priority high --key "disk:${mount}" \
+        --title "$(hostname 2>/dev/null || echo server): ${mount} is ${pct}% full" \
+        "${mount} is ${pct}% full (alert at ${DISK_ALERT_PCT}%, /etc/pengyos/monitor.conf). What is using it: sudo du -xh --max-depth=2 ${mount} | sort -h | tail" \
+        >/dev/null 2>&1 || true
 }
 
 conn_count() {

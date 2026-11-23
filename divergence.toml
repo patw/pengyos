@@ -738,36 +738,37 @@ observe_source = "pengyos-nightly observe, source id nvidia: git ls-remote --tag
 upstream_status = "not-offered"
 
 [[divergence]]
-id        = "go-src-1.27.2-stdlib-2026-11"
+id        = "go-src-1.27.3-stdlib-2026-11"
 kind      = "patch-set"
 component = "go-src"
-pinned_version = "1.27.2"
+pinned_version = "1.27.3"
 editions  = ["pengyos-core", "pengyos-server", "pengyos-server-nvidia", "pengyos-desktop", "pengyos-desktop-nvidia"]
 carried_since = "2026-11-12"
-patches_dir   = "buildroot-external/patches/go-src/1.27.2"
+patches_dir   = "buildroot-external/patches/go-src/1.27.3"
 
 # Go links its standard library into every binary, so a stdlib fix reaches podman,
-# runc, fzf, nvidia-container-toolkit and ipp-usb only through the toolchain they were
-# built with. Buildroot 2026.08.1 pins Go 1.27.2; 2026.08.x has 1.27.3, nothing has 1.27.4.
-# Both patches are the release-branch.go1.27 commits byte-for-byte (GitHub's .patch).
-#
-# CVE-2026-111943 (GO-2026-6809): crypto/x509 distrusts a handful of compromised
-# intermediate CAs. podman pulls images over TLS with crypto/x509. 90617fb7ce (go1.27.3).
+# runc, fzf, nvidia-container-toolkit, ipp-usb and restic only through the toolchain
+# they were built with. Buildroot 2026.08.2 pins Go 1.27.3; nothing has 1.27.4 yet.
+# The patch is the release-branch.go1.27 commit byte-for-byte (GitHub's .patch).
 #
 # CVE-2026-97054 (GO-2026-6859): an HTTP/1 server crash, a race between MaxBytesReader
 # and header writes. podman's API service (`podman system service`) is a net/http
 # server. 4c1752a033 (go1.27.4).
 #
-# Not carried: the rest of 1.27.3/1.27.4 is cmd/go and cgo flag validation (a
-# malicious module at *build* time; we build only pinned, hashed sources), FIPS 140
+# History: carried on 1.27.2 from 2026-11-12 with a second patch, CVE-2026-111943
+# (crypto/x509 distrusts compromised intermediates, 90617fb7ce), which is in go1.27.3
+# and was deleted with the move to Buildroot 2026.08.2 (it reverse-applies there).
+#
+# Not carried: the rest of 1.27.4 is cmd/go and cgo flag validation (a malicious
+# module at *build* time; we build only pinned, hashed sources), FIPS 140
 # bookkeeping, and compiler fixes.
 #
 # A Go binary is only patched once it is rebuilt: Buildroot does not rebuild a
 # package when its host toolchain changes, so the trees need `<pkg>-dirclean` for
-# every golang-package (done by hand on 2026-11-12; a fresh output tree needs nothing).
-closes = ["CVE-2026-111943", "CVE-2026-97054"]
-upstream_fixes = ["90617fb7ceb59cf08bee7826bb51b8c8fb8c11de", "4c1752a033aef1a66eadfb11363ff256f8daf47d"]
-expiry = "Buildroot pins Go 1.27.4 or newer: delete buildroot-external/patches/go-src and its GO_SRC_IGNORE_CVES lines (at 1.27.3, 0001 is already in and stops applying: delete it then)"
+# every golang-package after a host-go change (a fresh output tree needs nothing).
+closes = ["CVE-2026-97054"]
+upstream_fixes = ["4c1752a033aef1a66eadfb11363ff256f8daf47d"]
+expiry = "Buildroot pins Go 1.27.4 or newer: delete buildroot-external/patches/go-src and its GO_SRC_IGNORE_CVES line"
 observe_source = "pkg-stats"
 upstream_status = "merged"
 

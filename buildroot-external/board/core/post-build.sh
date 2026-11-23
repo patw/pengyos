@@ -357,6 +357,23 @@ mkdir -p "${TARGET_DIR}/usr/lib/pengyos"
       \( -type f -o -type l \) -name '*.service' 2>/dev/null | LC_ALL=C sort ) \
     > "${TARGET_DIR}/usr/lib/pengyos/image-units.txt"
 
+# --- Python compiles with the host's names, not the build host's toolchain -------
+# external.mk (PYTHON3_TARGET_TOOLCHAIN_NAMES) strips the cross-toolchain prefix
+# from sysconfig, so a pip/uv build on this machine runs `gcc`: the no-toolchain
+# stub, which prints the dev-guest recipe (Server; Core has uv since 2026-11-18 and
+# no compiler at all). Here in Core, so every edition is checked. If the prefix comes back (a Buildroot
+# bump that renames a file), stop here rather than ship a build-host path.
+for f in "${TARGET_DIR}"/usr/lib/python3*/_sysconfigdata_*.py* \
+         "${TARGET_DIR}"/usr/lib/python3*/_sysconfig_vars_*.json; do
+    [ -e "$f" ] || continue
+    # The compiler names only: FREEZE_MODULE (host python3) and the stdlib's own
+    # -L/-I into the build sysroot stay, and are never run on the target.
+    if grep -q -a -E "${HOST_DIR}/bin/[^/ \"']+-(gcc|g\+\+|gcc-ar)( |\"|'|$)" "$f"; then
+        echo "post-build: ${f#"${TARGET_DIR}"} still names the build host's compiler (${HOST_DIR}/bin/...-gcc)" >&2
+        exit 1
+    fi
+done
+
 # --- /usr/share/pengyos.txt: how this system works, and the motd nudge -------
 # Written from the finished tree (commands, stubs, packages), so each later
 # edition's post-build writes it again over what it added.

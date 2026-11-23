@@ -17,7 +17,7 @@
     pengyos-vm autostart NAME on|off
     pengyos-vm delete NAME [--yes]
     pengyos-vm run [--image FILE|URL] [--copy PATH]... [--fetch PATH]... [--timeout 10m]
-                   [--memory 1G] [--cpus 2] [--disk 8G] [--forward ...] [--keep]
+                   [--memory 1G] [--cpus 2] [--disk 8G] [--forward ...] [--online] [--keep]
                    [-- COMMAND...]
     pengyos-vm bridge status
     sudo pengyos-vm bridge enable [IFACE]
@@ -231,6 +231,7 @@ class VM:
             "memory": human(c["memory"]),
             "disk": str(self.path("disk.qcow2")),
             "net": c["net"],
+            "offline": bool(c.get("restrict")),
             "mac": c["mac"],
             "ssh": f"{ssh[0]}:{ssh[1]}" if ssh else None,
             "forwards": [fmt_forward(f) for f in c["forwards"]],
@@ -540,7 +541,14 @@ def qemu_argv(vm: VM) -> list[str]:
     if c["net"] == "nat":
         fwd = [f"hostfwd=tcp:127.0.0.1:{c['ssh_port']}-:22"]
         fwd += [f"hostfwd={f['proto']}:{f['addr']}:{f['host']}-:{f['guest']}" for f in c["forwards"]]
-        argv += ["-nic", ",".join(["user", "model=virtio-net-pci", f"mac={c['mac']}"] + fwd)]
+        # restrict=on (a `run` without --online): the guest reaches nothing, neither the
+        # internet nor this machine. Without it, QEMU's NAT maps 10.0.2.2 onto this
+        # machine's 127.0.0.1, so a job could talk to services that listen only there.
+        # The forwards (ssh included) are set from this side and keep working.
+        opts = ["user", "model=virtio-net-pci", f"mac={c['mac']}"]
+        if c.get("restrict"):
+            opts.append("restrict=on")
+        argv += ["-nic", ",".join(opts + fwd)]
     else:
         argv += ["-nic", f"bridge,br={BRIDGE},helper={HELPER},model=virtio-net-pci,mac={c['mac']}"]
     serial = d / "serial.sock"
@@ -664,7 +672,7 @@ def cmd_list(a) -> int:
         print("no VMs yet: pengyos-vm create NAME --iso FILE (or --image FILE|URL)")
         return 0
     head = ("NAME", "STATE", "CPUS", "MEMORY", "NET", "SSH", "AUTOSTART")
-    table = [head] + [(r["name"], r["state"], str(r["cpus"]), r["memory"], r["net"],
+    table = [head] + [(r["name"], r["state"], str(r["cpus"]), r["memory"], "offline" if r.get("offline") else r["net"],
                        r["ssh"] or "-", "yes" if r["autostart"] else "no") for r in rows]
     widths = [max(len(row[i]) for row in table) for i in range(len(head))]
     for row in table:
@@ -855,6 +863,7 @@ def cmd_set(a) -> int:
         if a.net == "bridge":
             require_bridge()
         c["net"] = a.net
+        c.pop("restrict", None)  # a kept offline run: --net gives it a network
         changed.append(f"network {a.net}")
     for host in a.unforward or []:
         before = len(c["forwards"])
@@ -1096,6 +1105,7 @@ def cmd_run_once(a) -> int:
     sweep_orphans()
     base = cached_image(image)
     conf = new_conf(name, memory, cpus)
+    conf["restrict"] = not a.online
     add_forwards(conf, a.forward or [], name)
     conf["run_owner"] = os.getpid()
 
@@ -1116,7 +1126,9 @@ def cmd_run_once(a) -> int:
         shutil.copyfile(under_root(VARS_TEMPLATE), vm.path("vars.fd"))
         vm.conf = conf
         vm.save()
-        print(f"{name}: booting {Path(image).name} ({cpus} CPUs, {human(memory)})", file=sys.stderr)
+        net = "online" if a.online else "offline: no internet, no host; --online to allow"
+        print(f"{name}: booting {Path(image).name} ({cpus} CPUs, {human(memory)}, {net})",
+              file=sys.stderr)
         user_systemctl("start", vm.unit)
         wait_for_ssh(vm, boot_timeout)
         if copies:
@@ -1134,6 +1146,9 @@ def cmd_run_once(a) -> int:
             p.wait()
             print(f"{name}: --timeout {a.timeout} reached; stopped", file=sys.stderr)
             status = 124
+        if status not in (0, 124) and not a.online:
+            print(f"{name}: exit {status} in an offline VM; if the job needed the internet "
+                  "(pip, uv, curl, git), run it again with --online", file=sys.stderr)
         if a.fetch:
             problems = pull(vm, a.fetch, Path.cwd())
             for problem in problems:
@@ -1389,6 +1404,9 @@ def parser() -> argparse.ArgumentParser:
     sp.add_argument("--disk", help=f"disk size (default {RUN_DEFAULTS['disk']}; a sparse overlay)")
     sp.add_argument("--forward", action="append", metavar="[ADDR:]HOST:GUEST[/udp]",
                     help="NAT port forward while it runs, e.g. 8080:80")
+    sp.add_argument("--online", action="store_true",
+                    help="let the job reach the internet (pip, uv, git); by default a run "
+                         "reaches nothing, not even this machine")
     sp.add_argument("--name", help="the VM's name (default run-XXXXXX)")
     sp.add_argument("--keep", action="store_true", help="keep the VM afterwards instead of deleting it")
     sp.add_argument("command", nargs=argparse.REMAINDER,

@@ -138,7 +138,7 @@ fi
 
 # Our libcosmic apps share one target dir so they share the libcosmic build.
 if [ "${FETCH_ONLY}" = 0 ] && [ "${RELOCK}" = 0 ]; then
-    for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-usage pengyos-gamepads pengyos-printers pengyos-firmware pengyos-sharing pengyos-remote-desktop pengy-games pengyos-hwmon; do
+    for app in pengyos-install-gui pengyos-updates pengyos-disks pengyos-usage pengyos-gamepads pengyos-printers pengyos-firmware pengyos-sharing pengyos-remote-desktop pengy-games pengyos-hwmon pengyos-themes; do
         wanted "${app}" || continue
         features=cosmic
         # The Hardware Monitor's Desktop binary carries the terminal view too,

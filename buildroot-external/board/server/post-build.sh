@@ -23,11 +23,14 @@ else
     sh "$(dirname "$0")/../common/os-release.sh" "${TARGET_DIR}" Server server
 fi
 
-# The backup timer ships disabled (its defaults filled the drive: a full tar of
-# /etc and /home, kept 7 times, on the same disk). Buildroot's target/ keeps the
-# enable link the overlay used to carry, so drop it from older build trees. (The
-# preset in 10-pengyos-server.preset is what keeps preset-all from re-enabling it.)
-rm -f "${TARGET_DIR}/etc/systemd/system/timers.target.wants/pengyos-backup.timer"
+# The backup timer ships disabled until a job is enabled (`pengyos-backup enable`).
+# Buildroot's target/ keeps files the overlay no longer carries, so drop the enable
+# link older trees had and the tar-based backup that pengyos-backup (restic)
+# replaced on 2026-11-17. (The preset in 10-pengyos-server.preset is what keeps
+# preset-all from re-enabling the timer.)
+rm -f "${TARGET_DIR}/etc/systemd/system/timers.target.wants/pengyos-backup.timer" \
+      "${TARGET_DIR}/usr/libexec/pengyos/pengyos-backup.sh" \
+      "${TARGET_DIR}/etc/pengyos/backup.conf"
 
 # Bootable image: install our GRUB menu once grub2 has staged efi-part/ in
 # BINARIES_DIR (same pattern as Core). Requires BR2_TARGET_GRUB2_X86_64_EFI.
@@ -181,22 +184,6 @@ python3 "$(dirname "$0")/../../../scripts/check-daemon-features.py" \
     echo "post-build: the rootfs lost capabilities listed above" >&2
     exit 1
 }
-
-# --- Python compiles with the host's names, not the build host's toolchain -------
-# external.mk (PYTHON3_TARGET_TOOLCHAIN_NAMES) strips the cross-toolchain prefix
-# from sysconfig, so a pip/uv build on this machine runs `gcc`: the no-toolchain
-# stub, which prints the dev-guest recipe. If the prefix comes back (a Buildroot
-# bump that renames a file), stop here rather than ship a build-host path.
-for f in "${TARGET_DIR}"/usr/lib/python3*/_sysconfigdata_*.py* \
-         "${TARGET_DIR}"/usr/lib/python3*/_sysconfig_vars_*.json; do
-    [ -e "$f" ] || continue
-    # The compiler names only: FREEZE_MODULE (host python3) and the stdlib's own
-    # -L/-I into the build sysroot stay, and are never run on the target.
-    if grep -q -a -E "${HOST_DIR}/bin/[^/ \"']+-(gcc|g\+\+|gcc-ar)( |\"|'|$)" "$f"; then
-        echo "post-build: ${f#"${TARGET_DIR}"} still names the build host's compiler (${HOST_DIR}/bin/...-gcc)" >&2
-        exit 1
-    fi
-done
 
 # --- /usr/share/pengyos.txt: how this system works, and the motd nudge -------
 # Written from the finished tree (commands, stubs, packages), so each later

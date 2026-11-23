@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-22
+
+### Fixed
+- **A slow Server boot no longer fails the smoke matrix on lines it never got to
+  read.** Readiness was the login prompt alone, and QEMU was killed 4 s
+  (`--settle`) later. The serial getty does not wait for multi-user.target, so
+  on a slow boot `Started Podman API Service`, `Reached target Multi-User System`
+  and the Server marker target came after the prompt and were cut off: Server
+  NVIDIA failed `podman-service`, `multi-user` and `server-target` on a healthy
+  image in 26.11.23 try 2, and failed the 2026-11-22 nightly (pengy 1.15.5,
+  26.11.26 never published). Both passed on a re-run of the same image.
+
+### Added
+- A smoke matrix may set a top-level `ready = [regex, …]`, the readiness markers
+  every variant waits for (all must match) before the settle window starts; an
+  explicit `expect` in `run_matrix(boot_kwargs=…)` still overrides it. A pattern
+  that is empty or does not compile is a matrix error. `smoke/server.toml` waits
+  for the login prompt and the PengyOS Server marker target, `smoke/core.toml`
+  for the login prompt and Multi-User. A boot that never prints them still
+  fails, at the variant's timeout.
+
 ## [0.7.0] — 2026-11-09
 
 ### Added

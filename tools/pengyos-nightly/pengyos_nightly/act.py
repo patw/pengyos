@@ -35,6 +35,49 @@ def _run(run, argv, **kw) -> subprocess.CompletedProcess:
     return run(argv, capture_output=True, text=True, **kw)
 
 
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[?[0-9;?]*")
+#: Lines of a failed release worth putting first: the step it was in, the checks
+#: that failed, the verdict, and errors. The boot check prints its FAIL lines and
+#: then ~25 more PASS lines per variant, so a plain tail never reached them.
+_RELEASE_KEY = re.compile(r"^\[release\] |\bFAIL\b|^result:\s+fail|error|refusing|fatal",
+                          re.IGNORECASE)
+RELEASE_KEY_LINES = 40
+RELEASE_TAIL_CHARS = 1500
+
+
+def release_failure(output: str, log_path: Path | None) -> str:
+    """The error for a failed scripts/release.sh: what failed first, then a tail.
+
+    The full output goes to ``log_path`` (the reports dir), because 2000 characters
+    from the end is not where a boot check says what failed: the 2026-11-22 nightly
+    recorded "1 failed" with the failing check's name cut off, and so did the unit
+    log. A log that cannot be written is said so, never a reason to lose the error.
+    """
+    where = ""
+    if log_path is not None:
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(output)
+            where = f"full output: {log_path}"
+        except OSError as exc:
+            where = f"full output NOT saved ({exc})"
+    lines = [_ANSI.sub("", l).rstrip() for l in output.splitlines()]
+    steps = [l for l in lines if l.startswith("[release] ")]
+    # A check that PASSed is not news even when its name says "error" (no-io-errors).
+    key = [l[:240] for l in lines
+           if _RELEASE_KEY.search(l) and not l.startswith("[release] ")
+           and not re.search(r"\bPASS\b", l)]
+    parts = []
+    if steps:
+        parts.append(f"failed in: {steps[-1][len('[release] '):][:200]}")
+    if key:
+        parts.append("\n".join(key[-RELEASE_KEY_LINES:]))
+    if where:
+        parts.append(where)
+    parts.append("--- last output ---\n" + _ANSI.sub("", output)[-RELEASE_TAIL_CHARS:])
+    return "\n".join(parts)
+
+
 def _git(run, repo: Path, *args, check=True) -> str:
     p = _run(run, ["git", "-C", str(repo), *args])
     if check and p.returncode != 0:
@@ -768,8 +811,10 @@ def run_act(action: dict, cfg: dict, repo: Path, build_root: Path, site: Path,
     except OSError as exc:
         return bail("release", f"could not start scripts/release.sh: {exc}")
     if p.returncode != 0:
+        why = release_failure(p.stdout + p.stderr, state_dir / "reports"
+                              / f"{today.isoformat()}-{action['id']}-release.log")
         return bail("release", "build / boot check / publish failed; nothing was "
-                               "published:\n" + (p.stdout + p.stderr)[-2000:])
+                               "published:\n" + why)
     step("published", True, f"{version} on {G.CHANNEL}"
                            + (" and pushed to the live feed" if cfg["push"] else
                               " (local site dir only)"))
@@ -1196,10 +1241,11 @@ def run_batch(actions: list[dict], cfg: dict, repo: Path, build_root: Path, site
         # nightly branch checked out (what a PermissionError did on 2026-10-08).
         return bail("release", f"could not start scripts/release.sh: {exc}")
     if p.returncode != 0:
-        result["batch_failure"] = {"date": today.isoformat(),
-                                   "detail": (p.stdout + p.stderr)[-400:]}
+        why = release_failure(p.stdout + p.stderr, state_dir / "reports"
+                              / f"{today.isoformat()}-act-release.log")
+        result["batch_failure"] = {"date": today.isoformat(), "detail": why[:600]}
         return bail("release", "build / boot check / publish failed; nothing was "
-                               "published:\n" + (p.stdout + p.stderr)[-2000:])
+                               "published:\n" + why)
     step("published", True, f"{version} on {G.CHANNEL} carrying {len(live)} change(s)"
                            + (" and pushed to the live feed" if cfg["push"] else
                               " (local site dir only)"))

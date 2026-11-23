@@ -215,6 +215,26 @@ else
     echo "post-build: ${FIRMWARE_GUI} not built — no Firmware app (firmware updates need a terminal)"
 fi
 
+# --- Themes (icon themes, colour themes, Looks; icons that follow dark/light) ---
+# tools/pengyos-themes, host-built the same way: the Themes window (System
+# folder; .desktop in the overlay) and the CLI in one binary. Per user and
+# unprivileged. Its catalogue (Papirus, our colour themes,
+# the Looks) goes to /usr/share/pengyos/themes; the session's `follow` (overlay
+# autostart) swaps Papirus-Dark and Papirus-Light when the mode changes. The
+# catalogue is installed even without the binary: it is data, and the theme
+# defaults in theme-defaults/ were generated from it.
+THEMES_BIN="${GUI_BUILD}/install-gui/release/pengyos-themes"
+rm -rf "${TARGET_DIR}/usr/share/pengyos/themes"
+mkdir -p "${TARGET_DIR}/usr/share/pengyos/themes"
+cp -r "${PENGYOS_TOOLS}/pengyos-themes/catalogue/." "${TARGET_DIR}/usr/share/pengyos/themes/"
+if [ -x "${THEMES_BIN}" ]; then
+    install -Dm0755 "${THEMES_BIN}" "${TARGET_DIR}/usr/bin/pengyos-themes"
+    echo "post-build: installed pengyos-themes and its catalogue"
+else
+    rm -f "${TARGET_DIR}/etc/xdg/autostart/io.catbee.pengyos.ThemesFollow.desktop"
+    echo "post-build: ${THEMES_BIN} not built — no pengyos-themes (icons will not follow dark/light)"
+fi
+
 # --- The pack-in games (one binary, eight games) -----------------------------
 # tools/pengy-games links every tools/pengy-<game> crate and runs the one it is
 # called as: /usr/bin/pengy-<game> is a symlink to it, so each launcher's
@@ -241,7 +261,7 @@ if [ -n "${STRIP_BIN}" ]; then
              "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-usage \
              "${TARGET_DIR}"/usr/bin/pengyos-gamepads \
              "${TARGET_DIR}"/usr/bin/pengyos-printers "${TARGET_DIR}"/usr/bin/pengyos-firmware \
-             "${TARGET_DIR}"/usr/bin/pengy-games; do
+             "${TARGET_DIR}"/usr/bin/pengy-games "${TARGET_DIR}"/usr/bin/pengyos-themes; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
     echo "post-build: stripped host-built binaries"
@@ -843,6 +863,15 @@ for icon in help-info-symbolic link-symbolic view-grid-symbolic view-list-symbol
     fi
 done
 echo "post-build: COSMIC's theme icons are all present"
+
+# --- File-type icons COSMIC Files draws ---------------------------------------
+# Files draws a file's MIME icon or its generic icon, and nothing when the theme
+# has neither: until 2026-11-22 every PIE binary and .so (application/x-sharedlib),
+# SQLite file, disk image and core dump was a blank tile (no application-x-generic
+# in any theme). pop-cursor-theme now ships Pop's file-type icons, and cosmic-files
+# patch 0003 falls back to text-x-generic; this fails the build if a common type
+# loses its real icon again, which the fallback alone would hide.
+python3 "$(dirname "$0")/check-mime-icons.py" "${TARGET_DIR}"
 
 # --- gdk-pixbuf can load those icons ---------------------------------------------
 # The themes are SVG only. Until 26.10.35 gdk-pixbuf had no SVG loader, so a

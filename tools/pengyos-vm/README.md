@@ -28,6 +28,7 @@ pengyos-vm delete web --yes
 export PENGYOS_VM_IMAGE=~/pengyos-core-x86_64.img            # or --image FILE|URL
 pengyos-vm run -- uname -a                                    # boot, run, delete
 pengyos-vm run --copy ./mytool --fetch out --timeout 30m -- ./mytool/run.sh
+pengyos-vm run --online --copy job.py -- 'uv run --with requests job.py'   # may use the internet
 pengyos-vm run                                                # a shell; deleted on exit
 ```
 
@@ -46,6 +47,13 @@ a closed terminal clean up too. A run killed outright (SIGKILL) leaves its
 `run-XXXXXX` VM behind; the next `run` deletes it. `--keep` keeps the VM
 instead (`pengyos-vm ssh NAME` uses the run's key). Defaults: 2 CPUs, 1G
 memory, an 8G sparse disk, NAT (`--forward` works), 180 s to answer SSH.
+
+A run is **offline** unless you pass `--online`: the VM reaches neither the
+internet nor this machine (QEMU's `restrict=on`; ssh and `--forward` still work).
+Plain QEMU NAT would let the guest reach this machine's 127.0.0.1 through
+10.0.2.2, so a job could talk to services meant to be local only. Give
+`--online` to a job that installs packages (`uv pip install`, `uv run --with`)
+or fetches data, and don't combine it with code you do not trust.
 
 ## In a browser: pengy-vmm
 
