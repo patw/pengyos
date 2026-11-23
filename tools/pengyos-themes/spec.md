@@ -91,8 +91,9 @@ that code lives in libcosmic.
   colour theme), the current `CosmicTk.icon_theme`, both theme builders and the mode are
   snapshotted to `~/.local/share/pengyos-themes/undo/`. `pengyos-themes undo`, or the
   app's *Undo*, restores the last snapshot exactly (20 steps are kept). *Reset*
-  restores COSMIC's icons and its shipped colours, dark and light (copied from
-  `/usr/share/cosmic`, else libcosmic's own); dark or light stays as the user has it,
+  restores the system's icon theme (the shipped CosmicTk `icon_theme`, in the
+  variant for the mode when the catalogue pairs it; else Cosmic) and its shipped
+  colours, dark and light (copied from `/usr/share/cosmic`, else libcosmic's own); dark or light stays as the user has it,
   as Settings' *Reset to default*. Reset is undoable.
 
 ## CLI
@@ -141,7 +142,7 @@ not a Tweaks replacement.
    RON in COSMIC Settings (compared key by key in a test).
 4. A malformed or oversized RON is refused without touching any config.
 5. `undo` after any `apply`/`use` restores the previous config byte for byte; `reset`
-   restores COSMIC's defaults.
+   restores the system's defaults (Glacier and Papirus on PengyOS Desktop).
 6. Offline: `looks apply` and `colours apply` from the library work with no network;
    `colours search` fails with a clear message, not a hang (timeouts on every request).
 7. An A/B update leaves installed themes, the library, Looks and the active choice

@@ -116,6 +116,10 @@ fn apply_status_undo_reset() {
     let o = run(h.path(), &["status", "--json"]);
     let s: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!((s["icons"].as_str(), s["colours"]["state"].as_str()), (Some("Cosmic"), Some("default")));
+    // The defaults are the image's (Glacier), not "COSMIC's".
+    let mode = s["mode"].as_str().unwrap().to_string();
+    let want = if mode == "dark" { "Colours: the system defaults (Glacier)\n" } else { "Colours: the system defaults (Glacier Light)\n" };
+    assert!(text(&run(h.path(), &["status"])).contains(want), "{}", text(&run(h.path(), &["status"])));
 
     // A catalogue colour theme applies with no network.
     let o = run(h.path(), &["colours", "apply", "meadow-light"]);
@@ -140,7 +144,10 @@ fn apply_status_undo_reset() {
     assert!(text(&run(h.path(), &["undo"])).contains("Nothing to undo"));
     assert!(!cosmic.join("com.system76.CosmicTheme.Light.Builder").exists());
 
-    assert!(run(h.path(), &["reset"]).status.success());
+    let o = run(h.path(), &["reset"]);
+    assert!(o.status.success(), "{}", text(&o));
     let s: serde_json::Value = serde_json::from_slice(&run(h.path(), &["status", "--json"]).stdout).unwrap();
+    let look = if s["mode"] == "dark" { "Glacier" } else { "Glacier Light" };
+    assert!(text(&o).contains(&format!("Back to the system defaults: {look}, with ")), "{}", text(&o));
     assert_eq!(s["colours"]["state"], "default");
 }

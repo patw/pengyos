@@ -175,6 +175,22 @@ pub fn valid_theme_dir(s: &str) -> bool {
 }
 
 impl Catalogue {
+    /// The name of the Look the system ships as its default for `mode`
+    /// (`[defaults]`: Glacier, Glacier Light), if the catalogue says.
+    pub fn default_look_name(&self, mode: Mode) -> Option<&str> {
+        let d = self.defaults.as_ref()?;
+        let id = if mode == Mode::Dark { &d.dark } else { &d.light };
+        self.looks.iter().find(|l| &l.id == id).map(|l| l.name.as_str())
+    }
+
+    /// "the system defaults (Glacier)", or without a name when unknown.
+    pub fn defaults_label(cat: Option<&Catalogue>, mode: Mode) -> String {
+        match cat.and_then(|c| c.default_look_name(mode)) {
+            Some(n) => format!("the system defaults ({n})"),
+            None => "the system defaults".to_string(),
+        }
+    }
+
     pub fn load(path: &Path) -> Result<Catalogue> {
         let text = io_at(std::fs::read_to_string(path), "cannot read the catalogue", path)?;
         let mut cat = Catalogue::parse(&text).map_err(|e| err!("{}: {e}", path.display()))?;
@@ -399,5 +415,15 @@ mode = "dark"
             let e = Catalogue::parse(&GOOD.replacen(from, to, 1)).unwrap_err();
             assert!(e.0.contains(why), "{to}: {e}");
         }
+    }
+
+    #[test]
+    fn the_defaults_label_names_the_shipped_look_when_it_can() {
+        let cat = Catalogue::parse(GOOD).unwrap();
+        assert_eq!(Catalogue::defaults_label(None, Mode::Dark), "the system defaults");
+        assert_eq!(Catalogue::defaults_label(Some(&cat), Mode::Dark), "the system defaults");
+        let shipped = Catalogue::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("catalogue/catalogue.toml")).unwrap();
+        assert_eq!(Catalogue::defaults_label(Some(&shipped), Mode::Dark), "the system defaults (Glacier)");
+        assert_eq!(Catalogue::defaults_label(Some(&shipped), Mode::Light), "the system defaults (Glacier Light)");
     }
 }

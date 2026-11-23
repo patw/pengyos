@@ -296,12 +296,15 @@ pub fn remove(paths: &Paths, cat: &Catalogue, id: &str) -> Result<bool> {
     let active = desktop::icon_theme(paths);
     let switched = ours.contains(&active.as_str());
     if switched {
-        desktop::snapshot(paths, &format!("icons {COSMIC_ICONS}"))?;
-        desktop::set_icon_theme(paths, COSMIC_ICONS)?;
+        desktop::snapshot(paths, &format!("icons {}", desktop::system_icon_theme(paths)))?;
     }
     for d in ours {
         let p = paths.icons().join(d);
         io_at(fs::remove_dir_all(&p), "cannot remove", &p)?;
+    }
+    if switched {
+        // After the removal, so the follow step only finds what is still there.
+        desktop::default_icons(paths, Some(cat))?;
     }
     Ok(switched)
 }

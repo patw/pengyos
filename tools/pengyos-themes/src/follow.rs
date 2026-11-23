@@ -94,6 +94,25 @@ mod tests {
     }
 
     #[test]
+    fn reset_goes_to_the_shipped_icons_in_the_variant_for_the_mode() {
+        let (_d, p, cat) = setup();
+        // The image ships Ice-Dark as the session's icon theme (Papirus-Dark on PengyOS).
+        let k = p.system_data[0].join("cosmic/com.system76.CosmicTk/v1");
+        fs::create_dir_all(&k).unwrap();
+        fs::write(k.join("icon_theme"), "\"Ice-Dark\"").unwrap();
+        desktop::set_icon_theme(&p, "Cosmic").unwrap();
+        desktop::reset(&p, Some(&cat)).unwrap();
+        assert_eq!(desktop::icon_theme(&p), "Ice-Dark", "dark mode: the shipped theme");
+        desktop::set_mode(&p, Mode::Light).unwrap();
+        desktop::set_icon_theme(&p, "Cosmic").unwrap();
+        desktop::reset(&p, Some(&cat)).unwrap();
+        assert_eq!(desktop::icon_theme(&p), "Ice", "light mode: its light half");
+        assert_eq!(desktop::mode(&p), Mode::Light, "reset keeps the mode");
+        desktop::undo(&p).unwrap();
+        assert_eq!(desktop::icon_theme(&p), "Cosmic", "one undo step");
+    }
+
+    #[test]
     fn a_missing_half_is_left_alone() {
         let (_d, p, cat) = setup();
         fs::remove_dir_all(p.system_data[0].join("icons/Ice")).unwrap();

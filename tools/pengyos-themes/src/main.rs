@@ -14,7 +14,7 @@ pengyos-themes — icon themes, colour themes and Looks for COSMIC, for you only
   icons list                       the catalogue's icon themes, and which are installed
   icons install <id>               download (checked against the catalogue's sha256) and install
   icons use <theme>                switch every app's icons (any installed theme, or Cosmic)
-  icons remove <id>                remove an installed pack (back to Cosmic if it was in use)
+  icons remove <id>                remove an installed pack (back to the system's icons if in use)
 
   colours search [TEXT] [--order popular|new|name] [--color HEX] [--page N]
                                    browse cosmic-themes.org
@@ -28,7 +28,7 @@ pengyos-themes — icon themes, colour themes and Looks for COSMIC, for you only
   looks forget <id>                drop one of your Looks
 
   undo                             put back what the last change replaced
-  reset                            COSMIC's icons and default colours (dark/light stays)
+  reset                            the system's default icons and colours (dark/light stays)
   status                           the icon theme, dark or light, and the colours in use
 
   follow                           keep a dark/light icon pair matched to the mode (runs
@@ -192,7 +192,7 @@ fn run(raw: Vec<String>) -> R {
             let cat = catalogue(&paths)?;
             let switched = icons::remove(&paths, &cat, id)?;
             if switched {
-                println!("It was in use: icons are back to Cosmic.");
+                println!("It was in use: icons are back to the system's ({}).", desktop::icon_theme(&paths));
             }
             println!("Removed {id}.");
             Ok(())
@@ -322,8 +322,13 @@ fn run(raw: Vec<String>) -> R {
             Ok(())
         }
         ["reset"] => {
-            desktop::reset(&paths)?;
-            println!("Icons and colours are COSMIC's defaults again. Undo with: pengyos-themes undo");
+            let cat = catalogue_opt(&paths)?;
+            desktop::reset(&paths, cat.as_ref())?;
+            let icons = desktop::icon_theme(&paths);
+            match cat.as_ref().and_then(|c| c.default_look_name(desktop::mode(&paths))) {
+                Some(look) => println!("Back to the system defaults: {look}, with {icons} icons. Undo with: pengyos-themes undo"),
+                None => println!("Back to the system defaults, with {icons} icons. Undo with: pengyos-themes undo"),
+            }
             Ok(())
         }
         ["status"] => status(&paths, a.json),
@@ -415,7 +420,7 @@ fn status(paths: &Paths, json_out: bool) -> R {
     println!(
         "Colours: {}",
         match now {
-            Now::Default => "COSMIC's defaults".to_string(),
+            Now::Default => Catalogue::defaults_label(catalogue_opt(paths).ok().flatten().as_ref(), mode),
             Now::Applied(a) => format!("{} ({})", a.name, a.id),
             Now::Custom => "your own (changed in Settings)".to_string(),
         }

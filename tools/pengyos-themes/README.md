@@ -33,8 +33,8 @@ pengyos-themes system-defaults DIR       # the image's COSMIC defaults (see belo
   pack, refuses it unless the sha256 matches the catalogue, and unpacks only the
   declared theme directories into `~/.local/share/icons`, where COSMIC Settings'
   icon picker finds them. `use` writes `com.system76.CosmicTk` `icon_theme`, as
-  Settings does; every app switches at once. `remove` goes back to Cosmic first
-  if the theme was in use.
+  Settings does; every app switches at once. `remove` goes back to the system's
+  icon theme first if the theme was in use.
 - **Colours.** `search` browses [cosmic-themes.org](https://cosmic-themes.org)'s
   public API (no account, nothing sent about you); themes this COSMIC cannot
   parse are left out. `apply` takes an id from the last search, a catalogue or
@@ -47,8 +47,9 @@ pengyos-themes system-defaults DIR       # the image's COSMIC defaults (see belo
   step.
 - **Undo.** Before any change the tool snapshots every key it may write;
   `undo` puts the last one back byte for byte (20 steps kept). `reset` restores
-  COSMIC's icons and its shipped colours (dark or light stays as you have it),
-  and is itself undoable.
+  the system's icons and colours: on PengyOS Desktop, Glacier (Glacier Light in
+  light mode) with Papirus. Dark or light stays as you have it, and reset is
+  itself undoable.
 
 - **Icons follow dark and light.** COSMIC has one icon theme for both modes.
   `follow` runs in each Desktop session and swaps a pack's declared pair
