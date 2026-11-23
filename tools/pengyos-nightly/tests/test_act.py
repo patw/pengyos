@@ -167,6 +167,23 @@ def test_one_action_end_to_end(tmp_path, monkeypatch):
     assert st["actions"] == {"libxml2": "2026-10-05"}, "a published action spends cooldown"
 
 
+def test_the_apps_are_rebuilt_unless_skip_cosmic_says_not(tmp_path, monkeypatch):
+    # Our libcosmic apps are host-built and copied into the image as they are; a
+    # release that skips build-cosmic.sh ships whatever was built last.
+    from pengyos_nightly import config as C
+    assert C.DEFAULTS["skip_cosmic"] is False
+    key = tmp_path / "release.key"
+    key.write_text("pengyos-key-v1 ed25519 abc\n")
+
+    def release_argv(cfg, where):
+        where.mkdir()
+        _, fake, *_ = _run(where, cfg=cfg)
+        return " ".join(" ".join(c) for c in fake.calls if any("release.sh" in a for a in c))
+
+    assert "--skip-cosmic" not in release_argv(_cfg(key_file=str(key), skip_cosmic=False), tmp_path / "a")
+    assert "--skip-cosmic" in release_argv(_cfg(key_file=str(key), skip_cosmic=True), tmp_path / "b")
+
+
 def test_the_patch_and_the_global_dir_land_in_the_tree(tmp_path):
     key = tmp_path / "release.key"
     key.write_text("k\n")

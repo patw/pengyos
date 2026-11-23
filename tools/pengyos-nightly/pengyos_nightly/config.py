@@ -39,7 +39,12 @@ DEFAULTS = {
     # version-bumped from a br2-external tree, so the security lane carries upstream
     # fix commits; see edits.py for the repro that settled it.
     "allow_patch_shape": True,
-    "skip_cosmic": True,
+    # Since 2026-10-28 COSMIC is a Buildroot package and scripts/build-cosmic.sh builds
+    # only our own apps (installer, Updates, Themes, the RDP server...), which
+    # post-build copies into the image as they are. Skipping it meant a merged app
+    # change never reached an image (the RDP idle-capture fix of 11-17, missing
+    # until 11-23). cargo rebuilds only what changed: about 3 s when nothing did.
+    "skip_cosmic": False,
     # Phase 4 (spec): the Buildroot release-bump lane. Empty means the lane is inert - a
     # newer release series stays a finding and nothing moves. Naming a target is the
     # operator scheduling that event; the loop never decides it from a tag alone.
