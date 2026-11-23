@@ -57,6 +57,29 @@ pub fn icon_theme(paths: &Paths) -> String {
     read_key(paths, TK_ID, TK_VERSION, "icon_theme").unwrap_or_else(|| COSMIC_ICONS.to_string())
 }
 
+/// The icon theme the system ships for the session (the image's CosmicTk
+/// default: Papirus-Dark on PengyOS Desktop), else Cosmic.
+pub fn system_icon_theme(paths: &Paths) -> String {
+    let rel = key_rel(TK_ID, TK_VERSION, "icon_theme");
+    paths
+        .system_data
+        .iter()
+        .find_map(|d| fs::read_to_string(d.join("cosmic").join(&rel)).ok())
+        .and_then(|s| ron::from_str(&s).ok())
+        .unwrap_or_else(|| COSMIC_ICONS.to_string())
+}
+
+/// Back to the system's icon theme, in the variant for the current mode when
+/// the catalogue pairs it (Papirus-Light in light mode). Written as a value,
+/// not by deleting the user's key, so running apps see the change.
+pub fn default_icons(paths: &Paths, cat: Option<&crate::catalogue::Catalogue>) -> Result<String> {
+    set_icon_theme(paths, &system_icon_theme(paths))?;
+    if let Some(cat) = cat {
+        crate::follow::once(paths, cat)?;
+    }
+    Ok(icon_theme(paths))
+}
+
 pub fn set_icon_theme(paths: &Paths, name: &str) -> Result<()> {
     config(paths, TK_ID, TK_VERSION)?.set("icon_theme", name.to_string())?;
     Ok(())
@@ -142,13 +165,15 @@ fn reset_ids(paths: &Paths, ids: &[&str]) -> Result<()> {
     Ok(())
 }
 
-/// Reset: COSMIC's icon theme and COSMIC's default colours, dark and light.
-/// Dark or light stays as the user has it (as Settings' *Reset to default*).
-pub fn reset(paths: &Paths) -> Result<()> {
+/// Reset: the system's icon theme and colours (on PengyOS, Glacier and
+/// Papirus; COSMIC's own where nothing is shipped), dark and light. Dark or
+/// light stays as the user has it (as Settings' *Reset to default*).
+pub fn reset(paths: &Paths, cat: Option<&crate::catalogue::Catalogue>) -> Result<()> {
     snapshot(paths, "reset")?;
-    set_icon_theme(paths, COSMIC_ICONS)?;
     reset_ids(paths, &THEME_IDS)?;
-    crate::colours::record_applied(paths, None)
+    crate::colours::record_applied(paths, None)?;
+    default_icons(paths, cat)?;
+    Ok(())
 }
 
 /// The builder COSMIC is using for `mode`, as Settings would export it.
@@ -515,8 +540,8 @@ mod tests {
         set_mode(&p, Mode::Light).unwrap();
         set_icon_theme(&p, "Papirus").unwrap();
         apply_builder(&p, &ThemeBuilder::light()).unwrap();
-        reset(&p).unwrap();
-        assert_eq!(icon_theme(&p), "Cosmic");
+        reset(&p, None).unwrap();
+        assert_eq!(icon_theme(&p), "Cosmic", "no shipped icon theme: Cosmic");
         assert_eq!(mode(&p), Mode::Light);
         for id in THEME_IDS {
             assert_eq!(
@@ -531,7 +556,7 @@ mod tests {
     #[test]
     fn reset_without_shipped_defaults_writes_libcosmics() {
         let (_d, p) = home();
-        reset(&p).unwrap();
+        reset(&p, None).unwrap();
         assert_eq!(current_builder(&p, Mode::Light).unwrap(), ThemeBuilder::light());
         assert_eq!(current_builder(&p, Mode::Dark).unwrap(), ThemeBuilder::dark());
     }

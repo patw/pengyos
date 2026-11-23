@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-23
+
+### Fixed
+- Reset (and removing an icon pack that is in use) went to Cosmic's icons,
+  which overrode the image's own default: since 26.11.26 Reset gave Glacier's
+  colours with Cosmic icons, and the icon follower then had nothing to follow.
+  Both now go to the system's icon theme (Papirus-Dark on PengyOS Desktop),
+  then follow the mode once (Papirus-Light in light mode).
+- `status` said "Colours: COSMIC's defaults" on a Desktop whose defaults are
+  Glacier. It now names the Look the system ships for the mode: "the system
+  defaults (Glacier)". `reset`, the Reset dialog and the remove messages say the
+  same.
+
 ## [0.3.0] - 2026-11-22
 
 ### Added

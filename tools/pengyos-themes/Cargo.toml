@@ -7,7 +7,7 @@
 # is behind the `cosmic` feature like the other PengyOS apps.
 [package]
 name = "pengyos-themes"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "MIT"
 authors = ["Pat Wendorf"]

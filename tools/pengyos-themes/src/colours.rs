@@ -528,7 +528,7 @@ pub(crate) mod tests {
         desktop::apply_builder(&p, &ThemeBuilder::dark().accent(cosmic_theme::palette::Srgb::new(0.0, 1.0, 0.0)))
             .unwrap();
         assert_eq!(now(&p, Mode::Dark), Now::Custom);
-        desktop::reset(&p).unwrap();
+        desktop::reset(&p, None).unwrap();
         assert_eq!(now(&p, Mode::Dark), Now::Default);
     }
 }

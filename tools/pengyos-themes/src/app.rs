@@ -140,6 +140,18 @@ fn filled<'a>(c: [f32; 4], radius: f32) -> cosmic::theme::Container<'a> {
 }
 
 impl App {
+    /// The Reset dialog's text, naming the shipped Looks when the catalogue has them.
+    fn reset_text(&self) -> String {
+        let names = self.cat.as_ref().and_then(|c| {
+            Some((c.default_look_name(Mode::Dark)?, c.default_look_name(Mode::Light)?))
+        });
+        let what = match names {
+            Some((d, l)) => format!("the system defaults: {d} in dark mode, {l} in light mode"),
+            None => "the system defaults, dark and light".to_string(),
+        };
+        format!("Icons and colours go back to {what}. Dark or light stays as it is. Undo puts your look back.")
+    }
+
     fn reload_status(&mut self) {
         self.icons_now = desktop::icon_theme(&self.paths);
         self.mode = desktop::mode(&self.paths);
@@ -358,7 +370,7 @@ impl cosmic::Application for App {
                 if let Some(cat) = self.cat.clone() {
                     let r = icons::remove(&self.paths, &cat, &id).map(|switched| {
                         if switched {
-                            "Removed. It was in use, so the icons are back to Cosmic.".into()
+                            "Removed. It was in use, so the icons are back to the system's.".into()
                         } else {
                             "Removed.".into()
                         }
@@ -434,7 +446,8 @@ impl cosmic::Application for App {
             Message::AskReset => self.dialog = Some(Dialog::Reset),
             Message::Reset => {
                 self.dialog = None;
-                let r = desktop::reset(&self.paths).map(|_| "COSMIC's icons and colours are back. Undo puts yours back.".into());
+                let r = desktop::reset(&self.paths, self.cat.as_ref())
+                    .map(|_| "The default look is back. Undo puts yours back.".into());
                 self.finish(r);
             }
             Message::AskSave => {
@@ -472,8 +485,8 @@ impl cosmic::Application for App {
         let d = self.dialog.as_ref()?;
         Some(match d {
             Dialog::Reset => widget::dialog()
-                .title("Back to COSMIC's look?")
-                .body("Icons go back to Cosmic and colours to the defaults, dark and light. Dark or light stays as it is. Undo puts your look back.")
+                .title("Back to the default look?")
+                .body(self.reset_text())
                 .primary_action(button::destructive("Reset").on_press(Message::Reset))
                 .secondary_action(button::standard("Cancel").on_press(Message::CloseDialog))
                 .into(),
@@ -495,7 +508,7 @@ impl cosmic::Application for App {
                 let name = self.packs.iter().find(|(p, _)| &p.id == id).map(|(p, _)| p.name.clone()).unwrap_or_default();
                 widget::dialog()
                     .title(format!("Remove {name}?"))
-                    .body("Its icon themes are deleted from your home folder. If you use one now, the icons go back to Cosmic.")
+                    .body("Its icon themes are deleted from your home folder. If you use one now, the icons go back to the system's.")
                     .primary_action(button::destructive("Remove").on_press(Message::RemovePack(id.clone())))
                     .secondary_action(button::standard("Cancel").on_press(Message::CloseDialog))
                     .into()

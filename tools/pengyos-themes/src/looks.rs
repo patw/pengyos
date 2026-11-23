@@ -264,7 +264,7 @@ mode = "light"
         let mine = save(&p, Some(&cat), "My Spring").unwrap();
         assert_eq!((mine.id.as_str(), mine.icons.as_str(), mine.colours.as_str()), ("my-spring", "Ice", "look-my-spring"));
         let wanted = desktop::current_builder(&p, Mode::Light).unwrap();
-        desktop::reset(&p).unwrap();
+        desktop::reset(&p, None).unwrap();
         apply(&p, Some(&cat), "my-spring", &Stub::default()).unwrap();
         assert_eq!(desktop::current_builder(&p, Mode::Light).unwrap(), wanted);
         assert_eq!(desktop::icon_theme(&p), "Ice");
