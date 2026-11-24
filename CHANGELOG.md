@@ -27,7 +27,7 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   read-only branch uses `rorslave`. The patch is retired with the bump, and the fork
   entry leaves `divergence.toml` (9 to 8 of the 10-fork budget).
 - The 2026-11-24 act lane found this the hard way: the obsolete patch stopped applying,
-  pre-flight dropped the batch only change, and nothing was published that night.
+  pre-flight dropped the batch's only change, and nothing was published that night.
 
 ### Added: desktop icons can be dragged anywhere on the grid (2026-11-23)
 - The COSMIC desktop laid icons out down each column in sort order, with no
