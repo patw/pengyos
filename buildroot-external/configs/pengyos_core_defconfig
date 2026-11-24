@@ -79,6 +79,13 @@ BR2_PACKAGE_SYSTEMD_ANALYZE=y
 # With libdw in the image each crash also logs a symbolized backtrace. Storage is
 # capped in board/core/rootfs-overlay/usr/lib/systemd/coredump.conf.d/.
 BR2_PACKAGE_SYSTEMD_COREDUMP=y
+# POSIX ACLs (libacl + getfacl/setfacl). systemd builds with -Dacl only when this
+# is set, and without it systemd-coredump cannot grant a crashing user read access
+# to their own dump (user:<uid>:r) nor journald to their own journal: every core is
+# root:root 0640 and `coredumpctl info/debug` says "inaccessible" to its owner.
+# Desktop only had it by accident (ddcutil selects it); Server lost a service's
+# cores this way on behoserver (2026-11-24).
+BR2_PACKAGE_ACL=y
 
 # --- System name / accounts -------------------------------------------------
 BR2_TARGET_GENERIC_HOSTNAME="pengyos-core"
