@@ -52,11 +52,13 @@ schema = 1
 fork_budget = 10
 
 # Budget: at most 10 maintained forks (kind = "fork") at any time.
-# Current fork count: 9 (ffmpeg-pengyos, hplip-pengyos 2026-10-19; upower-pengyos
-# 2026-10-20; libdisplay-info-pengyos 2026-10-23; uutils-findutils, distrobox,
-# xdg-utils 2026-10-27; ironrdp-server 2026-10-31; nvidia-open 2026-11-02). openssh-pengyos (2026-10-19) expired with Buildroot
-# 2026.08.1 on 2026-10-28. build-fix entries are not counted. The gate's count is
-# authoritative; this line is the human copy.
+# Current fork count: 8 (ffmpeg-pengyos, hplip-pengyos 2026-10-19; upower-pengyos
+# 2026-10-20; libdisplay-info-pengyos 2026-10-23; uutils-findutils, xdg-utils
+# 2026-10-27; ironrdp-server 2026-10-31; nvidia-open 2026-11-02). openssh-pengyos
+# (2026-10-19) expired with Buildroot 2026.08.1 on 2026-10-28; distrobox expired with
+# 1.8.2.6 on 2026-11-24, which fixed :ro,rslave on the shell line too. build-fix
+# entries are not counted. The gate's count is authoritative; this line is the human
+# copy.
 # Enforced by the gate from 2026-10-19: scripts/pengyos_gate.py:check_fork_budget counts
 # kind = "fork" entries against `fork_budget` above and fails past it. It also fails a
 # fork whose observe_source is pkg-stats, because pkg-stats cannot see a fork at all -
@@ -635,31 +637,6 @@ expiry = "a cutecosmic release with Qt Quick Controls optional and a way to supp
 observe_source = "pkg-stats"
 release_monitoring_id = 387805
 upstream_status = "not-offered"
-
-[[divergence]]
-id        = "distrobox-1.8.2.5-fork"
-kind      = "fork"
-component = "distrobox"
-pinned_version = "1.8.2.5"
-editions  = ["pengyos-server", "pengyos-server-nvidia", "pengyos-desktop",
-             "pengyos-desktop-nvidia"]
-carried_since = "2026-09-28"
-recipe        = "buildroot-external/package/distrobox"
-
-# Authored recipe. On a host with a read-only root (every installed PengyOS: the A/B
-# slots are read-only ext4), distrobox-create mounted each read-only top-level
-# directory with "ro:rslave", which podman rejects ("incorrect volume format") because
-# volume options are comma-separated, so `distrobox create` failed. 0001 writes
-# "ro,rslave". A behaviour fix, so a fork.
-#
-# Upstream main is a Go rewrite (2.0.0, at rc.4 on 2026-10-27) whose
-# pkg/containermanager already returns ":ro,rslave". The shell 1.8 line has no fix.
-upstream_fixes = []
-cost = "a one-line patch; the 2.0 bump is a rewrite and needs its own boot test"
-expiry = "distrobox 2.0.0 is released and the recipe moves to it (pkg/containermanager returns \":ro,rslave\"): delete 0001"
-observe_source = "pkg-stats"
-release_monitoring_id = 242098
-upstream_status = "fixed-upstream-unreleased"
 
 [[divergence]]
 id        = "xdg-utils-1.2.1-fork"

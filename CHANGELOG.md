@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: distrobox works on a read-only root without our patch (2026-11-24)
+- `distrobox create` failed on every installed image ("incorrect volume format"):
+  with a read-only top-level directory, `distrobox-create` passed `ro:rslave` as one
+  volume option, and podman wants them comma-separated. The recipe carried
+  `distrobox/0001-distrobox-create-fix-read-only-volume-option.patch` for it, on the
+  reading that the shell 1.8 line would never get the fix.
+- 1.8.2.6 has it upstream: `rslave`/`rorslave` are `:rslave` and `:ro,rslave`, and the
+  read-only branch uses `rorslave`. The patch is retired with the bump, and the fork
+  entry leaves `divergence.toml` (9 to 8 of the 10-fork budget).
+- The 2026-11-24 act lane found this the hard way: the obsolete patch stopped applying,
+  pre-flight dropped the batch only change, and nothing was published that night.
+
 ### Added: desktop icons can be dragged anywhere on the grid (2026-11-23)
 - The COSMIC desktop laid icons out down each column in sort order, with no
   setting to move one. Dragging icons now snaps them to the grid cell under the
