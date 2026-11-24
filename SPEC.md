@@ -102,7 +102,8 @@ Chosen once, inherited everywhere.
 > **Licenses.** Freedom-first (README Principle 1): permissive preferred, weak copyleft
 > fine when dynamically linked, strong copyleft fine for standalone programs. The GPL
 > and LGPL components above are such programs or dynamically linked libraries, as are
-> the ones the editions add: QEMU (GPL-2.0, Server/Desktop), fwupd and GnuTLS (LGPL-2.1+;
+> the ones the editions add: acl (LGPL-2.1+ libacl, GPL-2.0+ getfacl/setfacl; every
+> edition, for systemd's per-user ACLs on cores and journals), QEMU (GPL-2.0, Server/Desktop), fwupd and GnuTLS (LGPL-2.1+;
 > Server/Desktop), libqalculate/`qalc`
 > (GPL-2.0+), libnotify and PulseAudio's client library and `pactl` (LGPL-2.1+; no
 > PulseAudio daemon), cosmic-osk (GPL-3.0), RealtimeKit (GPL-3.0+ daemon, MIT client;
@@ -179,7 +180,7 @@ Boots a modern x86_64 machine to a networked, SSH-managed console.
   coreutils and uutils findutils (Rust), util-linux, kmod, iproute2, procps-ng, bash, Python 3, nftables,
   chrony, OpenSSH (key-only by default). The text/search tools come from the projects that define
   the behaviour: find/xargs (uutils findutils), grep, sed, gawk, GNU time, which,
-  diffutils, patch, gzip, Info-ZIP unzip, tar, tree, lsof, less, attr, psmisc, Vim,
+  diffutils, patch, gzip, Info-ZIP unzip, tar, tree, lsof, less, attr, acl (getfacl/setfacl), psmisc, Vim,
   curl and GNU wget, shadow (login, passwd, useradd), iputils, net-tools, traceroute,
   pciutils, usbutils, binutils (no linker). There is no BusyBox (since 26.11.0).
   `/bin/sh` is bash.

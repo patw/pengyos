@@ -17,6 +17,18 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: Server owners can read their own crash dumps (2026-11-24)
+- On every Server image a crashing user service's core was stored as `root:root 0640`
+  with no ACL, so `coredumpctl info/debug` said "inaccessible" to the user who owned
+  it and only the short journal stack survived. Found on behoserver, where the LoA
+  worldserver's core (and a keeper that copies cores out) worked on behotv but not there.
+- systemd is built with ACL support only when `BR2_PACKAGE_ACL` is set. Nothing asked for
+  it: the Desktop editions had it only because ddcutil selects it, so Core and Server
+  systemd was `-ACL` and systemd-coredump could not grant `user:<uid>:r`. The same gap
+  left per-user journal files without their usual ACL.
+- `BR2_PACKAGE_ACL=y` is now in the Core layer (libacl, getfacl/setfacl). `configure`
+  sees systemd's new dependency and rebuilds just that package; no clean rebuild.
+
 ### Fixed: distrobox works on a read-only root without our patch (2026-11-24)
 - `distrobox create` failed on every installed image ("incorrect volume format"):
   with a read-only top-level directory, `distrobox-create` passed `ro:rslave` as one
