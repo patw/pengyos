@@ -17,6 +17,22 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: `provision-build-host.sh` installs rust and uv where the build can see them (2026-11-25)
+- The script followed its own header ("needs sudo for apt-get") and put rustup in the
+  invoking user's `$HOME` — `/root` when run as `sudo bash scripts/provision-build-host.sh`.
+  Nothing on a build host looks there: `pengyos-box` starts the nightly with
+  `env -i HOME=<user> PATH=$HOME/.local/bin:$HOME/.cargo/bin:…`, and `build-cosmic.sh`
+  prepends `~/.cargo/bin` itself. On behoserver's first nightly fire (2026-11-24) the repo
+  gate's `cargo test`s and the nightly's `pkg-stats` both reported "cargo: not found" with a
+  perfectly good toolchain sitting in `/root/.cargo` — and the nightly still wrote a plan,
+  an empty one, instead of failing, so the act lane looked healthy and did nothing.
+- The per-user tools now go into the **invoking user's** home (`$SUDO_USER`'s when the
+  script is run under sudo), and the script refuses with an explanation instead of
+  installing into `/root`. `PENGYOS_BUILD_HOME` overrides the target.
+- It also installs **uv** now (any edition, not just `--desktop`): `pkg-stats` is run as
+  `uv run --with aiohttp --with setuptools --with ijson …`, so a host without uv records 0
+  packages, goes red on the gate and plans nothing.
+
 ### Fixed: Server owners can read their own crash dumps (2026-11-24)
 - On every Server image a crashing user service's core was stored as `root:root 0640`
   with no ACL, so `coredumpctl info/debug` said "inaccessible" to the user who owned
