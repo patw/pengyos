@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-DISTROBOX_VERSION = 1.8.2.5
+DISTROBOX_VERSION = 1.8.2.6
 DISTROBOX_SITE = $(call github,89luca89,distrobox,$(DISTROBOX_VERSION))
 DISTROBOX_LICENSE = GPL-3.0
 DISTROBOX_LICENSE_FILES = COPYING.md
