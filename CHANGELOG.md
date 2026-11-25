@@ -40,6 +40,10 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
   entry leaves `divergence.toml` (9 to 8 of the 10-fork budget).
 - The 2026-11-24 act lane found this the hard way: the obsolete patch stopped applying,
   pre-flight dropped the batch's only change, and nothing was published that night.
+- The patch was then retired on main, but the bump itself was in that dropped batch, so
+  main built 1.8.2.5 with neither fix and 26.11.28 (Desktop, testing) shipped a broken
+  `distrobox create`. The recipe is now 1.8.2.6 (2026-11-25; tarball hash checked
+  against a fresh GitHub download). Retire a patch in the same change as the bump.
 
 ### Added: desktop icons can be dragged anywhere on the grid (2026-11-23)
 - The COSMIC desktop laid icons out down each column in sort order, with no
