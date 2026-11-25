@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-FLATPAK_VERSION = 1.18.4
+FLATPAK_VERSION = 1.18.6
 FLATPAK_SOURCE = flatpak-$(FLATPAK_VERSION).tar.xz
 FLATPAK_SITE = https://github.com/flatpak/flatpak/releases/download/$(FLATPAK_VERSION)
 FLATPAK_LICENSE = LGPL-2.1+
