@@ -686,6 +686,41 @@ BR2_PACKAGE_KSMBD_TOOLS=y
 #   libraries live under; no X server is built.
 BR2_PACKAGE_XORG7=y
 BR2_PENGYOS_MANYLINUX_LIBS=y
+# - Moving apps off an Ubuntu host (2026-11-26) found general tools that sat in
+#   desktop.config only because a Desktop feature needed them first (moved here;
+#   the Desktop inherits them), and one that no layer had.
+#   bubblewrap (`bwrap`): the unprivileged namespace sandbox. Flatpak was its
+#   first user, but headless code sandboxes with it too: an agent app's code
+#   executor died with "bwrap: not found" after its move to behoserver.
+#   Unprivileged user namespaces are on in every edition (core
+#   kernel-required.txt), so the recipe's plain, non-setuid install is enough.
+BR2_PACKAGE_BUBBLEWRAP=y
+#   socat: the socket relay. Claude Code's Linux sandbox needs it beside bwrap,
+#   and ops scripts reach for it (relaying a unix socket, poking a port).
+BR2_PACKAGE_SOCAT=y
+#   lm-sensors: `sensors` for temperatures, fan speeds and voltages from the
+#   hwmon drivers the kernel already has (Super-I/O, ASUS, k10temp, coretemp).
+#   pengyos-hwmon and pengyos-fans read sysfs, but the plain CLI that scripts,
+#   alerts and agents call was Desktop-only.
+BR2_PACKAGE_LM_SENSORS=y
+#   FFmpeg (`ffmpeg`, `ffprobe`): host apps cut video thumbnails and probe
+#   media with it (pengyshare's poster frames failed without a word on
+#   behoserver). The media stack (US-SRV-9) runs in containers with its own.
+#   ffmpeg-pengyos, not ffmpeg: the fork is what ships. The stock symbol is
+#   switched off explicitly so a stray `select` cannot bring 6.1.5 back beside
+#   it. divergence.toml -> ffmpeg-9.0.2-fork. Software codecs only (no VA-API
+#   driver on the Server): dav1d for AV1, which FFmpeg cannot decode alone;
+#   libvpx and Opus to write WebM. H.264, HEVC and VP9 decode natively. The
+#   Desktop adds Theora, Vorbis and VA-API to the same build.
+BR2_PACKAGE_FFMPEG=n
+BR2_PACKAGE_FFMPEG_PENGYOS=y
+BR2_PACKAGE_FFMPEG_PENGYOS_GPL=y
+BR2_PACKAGE_FFMPEG_PENGYOS_FFMPEG=y
+BR2_PACKAGE_FFMPEG_PENGYOS_FFPROBE=y
+BR2_PACKAGE_FFMPEG_PENGYOS_SWSCALE=y
+BR2_PACKAGE_DAV1D=y
+BR2_PACKAGE_LIBVPX=y
+BR2_PACKAGE_OPUS=y
 
 # --- The installer + the partition & state layout (docs/state-layout.md) -------
 # Server and Desktop install the same way: the USB stick carries the image as a

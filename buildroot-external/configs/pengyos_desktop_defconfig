@@ -686,6 +686,41 @@ BR2_PACKAGE_KSMBD_TOOLS=y
 #   libraries live under; no X server is built.
 # BR2_PACKAGE_XORG7: set by the desktop layer
 BR2_PENGYOS_MANYLINUX_LIBS=y
+# - Moving apps off an Ubuntu host (2026-11-26) found general tools that sat in
+#   desktop.config only because a Desktop feature needed them first (moved here;
+#   the Desktop inherits them), and one that no layer had.
+#   bubblewrap (`bwrap`): the unprivileged namespace sandbox. Flatpak was its
+#   first user, but headless code sandboxes with it too: an agent app's code
+#   executor died with "bwrap: not found" after its move to behoserver.
+#   Unprivileged user namespaces are on in every edition (core
+#   kernel-required.txt), so the recipe's plain, non-setuid install is enough.
+BR2_PACKAGE_BUBBLEWRAP=y
+#   socat: the socket relay. Claude Code's Linux sandbox needs it beside bwrap,
+#   and ops scripts reach for it (relaying a unix socket, poking a port).
+BR2_PACKAGE_SOCAT=y
+#   lm-sensors: `sensors` for temperatures, fan speeds and voltages from the
+#   hwmon drivers the kernel already has (Super-I/O, ASUS, k10temp, coretemp).
+#   pengyos-hwmon and pengyos-fans read sysfs, but the plain CLI that scripts,
+#   alerts and agents call was Desktop-only.
+BR2_PACKAGE_LM_SENSORS=y
+#   FFmpeg (`ffmpeg`, `ffprobe`): host apps cut video thumbnails and probe
+#   media with it (pengyshare's poster frames failed without a word on
+#   behoserver). The media stack (US-SRV-9) runs in containers with its own.
+#   ffmpeg-pengyos, not ffmpeg: the fork is what ships. The stock symbol is
+#   switched off explicitly so a stray `select` cannot bring 6.1.5 back beside
+#   it. divergence.toml -> ffmpeg-9.0.2-fork. Software codecs only (no VA-API
+#   driver on the Server): dav1d for AV1, which FFmpeg cannot decode alone;
+#   libvpx and Opus to write WebM. H.264, HEVC and VP9 decode natively. The
+#   Desktop adds Theora, Vorbis and VA-API to the same build.
+BR2_PACKAGE_FFMPEG=n
+BR2_PACKAGE_FFMPEG_PENGYOS=y
+BR2_PACKAGE_FFMPEG_PENGYOS_GPL=y
+BR2_PACKAGE_FFMPEG_PENGYOS_FFMPEG=y
+BR2_PACKAGE_FFMPEG_PENGYOS_FFPROBE=y
+BR2_PACKAGE_FFMPEG_PENGYOS_SWSCALE=y
+BR2_PACKAGE_DAV1D=y
+BR2_PACKAGE_LIBVPX=y
+BR2_PACKAGE_OPUS=y
 
 # --- The installer + the partition & state layout (docs/state-layout.md) -------
 # Server and Desktop install the same way: the USB stick carries the image as a
@@ -804,12 +839,12 @@ BR2_PACKAGE_DESKTOP_FILE_UTILS_TARGET=y
 #   error: Failed to sync with dbus proxy
 # The app-lane's whole point is the sandbox, so build both into the image
 # (both are stock Buildroot 2026.08 meson recipes, same class as flatpak).
-# bubblewrap installs /usr/bin/bwrap setuid (1755 root:root) so it works even
-# where unprivileged user namespaces are off; xdg-dbus-proxy is the filtered
-# D-Bus proxy the sandbox talks through. Verified end-to-end on the flashed
-# Desktop image: with both on PATH, `flatpak run --command=sh … -c` reaches
-# SANDBOX_OK as the desktop user.
-BR2_PACKAGE_BUBBLEWRAP=y
+# bubblewrap is the Server's since 2026-11-26 (server.config; headless code
+# sandboxes with it too). The recipe installs /usr/bin/bwrap plain, not setuid:
+# it relies on unprivileged user namespaces, which every edition's kernel has.
+# xdg-dbus-proxy is the filtered D-Bus proxy the sandbox talks through.
+# Verified end-to-end on the flashed Desktop image: with both on PATH,
+# `flatpak run --command=sh … -c` reaches SANDBOX_OK as the desktop user.
 BR2_PACKAGE_XDG_DBUS_PROXY=y
 # hicolor-icon-theme: the freedesktop fallback theme's index.theme with a
 # section per directory. Icon lookup ignores any directory without one, so
@@ -1098,20 +1133,19 @@ BR2_PACKAGE_PIPEWIRE=y
 BR2_PACKAGE_WIREPLUMBER=y
 # PipeWire's Bluetooth audio (the bluez5 SPA plugin) needs SBC — without it
 # WirePlumber logged "PipeWire's BlueZ SPA plugin is missing" and headphones
-# could never play. Opus = a better Bluetooth codec; V4L2 = webcams via PipeWire.
+# could never play. Opus = a better Bluetooth codec (server.config, for FFmpeg);
+# V4L2 = webcams via PipeWire.
 BR2_PACKAGE_SBC=y
-BR2_PACKAGE_OPUS=y
 BR2_PACKAGE_PIPEWIRE_V4L2=y
 # UPower: batteries, UPS and power state for the panel's battery applet and
 # Settings → Power. Without it the applet could not tell there is no battery and
-# showed "0%" on the (battery-less) N100. lm-sensors: `sensors` for temperatures.
+# showed "0%" on the (battery-less) N100. (lm-sensors moved to server.config.)
 # upower-pengyos, not upower: the fork is what ships (stock 0.99.19 stops updating
 # the battery after suspend). The stock symbol is off, and thermald below is the
 # fork too, because stock thermald selects stock upower.
 # divergence.toml -> upower-1.91.5-fork.
 BR2_PACKAGE_UPOWER=n
 BR2_PACKAGE_UPOWER_PENGYOS=y
-BR2_PACKAGE_LM_SENSORS=y
 BR2_PACKAGE_ALSA_LIB=y
 # ALSA UCM configuration (alsa-ucm-conf, a PengyOS data recipe — Buildroot has
 # none). WirePlumber's ACP path reads /usr/share/alsa/ucm2 to build a card's
@@ -1218,22 +1252,13 @@ BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_WEBP=y
 # fork. divergence.toml -> ffmpeg-9.0.2-fork.
 BR2_PACKAGE_GST1_LIBAV=n
 BR2_PACKAGE_GST1_LIBAV_PENGYOS=y
-BR2_PACKAGE_DAV1D=y
-BR2_PACKAGE_LIBVPX=y
 BR2_PACKAGE_MPG123=y
 BR2_PACKAGE_FLAC=y
 BR2_PACKAGE_LIBVORBIS=y
 BR2_PACKAGE_LIBTHEORA=y
 BR2_PACKAGE_LIBOGG=y
-# ffmpeg-pengyos, not ffmpeg: the fork is what ships. The stock symbol is
-# switched off explicitly so a stray `select` cannot bring 6.1.5 back beside it.
-# divergence.toml -> ffmpeg-9.0.2-fork.
-BR2_PACKAGE_FFMPEG=n
-BR2_PACKAGE_FFMPEG_PENGYOS=y
-BR2_PACKAGE_FFMPEG_PENGYOS_GPL=y
-BR2_PACKAGE_FFMPEG_PENGYOS_FFMPEG=y
-BR2_PACKAGE_FFMPEG_PENGYOS_FFPROBE=y
-BR2_PACKAGE_FFMPEG_PENGYOS_SWSCALE=y
+# FFmpeg itself (ffmpeg-pengyos) and dav1d/libvpx are the Server's since
+# 2026-11-26 (server.config); the libraries above add Theora and Vorbis to it.
 # PipeWire's GStreamer elements (pipewiresrc: cameras and screen capture into
 # GStreamer apps).
 BR2_PACKAGE_PIPEWIRE_GSTREAMER=y
