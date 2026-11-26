@@ -17,6 +17,13 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Fixed: a "NaN%" keyboard backlight slider on machines without one (2026-11-26)
+- The power applet showed a keyboard-brightness slider reading "NaN%" on every machine
+  without a keyboard backlight (behopc and most of the fleet): UPower exports its
+  keyboard-backlight object everywhere and reports a maximum of 0, and the applet divided
+  by it. A maximum of 0 now means no backlight, so the slider is gone
+  (`cosmic-patches/cosmic-applets/0002-…`). Machines with a real backlight are unchanged.
+
 ### Added: systemd-oomd on the Server (2026-11-26)
 - A Server had no out-of-memory handling of its own: a runaway job ground the box
   through zram until the kernel's OOM killer took one process, often not the culprit.

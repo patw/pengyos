@@ -1,0 +1,36 @@
+From: Pat Wendorf <dungeons@gmail.com>
+Subject: [PATCH] battery: no keyboard backlight slider without a keyboard backlight
+
+UPower (1.91.5) exports /org/freedesktop/UPower/KbdBacklight on every
+machine and answers GetMaxBrightness = 0 when there is no keyboard
+backlight LED. The applet took any answer as a backlight, so every
+desktop and most laptops showed a keyboard slider reading "NaN%"
+(100 * 0 / 0), and a machine with no adjustable screen either would
+have shown a keyboard icon in the panel. Treat a maximum of 0 as no
+backlight and ignore brightness updates until a real maximum arrives.
+
+Upstream: unfixed on master as of 2026-11-26
+---
+--- a/cosmic-applet-battery/src/app.rs
++++ b/cosmic-applet-battery/src/app.rs
+@@ -431,10 +431,18 @@
+                     self.kbd_sender = Some(tx);
+                 }
+                 KeyboardBacklightUpdate::MaxBrightness(max_brightness) => {
+-                    self.max_kbd_brightness = Some(max_brightness);
++                    // UPower exports its KbdBacklight object on every machine and
++                    // answers 0 when there is no keyboard backlight. Treat that as
++                    // none: no slider (it read "NaN%", 0/0) and no keyboard icon.
++                    if max_brightness > 0 {
++                        self.max_kbd_brightness = Some(max_brightness);
++                    } else {
++                        self.max_kbd_brightness = None;
++                        self.kbd_brightness = None;
++                    }
+                 }
+                 KeyboardBacklightUpdate::Brightness(brightness) => {
+-                    if !self.dragging_kbd_brightness {
++                    if !self.dragging_kbd_brightness && self.max_kbd_brightness.is_some() {
+                         self.kbd_brightness = Some(brightness);
+                     }
+                 }
