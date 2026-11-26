@@ -17,6 +17,21 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: bubblewrap, socat and lm-sensors on the Server (2026-11-26)
+- Moving apps from an Ubuntu host to behoserver broke one: its code executor runs
+  everything under `bwrap`, which the Server did not have, and the read-only root left
+  nowhere to install it (the stopgap was an Ubuntu binary in `~/.local/bin`). bubblewrap
+  was in `desktop.config` only because Flatpak needed it first; headless code sandboxes
+  with it too. It moves to `server.config` (the Desktop inherits it), installed plain,
+  not setuid: every edition's kernel has unprivileged user namespaces.
+- **socat** joins it (no layer had it): Claude Code's Linux sandbox needs it beside
+  bwrap, and ops scripts reach for it.
+- **lm-sensors** moves from the Desktop too: the Server had the hwmon drivers but no
+  `sensors`, so temperatures and fan speeds could not be read from a script or an SSH
+  session without going through `pengyos-hwmon`.
+- The Desktop layer's comment claimed bwrap was installed setuid (1755); the 2026.08
+  recipe sets no permissions and the built `/usr/bin/bwrap` is 0755. Corrected.
+
 ### Fixed: `provision-build-host.sh` installs rust and uv where the build can see them (2026-11-25)
 - The script followed its own header ("needs sudo for apt-get") and put rustup in the
   invoking user's `$HOME` — `/root` when run as `sudo bash scripts/provision-build-host.sh`.
