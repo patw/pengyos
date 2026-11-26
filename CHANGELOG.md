@@ -29,6 +29,9 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 - **lm-sensors** moves from the Desktop too: the Server had the hwmon drivers but no
   `sensors`, so temperatures and fan speeds could not be read from a script or an SSH
   session without going through `pengyos-hwmon`.
+- **FFmpeg** (`ffmpeg`, `ffprobe`) moves from the Desktop too, with dav1d, libvpx and
+  Opus: a host app on behoserver (pengyshare) cuts video poster frames with it and
+  failed without a word. Software codecs only; the Desktop's build is unchanged.
 - The Desktop layer's comment claimed bwrap was installed setuid (1755); the 2026.08
   recipe sets no permissions and the built `/usr/bin/bwrap` is 0755. Corrected.
 

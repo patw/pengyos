@@ -703,6 +703,24 @@ BR2_PACKAGE_SOCAT=y
 #   pengyos-hwmon and pengyos-fans read sysfs, but the plain CLI that scripts,
 #   alerts and agents call was Desktop-only.
 BR2_PACKAGE_LM_SENSORS=y
+#   FFmpeg (`ffmpeg`, `ffprobe`): host apps cut video thumbnails and probe
+#   media with it (pengyshare's poster frames failed without a word on
+#   behoserver). The media stack (US-SRV-9) runs in containers with its own.
+#   ffmpeg-pengyos, not ffmpeg: the fork is what ships. The stock symbol is
+#   switched off explicitly so a stray `select` cannot bring 6.1.5 back beside
+#   it. divergence.toml -> ffmpeg-9.0.2-fork. Software codecs only (no VA-API
+#   driver on the Server): dav1d for AV1, which FFmpeg cannot decode alone;
+#   libvpx and Opus to write WebM. H.264, HEVC and VP9 decode natively. The
+#   Desktop adds Theora, Vorbis and VA-API to the same build.
+BR2_PACKAGE_FFMPEG=n
+BR2_PACKAGE_FFMPEG_PENGYOS=y
+BR2_PACKAGE_FFMPEG_PENGYOS_GPL=y
+BR2_PACKAGE_FFMPEG_PENGYOS_FFMPEG=y
+BR2_PACKAGE_FFMPEG_PENGYOS_FFPROBE=y
+BR2_PACKAGE_FFMPEG_PENGYOS_SWSCALE=y
+BR2_PACKAGE_DAV1D=y
+BR2_PACKAGE_LIBVPX=y
+BR2_PACKAGE_OPUS=y
 
 # --- The installer + the partition & state layout (docs/state-layout.md) -------
 # Server and Desktop install the same way: the USB stick carries the image as a
