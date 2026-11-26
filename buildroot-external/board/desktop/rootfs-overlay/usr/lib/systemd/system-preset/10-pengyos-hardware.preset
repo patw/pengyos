@@ -4,6 +4,11 @@
 enable thermald.service
 enable power-profiles-daemon.service
 enable smartd.service
+# systemd-oomd comes with the Server layer; the Desktop keeps earlyoom instead
+# (desktop.config: oomd kills whole cgroups, and the COSMIC session is one).
+# Read before 10-pengyos-server.preset, so this wins.
+disable systemd-oomd.service
+disable systemd-oomd.socket
 # NetworkManager's Wi-Fi backend. The Server preset disables it (its Wi-Fi is
 # per-interface units); this file is read first, so the Desktop keeps it.
 enable wpa_supplicant.service

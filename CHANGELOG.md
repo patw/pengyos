@@ -17,6 +17,17 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: systemd-oomd on the Server (2026-11-26)
+- A Server had no out-of-memory handling of its own: a runaway job ground the box
+  through zram until the kernel's OOM killer took one process, often not the culprit.
+  systemd-oomd now kills the whole cgroup (one service or container) using the most
+  swap once swap is 90% full.
+- Swap only, no memory-pressure rule: a build host (behoserver) runs long compiles
+  under heavy pressure, and a pressure rule would kill them. sshd and `pengy-web@`
+  are never picked, so the box stays reachable.
+- The Desktop presets it off and keeps earlyoom: oomd kills whole cgroups, and the
+  COSMIC session is one.
+
 ### Added: bubblewrap, socat and lm-sensors on the Server (2026-11-26)
 - Moving apps from an Ubuntu host to behoserver broke one: its code executor runs
   everything under `bwrap`, which the Server did not have, and the read-only root left
