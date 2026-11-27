@@ -30,17 +30,31 @@ pub fn run(argv: &[String]) -> Result<String, String> {
     }
 }
 
-/// Start a program and leave it running (a terminal window).
+/// Start a program and leave it running (a terminal window). A thread waits
+/// for it, so it does not linger as a zombie once it is closed.
 pub fn spawn(argv: &[String]) -> Result<(), String> {
     let (cmd, args) = argv.split_first().ok_or("nothing to run")?;
-    Command::new(cmd)
+    let mut child = Command::new(cmd)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map(|_| ())
-        .map_err(|e| format!("{cmd}: {e}"))
+        .map_err(|e| format!("{cmd}: {e}"))?;
+    std::thread::spawn(move || child.wait());
+    Ok(())
+}
+
+/// Does an SSH server answer at `addr` (host:port)? QEMU's NAT forward accepts
+/// the connection whether or not the guest runs sshd, and ssh then waits
+/// forever for a greeting; this waits three seconds for "SSH-".
+pub fn ssh_answers(addr: &str) -> bool {
+    use std::net::{TcpStream, ToSocketAddrs};
+    let Some(sa) = addr.to_socket_addrs().ok().and_then(|mut a| a.next()) else { return false };
+    let Ok(mut s) = TcpStream::connect_timeout(&sa, Duration::from_secs(2)) else { return false };
+    s.set_read_timeout(Some(Duration::from_secs(3))).ok();
+    let mut b = [0u8; 4];
+    s.read_exact(&mut b).is_ok() && &b == b"SSH-"
 }
 
 pub fn list_vms() -> Result<Vec<crate::Vm>, String> {
@@ -222,6 +236,24 @@ mod tests {
         assert_eq!(&tail[12..], &[5, 1, 0, 1, 0, 0]);
         assert!(matches!(erx.recv_timeout(Duration::from_secs(2)), Ok(ScreenEvent::Closed(None)) | Ok(ScreenEvent::Frame { .. })));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ssh_answers_only_with_a_greeting() {
+        use std::net::TcpListener;
+        let quiet = TcpListener::bind("127.0.0.1:0").unwrap();
+        let qa = quiet.local_addr().unwrap().to_string();
+        let talks = TcpListener::bind("127.0.0.1:0").unwrap();
+        let ta = talks.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            let (mut c, _) = talks.accept().unwrap();
+            c.write_all(b"SSH-2.0-OpenSSH_10\r\n").unwrap();
+            std::thread::sleep(Duration::from_millis(200));
+        });
+        assert!(ssh_answers(&ta));
+        assert!(!ssh_answers(&qa)); // accepts, says nothing: like QEMU's forward with no sshd
+        drop(quiet);
+        assert!(!ssh_answers("127.0.0.1:1"));
     }
 
     #[test]

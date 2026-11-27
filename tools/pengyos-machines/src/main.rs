@@ -1,5 +1,6 @@
-//! `pengyos-machines` — the "Machines" window. `--list [--json]` prints what the
-//! window would show (the VMs and the ISO library) instead, for SSH and tests.
+//! `pengyos-machines` — the "Machines" window; `--screen NAME` opens it on that
+//! VM's screen. `--list [--json]` prints what the window would show (the VMs
+//! and the ISO library) instead, for SSH and tests.
 
 use std::process::ExitCode;
 
@@ -52,7 +53,8 @@ fn main() -> ExitCode {
     #[cfg(feature = "cosmic")]
     {
         let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(1100.0, 760.0));
-        match cosmic::app::run::<pengyos_machines::app::App>(settings, ()) {
+        let screen = args.iter().position(|a| a == "--screen").and_then(|i| args.get(i + 1)).cloned();
+        match cosmic::app::run::<pengyos_machines::app::App>(settings, screen) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("pengyos-machines: {err}");

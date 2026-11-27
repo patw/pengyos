@@ -40,6 +40,9 @@ pub enum Message {
     Done(String, Result<String, String>),
     SnapLabel(String),
     Terminal(Vec<String>),
+    /// Open SSH in a terminal, once the guest answers SSH.
+    Ssh(String),
+    SshChecked(String, bool),
     NewVm,
     NewField(Field, String),
     NewIso(usize),
@@ -57,6 +60,9 @@ pub enum Message {
     CloseDialog,
     OpenScreen(String),
     Screen(u64, ScreenEvent),
+    /// A frame's image is on the GPU: show it (iced 0.14 uploads a new image
+    /// asynchronously, so a handle shown before this draws nothing).
+    FrameReady(u64, cosmic::iced::runtime::image::Allocation),
     ScreenInput(Input),
     ScreenFocus(bool),
     ScreenFit(bool),
@@ -74,6 +80,8 @@ struct Screen {
     id: u64,
     tx: Option<Sender<Input>>,
     image: Option<Handle>,
+    /// Keeps the shown frame's GPU memory alive.
+    allocation: Option<cosmic::iced::runtime::image::Allocation>,
     width: u16,
     height: u16,
     status: String,
@@ -97,6 +105,8 @@ pub struct App {
     creating: Option<String>,
     screen: Option<Screen>,
     screens_opened: u64,
+    /// `--screen NAME`, until the first list arrives.
+    open_on_load: Option<String>,
 }
 
 /// Run a command off the UI thread.
@@ -162,6 +172,7 @@ impl App {
             id,
             tx: None,
             image: None,
+            allocation: None,
             width: 0,
             height: 0,
             status: "Connecting…".into(),
@@ -195,7 +206,8 @@ impl App {
 
 impl cosmic::Application for App {
     type Executor = cosmic::executor::Default;
-    type Flags = ();
+    /// `--screen NAME`: open straight to that VM's screen.
+    type Flags = Option<String>;
     type Message = Message;
     const APP_ID: &'static str = crate::APP_ID;
 
@@ -213,7 +225,7 @@ impl cosmic::Application for App {
         None
     }
 
-    fn init(core: cosmic::Core, _flags: ()) -> (Self, Task<cosmic::Action<Message>>) {
+    fn init(core: cosmic::Core, flags: Option<String>) -> (Self, Task<cosmic::Action<Message>>) {
         let mut app = App {
             core,
             vms: Vec::new(),
@@ -228,7 +240,9 @@ impl cosmic::Application for App {
             creating: None,
             screen: None,
             screens_opened: 0,
+            open_on_load: flags.clone(),
         };
+        app.selected = flags;
         let title = match app.core.main_window_id() {
             Some(id) => app.set_window_title("Machines".into(), id),
             None => Task::none(),
@@ -246,6 +260,13 @@ impl cosmic::Application for App {
                 self.isos = isos;
                 if self.current().is_none() {
                     self.selected = self.vms.first().map(|v| v.name.clone());
+                }
+                if let Some(vm) = self.open_on_load.take() {
+                    if self.vms.iter().any(|v| v.name == vm && v.has_screen()) {
+                        self.selected = Some(vm.clone());
+                        return self.open_screen(vm);
+                    }
+                    self.result = Some((format!("{vm} is not running, so it has no screen to show."), String::new(), true));
                 }
                 // The VM stopped under the screen: say so rather than show a frozen picture.
                 if let Some(s) = &mut self.screen {
@@ -312,6 +333,31 @@ impl cosmic::Application for App {
                 if let Err(e) = backend::spawn(&crate::in_terminal(&argv)) {
                     self.result = Some((e, shell_line(&argv), true));
                 }
+            }
+            Message::Ssh(vm) => {
+                let Some(addr) = self.vms.iter().find(|v| v.name == vm).and_then(|v| v.ssh.clone()) else {
+                    return Task::none();
+                };
+                self.busy = Some((vm.clone(), "Checking that it answers SSH"));
+                return cosmic::task::future(async move {
+                    let ok = off_thread(move || backend::ssh_answers(&addr)).await;
+                    Message::SshChecked(vm, ok)
+                });
+            }
+            Message::SshChecked(vm, ok) => {
+                self.busy = None;
+                let argv = vec![crate::VM.to_string(), "ssh".into(), vm.clone()];
+                if ok {
+                    return self.update(Message::Terminal(argv));
+                }
+                self.result = Some((
+                    format!(
+                        "{vm} does not answer SSH: no SSH server is running in it yet (an installer \
+                         usually has none), or it is still starting. Its screen works without one."
+                    ),
+                    shell_line(&argv),
+                    true,
+                ));
             }
             Message::NewVm => {
                 let mut f = NewVm::default();
@@ -431,15 +477,29 @@ impl cosmic::Application for App {
                         s.status = "Click the screen to type into the VM.".into();
                     }
                     ScreenEvent::Frame { width, height, rgba } => {
+                        if std::env::var_os("PENGYOS_MACHINES_DEBUG").is_some() {
+                            let lit = rgba.chunks_exact(4).filter(|p| p[0] | p[1] | p[2] != 0).count();
+                            eprintln!("frame {width}x{height}, {} bytes, {lit} lit pixels", rgba.len());
+                        }
                         s.width = width;
                         s.height = height;
-                        s.image = Some(Handle::from_rgba(width as u32, height as u32, rgba));
+                        let handle = Handle::from_rgba(width as u32, height as u32, rgba);
+                        return cosmic::iced::runtime::image::allocate(handle).then(move |r| match r {
+                            Ok(a) => cosmic::task::message(Message::FrameReady(id, a)),
+                            Err(_) => Task::none(),
+                        });
                     }
                     ScreenEvent::Bell => {}
                     ScreenEvent::Closed(why) => {
                         s.tx = None;
                         s.status = why.unwrap_or_else(|| "The screen closed (the VM stopped or restarted).".into());
                     }
+                }
+            }
+            Message::FrameReady(id, a) => {
+                if let Some(s) = self.screen.as_mut().filter(|s| s.id == id) {
+                    s.image = Some(a.handle().clone());
+                    s.allocation = Some(a);
                 }
             }
             Message::ScreenInput(input) => {
@@ -688,9 +748,12 @@ impl App {
                     .on_press_maybe(idle.then(|| Message::Ask(v.name.clone(), VmAction::ForceOff)))
                     .into(),
             );
-            if let Some(_ssh) = &v.ssh {
-                let argv = vec![crate::VM.to_string(), "ssh".into(), v.name.clone()];
-                buttons.push(button::standard("SSH in a terminal").on_press(Message::Terminal(argv)).into());
+            if v.ssh.is_some() {
+                buttons.push(
+                    button::standard("SSH in a terminal")
+                        .on_press_maybe(idle.then(|| Message::Ssh(v.name.clone())))
+                        .into(),
+                );
             }
         } else {
             buttons.push(
@@ -727,7 +790,7 @@ impl App {
         }
 
         let mut info = section().title("Settings");
-        info = info.add(item::builder("Processors and memory").control(text::body(format!("{} CPUs, {}", v.cpus, v.memory))));
+        info = info.add(item::builder("Processors and memory").control(text::body(format!("{} CPU{}, {} memory", v.cpus, if v.cpus == 1 { "" } else { "s" }, v.memory))));
         let net = match (v.net.as_str(), v.offline) {
             (_, true) => "Offline (a throwaway run)".to_string(),
             ("bridge", _) => "Bridged: its own address on your LAN".to_string(),
@@ -804,17 +867,32 @@ impl App {
         .spacing(spacing.space_s)
         .align_y(Alignment::Center);
         let view = crate::screen::View {
-            image: s.image.as_ref(),
             width: s.width,
             height: s.height,
             fit: s.fit,
             on_input: Message::ScreenInput,
             on_focus: Message::ScreenFocus,
         };
-        column::with_children([
-            bar.into(),
+        // The picture is iced's image widget (drawing it inside the canvas
+        // flickered: the image was missing from most redraws); the canvas on
+        // top draws nothing and only turns the mouse and keys into VNC input.
+        let fit = if s.fit { cosmic::iced::ContentFit::Contain } else { cosmic::iced::ContentFit::None };
+        let picture: Element<'a, Message> = match &s.image {
+            Some(h) => widget::image(h.clone()).content_fit(fit).width(Length::Fill).height(Length::Fill).into(),
+            None => widget::Space::new().width(Length::Fill).height(Length::Fill).into(),
+        };
+        let screen = cosmic::iced::widget::stack([
+            container(picture)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .class(cosmic::theme::Container::custom(|_| cosmic::iced::widget::container::Style {
+                    background: Some(cosmic::iced::Color::BLACK.into()),
+                    ..Default::default()
+                }))
+                .into(),
             canvas::Canvas::new(view).width(Length::Fill).height(Length::Fill).into(),
-        ])
+        ]);
+        column::with_children([bar.into(), screen.into()])
         .spacing(spacing.space_xs)
         .into()
     }

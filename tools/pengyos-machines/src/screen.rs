@@ -5,13 +5,11 @@
 //! click anywhere else.
 
 use cosmic::iced::widget::canvas::{self, Event};
-use cosmic::iced::{keyboard, mouse, Color, Point, Rectangle, Size};
-use cosmic::iced::widget::image::Handle;
+use cosmic::iced::{keyboard, mouse, Point, Rectangle, Size};
 
 use crate::backend::Input;
 
-pub struct View<'a> {
-    pub image: Option<&'a Handle>,
+pub struct View {
     pub width: u16,
     pub height: u16,
     pub fit: bool,
@@ -60,7 +58,7 @@ fn code_name(k: &keyboard::key::Physical) -> Option<String> {
     }
 }
 
-impl canvas::Program<crate::app::Message, cosmic::Theme, cosmic::Renderer> for View<'_> {
+impl canvas::Program<crate::app::Message, cosmic::Theme, cosmic::Renderer> for View {
     type State = State;
 
     fn update(
@@ -130,13 +128,9 @@ impl canvas::Program<crate::app::Message, cosmic::Theme, cosmic::Renderer> for V
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry<cosmic::Renderer>> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::BLACK);
-        if let Some(h) = self.image {
-            let place = placement(bounds.size(), self.width, self.height, self.fit);
-            frame.draw_image(place, canvas::Image::new(h.clone()));
-        }
-        vec![frame.into_geometry()]
+        // Input only: the picture is the image widget underneath (app.rs).
+        let _ = (renderer, bounds);
+        Vec::new()
     }
 
     fn mouse_interaction(&self, state: &State, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
