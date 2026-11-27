@@ -1,0 +1,10 @@
+config BR2_PACKAGE_NOVNC
+	bool "novnc"
+	help
+	  noVNC's JavaScript VNC client library (core/ and the pako
+	  zlib it imports), installed in /usr/share/novnc. pengy-vmm
+	  serves it to show a VM's screen in the browser, over a
+	  WebSocket that pengy-vmm proxies to the VM's private VNC
+	  socket.
+
+	  https://github.com/novnc/noVNC
