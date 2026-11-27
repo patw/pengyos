@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: Machines, the Desktop's app for VMs, dev boxes and containers (2026-11-27)
+- **Machines** (`pengyos-machines`, System folder) is a window over the tools the
+  Desktop already has. Every result shows the command that ran.
+  - **Virtual machines** (pengyos-vm): start, shut down, force off, SSH (it checks
+    the guest answers first), eject, delete, start at boot, disk snapshots, and New
+    VM from the ISO library or a disk image. The VM's **screen** is built in: a small
+    VNC client of our own on the VM's private socket, with keys sent by position so
+    the guest's keyboard layout applies.
+  - **Dev boxes** (distrobox): Ubuntu, Fedora, Debian, Arch or any image, with its
+    own home folder or the NVIDIA GPU if wanted; open in a terminal, add its apps
+    to the launcher, upgrade, stop, delete.
+  - **Containers** (podman): Quadlet services (start, stop, restart, logs, edit,
+    remove), other containers (start, stop, shell, logs, remove, and **Keep running
+    at boot**, which turns one into a Quadlet service with the same image, ports,
+    folders and environment and puts it back if the service does not start), images,
+    and Run a container (as a service or not).
+
 ### Added: VM snapshots, an ISO library, and a VM's screen in the browser (2026-11-27)
 - **A VM's screen is private.** It was VNC on `127.0.0.1:59xx` with no password, so
   any account on the machine could watch and type into any user's VM. QEMU now serves

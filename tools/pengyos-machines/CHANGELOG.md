@@ -5,9 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] - 2026-11-27
 
 ### Added
+- **Dev boxes** (distrobox) and **Containers** (podman, Quadlet services, images):
+  see spec.md. Keep running at boot rewrites a container as a Quadlet service and
+  rolls back (file removed, container renamed back and restarted) when the service
+  does not start, quoting the service's journal. `keep-at-boot NAME` on the command
+  line does the same. Tested on behobasement: nginx kept its port and environment
+  (not the image's own), and a port clash rolled back cleanly.
+- `--screen NAME`, `--page boxes|containers`.
+- The screen draws through an allocated image (iced 0.14 uploads new images
+  asynchronously, which made it flicker or stay black), and SSH waits for the
+  guest's SSH greeting before opening a terminal.
 - The window, step 2 of spec.md: **virtual machines**. A list of your VMs; for
   each, Start, Shut down, Force off (asks), SSH in a terminal, Eject ISO, Delete
   (asks), start at boot, its settings, and **disk snapshots** (take with a label,

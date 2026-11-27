@@ -65,6 +65,216 @@ pub fn list_isos() -> Result<Vec<crate::Iso>, String> {
     crate::parse_isos(&run(&[crate::VM.into(), "iso".into(), "list".into(), "--json".into()])?)
 }
 
+// ------------------------------------------- dev boxes, containers, services
+
+use crate::containers::{self, Container, Image, QuadletSpec, RunForm, Service};
+
+pub fn home() -> String {
+    std::env::var("HOME").unwrap_or_else(|_| "/".into())
+}
+
+fn sv(parts: &[&str]) -> Vec<String> {
+    parts.iter().map(|p| p.to_string()).collect()
+}
+
+pub fn list_containers() -> Result<Vec<Container>, String> {
+    containers::parse_ps(&run(&sv(&["podman", "ps", "--all", "--format", "json"]))?)
+}
+
+pub fn list_images() -> Result<Vec<Image>, String> {
+    containers::parse_images(&run(&sv(&["podman", "images", "--format", "json"]))?)
+}
+
+/// NVIDIA's container device is set up (Desktop NVIDIA): offer the GPU.
+pub fn has_nvidia() -> bool {
+    std::path::Path::new("/dev/nvidiactl").exists()
+}
+
+/// Is linger on (the user's services run without a login)?
+pub fn lingering() -> bool {
+    let user = std::env::var("USER").unwrap_or_default();
+    std::path::Path::new("/var/lib/systemd/linger").join(user).exists()
+}
+
+/// The unit states, one systemctl call for all of them.
+fn unit_states(user: bool, units: &[String]) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    if units.is_empty() {
+        return out;
+    }
+    let mut a = vec!["systemctl".to_string()];
+    if user {
+        a.push("--user".into());
+    }
+    a.extend(sv(&["show", "--property=Id,ActiveState"]));
+    a.extend(units.iter().cloned());
+    let text = run(&a).unwrap_or_default();
+    let (mut id, mut state) = (String::new(), String::new());
+    for line in text.lines().chain(std::iter::once("")) {
+        if let Some(v) = line.strip_prefix("Id=") {
+            id = v.to_string();
+        } else if let Some(v) = line.strip_prefix("ActiveState=") {
+            state = v.to_string();
+        } else if line.is_empty() && !id.is_empty() {
+            out.insert(std::mem::take(&mut id), std::mem::take(&mut state));
+        }
+    }
+    out
+}
+
+/// Quadlet `.container` services: yours (~/.config/containers/systemd), then the
+/// system's (/etc/containers/systemd, shown read-only).
+pub fn list_services() -> Vec<Service> {
+    let mut out = Vec::new();
+    for (dir, system) in [(containers::quadlet_dir(&home()), false), ("/etc/containers/systemd".to_string(), true)] {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let mut found: Vec<Service> = rd
+            .flatten()
+            .filter_map(|e| {
+                let p = e.path();
+                let name = p.file_name()?.to_str()?.strip_suffix(".container")?.to_string();
+                let text = std::fs::read_to_string(&p).ok()?;
+                Some(containers::parse_quadlet(&name, &p.display().to_string(), &text, system))
+            })
+            .collect();
+        found.sort_by(|a, b| a.name.cmp(&b.name));
+        let units: Vec<String> = found.iter().map(|s| format!("{}.service", s.name)).collect();
+        let states = unit_states(!system, &units);
+        for s in &mut found {
+            s.state = states.get(&format!("{}.service", s.name)).cloned().unwrap_or_else(|| "inactive".into());
+        }
+        out.extend(found);
+    }
+    out
+}
+
+/// Every command run, as lines for the result ("ran: ...").
+pub type Log = Vec<String>;
+
+fn step(log: &mut Log, argv: &[String]) -> Result<String, String> {
+    log.push(crate::shell_line(argv));
+    run(argv)
+}
+
+fn write_quadlet(spec: &QuadletSpec, log: &mut Log) -> Result<std::path::PathBuf, String> {
+    let dir = std::path::PathBuf::from(containers::quadlet_dir(&home()));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join(spec.file_name());
+    if path.exists() {
+        return Err(format!("{} already exists", path.display()));
+    }
+    std::fs::write(&path, spec.render()).map_err(|e| format!("{}: {e}", path.display()))?;
+    log.push(format!("wrote {}", path.display()));
+    Ok(path)
+}
+
+/// Why a service failed to start, from its journal (systemctl itself says little).
+fn why_failed(unit: &str, e: String) -> String {
+    let tail = run(&sv(&["journalctl", "--user", "-u", unit, "-n", "6", "--no-pager", "-o", "cat"])).unwrap_or_default();
+    let lines: Vec<&str> = tail.lines().filter(|l| !l.trim().is_empty()).collect();
+    if lines.is_empty() {
+        e
+    } else {
+        format!("{e}\n{}", lines.join("\n"))
+    }
+}
+
+fn ensure_linger(log: &mut Log) {
+    if !lingering() {
+        let user = std::env::var("USER").unwrap_or_default();
+        let _ = step(log, &sv(&["loginctl", "enable-linger", &user]));
+    }
+}
+
+/// Run a container, as a Quadlet service or a plain `podman run`.
+pub fn run_container(form: &RunForm) -> (Result<String, String>, Log) {
+    let mut log = Log::new();
+    let r = (|| {
+        let spec = form.spec();
+        // Pull first: a service start times out long before a big image is in.
+        step(&mut log, &sv(&["podman", "pull", &spec.image]))?;
+        if !form.service {
+            step(&mut log, &form.run_argv())?;
+            return Ok(format!("{} is running.", spec.name));
+        }
+        let path = write_quadlet(&spec, &mut log)?;
+        step(&mut log, &sv(&["systemctl", "--user", "daemon-reload"]))?;
+        if let Err(e) = step(&mut log, &containers::service_action("start", &spec.unit())) {
+            let e = why_failed(&spec.unit(), e);
+            let _ = std::fs::remove_file(&path);
+            let _ = run(&sv(&["systemctl", "--user", "daemon-reload"]));
+            log.push(format!("removed {} again", path.display()));
+            return Err(e);
+        }
+        ensure_linger(&mut log);
+        Ok(format!("{} is running as a service, and starts with this computer.", spec.name))
+    })();
+    (r, log)
+}
+
+/// Keep running at boot: the container becomes a Quadlet service with the same
+/// image, ports, folders and environment; the original goes once the service runs.
+pub fn keep_at_boot(name: &str) -> (Result<String, String>, Log) {
+    let mut log = Log::new();
+    let r = (|| {
+        let inspect = step(&mut log, &sv(&["podman", "container", "inspect", name]))?;
+        let mut spec = QuadletSpec::from_inspect(&inspect, &[])?;
+        let img = run(&sv(&["podman", "image", "inspect", &spec.image])).unwrap_or_default();
+        spec = QuadletSpec::from_inspect(&inspect, &containers::image_env(&img))?;
+        let was_running = run(&sv(&["podman", "container", "inspect", "--format", "{{.State.Running}}", name]))
+            .map(|o| o.trim() == "true")
+            .unwrap_or(false);
+        step(&mut log, &sv(&["podman", "stop", name]))?;
+        // The service's container takes the same name: the old one is renamed aside.
+        let aside = format!("{name}-before-machines");
+        step(&mut log, &sv(&["podman", "rename", name, &aside]))?;
+        let undo = |log: &mut Log| {
+            let _ = step(log, &sv(&["podman", "rename", &aside, name]));
+            if was_running {
+                let _ = step(log, &sv(&["podman", "start", name]));
+            }
+        };
+        let path = match write_quadlet(&spec, &mut log) {
+            Ok(p) => p,
+            Err(e) => {
+                undo(&mut log);
+                return Err(e);
+            }
+        };
+        let started = step(&mut log, &sv(&["systemctl", "--user", "daemon-reload"]))
+            .and_then(|_| step(&mut log, &containers::service_action("start", &spec.unit())));
+        if let Err(e) = started {
+            let e = why_failed(&spec.unit(), e);
+            let _ = std::fs::remove_file(&path);
+            let _ = run(&sv(&["systemctl", "--user", "daemon-reload"]));
+            log.push(format!("removed {} again", path.display()));
+            undo(&mut log);
+            return Err(format!("The service did not start, so {name} was put back as it was: {e}"));
+        }
+        let _ = step(&mut log, &sv(&["podman", "rm", "--force", &aside]));
+        ensure_linger(&mut log);
+        Ok(format!("{name} is now a service: it starts with this computer. Its file: {}", path.display()))
+    })();
+    (r, log)
+}
+
+/// Stop a service and delete its file (yours only); volumes are kept.
+pub fn remove_service(svc: &Service) -> (Result<String, String>, Log) {
+    let mut log = Log::new();
+    let r = (|| {
+        if svc.system {
+            return Err("a system service: remove it with sudo".into());
+        }
+        let unit = format!("{}.service", svc.name);
+        let _ = step(&mut log, &containers::service_action("stop", &unit));
+        std::fs::remove_file(&svc.path).map_err(|e| format!("{}: {e}", svc.path))?;
+        log.push(format!("deleted {}", svc.path));
+        step(&mut log, &sv(&["systemctl", "--user", "daemon-reload"]))?;
+        Ok(format!("{} is removed. Its data (volumes and folders) is kept.", svc.name))
+    })();
+    (r, log)
+}
+
 // ------------------------------------------------------------- the screen
 
 #[derive(Debug, Clone)]

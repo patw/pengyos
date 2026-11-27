@@ -4,6 +4,7 @@
 //! (feature `cosmic`); `backend` runs the commands.
 
 pub mod backend;
+pub mod containers;
 pub mod keymap;
 pub mod rfb;
 

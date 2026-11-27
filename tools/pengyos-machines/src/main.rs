@@ -1,5 +1,6 @@
 //! `pengyos-machines` — the "Machines" window; `--screen NAME` opens it on that
-//! VM's screen. `--list [--json]` prints what the window would show (the VMs
+//! VM's screen, `--page boxes|containers` on that page. `keep-at-boot CONTAINER`
+//! turns a podman container into a Quadlet service, as the window's button does. `--list [--json]` prints what the window would show (the VMs
 //! and the ISO library) instead, for SSH and tests.
 
 use std::process::ExitCode;
@@ -46,6 +47,26 @@ fn list(json: bool) -> ExitCode {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("keep-at-boot") {
+        let Some(name) = args.get(1) else {
+            eprintln!("usage: pengyos-machines keep-at-boot CONTAINER");
+            return ExitCode::from(2);
+        };
+        let (r, log) = pengyos_machines::backend::keep_at_boot(name);
+        for l in log {
+            eprintln!("  {l}");
+        }
+        return match r {
+            Ok(m) => {
+                println!("{m}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("pengyos-machines: {e}");
+                ExitCode::from(1)
+            }
+        };
+    }
     if args.iter().any(|a| a == "--list") {
         return list(args.iter().any(|a| a == "--json"));
     }
@@ -53,8 +74,9 @@ fn main() -> ExitCode {
     #[cfg(feature = "cosmic")]
     {
         let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(1100.0, 760.0));
-        let screen = args.iter().position(|a| a == "--screen").and_then(|i| args.get(i + 1)).cloned();
-        match cosmic::app::run::<pengyos_machines::app::App>(settings, screen) {
+        let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned();
+        let flags = pengyos_machines::app::Flags { screen: value("--screen"), page: value("--page") };
+        match cosmic::app::run::<pengyos_machines::app::App>(settings, flags) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("pengyos-machines: {err}");

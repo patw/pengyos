@@ -17,7 +17,25 @@ use cosmic::widget::settings::{item, section};
 use cosmic::widget::{self, button, column, container, nav_bar, row, text};
 
 use crate::backend::{self, Input, ScreenEvent};
+
+#[path = "app_pods.rs"]
+mod pods;
+use pods::{PodMsg, Pods};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Page {
+    Vms,
+    Boxes,
+    Containers,
+}
 use crate::{shell_line, Iso, NewVm, Vm, VmAction};
+
+/// What the command line asked for.
+#[derive(Debug, Clone, Default)]
+pub struct Flags {
+    pub screen: Option<String>,
+    pub page: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 pub enum Field {
@@ -32,6 +50,7 @@ pub enum Field {
 #[derive(Debug, Clone)]
 pub enum Message {
     Refresh,
+    Pods(PodMsg),
     Loaded(Result<(Vec<Vm>, Vec<Iso>), String>),
     Select(String),
     /// Ask first (the dialog), then run.
@@ -107,6 +126,9 @@ pub struct App {
     screens_opened: u64,
     /// `--screen NAME`, until the first list arrives.
     open_on_load: Option<String>,
+    nav: nav_bar::Model,
+    page: Page,
+    pods: Pods,
 }
 
 /// Run a command off the UI thread.
@@ -206,8 +228,8 @@ impl App {
 
 impl cosmic::Application for App {
     type Executor = cosmic::executor::Default;
-    /// `--screen NAME`: open straight to that VM's screen.
-    type Flags = Option<String>;
+    /// `--screen NAME`, `--page boxes|containers`.
+    type Flags = Flags;
     type Message = Message;
     const APP_ID: &'static str = crate::APP_ID;
 
@@ -220,12 +242,23 @@ impl cosmic::Application for App {
     }
 
     fn nav_model(&self) -> Option<&nav_bar::Model> {
-        // Dev boxes and containers come next (spec.md, steps 3 and 4); until
-        // then there is one page and no sidebar.
-        None
+        Some(&self.nav)
     }
 
-    fn init(core: cosmic::Core, flags: Option<String>) -> (Self, Task<cosmic::Action<Message>>) {
+    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Message>> {
+        self.nav.activate(id);
+        if let Some(p) = self.nav.data::<Page>(id).copied() {
+            self.page = p;
+            if p != Page::Vms {
+                self.close_screen();
+                return self.update(Message::Pods(PodMsg::Refresh));
+            }
+        }
+        Task::none()
+    }
+
+    fn init(core: cosmic::Core, flags: Flags) -> (Self, Task<cosmic::Action<Message>>) {
+        let Flags { screen: flags, page } = flags;
         let mut app = App {
             core,
             vms: Vec::new(),
@@ -241,18 +274,45 @@ impl cosmic::Application for App {
             screen: None,
             screens_opened: 0,
             open_on_load: flags.clone(),
+            nav: nav_bar::Model::default(),
+            page: Page::Vms,
+            pods: Pods::default(),
         };
+        let page_flag = page.as_deref();
+        for (label, icon, page) in [
+            ("Virtual machines", "computer-symbolic", Page::Vms),
+            ("Dev boxes", "utilities-terminal-symbolic", Page::Boxes),
+            ("Containers", "package-x-generic-symbolic", Page::Containers),
+        ] {
+            let id = app.nav.insert().text(label).icon(widget::icon::from_name(icon)).data(page).id();
+            let wanted = match page_flag {
+                Some("boxes") => Page::Boxes,
+                Some("containers") => Page::Containers,
+                _ => Page::Vms,
+            };
+            if page == wanted {
+                app.nav.activate(id);
+                app.page = page;
+            }
+        }
+        let pods_task = app.pods_init();
         app.selected = flags;
         let title = match app.core.main_window_id() {
             Some(id) => app.set_window_title("Machines".into(), id),
             None => Task::none(),
         };
-        (app, Task::batch([title, load()]))
+        (app, Task::batch([title, load(), pods_task]))
     }
 
     fn update(&mut self, msg: Message) -> Task<cosmic::Action<Message>> {
         match msg {
-            Message::Refresh => return load(),
+            Message::Refresh => {
+                return match self.page {
+                    Page::Vms => load(),
+                    _ => self.update_pods(PodMsg::Refresh),
+                };
+            }
+            Message::Pods(m) => return self.update_pods(m),
             Message::Loaded(Ok((vms, isos))) => {
                 self.load_error = None;
                 self.vms = vms;
@@ -466,7 +526,10 @@ impl cosmic::Application for App {
                 });
                 return load();
             }
-            Message::CloseDialog => self.dialog = None,
+            Message::CloseDialog => {
+                self.dialog = None;
+                self.pods.dialog = None;
+            }
             Message::OpenScreen(vm) => return self.open_screen(vm),
             Message::Screen(id, ev) => {
                 let Some(s) = self.screen.as_mut().filter(|s| s.id == id) else { return Task::none() };
@@ -542,6 +605,11 @@ impl cosmic::Application for App {
 
     fn view(&self) -> Element<'_, Message> {
         let spacing = cosmic::theme::spacing();
+        match self.page {
+            Page::Boxes => return container(self.view_boxes()).padding(spacing.space_s).into(),
+            Page::Containers => return container(self.view_containers()).padding(spacing.space_s).into(),
+            Page::Vms => {}
+        }
         let body: Element<'_, Message> = match (&self.screen, self.current()) {
             (Some(s), Some(v)) if s.vm == v.name => self.view_screen(s),
             (_, Some(v)) => widget::scrollable(self.view_vm(v)).height(Length::Fill).into(),
@@ -554,6 +622,9 @@ impl cosmic::Application for App {
     }
 
     fn dialog(&self) -> Option<Element<'_, Message>> {
+        if let Some(d) = self.pods_dialog() {
+            return Some(d);
+        }
         let spacing = cosmic::theme::spacing();
         let cancel = button::standard("Cancel").on_press(Message::CloseDialog);
         let d = match self.dialog.as_ref()? {

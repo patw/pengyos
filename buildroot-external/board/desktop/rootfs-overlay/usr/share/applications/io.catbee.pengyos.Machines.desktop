@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Machines
+GenericName=Virtual Machines and Containers
+Comment=Run virtual machines, dev boxes and containers
+Exec=pengyos-machines
+Icon=gnome-boxes
+Terminal=false
+Categories=System;Emulator;
+Keywords=vm;virtual;machine;qemu;kvm;iso;snapshot;container;podman;docker;distrobox;toolbox;box;quadlet;service;
+StartupNotify=true
