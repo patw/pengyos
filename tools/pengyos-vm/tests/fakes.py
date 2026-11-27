@@ -73,7 +73,29 @@ if NAME == "qemu-img":
     elif verb == "resize":
         Path(ARGS[-2]).write_text(json.dumps({"virtual-size": parse(ARGS[-1])}))
     elif verb == "info":
-        print(json.dumps({"virtual-size": size_of(ARGS[-1])}))
+        info = {"virtual-size": size_of(ARGS[-1])}
+        try:
+            snaps = json.loads(Path(ARGS[-1]).read_text()).get("snapshots")
+        except (ValueError, UnicodeDecodeError, AttributeError):
+            snaps = None
+        if snaps:
+            info["snapshots"] = snaps
+        print(json.dumps(info))
+    elif verb == "snapshot":  # snapshot -c|-a|-d NAME FILE
+        flag, name, path = ARGS[1], ARGS[2], Path(ARGS[3])
+        disk = json.loads(path.read_text())
+        snaps = disk.setdefault("snapshots", [])
+        names = [sn["name"] for sn in snaps]
+        if flag == "-c":
+            snaps.append({"name": name, "date-sec": 1764250000 + len(snaps), "vm-state-size": 0})
+        elif name not in names:
+            print(f"qemu-img: Could not find snapshot '{name}'", file=sys.stderr)
+            sys.exit(1)
+        elif flag == "-a":
+            disk["reverted-to"] = name
+        elif flag == "-d":
+            disk["snapshots"] = [sn for sn in snaps if sn["name"] != name]
+        path.write_text(json.dumps(disk))
     sys.exit(0)
 
 if NAME == "ip" and ARGS[:3] == ["-j", "-4", "neigh"]:

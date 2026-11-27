@@ -19,6 +19,10 @@ pengyos-vm vnc web                  # its screen: a private VNC socket, and the 
 pengyos-vm log web                  # what it wrote to its serial console
 pengyos-vm stop web [--force]       # ACPI power button (or pull the plug)
 pengyos-vm autostart web on         # start at boot (turns on linger, see below)
+pengyos-vm snapshot web create before upgrade   # disk snapshot s1 (running or not)
+pengyos-vm snapshot web list        # SNAP TAKEN WHILE LABEL
+pengyos-vm snapshot web revert s1   # back to it (asks; a running VM restarts)
+pengyos-vm snapshot web delete s1
 pengyos-vm delete web --yes
 ```
 
@@ -70,6 +74,15 @@ and needs your token (`~/.config/pengy-vmm/token`, 0600), because other
 accounts on the machine can reach that port too; changes need it in a header
 as well, so another site cannot post a form at it. From another machine:
 `ssh -L 5100:127.0.0.1:5100 you@host`, then open the `pengy-vmm url` address.
+
+## Snapshots
+
+A snapshot saves the VM's disk, not its memory: take one before trying something,
+and roll back if it goes wrong. Taken while the VM runs, it is the disk as a power
+cut would leave it (journaling filesystems recover on boot); shut the VM down
+first for a clean one. `revert` throws away every change to the disk since the
+snapshot, and the UEFI boot entries with it. Snapshots live inside `disk.qcow2`,
+which grows by whatever changed since each one; `delete` frees it.
 
 ## Networking
 

@@ -18,7 +18,9 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -744,3 +746,129 @@ def test_vnc_tells_how_to_reach_the_socket(box):
     sock = box.home / "vms" / "deb" / "vnc.sock"
     assert f"ssh -N -L 5901:{sock} " in out
     assert "vnc://localhost:5901" in out
+
+
+# --- snapshots (0.6.0): disk only ---------------------------------------------
+
+class FakeQMP:
+    """A QMP socket for a 'running' VM: greets, accepts every command, records it,
+    and applies the two snapshot commands to the fake qcow2 like QEMU would."""
+
+    def __init__(self, vm_dir: Path, fail: str | None = None):
+        self.calls: list[dict] = []
+        self.dir, self.fail = vm_dir, fail
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.bind(str(vm_dir / "qmp.sock"))
+        self.sock.listen(4)
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self):
+        while True:
+            try:
+                conn, _ = self.sock.accept()
+            except OSError:
+                return
+            f = conn.makefile("rwb", buffering=0)
+            f.write(b'{"QMP": {}}\n')
+            for line in f:
+                msg = json.loads(line)
+                self.calls.append(msg)
+                if msg["execute"] == self.fail:
+                    f.write(b'{"error": {"class": "GenericError", "desc": "Device has no medium"}}\n')
+                    continue
+                disk = self.dir / "disk.qcow2"
+                d = json.loads(disk.read_text())
+                args = msg.get("arguments", {})
+                if msg["execute"] == "blockdev-snapshot-internal-sync":
+                    d.setdefault("snapshots", []).append({"name": args["name"], "date-sec": 1764250000})
+                elif msg["execute"] == "blockdev-snapshot-delete-internal-sync":
+                    d["snapshots"] = [x for x in d.get("snapshots", []) if x["name"] != args["name"]]
+                disk.write_text(json.dumps(d))
+                f.write(b'{"return": {}}\n')
+            conn.close()
+
+    def close(self):
+        self.sock.close()
+
+
+def _running(box: Box, name: str) -> None:
+    units = box.root / "units"
+    units.mkdir(exist_ok=True)
+    (units / f"pengyos-vm@{name}.service").write_text("active")
+
+
+def _disk(box: Box, name: str) -> dict:
+    return json.loads((box.home / "vms" / name / "disk.qcow2").read_text())
+
+
+def test_snap_stopped_create_list_revert_delete(box):
+    box.run("create", "deb", "--iso", str(box.iso))
+    d = box.home / "vms" / "deb"
+    out = box.run("snapshot", "deb", "create", "before", "the", "upgrade").stdout
+    assert "snapshot s1 (before the upgrade) taken" in out and "power cut" not in out
+    assert ["snapshot", "-c", "s1", str(d / "disk.qcow2")] in box.calls("qemu-img")
+    assert (d / "snapshots" / "s1.vars.fd").read_bytes() == b"VARS"
+    box.run("snapshot", "deb", "create")
+    listed = json.loads(box.run("snapshot", "deb", "list", "--json").stdout)
+    assert [(x["name"], x["label"], x["taken"]) for x in listed["snapshots"]] == [
+        ("s1", "before the upgrade", "stopped"), ("s2", "", "stopped")]
+    assert "s1" in box.run("snapshot", "deb", "list").stdout
+    # The guest changed its UEFI variables after s1; revert puts s1's back.
+    (d / "vars.fd").write_bytes(b"CHANGED")
+    box.run("snapshot", "deb", "revert", "s1", ok=2)            # no tty, no --yes: refuses
+    assert "reverted-to" not in _disk(box, "deb")
+    box.run("snapshot", "deb", "revert", "s1", "--yes")
+    assert _disk(box, "deb")["reverted-to"] == "s1"
+    assert (d / "vars.fd").read_bytes() == b"VARS"
+    box.run("snapshot", "deb", "delete", "s1")
+    assert [x["name"] for x in _disk(box, "deb")["snapshots"]] == ["s2"]
+    assert not (d / "snapshots" / "s1.json").exists() and not (d / "snapshots" / "s1.vars.fd").exists()
+    # The next one never reuses a name still in use.
+    box.run("snapshot", "deb", "create")
+    assert [x["name"] for x in _disk(box, "deb")["snapshots"]] == ["s2", "s3"]
+    assert [x["name"] for x in json.loads(box.run("show", "deb", "--json").stdout)["snapshots"]] == ["s2", "s3"]
+
+
+def test_snap_running_uses_qmp_and_revert_restarts(box):
+    box.run("create", "r", "--iso", str(box.iso))
+    d = box.home / "vms" / "r"
+    _running(box, "r")
+    q = FakeQMP(d)
+    try:
+        out = box.run("snapshot", "r", "create", "pre").stdout
+        assert "power cut" in out
+        assert {"execute": "blockdev-snapshot-internal-sync",
+                "arguments": {"device": "disk0", "name": "s1"}} in q.calls
+        assert not any(c[:2] == ["snapshot", "-c"] for c in box.calls("qemu-img"))
+        assert json.loads((d / "snapshots" / "s1.json").read_text())["taken"] == "running"
+        box.run("snapshot", "r", "revert", "s1", "--yes")
+        sysd = box.calls("systemctl")
+        kill = sysd.index(["--user", "kill", "--signal=SIGKILL", "pengyos-vm@r.service"])
+        start = max(i for i, c in enumerate(sysd) if c == ["--user", "start", "pengyos-vm@r.service"])
+        assert kill < start                    # off, rolled back, then started again
+        assert _disk(box, "r")["reverted-to"] == "s1"
+        _running(box, "r")
+        box.run("snapshot", "r", "delete", "s1")
+        assert {"execute": "blockdev-snapshot-delete-internal-sync",
+                "arguments": {"device": "disk0", "name": "s1"}} in q.calls
+    finally:
+        q.close()
+
+
+def test_snap_qemu_error_is_reported_and_leaves_no_files(box):
+    box.run("create", "e", "--iso", str(box.iso))
+    d = box.home / "vms" / "e"
+    _running(box, "e")
+    q = FakeQMP(d, fail="blockdev-snapshot-internal-sync")
+    try:
+        err = box.run("snapshot", "e", "create", ok=1).stderr
+        assert "Device has no medium" in err
+        assert list((d / "snapshots").iterdir()) == []
+    finally:
+        q.close()
+
+
+def test_snap_unknown_names_are_misuse(box):
+    box.run("create", "u", "--iso", str(box.iso))
+    assert "has no snapshot 's9'" in box.run("snapshot", "u", "revert", "s9", "--yes", ok=2).stderr
+    assert "needs one snapshot name" in box.run("snapshot", "u", "delete", ok=2).stderr

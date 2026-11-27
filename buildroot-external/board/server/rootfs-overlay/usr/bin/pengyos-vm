@@ -15,6 +15,7 @@
     pengyos-vm set NAME [--memory] [--cpus] [--net] [--forward ...] [--unforward HOST]
                         [--iso FILE | --eject] [--ssh-key [FILE]]
     pengyos-vm autostart NAME on|off
+    pengyos-vm snapshot NAME create [LABEL] | list [--json] | revert SNAP [--yes] | delete SNAP
     pengyos-vm delete NAME [--yes]
     pengyos-vm run [--image FILE|URL] [--copy PATH]... [--fetch PATH]... [--timeout 10m]
                    [--memory 1G] [--cpus 2] [--disk 8G] [--forward ...] [--online] [--keep]
@@ -248,6 +249,7 @@ class VM:
             "iso": c.get("iso"),
             "firmware": c["firmware"],
             "ssh_key": bool(c.get("ssh_keys")),
+            "snapshots": [{k: v for k, v in sn.items() if k != "vars"} for sn in snapshots(self)],
         }
 
 
@@ -641,6 +643,33 @@ def qmp(vm: VM, command: str) -> socket.socket | None:
         return None
 
 
+def qmp_call(vm: VM, command: str, arguments: dict) -> dict:
+    """One QMP command with arguments; its "return", or Failure with QEMU's error."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.settimeout(60)
+        s.connect(str(vm.path("qmp.sock")))
+        f = s.makefile("rwb", buffering=0)
+        f.readline()  # greeting
+        for msg in ({"execute": "qmp_capabilities"},
+                    {"execute": command, "arguments": arguments}):
+            f.write(json.dumps(msg).encode() + b"\n")
+            while True:
+                line = f.readline()
+                if not line:
+                    raise Failure(f"{vm.name}: QEMU closed its QMP socket")
+                reply = json.loads(line)
+                if "return" in reply or "error" in reply:
+                    break
+            if "error" in reply:
+                raise Failure(f"{vm.name}: {command}: {reply['error'].get('desc', reply['error'])}")
+        return reply["return"]
+    except OSError as e:
+        raise Failure(f"cannot reach {vm.name}'s QMP socket: {e.strerror or e}")
+    finally:
+        s.close()
+
+
 def host_stopping() -> bool:
     """Is everything going down, not just this VM: the user manager is stopping
     (a shutdown or reboot, or the last logout without linger)? Asked of the user
@@ -717,6 +746,10 @@ def cmd_show(a) -> int:
         print(f"  forward  {f}")
     print(f"  screen   VNC on {s['vnc_socket']} (pengyos-vm vnc {vm.name})")
     print(f"  console  pengyos-vm console {vm.name}")
+    if s["snapshots"]:
+        last = s["snapshots"][-1]
+        print(f"  snapshots {len(s['snapshots'])}, newest {last['name']} {last['created']}"
+              f" (pengyos-vm snapshot {vm.name} list)")
     if s["ssh_key"]:
         print("  key      root's SSH key is offered to the guest (systemd credential)")
     if not kvm_ok():
@@ -952,6 +985,165 @@ def cmd_delete(a) -> int:
     shutil.rmtree(vm.dir)
     print(f"deleted {vm.name}")
     return 0
+
+
+# ----------------------------------------------------------------- snapshots
+# Disk-only snapshots, for "try something, roll back, try it another way"
+# (operator, 2026-11-27): internal qcow2 snapshots of disk.qcow2, no memory
+# state. A running VM's is taken by QEMU itself (QMP
+# blockdev-snapshot-internal-sync), so it is crash-consistent: the disk as a
+# power cut would leave it. The UEFI variables (vars.fd, raw) are copied beside
+# it and put back on revert, so boot entries match the disk. Labels and times
+# live in snapshots/SNAP.json; qcow2 is the truth for which snapshots exist.
+SNAP_RE = re.compile(r"^s[0-9]{1,6}$")
+DISK_ID = "disk0"
+
+
+def snapshots(vm: VM) -> list[dict]:
+    """The disk's snapshots, oldest first: name, label, created, taken (running or
+    stopped), vars (a copy exists)."""
+    disk = vm.path("disk.qcow2")
+    if not disk.is_file():
+        return []
+    cp = run(["qemu-img", "info", "--force-share", "--output=json", str(disk)], check=False)
+    try:
+        info = json.loads(cp.stdout or "{}")
+    except ValueError:
+        info = {}
+    out = []
+    for sn in info.get("snapshots", []):
+        name = sn.get("name", "")
+        meta = {}
+        side = vm.path("snapshots") / f"{name}.json"
+        if SNAP_RE.match(name) and side.is_file():
+            try:
+                meta = json.loads(side.read_text())
+            except ValueError:
+                meta = {}
+        created = meta.get("created") or (time.strftime(
+            "%Y-%m-%d %H:%M:%S", time.localtime(sn["date-sec"])) if "date-sec" in sn else "")
+        out.append({"name": name, "label": meta.get("label", ""), "created": created,
+                    "taken": meta.get("taken", ""),
+                    "vars": (vm.path("snapshots") / f"{name}.vars.fd").is_file()})
+    return out
+
+
+def find_snapshot(vm: VM, name: str) -> dict:
+    for sn in snapshots(vm):
+        if sn["name"] == name:
+            return sn
+    names = ", ".join(sn["name"] for sn in snapshots(vm)) or "none"
+    raise Misuse(f"{vm.name} has no snapshot {name!r} (it has: {names})")
+
+
+def disk_usage(vm: VM) -> str:
+    st = vm.path("disk.qcow2").stat()
+    return human(st.st_blocks * 512)
+
+
+def snap_create(vm: VM, label: str) -> int:
+    existing = snapshots(vm)
+    nums = [int(sn["name"][1:]) for sn in existing if SNAP_RE.match(sn["name"])]
+    name = f"s{max(nums, default=0) + 1}"
+    side = vm.path("snapshots")
+    side.mkdir(exist_ok=True)
+    taken = "running" if vm.running() else "stopped"
+    if vm.path("vars.fd").is_file():
+        shutil.copyfile(vm.path("vars.fd"), side / f"{name}.vars.fd")
+    try:
+        if taken == "running":
+            qmp_call(vm, "blockdev-snapshot-internal-sync", {"device": DISK_ID, "name": name})
+        else:
+            run(["qemu-img", "snapshot", "-c", name, str(vm.path("disk.qcow2"))])
+    except Failure:
+        (side / f"{name}.vars.fd").unlink(missing_ok=True)
+        raise
+    (side / f"{name}.json").write_text(json.dumps(
+        {"label": label, "created": time.strftime("%Y-%m-%d %H:%M:%S"), "taken": taken},
+        indent=2) + "\n")
+    print(f"{vm.name}: snapshot {name}" + (f" ({label})" if label else "") + " taken")
+    if taken == "running":
+        print("  taken while it runs: the disk as a power cut would leave it (the guest's "
+              "filesystem recovers on boot). Shut it down first for a clean one.")
+    print(f"  roll back with: pengyos-vm snapshot {vm.name} revert {name}")
+    return 0
+
+
+def snap_list(vm: VM, as_json: bool) -> int:
+    snaps = snapshots(vm)
+    if as_json:
+        print(json.dumps({"vm": vm.name, "disk_usage": disk_usage(vm),
+                          "snapshots": [{k: v for k, v in sn.items() if k != "vars"}
+                                        for sn in snaps]}, indent=2))
+        return 0
+    if not snaps:
+        print(f"{vm.name} has no snapshots (pengyos-vm snapshot {vm.name} create LABEL)")
+        return 0
+    print(f"{'SNAP':<8} {'TAKEN':<20} {'WHILE':<8} LABEL")
+    for sn in snaps:
+        print(f"{sn['name']:<8} {sn['created']:<20} {sn['taken'] or '-':<8} {sn['label']}")
+    print(f"disk.qcow2 uses {disk_usage(vm)} with its snapshots "
+          f"(delete one to free what only it holds)")
+    return 0
+
+
+def snap_revert(vm: VM, name: str, yes: bool) -> int:
+    sn = find_snapshot(vm, name)
+    was_running = vm.running()
+    what = (f"{vm.name} is switched off now (no shutdown: its disk is being replaced), "
+            if was_running else "")
+    prompt = (f"{what}every change to its disk since {name} ({sn['created']}) is lost. "
+              f"Roll {vm.name} back to {name}?")
+    if not yes:
+        if not sys.stdin.isatty():
+            raise Misuse(f"{prompt} Add --yes")
+        if input(prompt + " [y/N] ").strip().lower() not in ("y", "yes"):
+            print("not rolled back")
+            return 1
+    if was_running:
+        force_off(vm)
+        for _ in range(100):
+            if not vm.running():
+                break
+            time.sleep(0.1)
+        else:
+            raise Failure(f"{vm.name} did not switch off; nothing was rolled back")
+    run(["qemu-img", "snapshot", "-a", name, str(vm.path("disk.qcow2"))])
+    saved = vm.path("snapshots") / f"{name}.vars.fd"
+    if saved.is_file() and vm.path("vars.fd").is_file():
+        shutil.copyfile(saved, vm.path("vars.fd"))
+    print(f"{vm.name} is back at {name}" + (f" ({sn['label']})" if sn["label"] else ""))
+    if was_running:
+        user_systemctl("reset-failed", vm.unit, check=False)
+        user_systemctl("start", vm.unit)
+        print(f"{vm.name} is starting again")
+    return 0
+
+
+def snap_delete(vm: VM, name: str) -> int:
+    find_snapshot(vm, name)
+    if vm.running():
+        qmp_call(vm, "blockdev-snapshot-delete-internal-sync", {"device": DISK_ID, "name": name})
+    else:
+        run(["qemu-img", "snapshot", "-d", name, str(vm.path("disk.qcow2"))])
+    for f in (f"{name}.json", f"{name}.vars.fd"):
+        (vm.path("snapshots") / f).unlink(missing_ok=True)
+    print(f"{vm.name}: deleted snapshot {name}")
+    return 0
+
+
+def cmd_snapshot(a) -> int:
+    vm = VM(a.name).load()
+    if a.action == "create":
+        return snap_create(vm, " ".join(a.args).strip())
+    if a.action == "list":
+        return snap_list(vm, a.json)
+    if len(a.args) != 1:
+        raise Misuse(f"snapshot {a.action} needs one snapshot name, e.g. s1 "
+                     f"(pengyos-vm snapshot {vm.name} list)")
+    if a.action == "revert":
+        return snap_revert(vm, a.args[0], a.yes)
+    return snap_delete(vm, a.args[0])
 
 
 # ------------------------------------------------------------ throwaway runs
@@ -1403,6 +1595,13 @@ def parser() -> argparse.ArgumentParser:
     sp = add("autostart", cmd_autostart, "start a VM when the machine boots")
     sp.add_argument("name")
     sp.add_argument("mode", choices=("on", "off"))
+    sp = add("snapshot", cmd_snapshot, "disk snapshots: take one, list, roll back, delete")
+    sp.add_argument("name")
+    sp.add_argument("action", choices=("create", "list", "revert", "delete"))
+    sp.add_argument("args", nargs="*", metavar="LABEL|SNAP",
+                    help="create: an optional label; revert, delete: the snapshot (s1, s2...)")
+    sp.add_argument("--json", action="store_true", help="list: as JSON")
+    sp.add_argument("--yes", action="store_true", help="revert: don't ask")
     sp = add("delete", cmd_delete, "delete a VM and its disk")
     sp.add_argument("name")
     sp.add_argument("--yes", action="store_true")
