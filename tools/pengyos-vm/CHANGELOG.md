@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.7.0] - 2026-11-27
+
+### Added
+- **An ISO library**, `~/vms/isos`: `pengyos-vm iso list [--json] | add FILE|URL
+  [--name N] [--progress] | remove NAME`. An installer ISO is kept once and
+  attached to any number of VMs, and `create --iso` / `set --iso` take a library
+  name (with or without `.iso`) as well as a path. `add` hard-links a file on the
+  same filesystem (no second copy), downloads a URL, checks the free space
+  first, and refuses anything without an ISO 9660 volume (an HTML error page
+  saved from a URL). It writes a hidden `.part` file and renames it only when
+  complete. `--progress` prints JSON lines for the front ends. `list` shows
+  which VMs use each one, and `remove` refuses an ISO still attached (it names
+  the `set VM --eject` to run). `isos` and `images` are no longer allowed as VM
+  names.
+
+### Fixed
+- A download that fails (404, no network) is now one line, `URL: the server
+  answered 404 Not Found`, not a Python traceback. That covers `create --image
+  URL` too.
+
 ## [0.6.0] - 2026-11-27
 
 ### Added

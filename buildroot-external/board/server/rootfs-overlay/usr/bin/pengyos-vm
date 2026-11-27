@@ -16,6 +16,7 @@
                         [--iso FILE | --eject] [--ssh-key [FILE]]
     pengyos-vm autostart NAME on|off
     pengyos-vm snapshot NAME create [LABEL] | list [--json] | revert SNAP [--yes] | delete SNAP
+    pengyos-vm iso list [--json] | add FILE|URL [--name N] [--progress] | remove NAME
     pengyos-vm delete NAME [--yes]
     pengyos-vm run [--image FILE|URL] [--copy PATH]... [--fetch PATH]... [--timeout 10m]
                    [--memory 1G] [--cpus 2] [--disk 8G] [--forward ...] [--online] [--keep]
@@ -78,6 +79,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -96,6 +98,10 @@ BRIDGE_CONF = "etc/qemu/bridge.conf"
 HELPER = "/usr/libexec/qemu-bridge-helper"
 MARK = "# Managed by pengyos-vm (pengyos-vm bridge enable/disable)."
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
+# Folders in ~/vms that are not VMs: the ISO library, and (for the front ends'
+# image picker) a place for disk images.
+RESERVED = ("isos", "images")
+ISO_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$")
 SIZE_RE = re.compile(r"^(\d+)([KMGT]?)i?B?$", re.I)
 SSH_PORT_BASE = 2201
 ESCAPE = b"\x1d"  # Ctrl-]
@@ -175,10 +181,27 @@ def human(nbytes: int) -> str:
     return f"{nbytes // 1024 ** 2}M"
 
 
+def size_text(nbytes: int) -> str:
+    """A file size for people: 1.4G, 620M, 12K."""
+    for unit, size in (("T", 1 << 40), ("G", 1 << 30), ("M", 1 << 20), ("K", 1 << 10)):
+        if nbytes >= size:
+            v = nbytes / size
+            return f"{v:.1f}{unit}" if v < 10 else f"{v:.0f}{unit}"
+    return f"{nbytes}B"
+
+
 def check_name(name: str) -> str:
     if not NAME_RE.match(name):
         raise Misuse(f"VM names are lowercase letters, digits and dashes (up to 32), "
                      f"starting with a letter or digit: {name!r}")
+    return name
+
+
+def check_new_name(name: str) -> str:
+    check_name(name)
+    if name in RESERVED:
+        raise Misuse(f"{name!r} is taken: ~/vms/{name} holds "
+                     f"{'the ISO library' if name == 'isos' else 'disk images'}")
     return name
 
 
@@ -378,24 +401,54 @@ def read_key(value: str) -> str:
 
 
 # --------------------------------------------------------------------- images
+def url_name(url: str) -> str:
+    return url.split("?", 1)[0].split("#", 1)[0].rstrip("/").rsplit("/", 1)[-1] or "download"
+
+
+def progress_line(**fields) -> None:
+    """--progress: one JSON object per line on stdout, for the front ends."""
+    print(json.dumps(fields), flush=True)
+
+
+def download(url: str, out: Path, progress: bool = False) -> None:
+    """url into out, with a counter on a terminal (or JSON lines with progress).
+    Checks the free space when the server says the size."""
+    print(f"downloading {url}", file=sys.stderr)
+    try:
+        r = urllib.request.urlopen(url, timeout=60)
+    except urllib.error.HTTPError as e:
+        raise Failure(f"{url}: the server answered {e.code} {e.reason}")
+    except (urllib.error.URLError, OSError) as e:
+        raise Failure(f"{url}: {getattr(e, 'reason', None) or e}")
+    with r, open(out, "wb") as w:
+        total = int(r.headers.get("Content-Length") or 0)
+        if total:
+            free = shutil.disk_usage(out.parent).free
+            if total > free:
+                raise Failure(f"{url_name(url)} is {size_text(total)}, and only {size_text(free)} "
+                              f"is free in {out.parent}")
+        done, last = 0, 0.0
+        while chunk := r.read(1 << 20):
+            w.write(chunk)
+            done += len(chunk)
+            if time.monotonic() - last > 0.5:
+                last = time.monotonic()
+                if progress:
+                    progress_line(step="download", done=done, total=total or None)
+                elif sys.stderr.isatty():
+                    pct = f" {100 * done // total}%" if total else ""
+                    print(f"\r  {done >> 20} MiB{pct}  ", end="", file=sys.stderr)
+    if progress:
+        progress_line(step="download", done=done, total=total or done)
+    elif sys.stderr.isatty():
+        print(file=sys.stderr)
+
+
 def fetch(source: str, dest: Path) -> Path:
     """A local path, or download a URL into dest's folder. Returns the file."""
     if re.match(r"^https?://", source):
-        name = source.rstrip("/").rsplit("/", 1)[-1] or "download"
-        out = dest.parent / name
-        print(f"downloading {source}", file=sys.stderr)
-        with urllib.request.urlopen(source) as r, open(out, "wb") as w:
-            total = int(r.headers.get("Content-Length") or 0)
-            done, last = 0, 0.0
-            while chunk := r.read(1 << 20):
-                w.write(chunk)
-                done += len(chunk)
-                if sys.stderr.isatty() and time.monotonic() - last > 0.5:
-                    last = time.monotonic()
-                    pct = f" {100 * done // total}%" if total else ""
-                    print(f"\r  {done >> 20} MiB{pct}  ", end="", file=sys.stderr)
-        if sys.stderr.isatty():
-            print(file=sys.stderr)
+        out = dest.parent / url_name(source)
+        download(source, out)
         return out
     path = Path(source).expanduser()
     if not path.is_file():
@@ -455,7 +508,7 @@ def new_conf(name: str, memory: int, cpus: int, net: str = "nat", firmware: str 
 
 
 def cmd_create(a) -> int:
-    vm = VM(a.name)
+    vm = VM(check_new_name(a.name))
     if vm.exists() or vm.dir.exists():
         raise Misuse(f"{vm.dir} already exists: pick another name, or `pengyos-vm delete {a.name}`")
     if bool(a.iso) == bool(a.image):
@@ -468,9 +521,7 @@ def cmd_create(a) -> int:
         require_bridge()
     iso = None
     if a.iso:
-        iso = Path(a.iso).expanduser().resolve()
-        if not iso.is_file():
-            raise Misuse(f"--iso: {a.iso} does not exist")
+        iso = resolve_iso(a.iso)
     conf = new_conf(a.name, memory, cpus, net=a.net,
                     firmware="bios" if a.bios else "uefi",
                     iso=str(iso) if iso else None,
@@ -928,9 +979,7 @@ def cmd_set(a) -> int:
         c["iso"] = None
         changed.append("ISO ejected")
     if a.iso:
-        iso = Path(a.iso).expanduser().resolve()
-        if not iso.is_file():
-            raise Misuse(f"--iso: {a.iso} does not exist")
+        iso = resolve_iso(a.iso)
         c["iso"] = str(iso)
         changed.append(f"ISO {iso.name}")
     if a.ssh_key is not None:
@@ -987,6 +1036,137 @@ def cmd_delete(a) -> int:
     return 0
 
 
+# --------------------------------------------------------------- ISO library
+# ~/vms/isos: installer ISOs kept once and attached to any number of VMs, so
+# the front ends (pengy-vmm, Machines) can offer a list instead of a typed path.
+def iso_dir() -> Path:
+    return vm_home() / "isos"
+
+
+def library() -> list[dict]:
+    d = iso_dir()
+    if not d.is_dir():
+        return []
+    users: dict[str, list[str]] = {}
+    for vm in all_vms():
+        if vm.conf.get("iso"):
+            users.setdefault(str(Path(vm.conf["iso"]).resolve()), []).append(vm.name)
+    out = []
+    for f in sorted(d.iterdir(), key=lambda p: p.name.lower()):
+        if f.is_file() and not f.name.startswith("."):
+            st = f.stat()
+            out.append({"name": f.name, "path": str(f), "size": size_text(st.st_size),
+                        "bytes": st.st_size,
+                        "added": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
+                        "used_by": users.get(str(f.resolve()), [])})
+    return out
+
+
+def resolve_iso(text: str) -> Path:
+    """--iso: a file, or the name of an ISO in the library (with or without .iso)."""
+    path = Path(text).expanduser()
+    if path.is_file():
+        return path.resolve()
+    if "/" in text:
+        raise Misuse(f"--iso: {text} does not exist")
+    for cand in (iso_dir() / text, iso_dir() / f"{text}.iso"):
+        if cand.is_file():
+            return cand.resolve()
+    names = ", ".join(i["name"] for i in library()) or "it is empty"
+    raise Misuse(f"--iso: {text} is not a file, nor in the ISO library ({names}; "
+                 f"pengyos-vm iso add FILE|URL)")
+
+
+def looks_like_iso(path: Path) -> bool:
+    """ISO 9660 (every installer ISO, hybrid and Windows ones included, has it):
+    'CD001' at byte 32769. Catches an HTML error page saved from a URL."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0x8001)
+            return f.read(5) == b"CD001"
+    except OSError:
+        return False
+
+
+def iso_add(source: str, name: str | None, progress: bool) -> int:
+    is_url = bool(re.match(r"^https?://", source))
+    if not name:
+        name = url_name(source) if is_url else Path(source).name
+    elif "." not in name:
+        name += ".iso"
+    if not ISO_NAME_RE.match(name):
+        raise Misuse(f"ISO names are letters, digits and . _ + - (up to 128): {name!r} "
+                     f"(give one with --name)")
+    d = iso_dir()
+    target = d / name
+    if target.exists():
+        raise Misuse(f"the library already has {name} (pengyos-vm iso remove {name}, or --name)")
+    if not is_url:
+        src = Path(source).expanduser()
+        if not src.is_file():
+            raise Misuse(f"{source} does not exist")
+        if not looks_like_iso(src):
+            raise Misuse(f"{source} is not an ISO image (no ISO 9660 volume)")
+    d.mkdir(parents=True, exist_ok=True)
+    private(d)
+    part = d / f".{name}.part"
+    try:
+        if is_url:
+            download(source, part, progress)
+            if not looks_like_iso(part):
+                raise Failure(f"{url_name(source)} is not an ISO image (no ISO 9660 volume): "
+                              f"check the URL")
+        else:
+            src = Path(source).expanduser().resolve()
+            try:
+                os.link(src, part)          # same filesystem: no second copy
+            except OSError:
+                if src.stat().st_size > shutil.disk_usage(d).free:
+                    raise Failure(f"{src.name} is {size_text(src.stat().st_size)}, more than is "
+                                  f"free in {d}")
+                print(f"copying {src.name}", file=sys.stderr)
+                shutil.copyfile(src, part)
+        part.rename(target)
+    finally:
+        part.unlink(missing_ok=True)
+    if progress:
+        progress_line(step="done", name=name, path=str(target))
+    else:
+        print(f"added {name} ({size_text(target.stat().st_size)}) to the ISO library")
+        print(f"  use it with: pengyos-vm create NAME --iso {name}")
+    return 0
+
+
+def cmd_iso(a) -> int:
+    if a.action == "list":
+        items = library()
+        if a.json:
+            print(json.dumps({"dir": str(iso_dir()), "isos": items}, indent=2))
+            return 0
+        if not items:
+            print(f"the ISO library ({iso_dir()}) is empty: pengyos-vm iso add FILE|URL")
+            return 0
+        print(f"{'NAME':<40} {'SIZE':>8}  {'ADDED':<16}  USED BY")
+        for i in items:
+            print(f"{i['name']:<40} {i['size']:>8}  {i['added']:<16}  {', '.join(i['used_by'])}")
+        return 0
+    if len(a.args) != 1:
+        raise Misuse(f"iso {a.action} needs one " + ("FILE or URL" if a.action == "add" else "NAME"))
+    if a.action == "add":
+        return iso_add(a.args[0], a.name, a.progress)
+    name = a.args[0]
+    target = iso_dir() / name
+    if "/" in name or not target.is_file():
+        raise Misuse(f"the ISO library has no {name} (pengyos-vm iso list)")
+    users = next(i["used_by"] for i in library() if i["name"] == name)
+    if users:
+        raise Misuse(f"{name} is attached to {', '.join(users)}: "
+                     + "; ".join(f"pengyos-vm set {u} --eject" for u in users) + " first")
+    target.unlink()
+    print(f"removed {name} from the ISO library")
+    return 0
+
+
 # ----------------------------------------------------------------- snapshots
 # Disk-only snapshots, for "try something, roll back, try it another way"
 # (operator, 2026-11-27): internal qcow2 snapshots of disk.qcow2, no memory
@@ -1038,7 +1218,7 @@ def find_snapshot(vm: VM, name: str) -> dict:
 
 def disk_usage(vm: VM) -> str:
     st = vm.path("disk.qcow2").stat()
-    return human(st.st_blocks * 512)
+    return size_text(st.st_blocks * 512)
 
 
 def snap_create(vm: VM, label: str) -> int:
@@ -1306,7 +1486,7 @@ def cmd_run_once(a) -> int:
     for name in a.fetch or []:
         if name.startswith("/") or ".." in Path(name).parts:
             raise Misuse(f"--fetch takes a path inside {RUN_DIR}, not {name!r}")
-    name = check_name(a.name) if a.name else "run-" + secrets.token_hex(3)
+    name = check_new_name(a.name) if a.name else "run-" + secrets.token_hex(3)
     vm = VM(name)
     if vm.dir.exists():
         raise Misuse(f"{vm.dir} already exists: pick another --name")
@@ -1552,7 +1732,9 @@ def parser() -> argparse.ArgumentParser:
                         help="nat (default; works on Wi-Fi) or bridge (own LAN address; wired only)")
         sp.add_argument("--forward", action="append", metavar="[ADDR:]HOST:GUEST[/udp]",
                         help="NAT port forward, e.g. 8080:80 (listens on 127.0.0.1 unless ADDR)")
-        sp.add_argument("--iso", metavar="FILE", help="installer ISO (boots while the disk is empty)")
+        sp.add_argument("--iso", metavar="FILE|NAME",
+                        help="installer ISO, a file or a name from `pengyos-vm iso list` "
+                             "(boots while the disk is empty)")
         sp.add_argument("--ssh-key", nargs="?", const="", metavar="FILE",
                         help="offer this public key (default ~/.ssh/id_ed25519.pub) as root's to "
                              "systemd guests")
@@ -1602,6 +1784,13 @@ def parser() -> argparse.ArgumentParser:
                     help="create: an optional label; revert, delete: the snapshot (s1, s2...)")
     sp.add_argument("--json", action="store_true", help="list: as JSON")
     sp.add_argument("--yes", action="store_true", help="revert: don't ask")
+    sp = add("iso", cmd_iso, "the ISO library (~/vms/isos): list, add, remove")
+    sp.add_argument("action", choices=("list", "add", "remove"))
+    sp.add_argument("args", nargs="*", metavar="FILE|URL|NAME")
+    sp.add_argument("--name", help="add: the name in the library (default: the file's)")
+    sp.add_argument("--json", action="store_true", help="list: as JSON")
+    sp.add_argument("--progress", action="store_true",
+                    help="add: JSON progress lines on stdout (for front ends)")
     sp = add("delete", cmd_delete, "delete a VM and its disk")
     sp.add_argument("name")
     sp.add_argument("--yes", action="store_true")

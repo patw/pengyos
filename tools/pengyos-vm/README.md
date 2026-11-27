@@ -75,6 +75,16 @@ accounts on the machine can reach that port too; changes need it in a header
 as well, so another site cannot post a form at it. From another machine:
 `ssh -L 5100:127.0.0.1:5100 you@host`, then open the `pengy-vmm url` address.
 
+## The ISO library
+
+```sh
+pengyos-vm iso add ~/Downloads/debian-13-netinst.iso   # kept in ~/vms/isos (a hard link, no copy)
+pengyos-vm iso add https://…/alpine-virt-3.24.3-x86_64.iso
+pengyos-vm iso list                                     # NAME SIZE ADDED USED BY
+pengyos-vm create deb --iso debian-13-netinst           # by name
+pengyos-vm iso remove debian-13-netinst.iso             # not while a VM has it attached
+```
+
 ## Snapshots
 
 A snapshot saves the VM's disk, not its memory: take one before trying something,
