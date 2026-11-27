@@ -15,7 +15,7 @@ pengyos-vm start web && pengyos-vm ssh web
 
 pengyos-vm list                     # NAME STATE CPUS MEMORY NET SSH AUTOSTART
 pengyos-vm show web [--json|--qemu] # settings, how to reach it, the QEMU command
-pengyos-vm vnc web                  # its screen: VNC on 127.0.0.1, and the ssh -L line
+pengyos-vm vnc web                  # its screen: a private VNC socket, and the ssh -L line
 pengyos-vm log web                  # what it wrote to its serial console
 pengyos-vm stop web [--force]       # ACPI power button (or pull the plug)
 pengyos-vm autostart web on         # start at boot (turns on linger, see below)

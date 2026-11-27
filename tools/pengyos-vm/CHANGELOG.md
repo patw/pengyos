@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.5.0] - 2026-11-27
+
+### Security
+- **A VM's screen is no longer open to every account on the machine.** It was
+  VNC on `127.0.0.1:59xx` with no password, so any local user (another login, a
+  service account, a container with host networking) could watch and type into
+  anyone's VM. Now QEMU serves it only on `~/vms/NAME/vnc.sock`, and `~/vms` and
+  each VM folder are 0700. `start` fixes the mode of folders made by older
+  versions, and the serial console and QMP sockets are covered by the same lock.
+  There is no TCP listener at all. From another machine (or for a viewer that
+  only speaks TCP), SSH forwards a port to the socket:
+  `ssh -N -L 5901:/home/you/vms/NAME/vnc.sock you@host`. `pengyos-vm vnc NAME`
+  prints that line.
+- `show --json` (and `list --json`): `vnc` (the TCP address) is replaced by
+  `vnc_socket`. pengy-vmm's Screen row shows the socket and the ssh line.
+- A VM that is running when the image updates keeps its TCP port until it is
+  next started.
+
 ## [0.4.0] - 2026-11-18
 
 ### Changed

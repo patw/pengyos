@@ -240,7 +240,8 @@ def test_nat_command(box: Box):
     assert "virtio-blk-pci,drive=disk0,bootindex=0" in devices
     assert "ide-cd,drive=cd0,bootindex=1" in devices
     assert any(x.startswith(f"if=none,id=cd0,media=cdrom,readonly=on,file={box.iso.resolve()}") for x in drives)
-    assert opt(argv, "-vnc") == ["127.0.0.1:1"]
+    # The screen is a socket in the VM's own folder, never a TCP port (0.5.0).
+    assert opt(argv, "-vnc") == [f"unix:{d / 'vnc.sock'}"]
     assert opt(argv, "-qmp") == [f"unix:{d / 'qmp.sock'},server=on,wait=off"]
     smbios = opt(argv, "-smbios")
     # base64("deb") and base64 of the key line.
@@ -705,3 +706,41 @@ def test_the_helper_is_setuid_in_the_image_and_bridged_frames_pass():
     assert "/usr/libexec/qemu-bridge-helper\tf\t4755\t0\t0" in perms
     nft = (BOARD / "core" / "rootfs-overlay" / "etc" / "nftables.conf").read_text()
     assert 'iifname "pengyos-br0" oifname "pengyos-br0" accept' in nft
+
+
+# --- 0.5.0: the screen is private -------------------------------------------
+# Before, every VM's screen was password-less VNC on 127.0.0.1:59xx, so any
+# account on the machine could watch and type into any user's VM.
+
+def test_vm_folder_and_vms_are_owner_only(box):
+    box.run("create", "deb", "--iso", str(box.iso))
+    d = box.home / "vms" / "deb"
+    assert d.stat().st_mode & 0o777 == 0o700
+    assert (box.home / "vms").stat().st_mode & 0o777 == 0o700
+
+
+def test_start_makes_an_old_open_folder_private(box):
+    box.run("create", "deb", "--iso", str(box.iso))
+    d = box.home / "vms" / "deb"
+    d.chmod(0o755)
+    (box.home / "vms").chmod(0o755)
+    box.run("_run", "deb")
+    assert d.stat().st_mode & 0o777 == 0o700
+    assert (box.home / "vms").stat().st_mode & 0o777 == 0o700
+
+
+def test_no_tcp_vnc_anywhere(box):
+    box.run("create", "deb", "--iso", str(box.iso))
+    argv = json.loads(box.run("_run", "deb").stdout)
+    assert [x.startswith("unix:") for x in opt(argv, "-vnc")] == [True]
+    shown = json.loads(box.run("show", "deb", "--json").stdout)
+    assert "vnc" not in shown
+    assert shown["vnc_socket"] == str(box.home / "vms" / "deb" / "vnc.sock")
+
+
+def test_vnc_tells_how_to_reach_the_socket(box):
+    box.run("create", "deb", "--iso", str(box.iso))
+    out = box.run("vnc", "deb").stdout
+    sock = box.home / "vms" / "deb" / "vnc.sock"
+    assert f"ssh -N -L 5901:{sock} " in out
+    assert "vnc://localhost:5901" in out
