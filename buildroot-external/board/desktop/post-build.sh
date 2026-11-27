@@ -135,6 +135,18 @@ else
     echo "post-build: ${DISKS_GUI} not built — no Disks app (partitioning needs a terminal)"
 fi
 
+# --- Machines (virtual machines, dev boxes, containers) -----------------------
+# tools/pengyos-machines, host-built the same way. A window over pengyos-vm
+# (Server layer), distrobox and podman/Quadlet; it runs them as the user and
+# needs no privileges. The .desktop file is in the overlay.
+MACHINES_GUI="${GUI_BUILD}/install-gui/release/pengyos-machines"
+if [ -x "${MACHINES_GUI}" ]; then
+    install -Dm0755 "${MACHINES_GUI}" "${TARGET_DIR}/usr/bin/pengyos-machines"
+    echo "post-build: installed pengyos-machines"
+else
+    echo "post-build: ${MACHINES_GUI} not built — no Machines app (VMs and containers need a terminal)"
+fi
+
 # --- Disk Usage (what is taking the space, as a ring chart) -------------------
 # tools/pengyos-usage, host-built the same way. Read-only and unprivileged: it
 # walks what the user can read. The .desktop file is in the overlay.
@@ -261,7 +273,8 @@ if [ -n "${STRIP_BIN}" ]; then
              "${TARGET_DIR}"/usr/bin/pengyos-disks "${TARGET_DIR}"/usr/bin/pengyos-usage \
              "${TARGET_DIR}"/usr/bin/pengyos-gamepads \
              "${TARGET_DIR}"/usr/bin/pengyos-printers "${TARGET_DIR}"/usr/bin/pengyos-firmware \
-             "${TARGET_DIR}"/usr/bin/pengy-games "${TARGET_DIR}"/usr/bin/pengyos-themes; do
+             "${TARGET_DIR}"/usr/bin/pengy-games "${TARGET_DIR}"/usr/bin/pengyos-themes \
+             "${TARGET_DIR}"/usr/bin/pengyos-machines; do
         [ -f "$f" ] && [ ! -L "$f" ] && file -b "$f" | grep -q "^ELF" && "${STRIP_BIN}" "$f"
     done
     echo "post-build: stripped host-built binaries"

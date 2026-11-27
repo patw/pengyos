@@ -126,7 +126,7 @@ def test_the_desktop_apps_have_launchers():
     """The apps that are meant to be opened from the Applications list."""
     programs = set(_launchers().values())
     for app in ("pengyos-disks", "pengyos-firmware", "pengyos-gamepads", "pengyos-printers",
-                "pengyos-sharing", "pengyos-updates"):
+                "pengyos-sharing", "pengyos-updates", "pengyos-machines"):
         assert app in programs, f"{app} is installed but no .desktop launcher runs it"
 
 

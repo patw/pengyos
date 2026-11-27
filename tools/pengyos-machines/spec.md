@@ -1,6 +1,7 @@
 # pengyos-machines — "Machines", the Desktop's VM and container app
 
-Status: **spec, not built** (2026-11-27). Decided with the operator: the name
+Status: **built** (0.1.0, 2026-11-27): all three pages. Not yet: the serial
+console view, `pengyos-vm create --progress`, `.pod`/`.kube` files. Decided with the operator: the name
 *Machines*, a VNC view built into the app, Quadlet services in v1.
 
 ## Summary
