@@ -157,6 +157,23 @@ port of a VNC client. QEMU is local, so v1 needs only:
 Dev boxes and containers need no CLI changes: podman's JSON is enough, and the
 distrobox commands are run as they are.
 
+## pengy-vmm (the Server's browser UI) gets the same
+Operator, 2026-11-27: "basics plus the in-browser screen too". Over the same
+`pengyos-vm` commands:
+- **ISO library**: upload an ISO from the browser. It streams into
+  `~/vms/isos`, checks free space first, and deletes a partial file on abort.
+  Add one by URL (`pengyos-vm iso add`, with progress); remove one.
+- **New VM** picks an ISO from the library, or a disk image from a list of the
+  images in `~/vms/images` and the cache, instead of a typed path. A URL still
+  works.
+- **Snapshots**: list, take, roll back (asks first), delete.
+- **Screen in the browser**: noVNC (MPL-2.0), vendored in the image and served
+  by pengy-vmm itself (no CDN). pengy-vmm proxies a WebSocket to the VM's
+  `vnc.sock`, so the screen needs no new port and sits behind the same token
+  as every other action. QEMU's own `websocket=` option is not used: it
+  listens on TCP. From another machine it is the same `ssh -L` to pengy-vmm
+  as today.
+
 ## Packaging
 - Rust crate `tools/pengyos-machines` (MIT), libcosmic pinned like
   pengyos-disks, built by `scripts/build-cosmic.sh` (add it to the `for app in`
@@ -175,8 +192,8 @@ Server has `pengy-vmm`); Compose files.
 
 ## Order
 1. The `pengyos-vm` changes: the VNC socket first (it is also a security fix),
-   then snapshots, then the ISO library. `pengy-vmm` gets snapshot buttons and
-   an ISO picker over the same commands.
+   then snapshots, then the ISO library. Then pengy-vmm: upload, picker,
+   snapshots, and the browser screen (above).
 2. Machines with the VM page and the VNC view.
 3. Dev boxes.
 4. Containers and Quadlet services.
