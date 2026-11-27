@@ -66,6 +66,7 @@ TOOLS = {
     "pengyos-hwmon": "Hardware Monitor: temps, fans, power",
     "pengyos-fans": "fan profiles: status, detect, profile (as root)",
     "pengyos-firmware": "the Firmware app (fwupd)",
+    "pengyos-machines": "the Machines app: VMs, dev boxes, containers",
     "pengyos-gamepads": "the Gamepads app: list and test controllers",
     "pengyos-printers": "the Printers app: printers, queue, test page",
     "pengyos-themes": "icon themes, colour themes and Looks, with undo",
