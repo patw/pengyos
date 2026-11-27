@@ -41,6 +41,7 @@ __all__ = [
     "default_assertions",
     "run_assertions",
     "all_passed",
+    "unsplit_console",
 ]
 
 # --- Status / kind constants ----------------------------------------------
@@ -153,22 +154,51 @@ def default_assertions() -> "tuple[Assertion, ...]":
     )
 
 
+# A kernel message printed while systemd is halfway through a status line lands
+# inside it: 26.11.32 (Server NVIDIA, uefi-tpm) read 'Started Network Con[
+# 2.403475] bochs-drm ... frame buffer device' and then 'figuration' on the next
+# line, and networkd-started failed a healthy image. It had happened before to
+# network-target (26.10.3) and distro-welcome (26.11.6), each fixed in its own
+# pattern. This finds the injection: a timestamped kernel line that starts in
+# the middle of a line (never at its start, so ordinary kernel lines stay put),
+# up to and including its line break.
+_INJECTED_KERNEL_LINE = re.compile(r"(?<=[^\r\n])\[ *[0-9]+\.[0-9]+\] [^\n]*\n")
+
+
+def unsplit_console(log_text: str) -> str:
+    """Return ``log_text`` with kernel lines injected mid-line cut out, so a
+    status line a kernel message split reads whole again."""
+    return _INJECTED_KERNEL_LINE.sub("", log_text)
+
+
 def _evaluate(log_text: str, assertion: "Assertion") -> CheckResult:
     """Evaluate a single assertion against the log and return its result.
+
+    Each pattern is tried on the log as captured and then on
+    :func:`unsplit_console` of it: a present check passes when either has the
+    pattern, and an absent check fails when either has it (a split must not
+    hide a 'Kernel panic' either). The evidence is the line from the text that
+    matched.
 
     Raises:
         re.error: if ``assertion.pattern`` does not compile.
     """
     compiled = re.compile(assertion.pattern)
-    match = compiled.search(log_text)
+    text = log_text
+    match = compiled.search(text)
+    if match is None:
+        joined = unsplit_console(log_text)
+        if joined != log_text:
+            text = joined
+            match = compiled.search(text)
     if assertion.kind == KIND_PRESENT:
         if match is None:
             return CheckResult(assertion.name, FAIL_STATUS, None)
-        return CheckResult(assertion.name, PASS_STATUS, _line_of(log_text, match))
+        return CheckResult(assertion.name, PASS_STATUS, _line_of(text, match))
     # KIND_ABSENT
     if match is None:
         return CheckResult(assertion.name, PASS_STATUS, None)
-    return CheckResult(assertion.name, FAIL_STATUS, _line_of(log_text, match))
+    return CheckResult(assertion.name, FAIL_STATUS, _line_of(text, match))
 
 
 def run_assertions(
