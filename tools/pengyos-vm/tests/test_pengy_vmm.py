@@ -7,7 +7,10 @@ here is checked down to the systemctl call it ends in.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import threading
 import os
 import socket
 import subprocess
@@ -37,7 +40,11 @@ class Web:
         self.port = free_port()
         env = dict(os.environ, HOME=str(box.home))
         cmd = f"{sys.executable} {SCRIPT} --root {box.root}"
-        self.proc = subprocess.Popen([sys.executable, str(VMM), "--vm-cmd", cmd, "serve",
+        self.novnc = box.home.parent / "novnc"
+        (self.novnc / "core").mkdir(parents=True)
+        (self.novnc / "core" / "rfb.js").write_text("export default class RFB {}\n")
+        self.proc = subprocess.Popen([sys.executable, str(VMM), "--vm-cmd", cmd,
+                                      "--novnc-dir", str(self.novnc), "serve",
                                       "--port", str(self.port)], env=env,
                                      stderr=subprocess.PIPE, text=True)
         for _ in range(50):
@@ -144,3 +151,182 @@ def test_url_prints_the_token(tmp_path: Path):
 
 def test_the_unit_serves_it():
     assert "ExecStart=/usr/bin/pengy-vmm serve" in UNIT.read_text()
+
+
+# --- 2026-11-27: ISO library, image picker, snapshots, the screen ------------
+
+def _iso(n: int = 0x9000) -> bytes:
+    data = bytearray(n)
+    data[0x8001:0x8006] = b"CD001"
+    return bytes(data)
+
+
+def _put(web: Web, name: str, data: bytes, token: str | None = None):
+    r = urllib.request.Request(f"http://127.0.0.1:{web.port}/api/isos/{name}", data=data, method="PUT")
+    r.add_header("X-Token", token or web.token)
+    try:
+        with urllib.request.urlopen(r, timeout=20) as resp:
+            return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def _wait_jobs(web: Web) -> list:
+    for _ in range(150):
+        jobs = json.loads(web.req("/api/jobs")[1])
+        if jobs and all(j["done"] for j in jobs):
+            return jobs
+        time.sleep(0.1)
+    raise AssertionError(jobs)
+
+
+def test_iso_upload_goes_into_the_library(web: Web):
+    code, body = _put(web, "debian-netinst.iso", _iso())
+    assert code == 200 and body["ok"], body
+    lib = json.loads(web.req("/api/isos")[1])["isos"]
+    assert [i["name"] for i in lib] == ["debian-netinst.iso"]
+    vms = web.box.home / "vms"
+    assert not [p for p in vms.iterdir() if p.name.startswith(".pengy-vmm-upload")]
+    # a VM from the library by name, then removing what it uses is refused
+    code, _, _ = web.req("/api/vms", {"name": "deb", "kind": "iso", "source": "debian-netinst.iso"})
+    assert code == 202 and _wait_jobs(web)[0]["ok"]
+    code, body, _ = web.req("/api/isos/debian-netinst.iso/remove", {})
+    assert code == 400 and "attached to deb" in json.loads(body)["output"]
+
+
+def test_iso_upload_refusals_keep_nothing(web: Web):
+    assert _put(web, "x.iso", _iso(), token="wrong")[0] == 403
+    assert _put(web, "..%2Fescape.iso", _iso())[0] == 400
+    code, body = _put(web, "page.iso", b"<html>404</html>" * 100)
+    assert code == 400 and "not an ISO image" in body["output"]
+    vms = web.box.home / "vms"
+    assert not [p for p in vms.rglob("*") if p.is_file()]
+
+
+def test_iso_download_job_reports_progress(web: Web, tmp_path: Path):
+    import functools
+    import http.server
+    www = tmp_path / "www"
+    www.mkdir()
+    (www / "alpine.iso").write_bytes(_iso(2 << 20))
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(www))
+    handler.log_message = lambda *a, **k: None
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{srv.server_address[1]}/alpine.iso"
+        assert web.req("/api/isos", {"url": url})[0] == 202
+        job = _wait_jobs(web)[0]
+        assert job["ok"] and job["progress"]["done"] == 2 << 20 and "added alpine.iso" in job["output"]
+        assert web.req("/api/isos", {"url": "file:///etc/passwd"})[0] == 400
+    finally:
+        srv.shutdown()
+
+
+def test_image_picker_lists_vms_images(web: Web):
+    d = web.box.home / "vms" / "images"
+    d.mkdir(parents=True)
+    (d / "debian-13.qcow2").write_text("{}")
+    (d / "notes.txt").write_text("no")
+    imgs = json.loads(web.req("/api/images")[1])["images"]
+    assert [i["name"] for i in imgs] == ["debian-13.qcow2"]
+
+
+def test_snapshot_buttons(web: Web):
+    web.box.run("create", "deb", "--iso", str(web.box.iso))
+    r = json.loads(web.req("/api/vms/deb/snapshot-create", {"label": "before it"})[1])
+    assert r["ok"] and "s1 (before it)" in r["output"]
+    snaps = json.loads(web.req("/api/vms/deb/snapshots")[1])["snapshots"]
+    assert [(x["name"], x["label"]) for x in snaps] == [("s1", "before it")]
+    assert json.loads(web.req("/api/vms/deb")[1])["snapshots"][0]["name"] == "s1"
+    assert json.loads(web.req("/api/vms/deb/snapshot-revert", {"snap": "s1"})[1])["ok"]
+    assert web.req("/api/vms/deb/snapshot-revert", {"snap": "s1; rm -rf ~"})[0] == 400
+    assert json.loads(web.req("/api/vms/deb/snapshot-delete", {"snap": "s1"})[1])["ok"]
+
+
+def test_novnc_is_served_but_nothing_else(web: Web):
+    code, body, headers = web.req("/novnc/core/rfb.js")
+    assert code == 200 and "class RFB" in body and headers["Content-Type"].startswith("text/javascript")
+    assert web.req("/novnc/core/rfb.js", token=None)[0] == 403
+    assert web.req("/novnc/../.config/pengy-vmm/token")[0] == 404
+    assert web.req("/novnc/%2e%2e/%2e%2e/home/.config/pengy-vmm/token")[0] == 404
+    code, page, headers = web.req("/screen/deb")
+    assert code == 200 and 'import RFB from "/novnc/core/rfb.js"' in page and "/api/vms/deb/vnc" in page
+    assert "script-src 'self'" in headers["Content-Security-Policy"]
+
+
+def _ws_open(web: Web, name: str, origin: str | None = None, cookie: bool = True):
+    s = socket.create_connection(("127.0.0.1", web.port), 5)
+    key = base64.b64encode(os.urandom(16)).decode()
+    host = f"127.0.0.1:{web.port}"
+    lines = [f"GET /api/vms/{name}/vnc HTTP/1.1", f"Host: {host}", "Upgrade: websocket",
+             "Connection: Upgrade", f"Sec-WebSocket-Key: {key}", "Sec-WebSocket-Version: 13",
+             "Sec-WebSocket-Protocol: binary", f"Origin: {origin or 'http://' + host}"]
+    if cookie:
+        lines.append(f"Cookie: vmm={web.token}")
+    s.sendall(("\r\n".join(lines) + "\r\n\r\n").encode())
+    f = s.makefile("rb")
+    status = f.readline().decode()
+    headers = {}
+    while (line := f.readline().decode().strip()):
+        k, v = line.split(":", 1)
+        headers[k.strip().lower()] = v.strip()
+    return s, f, status, headers, key
+
+
+def _ws_frame(f) -> tuple[int, bytes]:
+    head = f.read(2)
+    n = head[1] & 0x7F
+    if n == 126:
+        n = int.from_bytes(f.read(2), "big")
+    elif n == 127:
+        n = int.from_bytes(f.read(8), "big")
+    return head[0] & 0x0F, f.read(n)
+
+
+def test_screen_websocket_relays_to_vnc_sock(web: Web):
+    web.box.run("create", "deb", "--iso", str(web.box.iso))
+    path = web.box.home / "vms" / "deb" / "vnc.sock"
+    got = []
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(str(path))
+    srv.listen(1)
+
+    def qemu():
+        c, _ = srv.accept()
+        c.sendall(b"RFB 003.008\n")
+        got.append(c.recv(100))
+        c.sendall(b"x" * 70000)       # a frame over 64 KiB (8-byte length)
+        c.close()
+
+    threading.Thread(target=qemu, daemon=True).start()
+    s, f, status, headers, key = _ws_open(web, "deb")
+    try:
+        assert " 101 " in status, status
+        want = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
+        assert headers["sec-websocket-accept"] == want and headers["sec-websocket-protocol"] == "binary"
+        assert _ws_frame(f) == (0x2, b"RFB 003.008\n")
+        mask = os.urandom(4)
+        msg = b"RFB 003.008\n"
+        s.sendall(bytes([0x82, 0x80 | len(msg)]) + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(msg)))
+        # A stream: 70000 bytes may come as several frames (the first of 64 KiB
+        # needs the 8-byte length), then QEMU's close becomes a close frame.
+        total, sizes = b"", []
+        while True:
+            op, data = _ws_frame(f)
+            if op != 0x2:
+                break
+            total += data
+            sizes.append(len(data))
+        assert op == 0x8 and total == b"x" * 70000 and max(sizes) >= 1 << 16
+        assert got == [msg]
+    finally:
+        s.close()
+        srv.close()
+
+
+def test_screen_websocket_refusals(web: Web):
+    web.box.run("create", "deb", "--iso", str(web.box.iso))
+    assert " 409 " in _ws_open(web, "deb")[2]                       # not running: no socket
+    assert " 403 " in _ws_open(web, "deb", origin="http://evil.example")[2]
+    assert " 403 " in _ws_open(web, "deb", cookie=False)[2]

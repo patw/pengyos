@@ -17,6 +17,23 @@ month. The number lives in [`VERSION`](VERSION); see CONTRIBUTING.md
 
 ## [Unreleased]
 
+### Added: VM snapshots, an ISO library, and a VM's screen in the browser (2026-11-27)
+- **A VM's screen is private.** It was VNC on `127.0.0.1:59xx` with no password, so
+  any account on the machine could watch and type into any user's VM. QEMU now serves
+  it only on `~/vms/NAME/vnc.sock`, in an owner-only folder (pengyos-vm 0.5.0). From
+  another machine, `ssh -L 5901:/home/you/vms/NAME/vnc.sock` reaches it.
+- **Disk snapshots**: `pengyos-vm snapshot NAME create|list|revert|delete`, to take one
+  before trying something and roll back if it goes wrong (0.6.0).
+- **An ISO library**, `~/vms/isos`: `pengyos-vm iso list|add FILE|URL|remove`, and
+  `create --iso NAME` (0.7.0).
+- **pengy-vmm** (the browser page over pengyos-vm) does all of it: upload an ISO from
+  the browser or download one by URL, pick ISOs and disk images from lists, take and
+  roll back snapshots, and open a VM's **screen in the browser**. That is noVNC
+  (new recipe `package/novnc`, MPL-2.0, Server layer), served by pengy-vmm, which
+  proxies its WebSocket to the VM's socket behind the same token (0.8.0).
+- These are the first steps of *Machines*, the Desktop's VM and container app
+  (`tools/pengyos-machines/spec.md`).
+
 ### Fixed: a "NaN%" keyboard backlight slider on machines without one (2026-11-26)
 - The power applet showed a keyboard-brightness slider reading "NaN%" on every machine
   without a keyboard backlight (behopc and most of the fleet): UPower exports its

@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.8.0] - 2026-11-27
+
+### Added (pengy-vmm)
+- **A VM's screen in the browser.** *Screen* opens `/screen/NAME`: noVNC
+  (`/usr/share/novnc`, served at `/novnc/`) with Ctrl+Alt+Del, fit to window and
+  reconnect. Its WebSocket goes to pengy-vmm, which relays it to
+  `~/vms/NAME/vnc.sock`, so the screen needs no port of its own and the token
+  guards it: the SameSite=Strict cookie, plus an Origin check against another
+  site opening it. The page's CSP allows scripts from pengy-vmm only.
+- **The ISO library**: a list with sizes and the VMs using each, Remove, Upload from
+  the browser (a PUT streamed into `~/vms`, refused when it would leave less than
+  512 MiB free, then `pengyos-vm iso add`, which checks it is an ISO; an interrupted
+  upload keeps nothing), and Download from a URL (a background job with progress).
+- **New VM** picks the ISO from the library, or a disk image from `~/vms/images`
+  (or a typed path or URL), instead of only a typed path.
+- **Snapshots** in each VM's panel: take one with a label, roll back (asks first) and
+  delete.
+- Tested on behothinkpad with headless Chromium: an ISO uploaded through the page,
+  a VM created from it by name, and its screen in the browser, where typing `root`
+  at the Alpine prompt logged in.
+
 ## [0.7.0] - 2026-11-27
 
 ### Added

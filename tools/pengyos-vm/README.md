@@ -67,13 +67,20 @@ pengy-vmm url                              # the address to open, with your toke
 ```
 
 A page over the same commands: the VM list, start / shut down / force off /
-start at boot / eject / delete, the serial console (read it, type a line), and
-a form for a new VM (ISO, or an image file or URL, downloaded in the
-background). Every button runs `pengyos-vm` as you. It listens on 127.0.0.1
-and needs your token (`~/.config/pengy-vmm/token`, 0600), because other
-accounts on the machine can reach that port too; changes need it in a header
-as well, so another site cannot post a form at it. From another machine:
-`ssh -L 5100:127.0.0.1:5100 you@host`, then open the `pengy-vmm url` address.
+start at boot / eject / delete, **the VM's screen** (noVNC in the browser), its
+**snapshots** (take, roll back, delete), the serial console (read it, type a
+line), the **ISO library** (upload an ISO from the browser, download one from a
+URL, remove), and a form for a new VM that picks the ISO from the library or a
+disk image from `~/vms/images` (or a path or URL). Every button runs
+`pengyos-vm` as you.
+
+It listens on 127.0.0.1 and needs your token (`~/.config/pengy-vmm/token`,
+0600), because other accounts on the machine can reach that port too; changes
+need it in a header as well, so another site cannot post a form at it. The
+screen's WebSocket is relayed by pengy-vmm to the VM's private `vnc.sock`, so it
+needs no port of its own, and it is refused from any other site (Origin). From
+another machine: `ssh -L 5100:127.0.0.1:5100 you@host`, then open the
+`pengy-vmm url` address.
 
 ## The ISO library
 
