@@ -61,11 +61,17 @@ missing (no `/dev/kvm`, so VMs are slow; linger off, so things stop at logout).
   Runs `pengyos-vm create`. Image downloads show progress (needs the CLI's
   `--progress`, below).
 - **Per VM**: Start, Shut down, Force off, Screen, Console, Open SSH in a
-  terminal, Start at boot, Eject ISO (offered when it has one), Settings
+  terminal, Snapshots, Start at boot, Eject ISO (offered when it has one), Settings
   (CPUs, memory, forwards: `pengyos-vm set`, when stopped where QEMU needs it),
   Delete (asks first, and names the disk it deletes).
 - **Screen**: the built-in VNC view (below), in the VM's page or popped out to
   its own window. Opens by itself after *Start* for an ISO install.
+- **Snapshots**: a list (time, label, size) with Take snapshot, Roll back
+  (asks, switches the VM off, reverts, starts it again) and Delete; the CLI's
+  `pengyos-vm snapshot` (below). Disk only, for "try something, roll back, try
+  it another way"; not saved memory state.
+- **ISO library**: *New VM* picks an ISO from `pengyos-vm iso list` or adds one
+  (a file, or a URL downloaded with progress).
 - **Console**: the serial log (`pengyos-vm log`), live, with a line to type into.
 
 ### Dev boxes (`distrobox`)
@@ -130,7 +136,23 @@ port of a VNC client. QEMU is local, so v1 needs only:
 3. **`pengyos-vm list --json` / `show --json`**: add `kvm` (accelerated or not),
    `linger`, the ISO's presence, and an error field for a VM whose `vm.json`
    does not read, instead of skipping it.
-4. **Errors**: every `pengyos-vm` failure exits non-zero with one plain line on
+4. **`pengyos-vm snapshot NAME create [LABEL] | list [--json] | revert SNAP |
+   delete SNAP`** (operator, 2026-11-27: disk state only). Internal qcow2
+   snapshots of `disk.qcow2`. Running VM: QMP
+   `blockdev-snapshot-internal-sync` on disk0. That's crash-consistent, like
+   a power cut, which is fine for a "before I try X" snapshot; `create` says
+   so, and a stopped VM gives a clean one. Stopped VM: `qemu-img snapshot -c`.
+   `vars.fd` (raw) is copied to `snapshots/SNAP.vars.fd` and restored with
+   the disk. `revert` needs the VM off: it asks (or `--yes`), stops it
+   (`--force` after the power-button wait), runs `qemu-img snapshot -a`,
+   restores `vars.fd`, and starts it again if it was running. `list` shows
+   time, label and size (from `qemu-img info --output=json`). `delete`
+   frees the space. `show --json` gains `snapshots`.
+5. **`pengyos-vm iso list [--json] | add FILE|URL [--name N] | remove N`**: an ISO
+   library in `~/vms/isos`. `add` copies a file, or downloads a URL (with
+   `--progress` JSON lines). `create --iso NAME` takes a library name as well as
+   a path. `remove` refuses an ISO a VM still has attached.
+6. **Errors**: every `pengyos-vm` failure exits non-zero with one plain line on
    stderr (most already do); the app shows that line as is.
 Dev boxes and containers need no CLI changes: podman's JSON is enough, and the
 distrobox commands are run as they are.
@@ -146,12 +168,15 @@ distrobox commands are run as they are.
 
 ## Out of scope for v1
 Rootful containers and system Quadlets (read-only); pods, `.kube`, `.network`
-and `.volume` Quadlet files (listed, not edited); snapshots; USB/PCI passthrough
+and `.volume` Quadlet files (listed, not edited); snapshots with memory state
+(disk only, by choice); USB/PCI passthrough
 and GPU passthrough to VMs; SPICE, audio and a VM clipboard; remote hosts (the
 Server has `pengy-vmm`); Compose files.
 
 ## Order
-1. The `pengyos-vm` changes (VNC socket first: it is also a security fix).
+1. The `pengyos-vm` changes: the VNC socket first (it is also a security fix),
+   then snapshots, then the ISO library. `pengy-vmm` gets snapshot buttons and
+   an ISO picker over the same commands.
 2. Machines with the VM page and the VNC view.
 3. Dev boxes.
 4. Containers and Quadlet services.
