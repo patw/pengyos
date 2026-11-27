@@ -319,7 +319,7 @@ async function detail(v){
   B.append(v.autostart?btn("Don't start at boot","autostart-off"):btn("Start at boot","autostart-on"));
   if(v.iso)B.append(btn("Eject ISO","eject"));
   if(!on)B.append(btn("Delete","delete","d","Delete "+v.name+" and its disk? This cannot be undone."));
-  const rows=[["Disk",v.disk],["ISO",v.iso],["Network",v.net+", MAC "+v.mac],["SSH",v.ssh?`${v.ssh}  (pengyos-vm ssh ${v.name})`:(v.net=="bridge"?"LAN address not known yet":"")],["Forwards",(v.forwards||[]).join(", ")],["Screen",`VNC on ${v.vnc}: ssh -L ${v.vnc.split(":")[1]}:${v.vnc} this-machine, then a VNC viewer on localhost`],["Firmware",v.firmware.toUpperCase()]];
+  const rows=[["Disk",v.disk],["ISO",v.iso],["Network",v.net+", MAC "+v.mac],["SSH",v.ssh?`${v.ssh}  (pengyos-vm ssh ${v.name})`:(v.net=="bridge"?"LAN address not known yet":"")],["Forwards",(v.forwards||[]).join(", ")],["Screen",`VNC on ${v.vnc_socket} (only you can open it): ssh -N -L 5901:${v.vnc_socket} this-machine, then a VNC viewer on localhost:5901`],["Firmware",v.firmware.toUpperCase()]];
   $("dinfo").innerHTML=rows.filter(r=>r[1]).map(r=>`<dt>${r[0]}</dt><dd><code>${esc(r[1])}</code></dd>`).join("");
   try{const c=await api(`/api/vms/${v.name}/console`);const p=$("con"),end=p.scrollTop+p.clientHeight>=p.scrollHeight-20;p.textContent=c.text||"(nothing on the serial console yet)";if(end)p.scrollTop=p.scrollHeight}catch(e){}
 }

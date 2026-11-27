@@ -12,7 +12,7 @@
 - The QEMU command: q35, KVM (`-cpu host`) or TCG (`-cpu max`) when `/dev/kvm`
   is not usable; virtio disk at bootindex 0, the ISO at bootindex 1 (an empty
   disk falls through to the installer); virtio-net; serial on a socket with
-  `console.log`; QMP socket; VGA + VNC on `127.0.0.1:N`; USB tablet; RNG;
+  `console.log`; QMP socket; VGA + VNC on the socket `vnc.sock` only (0.5.0; `~/vms` and the VM folder 0700, set at create and at every start); USB tablet; RNG;
   systemd credentials over SMBIOS type 11.
 - NAT forwards: host port ≥ 1024, unique across the user's VMs, on 127.0.0.1
   unless an address is given. The SSH forward is allocated from 2201 up.

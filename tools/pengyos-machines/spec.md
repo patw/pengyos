@@ -125,12 +125,12 @@ port of a VNC client. QEMU is local, so v1 needs only:
   against captured byte streams; the widget only draws frames and sends input.
 
 ## CLI changes this needs (land first, each tested)
-1. **`pengyos-vm`: a VNC Unix socket.** Today the screen is VNC on
-   `127.0.0.1:59xx` with no password, so **any account on the machine can watch
-   and type into any user's VM**. Add `-vnc unix:~/vms/NAME/vnc.sock` (the
-   folder is 0700), show `"vnc_socket"` in `show --json`, and keep TCP only when
-   asked (`set NAME --vnc-tcp on`, for `ssh -L` from another machine). This is a
-   fix on its own, for the Server too; `pengy-vmm` and `pengyos-vm vnc` follow.
+1. **`pengyos-vm`: a VNC Unix socket** (pengyos-vm 0.5.0). The screen was VNC
+   on `127.0.0.1:59xx` with no password, so any account on the machine could
+   watch and type into any user's VM. It is now `-vnc unix:~/vms/NAME/vnc.sock`
+   only, with `~/vms` and the folder 0700, and `"vnc_socket"` in `show --json`.
+   There is no TCP option: from another machine, `ssh -L PORT:/path/vnc.sock`
+   reaches the socket directly (OpenSSH forwards to a Unix socket).
 2. **`pengyos-vm create --progress`**: one JSON line per step (download bytes,
    unpack, convert, resize) so the app shows a bar; the plain output stays.
 3. **`pengyos-vm list --json` / `show --json`**: add `kvm` (accelerated or not),

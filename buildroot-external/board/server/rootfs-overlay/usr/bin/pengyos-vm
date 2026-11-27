@@ -25,7 +25,9 @@
 
 A VM is a folder, ~/vms/NAME: vm.json (its settings),
 disk.qcow2, the UEFI variables, console.log (everything it wrote to its serial
-console), qemu.log, and while it runs the serial console and QMP sockets. It runs as your user, under your systemd user manager
+console), qemu.log, and while it runs the serial console, QMP and screen (VNC)
+sockets. The folder is private (0700), and the screen is only that socket: no
+TCP port, so no other account on the machine can watch or type into a VM. It runs as your user, under your systemd user manager
 (pengyos-vm@NAME.service), so `stop`, a reboot of the host and `autostart` all
 go through systemd, and nothing needs root.
 
@@ -145,6 +147,13 @@ def vm_home() -> Path:
     return Path.home() / "vms"
 
 
+def private(d: Path) -> None:
+    """Make ~/vms and the VM folder d owner-only (0700)."""
+    for p in (vm_home(), d):
+        if p.is_dir():
+            p.chmod(0o700)
+
+
 def parse_size(text: str, what: str) -> int:
     """Bytes in '20G', '512M', '2048' (MiB when there is no unit)."""
     m = SIZE_RE.match(text.strip())
@@ -235,7 +244,7 @@ class VM:
             "mac": c["mac"],
             "ssh": f"{ssh[0]}:{ssh[1]}" if ssh else None,
             "forwards": [fmt_forward(f) for f in c["forwards"]],
-            "vnc": f"127.0.0.1:{5900 + c['vnc']}",
+            "vnc_socket": str(self.path("vnc.sock")),
             "iso": c.get("iso"),
             "firmware": c["firmware"],
             "ssh_key": bool(c.get("ssh_keys")),
@@ -467,6 +476,7 @@ def cmd_create(a) -> int:
     add_forwards(conf, a.forward or [], a.name)
 
     vm.dir.mkdir(parents=True)
+    private(vm.dir)
     try:
         target = vm.path("disk.qcow2")
         if a.image:
@@ -556,7 +566,7 @@ def qemu_argv(vm: VM) -> list[str]:
                          f"logfile={d / 'console.log'},logappend=on",
              "-serial", "chardev:ser0",
              "-qmp", f"unix:{d / 'qmp.sock'},server=on,wait=off",
-             "-device", "VGA", "-vnc", f"127.0.0.1:{c['vnc']}",
+             "-device", "VGA", "-vnc", f"unix:{d / 'vnc.sock'}",
              "-device", "qemu-xhci", "-device", "usb-tablet",
              "-device", "virtio-rng-pci"]
     # systemd guests read these (systemd.system-credentials(7)): the hostname,
@@ -594,7 +604,11 @@ def cmd_run(a) -> int:
     problems = preflight(vm)
     if problems:
         raise Failure("; ".join(problems))
-    for stale in ("serial.sock", "qmp.sock"):
+    # The sockets give whoever reaches them the VM's console, its QMP (power,
+    # devices) and its screen. Before 0.5.0 the screen was VNC on 127.0.0.1, open
+    # to every account; now it is vnc.sock here, and the folder is the lock.
+    private(vm.dir)
+    for stale in ("serial.sock", "qmp.sock", "vnc.sock"):
         vm.path(stale).unlink(missing_ok=True)
     argv = qemu_argv(vm)
     if ROOT:
@@ -701,7 +715,7 @@ def cmd_show(a) -> int:
         print("  ssh      its LAN address is not known yet (see your router, or the console)")
     for f in s["forwards"]:
         print(f"  forward  {f}")
-    print(f"  screen   VNC on {s['vnc']} (pengyos-vm vnc {vm.name})")
+    print(f"  screen   VNC on {s['vnc_socket']} (pengyos-vm vnc {vm.name})")
     print(f"  console  pengyos-vm console {vm.name}")
     if s["ssh_key"]:
         print("  key      root's SSH key is offered to the guest (systemd credential)")
@@ -826,10 +840,13 @@ def cmd_ssh(a) -> int:
 def cmd_vnc(a) -> int:
     vm = VM(a.name).load()
     port = 5900 + vm.conf["vnc"]
+    sock = vm.path("vnc.sock")
     host = socket.gethostname()
-    print(f"{vm.name}'s screen is VNC on 127.0.0.1:{port} (this machine only).")
-    print("From another machine, tunnel it over SSH and point a VNC viewer at localhost:")
-    print(f"  ssh -L {port}:127.0.0.1:{port} {pwd.getpwuid(os.getuid()).pw_name}@{host}")
+    user = pwd.getpwuid(os.getuid()).pw_name
+    print(f"{vm.name}'s screen is VNC on the socket {sock}")
+    print("(only you can open it: there is no network port). From any machine, SSH")
+    print("forwards a local port to it; then point a VNC viewer at that port:")
+    print(f"  ssh -N -L {port}:{sock} {user}@{host}")
     print(f"  then open  vnc://localhost:{port}")
     if not vm.running():
         print(f"({vm.name} is not running yet: pengyos-vm start {vm.name})")
@@ -1117,6 +1134,7 @@ def cmd_run_once(a) -> int:
 
     status = 1
     vm.dir.mkdir(parents=True)
+    private(vm.dir)
     try:
         run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", f"{PROG} run {name}",
              "-f", str(vm.path("id_ed25519"))])
