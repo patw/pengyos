@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-11-27
+
+### Fixed
+- **A kernel message that splits a console line no longer fails a check, for any
+  check.** A kernel line printed while systemd is halfway through a status line
+  lands inside it: 26.11.32's first run read `Started Network Con[ 2.403475]
+  bochs-drm ...` then `figuration` on the next line, and `networkd-started`
+  failed a healthy Server NVIDIA image (uefi-tpm) and stopped the release. The
+  same thing had happened to `network-target` (26.10.3) and `distro-welcome`
+  (26.11.6), each fixed only in its own pattern. The matcher now retries every
+  pattern on the log with mid-line timestamped kernel lines cut out
+  (`unsplit_console`). A present check passes on either text; an absent check
+  fails on either, so a split can't hide a `Kernel panic`. `distro-welcome` is
+  back to a one-line pattern. The real 26.11.32 log is a test fixture.
+
 ## [0.8.0] — 2026-11-22
 
 ### Fixed

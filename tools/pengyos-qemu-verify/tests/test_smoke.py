@@ -26,7 +26,9 @@ from pengyos_qemu_verify import cli, smoke
 from pengyos_qemu_verify.assertions import (
     KIND_ABSENT,
     KIND_PRESENT,
+    Assertion,
     run_assertions,
+    unsplit_console,
 )
 from pengyos_qemu_verify.boot import BootResult
 
@@ -969,3 +971,48 @@ def test_server_ready_markers_are_not_met_by_a_core_boot():
     matrix = smoke.load_matrix(str(Path(smoke.default_matrix_path()).parent / "server.toml"))
     text = CORE_UEFI_LOG.read_text(encoding="utf-8", errors="replace")
     assert detect_readiness(text, matrix.ready)[0] is False
+
+
+# --- 26.11.32: the general fix -------------------------------------------------
+# The real Server NVIDIA uefi-tpm capture: 'Started Network Con' + a bochs-drm
+# kernel line + 'figuration'. The matcher now rejoins such lines for every
+# check, so the next split line does not need its own pattern.
+
+SERVER_SPLIT_NETWORKD_LOG = FIXTURES / "serial_server_split_networkd.log"
+
+
+def _server_matrix():
+    return smoke.load_matrix(str(SERVER_MATRIX))
+
+
+def test_networkd_started_survives_the_real_26_11_32_split():
+    check = _check(_server_matrix(), "networkd-started")
+    log_text = SERVER_SPLIT_NETWORKD_LOG.read_text(encoding="utf-8", errors="replace")
+    assert re.search(check.pattern, log_text) is None  # the raw log really is split
+    result = run_assertions(log_text, (check.to_assertion(),))[0]
+    assert result.passed is True
+    assert "Network Configuration" in result.evidence
+
+
+def test_server_matrix_passes_the_real_26_11_32_split_boot():
+    outcome = smoke.run_matrix(_server_matrix(), "img", boot_fn=_boot_from(SERVER_SPLIT_NETWORKD_LOG))
+    assert outcome.passed is True, [v.failed_checks for v in outcome.variants]
+
+
+def test_unsplit_console_leaves_line_start_kernel_lines_alone():
+    log_text = "[    1.0] e1000e: link up\r\n[  OK  ] Started \x1b[0;1;39mFoo\x1b[0m.\r\n"
+    assert unsplit_console(log_text) == log_text
+
+
+def test_a_split_cannot_hide_an_absent_pattern():
+    log_text = "Kernel pa[    3.141592] usb 1-1: new device\r\nnic - not syncing\r\n"
+    result = run_assertions(log_text, (Assertion.absent("no-kernel-panic", "Kernel panic"),))[0]
+    assert result.passed is False
+
+
+def test_a_split_does_not_invent_words_from_two_separate_lines():
+    # The injected text must start mid-line: here 'Network Con' ends its own line,
+    # so the kernel line after it is an ordinary one and nothing is joined.
+    log_text = "Started Network Con\r\n[    2.0] drm: fb0\r\nfiguration\r\n"
+    result = run_assertions(log_text, (Assertion.present("x", "Started .*Network Configuration"),))[0]
+    assert result.passed is False
