@@ -62,6 +62,13 @@
   `--yes` without a terminal, force-stops a running VM, `qemu-img snapshot -a`,
   restores vars, starts it again. A failed QMP snapshot leaves no files.
 
+- ISO library (0.7.0): `~/vms/isos` (0700). `iso add` names from `--name` (".iso"
+  added without an extension) or the file / URL's last segment, matching
+  `[A-Za-z0-9][A-Za-z0-9._+-]{0,127}`; needs `CD001` at byte 0x8001; writes
+  `.NAME.part`, then renames; a file is hard-linked when it can be. `--iso` resolves a
+  path first, then a library name, then the name + `.iso`. `remove` refuses
+  while any VM's `iso` resolves to it. VM names `isos` and `images` are reserved.
+
 ## Verification
 
 - `tools/pengyos-vm/tests`: the script against a sandbox root with

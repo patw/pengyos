@@ -872,3 +872,90 @@ def test_snap_unknown_names_are_misuse(box):
     box.run("create", "u", "--iso", str(box.iso))
     assert "has no snapshot 's9'" in box.run("snapshot", "u", "revert", "s9", "--yes", ok=2).stderr
     assert "needs one snapshot name" in box.run("snapshot", "u", "delete", ok=2).stderr
+
+
+# --- the ISO library (0.7.0) --------------------------------------------------
+
+def _iso_bytes(n: int = 0x9000) -> bytes:
+    data = bytearray(n)
+    data[0x8001:0x8006] = b"CD001"
+    return bytes(data)
+
+
+def _serve(directory: Path):
+    import functools
+    import http.server
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(directory))
+    handler.log_message = lambda *a, **k: None
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, f"http://127.0.0.1:{srv.server_address[1]}"
+
+
+def test_iso_add_file_list_use_and_remove(box, tmp_path):
+    src = tmp_path / "debian-13.2.0-amd64-netinst.iso"
+    src.write_bytes(_iso_bytes())
+    out = box.run("iso", "add", str(src)).stdout
+    assert "added debian-13.2.0-amd64-netinst.iso" in out
+    lib = box.home / "vms" / "isos"
+    kept = lib / src.name
+    assert kept.stat().st_ino == src.stat().st_ino      # same filesystem: a hard link, no copy
+    assert lib.stat().st_mode & 0o777 == 0o700
+    assert not [p for p in lib.iterdir() if p.name.startswith(".")]
+    # create takes the library name, with or without .iso
+    box.run("create", "deb", "--iso", "debian-13.2.0-amd64-netinst")
+    assert box.vm("deb")["iso"] == str(kept.resolve())
+    listed = json.loads(box.run("iso", "list", "--json").stdout)["isos"]
+    assert [(i["name"], i["used_by"]) for i in listed] == [(src.name, ["deb"])]
+    assert "deb" in box.run("iso", "list").stdout
+    # not while a VM has it attached
+    err = box.run("iso", "remove", src.name, ok=2).stderr
+    assert "attached to deb" in err and "pengyos-vm set deb --eject" in err
+    box.run("set", "deb", "--eject")
+    box.run("iso", "remove", src.name)
+    assert not kept.exists() and src.exists()
+
+
+def test_iso_add_refuses_non_iso_duplicates_and_bad_names(box, tmp_path):
+    junk = tmp_path / "notes.iso"
+    junk.write_text("<html>404</html>")
+    assert "not an ISO image" in box.run("iso", "add", str(junk), ok=2).stderr
+    good = tmp_path / "a.iso"
+    good.write_bytes(_iso_bytes())
+    box.run("iso", "add", str(good))
+    assert "already has a.iso" in box.run("iso", "add", str(good), ok=2).stderr
+    assert "ISO names" in box.run("iso", "add", str(good), "--name", "../x", ok=2).stderr
+    box.run("iso", "add", str(good), "--name", "copy")          # .iso is added
+    assert (box.home / "vms" / "isos" / "copy.iso").is_file()
+    assert "not a file, nor in the ISO library" in box.run(
+        "create", "x", "--iso", "missing", ok=2).stderr
+
+
+def test_iso_add_url_with_progress_and_a_bad_url(box, tmp_path):
+    www = tmp_path / "www"
+    www.mkdir()
+    (www / "alpine-virt.iso").write_bytes(_iso_bytes(3 << 20))
+    (www / "error.iso").write_text("<html>not found</html>")
+    srv, base = _serve(www)
+    try:
+        cp = box.run("iso", "add", f"{base}/alpine-virt.iso?mirror=1", "--progress")
+        lines = [json.loads(x) for x in cp.stdout.splitlines()]
+        assert lines[-2]["step"] == "download" and lines[-2]["done"] == 3 << 20
+        assert lines[-1] == {"step": "done", "name": "alpine-virt.iso",
+                             "path": str(box.home / "vms" / "isos" / "alpine-virt.iso")}
+        err = box.run("iso", "add", f"{base}/error.iso", ok=1).stderr
+        assert "not an ISO image" in err and "check the URL" in err
+        err = box.run("iso", "add", f"{base}/missing.iso", ok=1).stderr
+        assert "answered 404" in err and "Traceback" not in err
+        assert sorted(p.name for p in (box.home / "vms" / "isos").iterdir()) == ["alpine-virt.iso"]
+    finally:
+        srv.shutdown()
+
+
+def test_reserved_names_are_not_vms(box, tmp_path):
+    assert "ISO library" in box.run("create", "isos", "--iso", str(box.iso), ok=2).stderr
+    assert "disk images" in box.run("create", "images", "--iso", str(box.iso), ok=2).stderr
+    good = tmp_path / "a.iso"
+    good.write_bytes(_iso_bytes())
+    box.run("iso", "add", str(good))
+    assert "no VMs yet" in box.run("list").stdout
