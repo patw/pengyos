@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this tool keeps its own semver (only images use the repo-root `VERSION`).
 
+## [0.6.0] - 2026-11-27
+
+### Added
+- **Disk snapshots**, for "try something, roll back, try it another way":
+  `pengyos-vm snapshot NAME create [LABEL] | list [--json] | revert SNAP
+  [--yes] | delete SNAP`. They are internal qcow2 snapshots of `disk.qcow2`,
+  named s1, s2, ... and disk state only, no memory. On a running VM, QEMU takes
+  one live (QMP `blockdev-snapshot-internal-sync`); it is the disk as a power cut
+  would leave it, and `create` says so. A stopped VM's snapshot is clean.
+  `revert` asks (or `--yes`), switches a running VM off at once (its disk is
+  being replaced, so a shutdown would be wasted), rolls back, puts back the UEFI
+  variables saved with the snapshot (`snapshots/SNAP.vars.fd`), and starts it
+  again. `delete` works running or stopped. `list` shows when each was taken and
+  whether the VM was running; `show` and `show --json` include them.
+- Tested on behothinkpad with a PengyOS Core guest: a file written before a live
+  snapshot and changed after it read the old contents again after `revert`.
+
 ## [0.5.0] - 2026-11-27
 
 ### Security

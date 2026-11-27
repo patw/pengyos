@@ -53,6 +53,15 @@
   other than 124 in an offline run prints a hint to try `--online`. VMs made
   with `create` are unchanged; `set NAME --net` on a kept run drops `restrict`.
 
+- Snapshots (0.6.0): `snapshot NAME create|list|revert|delete`, internal qcow2
+  snapshots named `s<N>` (N = highest + 1), disk only. Running: QMP
+  `blockdev-snapshot-internal-sync` / `-delete-internal-sync` on `disk0`;
+  stopped: `qemu-img snapshot -c|-d`. `vars.fd` copied to
+  `snapshots/SNAP.vars.fd`; label, time and running/stopped in `SNAP.json`;
+  qcow2 (`qemu-img info --force-share`) decides which exist. `revert` needs
+  `--yes` without a terminal, force-stops a running VM, `qemu-img snapshot -a`,
+  restores vars, starts it again. A failed QMP snapshot leaves no files.
+
 ## Verification
 
 - `tools/pengyos-vm/tests`: the script against a sandbox root with
